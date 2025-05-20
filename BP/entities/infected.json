@@ -69,7 +69,7 @@
 				"height": 1.9
 			},
 			"minecraft:attack": {
-				"damage": 3
+				"damage": 5
 			},
 			"minecraft:movement": {
 				"value": 0.4
