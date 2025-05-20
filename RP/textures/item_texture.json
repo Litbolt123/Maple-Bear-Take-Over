@@ -1,0 +1,21 @@
+{
+	"resource_pack_name": "MapleBear TakeOver",
+	"texture_name": "atlas.items",
+	"texture_data": {
+		"mb_buff_mb_egg": {
+			"textures": "textures/items/buff_mb_egg"
+		},
+		"mb_mb_egg": {
+			"textures": "textures/items/mb"
+		},
+		"mb_infected_mb_egg": {
+			"textures": "textures/items/Infected_human_mb_egg"
+		},
+		"mb_infected_egg": {
+			"textures": "textures/items/Infected_human_mb_egg"
+		},
+		"mb_snow": {
+			"textures": "textures/items/snow___"
+		}
+	}
+}

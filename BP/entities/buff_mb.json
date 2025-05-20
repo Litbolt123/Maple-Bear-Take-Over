@@ -1,0 +1,93 @@
+{
+	"format_version": "1.20.80",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "mb:buff_mb",
+			"is_spawnable": true,
+			"is_summonable": true,
+			"is_experimental": false
+		},
+		"component_groups": {},
+		"components": {
+			"minecraft:physics": {
+				"has_collision": true,
+				"has_gravity": true,
+				"push_towards_closest_space": true
+			},
+			"minecraft:scale": {
+				"value": 2.5
+			},
+			"minecraft:collision_box": {
+				"width": 0.3,
+				"height": 0.7
+			},
+			"minecraft:behavior.random_look_around": {
+				"priority": 3,
+				"look_time": [
+					2
+				],
+				"look_distance": 30,
+				"max_angle_of_view_horizontal": 200,
+				"min_angle_of_view_horizontal": 135
+			},
+			"minecraft:behavior.look_at_target": {
+				"priority": 1,
+				"angle_of_view_horizontal": 200,
+				"angle_of_view_vertical": 135,
+				"look_distance": 30,
+				"look_time": [
+					4
+				],
+				"probability": 1
+			},
+			"minecraft:behavior.look_at_player": {
+				"priority": 2,
+				"angle_of_view_horizontal": 200,
+				"angle_of_view_vertical": 135,
+				"look_distance": 30,
+				"target_distance": 30,
+				"look_time": [
+					4
+				],
+				"probability": 0.02
+			},
+			"minecraft:pushable": {
+				"is_pushable": true,
+				"is_pushable_by_piston": true
+			},
+			"minecraft:annotation.break_door": {
+				"break_time": 1,
+				"min_difficulty": "peaceful"
+			},
+			"minecraft:behavior.random_stroll": {
+				"priority": 1,
+				"interval": 9,
+				"speed_multiplier": 3.5
+			},
+			"minecraft:navigation.climb": {
+				"avoid_powder_snow": true,
+				"is_amphibious": true,
+				"avoid_portals": true,
+				"can_break_doors": true,
+				"can_open_doors": false,
+				"can_pass_doors": true,
+				"can_swim": true,
+				"can_float": true,
+				"can_walk": true,
+				"can_jump": true,
+				"can_sink": true,
+				"can_path_over_water": true
+			},
+			"minecraft:jump.static": {
+				"jump_power": 0.1
+			},
+			"minecraft:movement": {
+				"value": 0.13
+			},
+			"minecraft:movement.basic": {
+				"max_turn": 30
+			}
+		},
+		"events": {}
+	}
+}

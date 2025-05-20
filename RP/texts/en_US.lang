@@ -1,0 +1,7 @@
+item.spawn_egg.entity.mb:buff_mb.name=Spawn Jacked MapleBear
+entity.mb:buff_mb.name=Jacked MapleBear
+item.spawn_egg.entity.mb:mb.name=Spawn Mapledabear
+entity.mb:mb.name=Mapledabear
+item.spawn_egg.entity.mb:infected.name=Spawn Maplethralls
+entity.mb:infected.name=Maplethralls
+item.mb:snow="snow"

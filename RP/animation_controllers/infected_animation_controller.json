@@ -1,0 +1,37 @@
+{
+	"format_version": "1.10.0",
+	"animation_controllers": {
+		"controller.animation.infected": {
+			"initial_state": "default",
+			"states": {
+				"default": {
+					"animations": [
+						{
+							"idle": true,
+							"infected": true
+						}
+					],
+					"transitions": [
+						{
+							"walk": "query.ground_speed"
+						}
+					],
+					"blend_transition": 0.3
+				},
+				"walk": {
+					"animations": [
+						{
+							"walk": true
+						}
+					],
+					"transitions": [
+						{
+							"default": "!query.ground_speed"
+						}
+					],
+					"blend_transition": 0.1
+				}
+			}
+		}
+	}
+}

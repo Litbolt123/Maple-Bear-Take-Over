@@ -1,0 +1,33 @@
+{
+	"entity_sounds": {
+		"entities": {
+			"mb:buff_mb": {
+				"volume": [
+					1
+				],
+				"pitch": [
+					1
+				],
+				"events": {
+					"step": {
+						"sound": "buff_mb",
+						"volume": [
+							1
+						],
+						"pitch": [
+							1
+						]
+					}
+				}
+			},
+			"mb:mb": {
+				"volume": [
+					1
+				],
+				"pitch": [
+					1
+				]
+			}
+		}
+	}
+}

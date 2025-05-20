@@ -1,0 +1,18 @@
+{
+	"format_version": "1.14.0",
+	"sound_definitions": {
+		"buff_mb": {
+			"category": "ambient",
+			"sounds": [
+				{
+					"name": "sounds/buff_mb.step",
+					"stream": true,
+					"volume": 1,
+					"load_on_low_memory": true
+				}
+			],
+			"subtitle": "step of doom...",
+			"__use_legacy_max_distance": true
+		}
+	}
+}

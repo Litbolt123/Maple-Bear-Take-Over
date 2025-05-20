@@ -1,0 +1,38 @@
+{
+	"type": "minecraftBedrock",
+	"name": "MapleBear TakeOver",
+	"namespace": "bridge",
+	"authors": [
+		"MapleBear industries"
+	],
+	"targetVersion": "1.21.90",
+	"description": "Don't do drugs kids...",
+	"experimentalGameplay": {},
+	"bdsProject": false,
+	"packs": {
+		"behaviorPack": "./BP",
+		"resourcePack": "./RP"
+	},
+	"worlds": [
+		"./worlds/*"
+	],
+	"compiler": {
+		"plugins": [
+			"generatorScripts",
+			"typeScript",
+			"entityIdentifierAlias",
+			"customEntityComponents",
+			"customItemComponents",
+			"customBlockComponents",
+			"customCommands",
+			"moLang",
+			"formatVersionCorrection",
+			[
+				"simpleRewrite",
+				{
+					"packName": "MapleBear TakeOver"
+				}
+			]
+		]
+	}
+}

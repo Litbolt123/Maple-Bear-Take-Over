@@ -1,0 +1,37 @@
+{
+	"format_version": "1.10.0",
+	"animation_controllers": {
+		"controller.animation.buff_mb": {
+			"initial_state": "idle",
+			"states": {
+				"idle": {
+					"animations": [
+						{
+							"idle": true,
+							"buff_mb": true
+						}
+					],
+					"blend_transition": 0.1,
+					"transitions": [
+						{
+							"walk": "query.ground_speed"
+						}
+					]
+				},
+				"walk": {
+					"animations": [
+						{
+							"walk": true
+						}
+					],
+					"transitions": [
+						{
+							"default": "!query.ground_speed"
+						}
+					],
+					"blend_transition": 0.1
+				}
+			}
+		}
+	}
+}

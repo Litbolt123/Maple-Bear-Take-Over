@@ -1,0 +1,52 @@
+{
+	"format_version": 2,
+	"metadata": {
+		"authors": [
+			"MapleBear industries"
+		],
+		"generated_with": {
+			"bridge": [
+				"2.7.46"
+			],
+			"dash": [
+				"0.11.7"
+			]
+		}
+	},
+	"header": {
+		"name": "MapleBear TakeOver",
+		"description": "Don't do drugs kids...",
+		"min_engine_version": [
+			1,
+			21,
+			80
+		],
+		"uuid": "2a4d2f59-f46d-47fc-a3c1-7a26d46d2157",
+		"version": [
+			1,
+			0,
+			0
+		]
+	},
+	"modules": [
+		{
+			"type": "resources",
+			"uuid": "773166f7-f06f-40b3-b44d-98d6ac5a6726",
+			"version": [
+				1,
+				0,
+				0
+			]
+		}
+	],
+	"dependencies": [
+		{
+			"uuid": "064b6f9c-349b-4ab1-80d3-c95f732db577",
+			"version": [
+				1,
+				0,
+				0
+			]
+		}
+	]
+}

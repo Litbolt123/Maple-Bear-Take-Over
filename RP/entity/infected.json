@@ -1,0 +1,40 @@
+{
+	"format_version": "1.20.80",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "mb:infected",
+			"materials": {
+				"default": "enderman"
+			},
+			"textures": {
+				"default": "textures/entity/Infected_human_mb1"
+			},
+			"geometry": {
+				"default": "geometry.infected"
+			},
+			"render_controllers": [
+				"controller.render.infected"
+			],
+			"spawn_egg": {
+				"texture": "mb_infected_egg",
+				"texture_index": 0
+			},
+			"animations": {
+				"look_at_target": "animation.humanoid.look_at_target.default",
+				"idle": "animation.infected.idle",
+				"infected": "controller.animation.infected",
+				"walk": "animation.infected.walk2"
+			},
+			"scripts": {
+				"animate": [
+					{
+						"look_at_target": true
+					},
+					{
+						"infected": true
+					}
+				]
+			}
+		}
+	}
+}

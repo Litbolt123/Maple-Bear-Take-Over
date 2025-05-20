@@ -1,0 +1,42 @@
+{
+	"format_version": "1.20.80",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "mb:buff_mb",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/buff_maplebear"
+			},
+			"geometry": {
+				"default": "geometry.buff_mb"
+			},
+			"render_controllers": [
+				"controller.render.buff_mb"
+			],
+			"spawn_egg": {
+				"texture": "mb_buff_mb_egg",
+				"texture_index": 0
+			},
+			"animations": {
+				"look_at_target": "animation.humanoid.look_at_target.default",
+				"idle": "animation.buff_maple.idle",
+				"walk": "animation.buff_mb.walk",
+				"attack": "animation.buff_mb.attack",
+				"climb": "animation.buff_mb.climb",
+				"buff_mb": "controller.animation.buff_mb"
+			},
+			"scripts": {
+				"animate": [
+					{
+						"look_at_target": true
+					},
+					{
+						"buff_mb": true
+					}
+				]
+			}
+		}
+	}
+}
