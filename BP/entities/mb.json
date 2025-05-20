@@ -79,7 +79,7 @@
 			"minecraft:behavior.melee_attack": {
 				"priority": 1,
 				"target_dist": 200,
-				"speed_multiplier": 2,
+				"speed_multiplier": 1.8,
 				"track_target": true,
 				"set_persistent": true,
 				"look_distance": 200,
@@ -89,7 +89,7 @@
 			},
 			"minecraft:behavior.random_stroll": {
 				"priority": 1,
-				"speed_multiplier": 1.4
+				"speed_multiplier": 1.2
 			},
 			"minecraft:behavior.look_at_player": {
 				"priority": 5,
