@@ -219,7 +219,7 @@
 				]
 			},
 			"minecraft:behavior.move_to_land": {
-				"priority": 4,
+				"priority": 5,
 				"goal_radius": 1,
 				"search_count": 10,
 				"search_height": 9,
