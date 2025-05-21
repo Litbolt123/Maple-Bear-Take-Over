@@ -77,7 +77,7 @@
 			},
 			"minecraft:behavior.melee_attack": {
 				"priority": 1,
-				"speed_multiplier": 1.9,
+				"speed_multiplier": 1.1,
 				"track_target": true,
 				"y_max_head_rotation": 360,
 				"reach_multiplier": 2
@@ -173,7 +173,7 @@
 			"minecraft:block_climber": {},
 			"minecraft:movement.generic": {},
 			"minecraft:behavior.leap_at_target": {
-				"priority": 3,
+				"priority": 2,
 				"set_persistent": true,
 				"target_dist": 20,
 				"must_be_on_ground": true,
