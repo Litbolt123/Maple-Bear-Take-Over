@@ -12,6 +12,9 @@
 			"geometry": {
 				"default": "geometry.buff_mb"
 			},
+			"particle_effects": {
+				"death_dust": "mb:white_dust_particale"
+			},
 			"render_controllers": [
 				"controller.render.buff_mb"
 			],
@@ -25,7 +28,8 @@
 				"walk": "animation.buff_mb.walk",
 				"attack": "animation.buff_mb.attack",
 				"climb": "animation.buff_mb.climb",
-				"buff_mb": "controller.animation.buff_mb"
+				"buff_mb": "controller.animation.buff_mb",
+				"death_particles": "animation.mb.death_particles"
 			},
 			"scripts": {
 				"animate": [
@@ -34,6 +38,9 @@
 					},
 					{
 						"buff_mb": true
+					},
+					{
+						"death_particles": "!query.is_alive"
 					}
 				]
 			}

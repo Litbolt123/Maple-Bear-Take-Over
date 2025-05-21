@@ -1,0 +1,14 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"animation.mb.death_particles": {
+			"animation_length": 3,
+			"particle_effects": {
+				"0.0": {
+					"effect": "death_dust",
+					"locator": "body"
+				}
+			}
+		}
+	}
+}

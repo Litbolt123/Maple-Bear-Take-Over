@@ -12,12 +12,25 @@
 			"geometry": {
 				"default": "geometry.mb"
 			},
+			"particle_effects": {
+				"death_dust": "mb:white_dust_particale"
+			},
 			"render_controllers": [
 				"controller.render.mb"
 			],
 			"spawn_egg": {
 				"texture": "mb_mb_egg",
 				"texture_index": 0
+			},
+			"scripts": {
+				"animate": [
+					{
+						"death_particles": "!query.is_alive"
+					}
+				]
+			},
+			"animations": {
+				"death_particles": "animation.mb.death_particles" 
 			}
 		}
 	}

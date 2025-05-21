@@ -12,6 +12,9 @@
 			"geometry": {
 				"default": "geometry.infected"
 			},
+			"particle_effects": {
+				"death_dust": "mb:white_dust_particale"
+			},
 			"render_controllers": [
 				"controller.render.infected"
 			],
@@ -23,7 +26,8 @@
 				"look_at_target": "animation.humanoid.look_at_target.default",
 				"idle": "animation.infected.idle",
 				"infected_controller": "controller.animation.infected_mb",
-				"walk": "animation.infected.walk2"
+				"walk": "animation.infected.walk2",
+				"death_particles": "animation.mb.death_particles"
 			},
 			"scripts": {
 				"animate": [
@@ -32,6 +36,9 @@
 					},
 					{
 						"infected_controller": true
+					},
+					{
+						"death_particles": "!query.is_alive"
 					}
 				]
 			}

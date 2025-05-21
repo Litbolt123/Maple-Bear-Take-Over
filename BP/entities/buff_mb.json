@@ -87,7 +87,6 @@
 			"minecraft:movement.basic": {
 				"max_turn": 30
 			}
-		},
-		"events": {}
+		}
 	}
 }
