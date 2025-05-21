@@ -13,6 +13,19 @@
 			],
 			"subtitle": "step of doom...",
 			"__use_legacy_max_distance": true
+		},
+		"mb:mb_sound": {
+			"category": "hostile",
+			"sounds": [
+				{
+					"name": "sounds/buff_mb.step",
+					"stream": true,
+					"volume": 0.5,
+					"load_on_low_memory": true
+				}
+			],
+			"subtitle": "tiny mb sound",
+			"__use_legacy_max_distance": true
 		}
 	}
 }

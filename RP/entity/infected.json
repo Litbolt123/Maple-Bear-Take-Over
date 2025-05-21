@@ -22,7 +22,7 @@
 			"animations": {
 				"look_at_target": "animation.humanoid.look_at_target.default",
 				"idle": "animation.infected.idle",
-				"infected": "controller.animation.infected",
+				"infected_controller": "controller.animation.infected_mb",
 				"walk": "animation.infected.walk2"
 			},
 			"scripts": {
@@ -31,7 +31,7 @@
 						"look_at_target": true
 					},
 					{
-						"infected": true
+						"infected_controller": true
 					}
 				]
 			}

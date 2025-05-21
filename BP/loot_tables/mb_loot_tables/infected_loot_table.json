@@ -3,7 +3,10 @@
 		{
 			"rolls": 1,
 			"entries": [
-				{},
+				{
+					"type": "empty",
+					"weight": 2
+				},
 				{
 					"type": "item",
 					"weight": 8,

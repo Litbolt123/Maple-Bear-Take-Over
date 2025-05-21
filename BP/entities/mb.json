@@ -17,7 +17,8 @@
 								{
 									"any_of": [
 										{
-											"subject": "player"
+											"test": "is_family",
+											"value": "player"
 										}
 									]
 								}
@@ -78,14 +79,11 @@
 			},
 			"minecraft:behavior.melee_attack": {
 				"priority": 1,
-				"target_dist": 200,
 				"speed_multiplier": 1.8,
 				"track_target": true,
-				"set_persistent": true,
-				"look_distance": 200,
 				"y_max_head_rotation": 360,
 				"random_stop_interval": 0,
-				"reach_multiplier": -0.1
+				"reach_multiplier": 0.1
 			},
 			"minecraft:behavior.random_stroll": {
 				"priority": 1,
@@ -100,9 +98,9 @@
 				"is_pushable_by_piston": true
 			},
 			"minecraft:breathable": {
-				"totalSupply": 15,
-				"suffocateTime": 0,
-				"breathesWater": true
+				"breathes_water": true,
+				"total_supply": 15,
+				"suffocate_time": 0
 			},
 			"minecraft:fire_immune": true,
 			"minecraft:behavior.hurt_by_target": {
@@ -148,7 +146,8 @@
 						{
 							"any_of": [
 								{
-									"subject": "player"
+									"test": "is_family",
+									"value": "player"
 								}
 							]
 						}

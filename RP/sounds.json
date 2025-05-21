@@ -26,7 +26,18 @@
 				],
 				"pitch": [
 					1
-				]
+				],
+				"events": {
+					"step": {
+						"sound": "mb:mb_sound",
+						"volume": [
+							1
+						],
+						"pitch": [
+							1
+						]
+					}
+				}
 			}
 		}
 	}

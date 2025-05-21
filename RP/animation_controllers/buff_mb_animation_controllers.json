@@ -4,6 +4,19 @@
 		"controller.animation.buff_mb": {
 			"initial_state": "idle",
 			"states": {
+				"default": {
+					"animations": [
+						{
+							"idle": true,
+							"buff_mb": true
+						}
+					],
+					"transitions": [
+						{
+							"idle": "true"
+						}
+					]
+				},
 				"idle": {
 					"animations": [
 						{
@@ -26,7 +39,7 @@
 					],
 					"transitions": [
 						{
-							"default": "!query.ground_speed"
+							"idle": "!query.ground_speed"
 						}
 					],
 					"blend_transition": 0.1

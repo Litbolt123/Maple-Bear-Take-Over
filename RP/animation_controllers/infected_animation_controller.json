@@ -1,14 +1,13 @@
 {
 	"format_version": "1.10.0",
 	"animation_controllers": {
-		"controller.animation.infected": {
+		"controller.animation.infected_mb": {
 			"initial_state": "default",
 			"states": {
 				"default": {
 					"animations": [
 						{
-							"idle": true,
-							"infected": true
+							"idle": true
 						}
 					],
 					"transitions": [
