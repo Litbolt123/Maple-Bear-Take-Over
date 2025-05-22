@@ -113,7 +113,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
         if (damager && damager.typeId === MAPLE_BEAR_ID) {
             // Apply poison when hit
             system.run(() => {
-                player.addEffect("minecraft:poison", 60, { amplifier: 3 }); // 3 seconds, level 1
+                player.addEffect("minecraft:poison", 60, { amplifier: 0.5 }); // 3 seconds, level 1
                 
                 // Random chance (30%) to apply an additional random freaky effect
                 if (Math.random() < 0.3) {
@@ -131,14 +131,14 @@ system.runInterval(() => {
         // Find nearby tiny Maple Bears within 6 blocks
         const nearbyTinyBears = player.dimension.getEntities({
             location: player.location,
-            maxDistance: 6,
+            maxDistance: 5,
             type: MAPLE_BEAR_ID
         });
 
         // Apply nausea if tiny bears are nearby
         if (nearbyTinyBears.length > 0) {
             system.run(() => {
-                player.addEffect("minecraft:nausea", 100, { amplifier: 2 }); // 5 seconds, level 3
+                player.addEffect("minecraft:nausea", 100, { amplifier: 0.5 }); // 5 seconds, level 3
             });
         }
     }
