@@ -111,7 +111,7 @@
 						"filters": {
 							"test": "is_family",
 							"subject": "other",
-							"value": "player"
+							"value": "mob"
 						}
 					},
 					{
@@ -145,7 +145,7 @@
 							"any_of": [
 								{
 									"test": "is_family",
-									"value": "player"
+									"value": "mob"
 								}
 							]
 						}
