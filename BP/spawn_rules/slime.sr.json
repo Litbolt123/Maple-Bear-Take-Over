@@ -1,5 +1,5 @@
 {
-	"format_version": "1.10.0",
+	"format_version": "1.21.80",
 	"minecraft:spawn_rules": {
 		"description": {
 			"identifier": "minecraft:slime",
@@ -7,7 +7,7 @@
 		},
 		"conditions": [
 			{
-				"minecraft:spawns_underground": {},
+				"minecraft:spawns_on_surface": {},
 				"minecraft:brightness_filter": {
 					"min": 0,
 					"max": 7,
@@ -24,15 +24,26 @@
 				"minecraft:weight": {
 					"default": 100
 				},
-				"minecraft:spawns_on_block_filter": [
-					"dirt",
-					"stone",
-					"grass_block"
-				],
+				"minecraft:herd": {
+					"min_size": 1,
+					"max_size": 1
+				},
+				"minecraft:density_limit": {
+					"surface": 70
+				},
 				"minecraft:biome_filter": {
-					"test": "has_biome_tag",
-					"operator": "==",
-					"value": "monster"
+					"any_of": [
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "swamp"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "mangrove_swamp"
+						}
+					]
 				}
 			}
 		]

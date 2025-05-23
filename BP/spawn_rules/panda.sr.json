@@ -2,7 +2,7 @@
 	"format_version": "1.21.80",
 	"minecraft:spawn_rules": {
 		"description": {
-			"identifier": "minecraft:sheep",
+			"identifier": "minecraft:panda",
 			"population_control": "animal"
 		},
 		"conditions": [
@@ -22,31 +22,30 @@
 					"max": 2400
 				},
 				"minecraft:weight": {
-					"default": 12
+					"default": 1
 				},
 				"minecraft:herd": {
-					"min_size": 2,
-					"max_size": 3
+					"min_size": 1,
+					"max_size": 2
 				},
 				"minecraft:density_limit": {
-					"surface": 10
+					"surface": 70
+				},
+				"minecraft:disallow_spawns_in_bubble": {},
+				"minecraft:distance_filter": {
+					"min": 24,
+					"max": 128
+				},
+				"minecraft:height_filter": {
+					"min": 0,
+					"max": 128
 				},
 				"minecraft:biome_filter": {
 					"any_of": [
 						{
 							"test": "has_biome_tag",
 							"operator": "==",
-							"value": "plains"
-						},
-						{
-							"test": "has_biome_tag",
-							"operator": "==",
-							"value": "forest"
-						},
-						{
-							"test": "has_biome_tag",
-							"operator": "==",
-							"value": "mountains"
+							"value": "jungle"
 						}
 					]
 				}

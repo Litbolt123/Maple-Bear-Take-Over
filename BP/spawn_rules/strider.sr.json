@@ -2,14 +2,14 @@
 	"format_version": "1.21.80",
 	"minecraft:spawn_rules": {
 		"description": {
-			"identifier": "minecraft:sheep",
+			"identifier": "minecraft:strider",
 			"population_control": "animal"
 		},
 		"conditions": [
 			{
 				"minecraft:spawns_on_surface": {},
 				"minecraft:brightness_filter": {
-					"min": 7,
+					"min": 0,
 					"max": 15,
 					"adjust_for_weather": true
 				},
@@ -22,31 +22,29 @@
 					"max": 2400
 				},
 				"minecraft:weight": {
-					"default": 12
+					"default": 60
 				},
 				"minecraft:herd": {
 					"min_size": 2,
-					"max_size": 3
+					"max_size": 4
 				},
 				"minecraft:density_limit": {
-					"surface": 10
+					"surface": 70
+				},
+				"minecraft:distance_filter": {
+					"min": 24,
+					"max": 128
+				},
+				"minecraft:height_filter": {
+					"min": 0,
+					"max": 128
 				},
 				"minecraft:biome_filter": {
 					"any_of": [
 						{
 							"test": "has_biome_tag",
 							"operator": "==",
-							"value": "plains"
-						},
-						{
-							"test": "has_biome_tag",
-							"operator": "==",
-							"value": "forest"
-						},
-						{
-							"test": "has_biome_tag",
-							"operator": "==",
-							"value": "mountains"
+							"value": "nether"
 						}
 					]
 				}
