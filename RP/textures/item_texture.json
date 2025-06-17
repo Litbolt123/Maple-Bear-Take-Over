@@ -15,7 +15,7 @@
 			"textures": "textures/items/Infected_human_mb_egg"
 		},
 		"mb_snow": {
-			"textures": "textures/items/snow___"
+			"textures": "textures/items/mb_snow"
 		}
 	}
 }
