@@ -1,4 +1,12 @@
 import { world, system, EntityTypes, Entity, Player } from "@minecraft/server";
+import { 
+    getCurrentDay, 
+    setCurrentDay, 
+    isMilestoneDay, 
+    initializeDayTracking, 
+    ensureScoreboardExists, 
+    handleMilestoneDay 
+} from "./mb_dayTracker.js";
 
 // Constants for Maple Bear behavior
 const MAPLE_BEAR_ID = "mb:mb";
@@ -20,6 +28,9 @@ const FREAKY_EFFECTS = [
 // Track players who have eaten snow and their transformation progress
 const transformingPlayers = new Map();
 
+// Track player inventories for clone drops
+const playerInventories = new Map();
+
 // Wait for the world to initialize before setting up event-driven systems
 world.afterEvents.worldInitialize.subscribe(() => {
     console.log("World initialized, setting up event listeners...");
@@ -32,6 +43,14 @@ world.afterEvents.worldInitialize.subscribe(() => {
         if (item?.typeId === SNOW_ITEM_ID) {
             try {
                 system.run(() => {
+                    // Save player inventory before transformation
+                    const inventory = [];
+                    for (let i = 0; i < player.getComponent("inventory").container.size; i++) {
+                        const item = player.getComponent("inventory").container.getItem(i);
+                        if (item) inventory.push({ slot: i, item: item });
+                    }
+                    playerInventories.set(player.id, inventory);
+
                     // Apply nausea effect using API
                     player.addEffect("minecraft:nausea", 550, { amplifier: 9 }); // 20 seconds (400 ticks) with amplifier 9
                     // Play effects
@@ -56,8 +75,40 @@ world.afterEvents.worldInitialize.subscribe(() => {
     // Handle player death to clean up transformation timers
     world.afterEvents.entityDie.subscribe((event) => {
         const entity = event.deadEntity;
+        
+        // Clean up transformation tracking
         if (entity instanceof Player) {
             transformingPlayers.delete(entity.id);
+            playerInventories.delete(entity.id);
+        }
+        
+        // Handle clone death drops
+        if (entity.typeId === INFECTED_BEAR_ID) {
+            const cloneOf = entity.getComponent("minecraft:variant")?.value;
+            if (cloneOf) {
+                const originalInventory = playerInventories.get(cloneOf);
+                if (originalInventory) {
+                    // Drop random items from original inventory
+                    const location = entity.location;
+                    const dimension = entity.dimension;
+                    
+                    // Drop 3-5 random items
+                    const numItems = Math.floor(Math.random() * 3) + 3;
+                    const shuffled = [...originalInventory].sort(() => 0.5 - Math.random());
+                    
+                    for (let i = 0; i < numItems; i++) {
+                        if (shuffled[i]) {
+                            // 50% chance to convert item to snow
+                            if (Math.random() < 0.5) {
+                                dimension.runCommand(`summon item ${location.x} ${location.y} ${location.z} {"Item":{"id":"${SNOW_ITEM_ID}","Count":1}}`);
+                            } else {
+                                const item = shuffled[i].item;
+                                dimension.runCommand(`summon item ${location.x} ${location.y} ${location.z} {"Item":{"id":"${item.typeId}","Count":${item.amount}}}`);
+                            }
+                        }
+                    }
+                }
+            }
         }
     });
 
@@ -123,8 +174,9 @@ system.runInterval(() => {
                     // Kill the player
                     player.kill();
                     
-                    // Spawn infected Maple Bear
-                    player.dimension.runCommand(`summon ${INFECTED_BEAR_ID} ${location.x} ${location.y} ${location.z}`);
+                    // Spawn infected Maple Bear with player variant
+                    const bear = player.dimension.spawnEntity(INFECTED_BEAR_ID, location);
+                    bear.getComponent("minecraft:variant").value = player.id;
                     
                     // Broadcast transformation
                     player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} transformed into a Maple Bear!"}]}`);
