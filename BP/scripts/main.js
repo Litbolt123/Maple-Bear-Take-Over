@@ -39,6 +39,163 @@ const infectedPlayers = new Set();
 // Track if we're currently handling a death to prevent double spawning
 let isHandlingDeath = false;
 
+/**
+ * Get the maximum stack size for an item type
+ * @param {string} itemType - The item type ID
+ * @returns {number} The maximum stack size
+ */
+function getMaxStackSize(itemType) {
+    // Items that stack to 16
+    const stack16Items = [
+        'minecraft:ender_pearl',
+        'minecraft:snowball',
+        'minecraft:egg',
+        'minecraft:sign',
+        'minecraft:bed',
+        'minecraft:boat',
+        'minecraft:minecart',
+        'minecraft:chest_minecart',
+        'minecraft:furnace_minecart',
+        'minecraft:tnt_minecart',
+        'minecraft:hopper_minecart',
+        'minecraft:spawner_minecart',
+        'minecraft:command_block_minecart',
+        'minecraft:jukebox',
+        'minecraft:note_block',
+        'minecraft:jukebox',
+        'minecraft:flower_pot',
+        'minecraft:skull',
+        'minecraft:banner',
+        'minecraft:armor_stand',
+        'minecraft:item_frame',
+        'minecraft:painting',
+        'minecraft:lead',
+        'minecraft:name_tag',
+        'minecraft:experience_bottle',
+        'minecraft:firework_rocket',
+        'minecraft:firework_star',
+        'minecraft:written_book',
+        'minecraft:book_and_quill',
+        'minecraft:map',
+        'minecraft:filled_map',
+        'minecraft:clock',
+        'minecraft:compass',
+        'minecraft:recovery_compass',
+        'minecraft:lodestone_compass',
+        'minecraft:spyglass',
+        'minecraft:goat_horn',
+        'minecraft:music_disc',
+        'minecraft:disc_fragment_5',
+        'minecraft:nether_star',
+        'minecraft:conduit',
+        'minecraft:heart_of_the_sea',
+        'minecraft:nautilus_shell',
+        'minecraft:scute',
+        'minecraft:turtle_helmet',
+        'minecraft:trident',
+        'minecraft:crossbow',
+        'minecraft:shield',
+        'minecraft:totem_of_undying',
+        'minecraft:elytra',
+        'minecraft:horse_armor',
+        'minecraft:saddle',
+        'minecraft:carrot_on_a_stick',
+        'minecraft:warped_fungus_on_a_stick',
+        'minecraft:brush',
+        'minecraft:goat_horn',
+        'minecraft:music_disc',
+        'minecraft:disc_fragment_5',
+        'minecraft:nether_star',
+        'minecraft:conduit',
+        'minecraft:heart_of_the_sea',
+        'minecraft:nautilus_shell',
+        'minecraft:scute',
+        'minecraft:turtle_helmet',
+        'minecraft:trident',
+        'minecraft:crossbow',
+        'minecraft:shield',
+        'minecraft:totem_of_undying',
+        'minecraft:elytra',
+        'minecraft:horse_armor',
+        'minecraft:saddle',
+        'minecraft:carrot_on_a_stick',
+        'minecraft:warped_fungus_on_a_stick',
+        'minecraft:brush'
+    ];
+    
+    // Items that stack to 1 (non-stackable)
+    const stack1Items = [
+        'minecraft:sword',
+        'minecraft:pickaxe', 
+        'minecraft:axe',
+        'minecraft:shovel',
+        'minecraft:hoe',
+        'minecraft:bow',
+        'minecraft:helmet',
+        'minecraft:chestplate',
+        'minecraft:leggings',
+        'minecraft:boots',
+        'minecraft:shears',
+        'minecraft:flint_and_steel',
+        'minecraft:compass',
+        'minecraft:clock',
+        'minecraft:map',
+        'minecraft:filled_map',
+        'minecraft:book',
+        'minecraft:written_book',
+        'minecraft:book_and_quill',
+        'minecraft:enchanted_book',
+        'minecraft:name_tag',
+        'minecraft:lead',
+        'minecraft:item_frame',
+        'minecraft:painting',
+        'minecraft:sign',
+        'minecraft:bed',
+        'minecraft:boat',
+        'minecraft:minecart',
+        'minecraft:chest_minecart',
+        'minecraft:furnace_minecart',
+        'minecraft:tnt_minecart',
+        'minecraft:hopper_minecart',
+        'minecraft:spawner_minecart',
+        'minecraft:command_block_minecart',
+        'minecraft:jukebox',
+        'minecraft:note_block',
+        'minecraft:flower_pot',
+        'minecraft:skull',
+        'minecraft:banner',
+        'minecraft:armor_stand',
+        'minecraft:experience_bottle',
+        'minecraft:firework_rocket',
+        'minecraft:firework_star',
+        'minecraft:nether_star',
+        'minecraft:conduit',
+        'minecraft:heart_of_the_sea',
+        'minecraft:nautilus_shell',
+        'minecraft:scute',
+        'minecraft:turtle_helmet',
+        'minecraft:totem_of_undying',
+        'minecraft:horse_armor',
+        'minecraft:saddle',
+        'minecraft:carrot_on_a_stick',
+        'minecraft:warped_fungus_on_a_stick',
+        'minecraft:brush',
+        'minecraft:goat_horn',
+        'minecraft:music_disc',
+        'minecraft:disc_fragment_5'
+    ];
+    
+    // Check for special stack sizes
+    if (stack16Items.some(item => itemType.includes(item))) {
+        return 16;
+    } else if (stack1Items.some(item => itemType.includes(item))) {
+        return 1;
+    } else {
+        // Default to 64 for most items
+        return 64;
+    }
+}
+
 // Wait for the world to initialize before setting up event-driven systems
 world.afterEvents.worldInitialize.subscribe(() => {
     console.log("World initialized, setting up event listeners...");
@@ -121,52 +278,128 @@ world.afterEvents.worldInitialize.subscribe(() => {
 
                     // Shuffle and limit how many items we try to drop
                     const shuffled = [...inventory].sort(() => 0.5 - Math.random());
-                    const dropCount = Math.max(1, Math.floor(inventory.length * 0.2)); // 20% of inventory, minimum 1
                     
-                    console.log(`Infected bear death - Attempting to drop ${dropCount} items from ${shuffled.length} total items`);
+                    // Calculate total individual items (not stacks)
+                    const totalIndividualItems = shuffled.reduce((total, entry) => total + (entry.amount || 1), 0);
+                    
+                    // Calculate how many individual items to preserve (20% of total individual items)
+                    const individualItemsToPreserve = Math.max(1, Math.floor(totalIndividualItems * 0.2));
+                    
+                    console.log(`Infected bear death - Attempting to preserve ${individualItemsToPreserve} individual items from ${totalIndividualItems} total individual items (${shuffled.length} stacks)`);
 
-                    // First, drop the selected items (preserved)
-                    for (let i = 0; i < dropCount && i < shuffled.length; i++) {
-                        const entry = shuffled[i];
-                        console.log(`Infected bear death - Processing preserved item ${i}:`, entry);
-                        
-                        if (!entry || !entry.typeId) {
-                            console.log(`Infected bear death - Skipping invalid item ${i}`);
-                            continue;
-                        }
-
-                        const dropLocation = { 
-                            x: location.x + Math.random() - 0.5, 
-                            y: location.y + 0.5, 
-                            z: location.z + Math.random() - 0.5 
-                        };
-
-                        // Preserve and drop the selected item
-                        try {
-                            const itemStack = new ItemStack(entry.typeId, entry.amount || 1);
-                            dimension.spawnItem(itemStack, dropLocation);
-                            console.log(`Infected bear death - Preserved and dropped item ${entry.typeId} at ${dropLocation.x}, ${dropLocation.y}, ${dropLocation.z}`);
-                            
-                            // Add preservation particle effect (simplified)
-                            try {
-                                dimension.runCommand(`particle minecraft:glow ${Math.round(dropLocation.x)} ${Math.round(dropLocation.y)} ${Math.round(dropLocation.z)}`);
-                            } catch (error) {
-                                console.warn("Failed to spawn preservation particle:", error);
+                    // First, preserve individual items (not stacks) with maximum variety
+                    let preservedCount = 0;
+                    
+                    // Group items by type for better variety
+                    const itemGroups = {};
+                    shuffled.forEach(entry => {
+                        if (entry && entry.typeId) {
+                            if (!itemGroups[entry.typeId]) {
+                                itemGroups[entry.typeId] = [];
                             }
-                        } catch (error) {
-                            console.warn(`Failed to preserve item ${entry.typeId}:`, error);
-                            // Fallback to snow if preservation fails
-                            const snowItem = new ItemStack(SNOW_ITEM_ID, 1);
-                            dimension.spawnItem(snowItem, dropLocation);
-                            console.log(`Infected bear death - Fallback snow spawned for failed item ${entry.typeId}`);
+                            itemGroups[entry.typeId].push(entry);
+                        }
+                    });
+                    
+                    // Get unique item types and shuffle them for randomness
+                    const uniqueItemTypes = Object.keys(itemGroups).sort(() => Math.random() - 0.5);
+                    
+                    // Calculate max items per type with special limits for tools
+                    let maxItemsPerType = Math.max(1, Math.floor(individualItemsToPreserve / uniqueItemTypes.length));
+                    
+                    // Limit tools to prevent getting too many back
+                    const toolTypes = ['minecraft:sword', 'minecraft:pickaxe', 'minecraft:axe', 'minecraft:shovel', 'minecraft:hoe', 'minecraft:bow', 'minecraft:crossbow', 'minecraft:trident', 'minecraft:shield'];
+                    const maxToolsPerType = 1; // Only 1 tool per type maximum
+                    
+                    console.log(`Infected bear death - Found ${uniqueItemTypes.length} unique item types, max ${maxItemsPerType} items per type (tools limited to ${maxToolsPerType})`);
+                    
+                    // Preserve items from each type to ensure variety (in random order)
+                    for (const itemType of uniqueItemTypes) {
+                        if (preservedCount >= individualItemsToPreserve) break;
+                        
+                        const itemsOfThisType = itemGroups[itemType];
+                        let itemsPreservedFromType = 0;
+                        
+                        // Check if this is a tool type
+                        const isTool = toolTypes.some(toolType => itemType.includes(toolType));
+                        const maxForThisType = isTool ? maxToolsPerType : maxItemsPerType;
+                        
+                        // Shuffle the stacks of this item type for randomness
+                        const shuffledStacks = [...itemsOfThisType].sort(() => Math.random() - 0.5);
+                        
+                        for (const entry of shuffledStacks) {
+                            if (preservedCount >= individualItemsToPreserve || itemsPreservedFromType >= maxForThisType) break;
+                            
+                            const dropLocation = { 
+                                x: location.x + Math.random() - 0.5, 
+                                y: location.y + 0.5, 
+                                z: location.z + Math.random() - 0.5 
+                            };
+
+                            // Calculate how many items from this stack to preserve (with randomness)
+                            const itemsInStack = entry.amount || 1;
+                            const maxPossibleFromStack = Math.min(
+                                itemsInStack, 
+                                individualItemsToPreserve - preservedCount,
+                                maxForThisType - itemsPreservedFromType
+                            );
+                            
+                            // Add randomness to the amount preserved based on item type
+                            let itemsToPreserveFromStack;
+                            
+                            // Check if this is a non-stackable item (tools, armor, etc.)
+                            const nonStackableItems = ['minecraft:sword', 'minecraft:pickaxe', 'minecraft:axe', 'minecraft:shovel', 'minecraft:hoe', 'minecraft:bow', 'minecraft:crossbow', 'minecraft:trident', 'minecraft:shield', 'minecraft:helmet', 'minecraft:chestplate', 'minecraft:leggings', 'minecraft:boots', 'minecraft:elytra'];
+                            const isNonStackable = nonStackableItems.some(itemType => entry.typeId.includes(itemType));
+                            
+                            if (isNonStackable) {
+                                // For non-stackable items, preserve 0 or 1 (random)
+                                itemsToPreserveFromStack = Math.random() < 0.5 ? 0 : Math.min(1, maxPossibleFromStack);
+                            } else {
+                                // For stackable items, preserve random amount between 1 and max possible (or max stack size)
+                                const maxStackSize = getMaxStackSize(entry.typeId);
+                                const maxToPreserve = Math.min(maxPossibleFromStack, maxStackSize);
+                                itemsToPreserveFromStack = maxToPreserve > 1 ? 
+                                    Math.floor(Math.random() * maxToPreserve) + 1 : 
+                                    maxToPreserve;
+                            }
+                            
+                            if (itemsToPreserveFromStack > 0) {
+                                // Preserve and drop the selected items from this stack
+                                try {
+                                    const itemStack = new ItemStack(entry.typeId, itemsToPreserveFromStack);
+                                    dimension.spawnItem(itemStack, dropLocation);
+                                    console.log(`Infected bear death - Preserved and dropped ${itemsToPreserveFromStack} items of ${entry.typeId} at ${dropLocation.x}, ${dropLocation.y}, ${dropLocation.z}`);
+                                    
+                                    // Add preservation particle effect (simplified)
+                                    try {
+                                        dimension.runCommand(`particle minecraft:glow ${Math.round(dropLocation.x)} ${Math.round(dropLocation.y)} ${Math.round(dropLocation.z)}`);
+                                    } catch (error) {
+                                        console.warn("Failed to spawn preservation particle:", error);
+                                    }
+                                    
+                                    preservedCount += itemsToPreserveFromStack;
+                                    itemsPreservedFromType += itemsToPreserveFromStack;
+                                } catch (error) {
+                                    console.warn(`Failed to preserve items of ${entry.typeId}:`, error);
+                                    // Fallback to snow if preservation fails
+                                    const snowItem = new ItemStack(SNOW_ITEM_ID, itemsToPreserveFromStack);
+                                    dimension.spawnItem(snowItem, dropLocation);
+                                    console.log(`Infected bear death - Fallback snow spawned for failed items of ${entry.typeId}`);
+                                    preservedCount += itemsToPreserveFromStack;
+                                    itemsPreservedFromType += itemsToPreserveFromStack;
+                                }
+                            }
                         }
                     }
                     
-                    // Then, corrupt the remaining items into snow (50% of non-selected items)
-                    const remainingItems = shuffled.slice(dropCount);
-                    const corruptionCount = Math.floor(remainingItems.length * 0.5); // 50% of remaining items
+                    // Then, corrupt the remaining individual items into snow (50% of remaining individual items, but capped)
+                    const remainingIndividualItems = totalIndividualItems - preservedCount;
+                    const corruptionCount = Math.min(
+                        Math.floor(remainingIndividualItems * 0.5), // 50% of remaining
+                        20 // Cap at 20 snow items maximum
+                    );
                     
-                    console.log(`Infected bear death - Corrupting ${corruptionCount} of ${remainingItems.length} remaining items into snow`);
+                    console.log(`Infected bear death - Corrupting ${corruptionCount} of ${remainingIndividualItems} remaining individual items into snow (capped at 20)`);
                     
                     for (let i = 0; i < corruptionCount; i++) {
                         const dropLocation = { 
@@ -390,6 +623,7 @@ system.runInterval(() => {
                         
                         // Capture player inventory right before transformation (includes items added after eating snow)
                         const inventory = [];
+                        let totalItemCount = 0;
                         for (let i = 0; i < player.getComponent("inventory").container.size; i++) {
                             const item = player.getComponent("inventory").container.getItem(i);
                             if (item) {
@@ -400,9 +634,10 @@ system.runInterval(() => {
                                     amount: item.amount,
                                     data: item.data || 0
                                 });
+                                totalItemCount += item.amount; // Count individual items, not stacks
                             }
                         }
-                        console.log(`Captured inventory for ${playerName}: ${inventory.length} items`);
+                        console.log(`Captured inventory for ${playerName}: ${inventory.length} item stacks (${totalItemCount} total items)`);
                         
                         // Clear player inventory before killing to prevent item drops
                         for (let i = 0; i < player.getComponent("inventory").container.size; i++) {
