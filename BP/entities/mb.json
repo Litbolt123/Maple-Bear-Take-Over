@@ -3,7 +3,7 @@
 	"minecraft:entity": {
 		"description": {
 			"identifier": "mb:mb",
-			"is_spawnable": false,
+			"is_spawnable": true,
 			"is_summonable": true,
 			"is_experimental": false,
 			"scripts": {}
