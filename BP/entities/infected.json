@@ -48,6 +48,122 @@
 			"minecraft:variant": {
 				"value": 0
 			},
+			"minecraft:inventory": {
+				"inventory_size": 5,
+				"private": false,
+				"restrict_to_owner": false
+			},
+			"minecraft:equipment": {
+				"table": "loot_tables/mb_loot_tables/infected_bear_equipment.json",
+				"slot_drop_chance": [
+					{
+						"slot": "slot.armor.head",
+						"drop_chance": 1
+					},
+					{
+						"slot": "slot.armor.chest",
+						"drop_chance": 1
+					},
+					{
+						"slot": "slot.armor.legs",
+						"drop_chance": 1
+					},
+					{
+						"slot": "slot.armor.feet",
+						"drop_chance": 1
+					},
+					{
+						"slot": "slot.weapon.offhand",
+						"drop_chance": 1
+					}
+				]
+			},
+			"minecraft:equippable": {
+				"slots": [
+					{
+						"slot": 0,
+						"accepted_items": [
+							"minecraft:leather_helmet",
+							"minecraft:iron_helmet",
+							"minecraft:diamond_helmet",
+							"minecraft:netherite_helmet",
+							"minecraft:golden_helmet",
+							"minecraft:chainmail_helmet",
+							"minecraft:turtle_helmet"
+						],
+						"on_equip": {
+							"event": "equip_armor"
+						}
+					},
+					{
+						"slot": 1,
+						"accepted_items": [
+							"minecraft:leather_chestplate",
+							"minecraft:iron_chestplate",
+							"minecraft:diamond_chestplate",
+							"minecraft:netherite_chestplate",
+							"minecraft:golden_chestplate",
+							"minecraft:chainmail_chestplate",
+							"minecraft:elytra"
+						],
+						"on_equip": {
+							"event": "equip_armor"
+						}
+					},
+					{
+						"slot": 2,
+						"accepted_items": [
+							"minecraft:leather_leggings",
+							"minecraft:iron_leggings",
+							"minecraft:diamond_leggings",
+							"minecraft:netherite_leggings",
+							"minecraft:golden_leggings",
+							"minecraft:chainmail_leggings"
+						],
+						"on_equip": {
+							"event": "equip_armor"
+						}
+					},
+					{
+						"slot": 3,
+						"accepted_items": [
+							"minecraft:leather_boots",
+							"minecraft:iron_boots",
+							"minecraft:diamond_boots",
+							"minecraft:netherite_boots",
+							"minecraft:golden_boots",
+							"minecraft:chainmail_boots"
+						],
+						"on_equip": {
+							"event": "equip_armor"
+						}
+					},
+					{
+						"slot": 4,
+						"accepted_items": [
+							"minecraft:shield",
+							"minecraft:totem_of_undying",
+							"minecraft:torch",
+							"minecraft:soul_torch",
+							"minecraft:lantern",
+							"minecraft:soul_lantern"
+						],
+						"on_equip": {
+							"event": "equip_weapon"
+						}
+					}
+				]
+			},
+			"minecraft:equip_item": {
+				"excluded_items": [
+					{
+						"item": "minecraft:banner:15"
+					}
+				]
+			},
+			"minecraft:behavior.equip_item": {
+				"priority": 2
+			},
 			"minecraft:navigation.generic": {
 				"can_float": true,
 				"can_walk": true,
@@ -95,11 +211,11 @@
 				"reach_multiplier": 2
 			},
 			"minecraft:behavior.random_stroll": {
-				"priority": 1,
+				"priority": 2,
 				"speed_multiplier": 1
 			},
 			"minecraft:behavior.look_at_player": {
-				"priority": 5,
+				"priority": 4,
 				"look_distance": 5
 			},
 			"minecraft:pushable": {
@@ -185,7 +301,7 @@
 			"minecraft:block_climber": {},
 			"minecraft:movement.generic": {},
 			"minecraft:behavior.leap_at_target": {
-				"priority": 2,
+				"priority": 3,
 				"set_persistent": true,
 				"target_dist": 20,
 				"must_be_on_ground": true,
@@ -240,12 +356,74 @@
 			"minecraft:conditional_bandwidth_optimization": {},
 			"minecraft:loot": {
 				"table": "loot_tables/mb_loot_tables/infected_loot_table.json"
+			},
+			"minecraft:behavior.pickup_items": {
+				"priority": 6,
+				"max_dist": 4,
+				"goal_radius": 1.5,
+				"speed_multiplier": 1.2,
+				"pickup_based_on_chance": false,
+				"can_pickup_any_item": true,
+				"excluded_items": [
+					"minecraft:glow_ink_sac"
+				]
+			},
+			"minecraft:shareables": {
+				"items": [
+					{ "item": "minecraft:netherite_sword", "want_amount": 1, "surplus_amount": 1, "priority": 0 },
+					{ "item": "minecraft:diamond_sword", "want_amount": 1, "surplus_amount": 1, "priority": 1 },
+					{ "item": "minecraft:iron_sword", "want_amount": 1, "surplus_amount": 1, "priority": 2 },
+					{ "item": "minecraft:stone_sword", "want_amount": 1, "surplus_amount": 1, "priority": 3 },
+					{ "item": "minecraft:golden_sword", "want_amount": 1, "surplus_amount": 1, "priority": 4 },
+					{ "item": "minecraft:wooden_sword", "want_amount": 1, "surplus_amount": 1, "priority": 5 },
+					{ "item": "minecraft:shield", "want_amount": 1, "surplus_amount": 1, "priority": 0 },
+					{ "item": "minecraft:netherite_helmet", "want_amount": 1, "surplus_amount": 1, "priority": 0 },
+					{ "item": "minecraft:diamond_helmet", "want_amount": 1, "surplus_amount": 1, "priority": 1 },
+					{ "item": "minecraft:iron_helmet", "want_amount": 1, "surplus_amount": 1, "priority": 2 },
+					{ "item": "minecraft:chainmail_helmet", "want_amount": 1, "surplus_amount": 1, "priority": 3 },
+					{ "item": "minecraft:golden_helmet", "want_amount": 1, "surplus_amount": 1, "priority": 4 },
+					{ "item": "minecraft:leather_helmet", "want_amount": 1, "surplus_amount": 1, "priority": 5 },
+					{ "item": "minecraft:turtle_helmet", "want_amount": 1, "surplus_amount": 1, "priority": 6 },
+					{ "item": "minecraft:skull:0", "want_amount": 1, "surplus_amount": 1, "priority": 7 },
+					{ "item": "minecraft:skull:1", "want_amount": 1, "surplus_amount": 1, "priority": 7 },
+					{ "item": "minecraft:carved_pumpkin", "want_amount": 1, "surplus_amount": 1, "priority": 7 },
+					{ "item": "minecraft:netherite_chestplate", "want_amount": 1, "surplus_amount": 1, "priority": 0 },
+					{ "item": "minecraft:diamond_chestplate", "want_amount": 1, "surplus_amount": 1, "priority": 1 },
+					{ "item": "minecraft:iron_chestplate", "want_amount": 1, "surplus_amount": 1, "priority": 2 },
+					{ "item": "minecraft:chainmail_chestplate", "want_amount": 1, "surplus_amount": 1, "priority": 3 },
+					{ "item": "minecraft:golden_chestplate", "want_amount": 1, "surplus_amount": 1, "priority": 4 },
+					{ "item": "minecraft:leather_chestplate", "want_amount": 1, "surplus_amount": 1, "priority": 5 },
+					{ "item": "minecraft:netherite_leggings", "want_amount": 1, "surplus_amount": 1, "priority": 0 },
+					{ "item": "minecraft:diamond_leggings", "want_amount": 1, "surplus_amount": 1, "priority": 1 },
+					{ "item": "minecraft:iron_leggings", "want_amount": 1, "surplus_amount": 1, "priority": 2 },
+					{ "item": "minecraft:chainmail_leggings", "want_amount": 1, "surplus_amount": 1, "priority": 3 },
+					{ "item": "minecraft:golden_leggings", "want_amount": 1, "surplus_amount": 1, "priority": 4 },
+					{ "item": "minecraft:leather_leggings", "want_amount": 1, "surplus_amount": 1, "priority": 5 },
+					{ "item": "minecraft:netherite_boots", "want_amount": 1, "surplus_amount": 1, "priority": 0 },
+					{ "item": "minecraft:diamond_boots", "want_amount": 1, "surplus_amount": 1, "priority": 1 },
+					{ "item": "minecraft:iron_boots", "want_amount": 1, "surplus_amount": 1, "priority": 2 },
+					{ "item": "minecraft:chainmail_boots", "want_amount": 1, "surplus_amount": 1, "priority": 3 },
+					{ "item": "minecraft:golden_boots", "want_amount": 1, "surplus_amount": 1, "priority": 4 },
+					{ "item": "minecraft:leather_boots", "want_amount": 1, "surplus_amount": 1, "priority": 5 }
+				]
 			}
 		},
 		"events": {
 			"become_buffed": {
 				"add": {
-					"component_groups": ["buffed"]
+					"component_groups": [
+						"buffed"
+					]
+				}
+			},
+			"equip_armor": {
+				"add": {
+					"component_groups": []
+				}
+			},
+			"equip_weapon": {
+				"add": {
+					"component_groups": []
 				}
 			}
 		}

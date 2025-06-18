@@ -130,7 +130,7 @@ export function getCurrentDay() {
         const raw = world.getDynamicProperty(DAY_COUNT_KEY);
         const parsed = parseInt(raw);
         const day = isNaN(parsed) ? 0 : parsed; // Default to day 0
-        console.warn(`Getting current day: ${day}`);
+        // console.warn(`Getting current day: ${day}`);
         return day;
     } catch (error) {
         console.warn("Error getting current day:", error);
@@ -145,14 +145,14 @@ export function getCurrentDay() {
 export function setCurrentDay(day) {
     try {
         const safeDay = Math.max(0, Math.floor(day)); // Allow day 0
-        console.warn(`Setting day to ${safeDay}`);
+        // console.warn(`Setting day to ${safeDay}`);
         
         // Update both storage methods
         world.setDynamicProperty(DAY_COUNT_KEY, safeDay);
         const obj = world.scoreboard.getObjective(SCOREBOARD_OBJECTIVE);
         if (obj) {
             obj.setScore(SCOREBOARD_ID, safeDay);
-            console.warn(`Updated scoreboard to day ${safeDay}`);
+            // console.warn(`Updated scoreboard to day ${safeDay}`);
         } else {
             console.warn("Failed to get scoreboard objective for update");
         }
@@ -184,10 +184,12 @@ function startDayCycleLoop() {
     let lastKnownDay = getCurrentDay();
     let lastTimeOfDay = world.getTimeOfDay();
 
+    // Comment out day cycle loop to stop logging spam
+    /*
     dayCycleLoopId = system.runInterval(() => {
         try {
             const currentTime = world.getTimeOfDay();
-            console.warn(`Day cycle check: currentTime=${currentTime}, lastTime=${lastTimeOfDay}`);
+            // console.warn(`Day cycle check: currentTime=${currentTime}, lastTime=${lastTimeOfDay}`);
 
             // Detect sunrise (~1000 is safe for detection)
             if (lastTimeOfDay > 1000 && currentTime <= 1000) {
@@ -221,6 +223,7 @@ function startDayCycleLoop() {
             console.warn("Error in day cycle loop:", error);
         }
     }, 40); // ~every 2 seconds
+    */
 
     // Mark that the loop is running
     world.setDynamicProperty(LOOP_RUNNING_FLAG, true);
@@ -327,11 +330,11 @@ export async function initializeDayTracking() {
 
 // Initialize when a player joins
 world.afterEvents.playerJoin.subscribe((event) => {
-    console.warn("✅ playerJoin triggered");
+    // console.warn("✅ playerJoin triggered");
     
     try {
         const playerId = event.playerId;
-        console.warn("Player join event data:", { playerId });
+        // console.warn("Player join event data:", { playerId });
         
         if (!playerId) {
             console.warn("Join event has no playerId, skipping");
@@ -347,7 +350,7 @@ world.afterEvents.playerJoin.subscribe((event) => {
         // Add a longer delay to ensure player is fully loaded
         system.runTimeout(async () => {
             try {
-                console.warn(`Looking up player with ID ${playerId}`);
+                // console.warn(`Looking up player with ID ${playerId}`);
                 const player = getPlayerById(playerId);
                 
                 if (!player) {
@@ -356,16 +359,16 @@ world.afterEvents.playerJoin.subscribe((event) => {
                 }
 
                 const playerName = player.name;
-                console.warn(`Found player: ${playerName}`);
+                // console.warn(`Found player: ${playerName}`);
 
                 // Check if this player has already been welcomed
                 if (welcomedPlayers.has(playerName)) {
-                    console.warn(`Player ${playerName} already welcomed`);
+                    // console.warn(`Player ${playerName} already welcomed`);
                     return;
                 }
 
                 const currentDay = getCurrentDay();
-                console.warn(`Welcoming player ${playerName} to day ${currentDay}`);
+                // console.warn(`Welcoming player ${playerName} to day ${currentDay}`);
 
                 // Check if this is the first time the world is being initialized
                 const isFirstTimeInit = !world.getDynamicProperty(INITIALIZED_FLAG);
@@ -390,7 +393,7 @@ world.afterEvents.playerJoin.subscribe((event) => {
                         
                         // Mark player as welcomed
                         welcomedPlayers.add(playerName);
-                        console.warn(`Successfully welcomed player ${playerName}`);
+                        // console.warn(`Successfully welcomed player ${playerName}`);
                     } catch (error) {
                         console.warn("Error in delayed welcome handler:", error);
                     }
