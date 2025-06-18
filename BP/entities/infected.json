@@ -239,10 +239,16 @@
 						"filters": {
 							"test": "is_family",
 							"subject": "other",
-							"value": "mob"
-						}
+							"value": "player"
+						},
+						"max_dist": 200
 					},
 					{
+						"filters": {
+							"test": "is_family",
+							"subject": "other",
+							"value": "mob"
+						},
 						"max_dist": 200
 					},
 					{
@@ -266,19 +272,7 @@
 				"broadcast_anger": true,
 				"broadcast_range": 20,
 				"broadcast_anger_on_attack": true,
-				"broadcast_anger_on_being_attacked": true,
-				"filters": {
-					"all_of": [
-						{
-							"any_of": [
-								{
-									"test": "is_family",
-									"value": "mob"
-								}
-							]
-						}
-					]
-				}
+				"broadcast_anger_on_being_attacked": true
 			},
 			"minecraft:follow_range": {
 				"value": 500,
