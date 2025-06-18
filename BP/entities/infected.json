@@ -33,18 +33,20 @@
 					"broadcast_anger_on_being_attacked": true,
 					"broadcast_anger_on_attack": true
 				}
+			},
+			"buffed": {
+				"minecraft:health": {
+					"value": 30,
+					"max": 30
+				},
+				"minecraft:attack": {
+					"damage": 7
+				}
 			}
 		},
 		"components": {
-			"minecraft:spawn_rule": {
-				"conditions": [
-					{
-						"minecraft:world_age_filter": {
-							"min": 2,
-							"max": 999999
-						}
-					}
-				]
+			"minecraft:variant": {
+				"value": 0
 			},
 			"minecraft:navigation.generic": {
 				"can_float": true,
@@ -208,7 +210,7 @@
 				]
 			},
 			"minecraft:behavior.jump_to_block": {
-				"priority": 2,
+				"priority": 3,
 				"search_width": 10,
 				"search_height": 10,
 				"minimum_path_length": 8,
@@ -240,6 +242,12 @@
 				"table": "loot_tables/mb_loot_tables/infected_loot_table.json"
 			}
 		},
-		"events": {}
+		"events": {
+			"become_buffed": {
+				"add": {
+					"component_groups": ["buffed"]
+				}
+			}
+		}
 	}
 }

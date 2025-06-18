@@ -36,16 +36,6 @@
 			}
 		},
 		"components": {
-			"minecraft:spawn_rule": {
-				"conditions": [
-					{
-						"minecraft:world_age_filter": {
-							"min": 2,
-							"max": 999999
-						}
-					}
-				]
-			},
 			"minecraft:navigation.climb": {
 				"can_path_over_water": true,
 				"is_amphibious": true,
