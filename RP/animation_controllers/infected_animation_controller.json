@@ -1,34 +1,276 @@
 {
 	"format_version": "1.10.0",
 	"animation_controllers": {
-		"controller.animation.infected_mb": {
-			"initial_state": "default",
+		"controller.animation.infected_mb_variant_0": {
+			"initial_state": "idle",
 			"states": {
-				"default": {
+				"idle": {
 					"animations": [
-						{
-							"idle": true
-						}
+						{"idle": "variable.idle_anim==1"},
+						{"idle2": "variable.idle_anim==2"},
+						{"idle3": "variable.idle_anim==3"},
+						{"idle4": "variable.idle_anim==4"},
+						{"idle5": "variable.idle_anim==5"}
 					],
+					"on_entry": ["variable.idle_anim=math.random_integer(1,5);"],
 					"transitions": [
 						{
-							"walk": "query.ground_speed"
+							"walk": "query.ground_speed > 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground"
 						}
 					],
-					"blend_transition": 0.3
+					"blend_transition": 0.2
 				},
 				"walk": {
 					"animations": [
+						{"walk": "variable.walk_anim==1"},
+						{"walk2": "variable.walk_anim==2"},
+						{"walk3": "variable.walk_anim==3"},
+						{"walk4": "variable.walk_anim==4"},
+						{"walk5": "variable.walk_anim==5"}
+					],
+					"on_entry": ["variable.walk_anim=math.random_integer(1,5);"],
+					"transitions": [
 						{
-							"walk": true
+							"idle": "query.ground_speed < 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground"
 						}
+					],
+					"blend_transition": 0.2
+				},
+				"falling": {
+					"animations": [
+						{"falling": "variable.falling_anim==1"},
+						{"falling2": "variable.falling_anim==2"},
+						{"falling3": "variable.falling_anim==3"},
+						{"falling4": "variable.falling_anim==4"},
+						{"falling5": "variable.falling_anim==5"}
+					],
+					"on_entry": ["variable.falling_anim=math.random_integer(1,5);"],
+					"transitions": [
+						{
+							"idle": "query.is_on_ground && query.ground_speed < 0.1"
+						},
+						{
+							"walk": "query.is_on_ground && query.ground_speed > 0.1"
+						}
+					],
+					"blend_transition": 0.2
+				}
+			}
+		},
+		"controller.animation.infected_mb_variant_1": {
+			"initial_state": "idle",
+			"states": {
+				"idle": {
+					"animations": [
+						"idle2"
 					],
 					"transitions": [
 						{
-							"default": "!query.ground_speed"
+							"walk": "query.ground_speed > 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground"
 						}
 					],
-					"blend_transition": 0.1
+					"blend_transition": 0.2
+				},
+				"walk": {
+					"animations": [
+						"walk2"
+					],
+					"transitions": [
+						{
+							"idle": "query.ground_speed < 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground"
+						}
+					],
+					"blend_transition": 0.2
+				},
+				"falling": {
+					"animations": [
+						"falling2"
+					],
+					"transitions": [
+						{
+							"idle": "query.is_on_ground && query.ground_speed < 0.1"
+						},
+						{
+							"walk": "query.is_on_ground && query.ground_speed > 0.1"
+						}
+					],
+					"blend_transition": 0.2
+				}
+			}
+		},
+		"controller.animation.infected_mb_variant_2": {
+			"initial_state": "idle",
+			"states": {
+				"idle": {
+					"animations": [
+						"idle3"
+					],
+					"transitions": [
+						{
+							"walk": "query.ground_speed > 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground"
+						}
+					],
+					"blend_transition": 0.2
+				},
+				"walk": {
+					"animations": [
+						"walk3"
+					],
+					"transitions": [
+						{
+							"idle": "query.ground_speed < 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground"
+						}
+					],
+					"blend_transition": 0.2
+				},
+				"falling": {
+					"animations": [
+						"falling3"
+					],
+					"transitions": [
+						{
+							"idle": "query.is_on_ground && query.ground_speed < 0.1"
+						},
+						{
+							"walk": "query.is_on_ground && query.ground_speed > 0.1"
+						}
+					],
+					"blend_transition": 0.2
+				}
+			}
+		},
+		"controller.animation.infected_mb_variant_3": {
+			"initial_state": "idle",
+			"states": {
+				"idle": {
+					"animations": [
+						"idle4"
+					],
+					"transitions": [
+						{
+							"walk": "query.ground_speed > 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground"
+						}
+					],
+					"blend_transition": 0.2
+				},
+				"walk": {
+					"animations": [
+						"walk4"
+					],
+					"transitions": [
+						{
+							"idle": "query.ground_speed < 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground"
+						}
+					],
+					"blend_transition": 0.2
+				},
+				"falling": {
+					"animations": [
+						"falling4"
+					],
+					"transitions": [
+						{
+							"idle": "query.is_on_ground && query.ground_speed < 0.1"
+						},
+						{
+							"walk": "query.is_on_ground && query.ground_speed > 0.1"
+						}
+					],
+					"blend_transition": 0.2
+				}
+			}
+		},
+		"controller.animation.infected_mb_variant_4": {
+			"initial_state": "idle",
+			"states": {
+				"idle": {
+					"animations": [
+						"idle5"
+					],
+					"transitions": [
+						{
+							"walk": "query.ground_speed > 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground"
+						}
+					],
+					"blend_transition": 0.2
+				},
+				"walk": {
+					"animations": [
+						"walk5"
+					],
+					"transitions": [
+						{
+							"idle": "query.ground_speed < 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground"
+						}
+					],
+					"blend_transition": 0.2
+				},
+				"falling": {
+					"animations": [
+						"falling5"
+					],
+					"transitions": [
+						{
+							"idle": "query.is_on_ground && query.ground_speed < 0.1"
+						},
+						{
+							"walk": "query.is_on_ground && query.ground_speed > 0.1"
+						}
+					],
+					"blend_transition": 0.2
+				}
+			}
+		},
+		"controller.animation.infected_mb_attack": {
+			"initial_state": "default",
+			"states": {
+				"default": {
+					"transitions": [
+						{"attacking": "v.attack_time > 0"}
+					],
+					"blend_transition": 0.2
+				},
+				"attacking": {
+					"animations": [
+						{"attack": "variable.attack_anim==1"},
+						{"attack2": "variable.attack_anim==2"},
+						{"attack3": "variable.attack_anim==3"}
+					],
+					"on_entry": ["variable.attack_anim=math.random_integer(1,3);"],
+					"transitions": [
+						{"default": "v.attack_time <= 0 && query.any_animation_finished"}
+					],
+					"blend_transition": 0.2
 				}
 			}
 		}

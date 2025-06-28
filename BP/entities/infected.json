@@ -42,12 +42,14 @@
 				"minecraft:attack": {
 					"damage": 7
 				}
-			}
+			},
+			"variant_0": {},
+			"variant_1": {},
+			"variant_2": {},
+			"variant_3": {},
+			"variant_4": {}
 		},
 		"components": {
-			"minecraft:variant": {
-				"value": 0
-			},
 			"minecraft:inventory": {
 				"inventory_size": 5,
 				"private": false,
@@ -419,6 +421,50 @@
 				"add": {
 					"component_groups": []
 				}
+			},
+			"spawn": {
+				"randomize": [
+					{
+						"weight": 20,
+						"add": {
+							"component_groups": [
+								"variant_0"
+							]
+						}
+					},
+					{
+						"weight": 20,
+						"add": {
+							"component_groups": [
+								"variant_1"
+							]
+						}
+					},
+					{
+						"weight": 20,
+						"add": {
+							"component_groups": [
+								"variant_2"
+							]
+						}
+					},
+					{
+						"weight": 20,
+						"add": {
+							"component_groups": [
+								"variant_3"
+							]
+						}
+					},
+					{
+						"weight": 20,
+						"add": {
+							"component_groups": [
+								"variant_4"
+							]
+						}
+					}
+				]
 			}
 		}
 	}

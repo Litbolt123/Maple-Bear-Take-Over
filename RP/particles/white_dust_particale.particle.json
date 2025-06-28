@@ -72,7 +72,7 @@
 			},
 			"minecraft:particle_motion_collision": {
 				"enabled": true,
-				"collision_radius": 1,
+				"collision_radius": 0.5,
 				"collision_drag": 0.1
 			}
 		}
