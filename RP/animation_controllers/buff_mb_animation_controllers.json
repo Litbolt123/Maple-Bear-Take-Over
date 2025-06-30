@@ -2,32 +2,24 @@
 	"format_version": "1.10.0",
 	"animation_controllers": {
 		"controller.animation.buff_mb": {
-			"initial_state": "idle",
+			"initial_state": "default",
 			"states": {
 				"default": {
 					"animations": [
 						{
-							"idle": true,
-							"buff_mb": true
+							"idle": true
 						}
 					],
+					"blend_transition": 0.3,
 					"transitions": [
 						{
-							"idle": "true"
-						}
-					]
-				},
-				"idle": {
-					"animations": [
+							"walk": "query.ground_speed > 0.1"
+						},
 						{
-							"idle": true,
-							"buff_mb": true
-						}
-					],
-					"blend_transition": 0.1,
-					"transitions": [
+							"falling": "!query.is_on_ground"
+						},
 						{
-							"walk": "query.ground_speed"
+							"climb": "query.is_on_ground == false && query.ground_speed > 0.1"
 						}
 					]
 				},
@@ -39,10 +31,51 @@
 					],
 					"transitions": [
 						{
-							"idle": "!query.ground_speed"
+							"default": "query.ground_speed < 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground"
+						},
+						{
+							"climb": "query.is_on_ground == false && query.ground_speed > 0.1"
 						}
 					],
-					"blend_transition": 0.1
+					"blend_transition": 0.3
+				},
+				"climb": {
+					"animations": [
+						{
+							"climb": true
+						}
+					],
+					"transitions": [
+						{
+							"default": "query.is_on_ground && query.ground_speed < 0.1"
+						},
+						{
+							"walk": "query.is_on_ground && query.ground_speed > 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground && query.ground_speed < 0.1"
+						}
+					],
+					"blend_transition": 0.3
+				},
+				"falling": {
+					"animations": [
+						{
+							"idle": true
+						}
+					],
+					"transitions": [
+						{
+							"default": "query.is_on_ground && query.ground_speed < 0.1"
+						},
+						{
+							"walk": "query.is_on_ground && query.ground_speed > 0.1"
+						}
+					],
+					"blend_transition": 0.3
 				}
 			}
 		}
