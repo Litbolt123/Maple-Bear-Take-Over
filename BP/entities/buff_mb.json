@@ -55,8 +55,8 @@
 			},
 			"minecraft:can_climb": {},
 			"minecraft:health": {
-				"value": 40,
-				"max": 40
+				"value": 100,
+				"max": 100
 			},
 			"minecraft:collision_box": {
 				"width": 0.5,
