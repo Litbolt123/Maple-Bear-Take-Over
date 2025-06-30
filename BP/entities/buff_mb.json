@@ -6,10 +6,7 @@
 			"is_spawnable": true,
 			"is_summonable": true,
 			"is_experimental": false,
-			"scripts": {},
-			"animations": {
-				"buff_mb": "controller.animation.buff_mb"
-			}
+			"scripts": {}
 		},
 		"component_groups": {
 			"bridge:": {
@@ -59,8 +56,8 @@
 				"max": 100
 			},
 			"minecraft:collision_box": {
-				"width": 0.5,
-				"height": 1.2
+				"width": 0.3,
+				"height": 0.7
 			},
 			"minecraft:attack": {
 				"damage": 8
