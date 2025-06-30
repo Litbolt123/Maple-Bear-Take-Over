@@ -1,0 +1,50 @@
+{
+  "format_version": "1.10.0",
+  "animation_controllers": {
+    "controller.animation.tiny_mb": {
+      "initial_state": "default",
+      "states": {
+        "default": {
+          "animations": [
+            { "idle": "query.variant == 0" },
+            { "idle2": "query.variant == 1" }
+          ],
+          "blend_transition": 0.2,
+          "transitions": [
+            { "walk": "query.ground_speed > 0.1 && query.is_on_ground" },
+            { "climb": "!query.is_on_ground && query.ground_speed > 0.1" },
+            { "attack": "v.attack_time > 0" }
+          ]
+        },
+        "walk": {
+          "animations": [
+            { "walk": "query.variant == 0" },
+            { "walk2": "query.variant == 1" }
+          ],
+          "blend_transition": 0.2,
+          "transitions": [
+            { "default": "query.ground_speed < 0.1 && query.is_on_ground" },
+            { "climb": "!query.is_on_ground && query.ground_speed > 0.1" },
+            { "attack": "v.attack_time > 0" }
+          ]
+        },
+        "climb": {
+          "animations": [ "climb" ],
+          "blend_transition": 0.2,
+          "transitions": [
+            { "default": "query.is_on_ground && query.ground_speed < 0.1" },
+            { "walk": "query.is_on_ground && query.ground_speed > 0.1" },
+            { "attack": "v.attack_time > 0" }
+          ]
+        },
+        "attack": {
+          "animations": [ "attack" ],
+          "blend_transition": 0.1,
+          "transitions": [
+            { "default": "v.attack_time <= 0 && query.any_animation_finished" }
+          ]
+        }
+      }
+    }
+  }
+} 

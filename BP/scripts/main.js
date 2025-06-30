@@ -954,25 +954,6 @@ system.runInterval(() => {
     }
 }, 20); // Run every second
 
-// Main tick loop for proximity effects
-system.runInterval(() => {
-    for (const player of world.getAllPlayers()) {
-        // Find nearby tiny Maple Bears within 6 blocks
-        const nearbyTinyBears = player.dimension.getEntities({
-            location: player.location,
-            maxDistance: 5,
-            type: MAPLE_BEAR_ID
-        });
-
-        // Apply nausea if tiny bears are nearby
-        if (nearbyTinyBears.length > 0) {
-            system.run(() => {
-                player.addEffect("minecraft:nausea", 100, { amplifier: 0.5 }); // 5 seconds, level 3
-            });
-        }
-    }
-}, 20); // Run every second
-
 // Utility: Get best armor tier
 function getBestArmorTier(player) {
     // 0: none, 1: leather, 2: iron, 3: diamond, 4: netherite

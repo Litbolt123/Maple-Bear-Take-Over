@@ -26,11 +26,25 @@
 				"animate": [
 					{
 						"death_particles": "!query.is_alive"
+					},
+					{
+						"tiny_mb": true
+					},
+					{
+						"look_at_target": true
 					}
 				]
 			},
 			"animations": {
-				"death_particles": "animation.mb.death_particles" 
+				"idle": "animation.mb.idle",
+				"idle2": "animation.mb.idle2",
+				"walk": "animation.mb.walk",
+				"walk2": "animation.mb.walk2",
+				"climb": "animation.mb.climb",
+				"attack": "animation.mb.attack",
+				"death_particles": "animation.mb.death_particles",
+				"tiny_mb": "controller.animation.tiny_mb",
+				"look_at_target": "animation.common.look_at_target"
 			}
 		}
 	}

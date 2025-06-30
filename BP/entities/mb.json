@@ -1,5 +1,5 @@
 {
-	"format_version": "1.16.0",
+	"format_version": "1.21.80",
 	"minecraft:entity": {
 		"description": {
 			"identifier": "mb:mb",
@@ -59,7 +59,7 @@
 			"minecraft:damage_sensor": {
 				"triggers": {
 					"cause": "fall",
-					"deals_damage": false
+					"deals_damage": "no"
 				}
 			},
 			"minecraft:can_climb": {},
@@ -188,7 +188,6 @@
 					5
 				]
 			},
-			"minecraft:scaffolding_climber": {},
 			"minecraft:break_blocks": {
 				"breakable_blocks": [
 					"minecraft:glass_pane",
@@ -202,7 +201,8 @@
 					"minecraft:brown_stained_glass_pane",
 					"minecraft:hard_brown_stained_glass_pane"
 				]
-			}
+			},
+			"minecraft:conditional_bandwidth_optimization": {}
 		},
 		"events": {}
 	}
