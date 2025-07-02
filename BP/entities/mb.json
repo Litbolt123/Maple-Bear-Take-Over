@@ -114,10 +114,16 @@
 						"filters": {
 							"test": "is_family",
 							"subject": "other",
-							"value": "mob"
-						}
+							"value": "player"
+						},
+						"max_dist": 200
 					},
 					{
+						"filters": {
+							"test": "is_family",
+							"subject": "other",
+							"value": "mob"
+						},
 						"max_dist": 200
 					},
 					{
