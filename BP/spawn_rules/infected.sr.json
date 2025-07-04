@@ -1,5 +1,5 @@
 {
-    "format_version": "1.21.80",
+    "format_version": "1.8.0",
     "minecraft:spawn_rules": {
         "description": {
             "identifier": "mb:infected",
@@ -17,8 +17,11 @@
                     "min": "easy",
                     "max": "hard"
                 },
-                "minecraft:world_age_filter": {
-                    "min": 2400
+                "minecraft:delay_filter": {
+                    "min": 4800,
+                    "max": 6000,
+                    "identifier": "mb:infected",
+                    "spawn_chance": 100
                 },
                 "minecraft:weight": {
                     "default": 20

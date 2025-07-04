@@ -2,7 +2,7 @@
     "format_version": "1.8.0",
     "minecraft:spawn_rules": {
         "description": {
-            "identifier": "mb:mb",
+            "identifier": "mb:buff_mb",
             "population_control": "monster"
         },
         "conditions": [
@@ -18,20 +18,20 @@
                     "max": "hard"
                 },
                 "minecraft:delay_filter": {
-                    "min": 4800,
-                    "max": 6000,
-                    "identifier": "mb:mb",
+                    "min": 12000,
+                    "max": 14000,
+                    "identifier": "mb:buff_mb",
                     "spawn_chance": 100
                 },
                 "minecraft:weight": {
-                    "default": 70
+                    "default": 2
                 },
                 "minecraft:herd": {
                     "min_size": 1,
-                    "max_size": 2
+                    "max_size": 1
                 },
                 "minecraft:density_limit": {
-                    "surface": 70
+                    "surface": 10
                 },
                 "minecraft:distance_filter": {
                     "min": 24,

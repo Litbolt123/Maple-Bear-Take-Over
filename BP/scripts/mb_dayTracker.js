@@ -1,5 +1,20 @@
 import { world, system } from "@minecraft/server";
 
+// Minimal dynamic property test (must be delayed until after startup)
+// system.run(() => {
+//     try {
+//         world.setDynamicProperty("mb_test_number", 123);
+//         const testValue = world.getDynamicProperty("mb_test_number");
+//         if (testValue === 123) {
+//             console.warn("[MBI] Dynamic property test succeeded: mb_test_number = 123");
+//         } else {
+//             console.warn("[MBI] Dynamic property test failed: value is", testValue);
+//         }
+//     } catch (err) {
+//         console.warn("[MBI] ERROR: Dynamic properties are not working!", err);
+//     }
+// });
+
 // Debug logging
 console.warn("📜 Maple Bear Day Tracker script loaded");
 
@@ -35,41 +50,36 @@ function getPlayerById(playerId) {
     return [...world.getPlayers()].find(p => p.id === playerId);
 }
 
-// Clear welcomed players on world load to prevent persistence issues
-world.afterEvents.worldInitialize.subscribe(() => {
-    console.warn("🌍 World initialized, clearing welcomed players");
-    welcomedPlayers.clear();
+// Use playerJoin as a fallback for world initialization in 1.21+
+let hasInitialized = false;
+world.afterEvents.playerJoin.subscribe(() => {
+    if (!hasInitialized) {
+        console.warn("🌍 First player joined, clearing welcomed players (1.21+ workaround)");
+        welcomedPlayers.clear();
+        hasInitialized = true;
+    }
 });
 
 /**
- * Safely sends a message to a player
- * @param {Player} player The player to send the message to
- * @param {string} message The message to send
- */
-function sendPlayerMessage(player, message) {
-    try {
-        if (player && player.isValid()) {
-            player.sendMessage(message);
-        }
-    } catch (error) {
-        console.warn("Error sending message to player:", error);
-    }
-}
-
-/**
- * Shows a title to a player
+ * Shows a title to a player with optional subtitle and timing
  * @param {Player} player The player to show the title to
- * @param {string} text The text to display
+ * @param {string|RawMessage} text The text to display as the title
+ * @param {string|RawMessage} [subtitle] Optional subtitle
+ * @param {object} [options] Optional TitleDisplayOptions (fadeInDuration, stayDuration, fadeOutDuration)
  */
-async function showPlayerTitle(player, text) {
+function showPlayerTitle(player, text, subtitle = undefined, options = {}) {
     try {
-        if (player && player.isValid()) {
-            await player.runCommandAsync(`title @s title §6${text}`);
-            // Play ominous sound for titles
-            player.playSound("mob.wither.spawn", {
-                pitch: 0.8,
-                volume: 0.5
-            });
+        if (player && player.isValid) {
+            const titleOptions = {
+                fadeInDuration: options.fadeInDuration ?? 10,   // 0.5s
+                stayDuration: options.stayDuration ?? 60,       // 3s
+                fadeOutDuration: options.fadeOutDuration ?? 20, // 1s
+            };
+            if (subtitle !== undefined) {
+                titleOptions.subtitle = subtitle;
+            }
+            player.onScreenDisplay.setTitle(text, titleOptions);
+            player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.5 });
         }
     } catch (error) {
         console.warn("Error showing title to player:", error);
@@ -79,15 +89,30 @@ async function showPlayerTitle(player, text) {
 /**
  * Shows an actionbar message to a player
  * @param {Player} player The player to show the message to
- * @param {string} text The text to display
+ * @param {string|RawMessage} text The text to display
  */
-async function showPlayerActionbar(player, text) {
+function showPlayerActionbar(player, text) {
     try {
-        if (player && player.isValid()) {
-            await player.runCommandAsync(`title @s actionbar §7${text}`);
+        if (player && player.isValid) {
+            player.onScreenDisplay.setActionBar(text);
         }
     } catch (error) {
         console.warn("Error showing actionbar to player:", error);
+    }
+}
+
+/**
+ * Safely sends a message to a player
+ * @param {Player} player The player to send the message to
+ * @param {string|RawMessage} message The message to send
+ */
+function sendPlayerMessage(player, message) {
+    try {
+        if (player && player.isValid) {
+            player.sendMessage(message);
+        }
+    } catch (error) {
+        console.warn("Error sending message to player:", error);
     }
 }
 
@@ -130,7 +155,6 @@ export function getCurrentDay() {
         const raw = world.getDynamicProperty(DAY_COUNT_KEY);
         const parsed = parseInt(raw);
         const day = isNaN(parsed) ? 0 : parsed; // Default to day 0
-        // console.warn(`Getting current day: ${day}`);
         return day;
     } catch (error) {
         console.warn("Error getting current day:", error);
@@ -145,14 +169,12 @@ export function getCurrentDay() {
 export function setCurrentDay(day) {
     try {
         const safeDay = Math.max(0, Math.floor(day)); // Allow day 0
-        // console.warn(`Setting day to ${safeDay}`);
         
         // Update both storage methods
         world.setDynamicProperty(DAY_COUNT_KEY, safeDay);
         const obj = world.scoreboard.getObjective(SCOREBOARD_OBJECTIVE);
         if (obj) {
             obj.setScore(SCOREBOARD_ID, safeDay);
-            // console.warn(`Updated scoreboard to day ${safeDay}`);
         } else {
             console.warn("Failed to get scoreboard objective for update");
         }
@@ -176,7 +198,6 @@ export function isMilestoneDay(day) {
 function startDayCycleLoop() {
     // Don't start if already running
     if (dayCycleLoopId !== null) {
-        console.warn("Day cycle loop already running");
         return;
     }
 
@@ -184,13 +205,10 @@ function startDayCycleLoop() {
     let lastKnownDay = getCurrentDay();
     let lastTimeOfDay = world.getTimeOfDay();
 
-    // Comment out day cycle loop to stop logging spam
-    /*
+    // Uncommented: day cycle loop to advance day on sunrise
     dayCycleLoopId = system.runInterval(() => {
         try {
             const currentTime = world.getTimeOfDay();
-            // console.warn(`Day cycle check: currentTime=${currentTime}, lastTime=${lastTimeOfDay}`);
-
             // Detect sunrise (~1000 is safe for detection)
             if (lastTimeOfDay > 1000 && currentTime <= 1000) {
                 let newDay = getCurrentDay() + 1;
@@ -199,22 +217,23 @@ function startDayCycleLoop() {
 
                 // Notify players
                 for (const player of world.getAllPlayers()) {
-                    if (player && player.isValid()) {
+                    if (player && player.isValid) {
                         player.playSound("mob.wither.hurt", {
                             pitch: 0.9,
                             volume: 0.4
                         });
-                        showPlayerTitle(player, `☀️ Day ${newDay}`);
+                        showPlayerTitle(player, `§e☀️ Day ${newDay}`);
                         showPlayerActionbar(player, "The Maple Bear infection continues...");
                     }
                 }
 
-                // Send chat message for new day
-                world.sendMessage(`§6☀️ A new day begins... Day §e${newDay}`);
+                // Send chat message for new day and world age
+                const worldAge = world.getAbsoluteTime ? world.getAbsoluteTime() : world.getTime();
+                world.sendMessage(`§6☀️ A new day begins... Day §e${newDay} §7(World age: §b${worldAge}§7 ticks)`);
 
                 // Handle milestone days
                 if (isMilestoneDay(newDay)) {
-                    handleMilestoneDay(newDay);
+                    mbiHandleMilestoneDay(newDay);
                 }
             }
 
@@ -223,7 +242,6 @@ function startDayCycleLoop() {
             console.warn("Error in day cycle loop:", error);
         }
     }, 40); // ~every 2 seconds
-    */
 
     // Mark that the loop is running
     world.setDynamicProperty(LOOP_RUNNING_FLAG, true);
@@ -234,98 +252,147 @@ function startDayCycleLoop() {
  * Handles milestone day events
  * @param {number} day The milestone day reached
  */
-export async function handleMilestoneDay(day) {
-    try {
-        // Broadcast milestone message
-        world.sendMessage(`§8[MBI] §6Milestone reached: Day ${day}`);
-        
-        // Play milestone sound and show title for all players
-        for (const player of world.getAllPlayers()) {
-            if (player && player.isValid()) {
-                player.playSound("mob.wither.death", {
-                    pitch: 0.7,
-                    volume: 0.7
-                });
-                await showPlayerTitle(player, `Day ${day} Milestone!`);
+export async function mbiHandleMilestoneDay(day) {
+    system.runTimeout(() => {
+        console.warn(`[DEBUG] Entered mbiHandleMilestoneDay with day: ${day}`);
+        try {
+            // Broadcast milestone message
+            world.sendMessage(`§8[MBI] §6Milestone reached: Day ${day}`);
+            // Play milestone sound and show title for all players
+            for (const player of world.getAllPlayers()) {
+                try {
+                    console.warn(`[DEBUG] player:`, player);
+                    console.warn(`[DEBUG] typeof player.isValid: ${typeof player.isValid}`);
+                    console.warn(`[DEBUG] typeof player.playSound: ${typeof player.playSound}`);
+                    console.warn(`[DEBUG] typeof showPlayerTitle: ${typeof showPlayerTitle}`);
+                    if (player && player.isValid) {
+                        try {
+                            player.playSound("mob.wither.death", { pitch: 0.7, volume: 0.7 });
+                        } catch (err) {
+                            console.warn("[ERROR] in player.playSound:", err);
+                        }
+                        try {
+                            showPlayerTitle(player, `§eDay ${day} Milestone!`);
+                        } catch (err) {
+                            console.warn("[ERROR] in showPlayerTitle:", err);
+                        }
+                    }
+                } catch (err) {
+                    console.warn("[ERROR] in player milestone for-loop:", err);
+                }
             }
+            // Trigger specific milestone events
+            switch(day) {
+                case 10:
+                    world.sendMessage(`§8[MBI] §7The first Maple Bear clones have been spotted...`);
+                    break;
+                case 25:
+                    world.sendMessage(`§8[MBI] §7Reports of infected Maple Bears are increasing...`);
+                    break;
+                case 50:
+                    world.sendMessage(`§8[MBI] §7The Buff Maple Bears have emerged...`);
+                    break;
+                case 75:
+                    world.sendMessage(`§8[MBI] §7The infection is spreading rapidly...`);
+                    break;
+                case 100:
+                    world.sendMessage(`§8[MBI] §4Maximum infection rate reached. The end is near...`);
+                    break;
+            }
+        } catch (error) {
+            console.warn("[ERROR] in mbiHandleMilestoneDay:", error);
+            if (error && error.stack) {
+                console.warn("[ERROR STACK] mbiHandleMilestoneDay", error.stack);
+            }
+            console.warn("[ERROR TYPE] mbiHandleMilestoneDay", typeof error);
         }
-        
-        // Trigger specific milestone events
-        switch(day) {
-            case 10:
-                world.sendMessage(`§8[MBI] §7The first Maple Bear clones have been spotted...`);
-                break;
-            case 25:
-                world.sendMessage(`§8[MBI] §7Reports of infected Maple Bears are increasing...`);
-                break;
-            case 50:
-                world.sendMessage(`§8[MBI] §7The Buff Maple Bears have emerged...`);
-                break;
-            case 75:
-                world.sendMessage(`§8[MBI] §7The infection is spreading rapidly...`);
-                break;
-            case 100:
-                world.sendMessage(`§8[MBI] §4Maximum infection rate reached. The end is near...`);
-                break;
-        }
-    } catch (error) {
-        console.warn("Error handling milestone day:", error);
-    }
+    }, 80); // 4 seconds delay
 }
 
 /**
  * Initializes the day tracking system
  */
 export async function initializeDayTracking() {
-    try {
-        // Check if we've already initialized
-        if (world.getDynamicProperty(INITIALIZED_FLAG)) {
-            console.warn("Day tracking already initialized");
-            return;
-        }
+    // try {
+    // Check if we've already initialized
+    if (world.getDynamicProperty(INITIALIZED_FLAG)) {
+        console.warn("Day tracking already initialized");
+        return;
+    }
 
-        console.warn("🌅 Initializing day tracking system...");
-        
-        // Set up scoreboard
-        ensureScoreboardExists();
+    console.warn("🌅 Initializing day tracking system...");
+    system.run(() => {
+        world.sendMessage('hello world!');
+    });
 
-        // Get current day
-        const currentDay = getCurrentDay();
+    // Set up scoreboard
+    console.warn("[DEBUG] Calling ensureScoreboardExists()");
+    ensureScoreboardExists();
 
-        // Play welcome sound and show title for all players
-        for (const player of world.getAllPlayers()) {
-            if (player && player.isValid()) {
+    // Get current day
+    console.warn("[DEBUG] Calling getCurrentDay()");
+    const currentDay = getCurrentDay();
+    console.warn(`[DEBUG] getCurrentDay() returned: ${currentDay} (type: ${typeof currentDay})`);
+    if (typeof currentDay !== 'number' || isNaN(currentDay)) {
+        console.warn('[ERROR] getCurrentDay() did not return a valid number!');
+    }
+
+    // Play welcome sound and show title for all players
+    for (const player of world.getAllPlayers()) {
+        if (player && player.isValid) {
+            system.run(() => {
                 player.playSound("mob.wither.ambient", {
                     pitch: 0.6,
                     volume: 0.6
                 });
-                await showPlayerTitle(player, `☀️ Day ${currentDay}`);
-                await showPlayerActionbar(player, "The Maple Bear infection begins...");
-            }
+                console.warn(`[DEBUG] Showing title and actionbar to player: ${player.name}`);
+                showPlayerTitle(player, `§e☀️ Day ${currentDay}`);
+                showPlayerActionbar(player, "The Maple Bear infection begins...");
+            });
         }
-
-        // Show welcome message
-        world.sendMessage(`§6☀️ Welcome to Day §e${currentDay}`);
-
-        // Mark as initialized
-        world.setDynamicProperty(INITIALIZED_FLAG, true);
-
-        // Start the day cycle loop
-        startDayCycleLoop();
-
-        // Check for milestone on first load
-        if (isMilestoneDay(currentDay)) {
-            await handleMilestoneDay(currentDay);
-        }
-
-        console.warn("Day tracking system initialized successfully");
-    } catch (error) {
-        console.warn("Error in day tracking initialization:", error);
-        // Retry after a short delay
-        system.runTimeout(() => {
-            initializeDayTracking();
-        }, 20);
     }
+
+    // Show welcome message
+    system.run(() => {
+        world.sendMessage(`§6☀️ Welcome to Day §e${currentDay}`);
+    });
+
+    // Mark as initialized
+    system.run(() => {
+        world.setDynamicProperty(INITIALIZED_FLAG, true);
+    });
+
+    // Start the day cycle loop
+    console.warn("[DEBUG] Calling startDayCycleLoop()");
+    system.run(() => {
+        startDayCycleLoop();
+    });
+
+    // Check for milestone on first load
+    console.warn("[DEBUG] Checking isMilestoneDay()");
+    console.warn(`[DEBUG] typeof isMilestoneDay: ${typeof isMilestoneDay}`);
+    console.warn(`[DEBUG] typeof mbiHandleMilestoneDay: ${typeof mbiHandleMilestoneDay}`);
+    if (typeof isMilestoneDay === 'function' && typeof mbiHandleMilestoneDay === 'function') {
+        if (isMilestoneDay(currentDay)) {
+            console.warn("[DEBUG] Calling mbiHandleMilestoneDay()");
+            mbiHandleMilestoneDay(currentDay);
+        }
+    } else {
+        console.warn('[ERROR] isMilestoneDay or mbiHandleMilestoneDay is not a function! Skipping milestone check.');
+    }
+
+    console.warn("Day tracking system initialized successfully");
+    // } catch (error) {
+    //     console.warn("[ERROR] in day tracking initialization:", error);
+    //     if (error && error.stack) {
+    //         console.warn("[ERROR STACK]", error.stack);
+    //     }
+    //     console.warn("[ERROR TYPE]", typeof error);
+    //     // Retry after a short delay
+    //     system.runTimeout(async () => {
+    //         await initializeDayTracking();
+    //     }, 20);
+    // }
 }
 
 // Initialize when a player joins
@@ -387,8 +454,8 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                 volume: 0.6
                             });
                             sendPlayerMessage(player, `§6☀️ Welcome! It is currently Day §e${currentDay}`);
-                            await showPlayerTitle(player, `☀️ Day ${currentDay}`);
-                            await showPlayerActionbar(player, "The Maple Bear infection continues...");
+                            showPlayerTitle(player, `§e☀️ Day ${currentDay}`);
+                            showPlayerActionbar(player, "The Maple Bear infection continues...");
                         }
                         
                         // Mark player as welcomed
