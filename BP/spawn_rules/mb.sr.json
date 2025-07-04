@@ -17,12 +17,7 @@
                     "min": "easy",
                     "max": "hard"
                 },
-                "minecraft:delay_filter": {
-                    "min": 4800,
-                    "max": 6000,
-                    "identifier": "mb:mb",
-                    "spawn_chance": 100
-                },
+                "minecraft:world_age_filter": { "min": 2400 },
                 "minecraft:weight": {
                     "default": 70
                 },
