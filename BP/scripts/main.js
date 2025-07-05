@@ -1,5 +1,5 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
-import { initializeDayTracking } from "./mb_dayTracker.js";
+import { initializeDayTracking, getCurrentDay } from "./mb_dayTracker.js";
 
 // Constants for Maple Bear behavior
 const MAPLE_BEAR_ID = "mb:mb";
@@ -65,6 +65,29 @@ const recentlyHandledInfectedDeaths = new Set();
 
 // Track last attacker for each player
 const lastAttackerMap = new Map();
+
+// === Scripted Spawning for Maple Bears ===
+const MAPLE_BEAR_MIN_DAY = 3;
+const INFECTED_BEAR_MIN_DAY = 3;
+const BUFF_BEAR_MIN_DAY = 10;
+
+const MAPLE_BEAR_SPAWN_CHANCE = 1.0; // 100% per interval per player (for testing)
+const INFECTED_BEAR_SPAWN_CHANCE = 1.0; // 100%
+const BUFF_BEAR_SPAWN_CHANCE = 1.0; // 100%
+
+const SPAWN_INTERVAL = 600; // every 30 seconds (600 ticks)
+const SPAWN_RADIUS = 48; // blocks from player
+const MIN_SPAWN_RADIUS = 16; // don't spawn right on top of player
+const MAX_ATTEMPTS = 30; // increased from 10 for better spawn chance
+
+const VALID_SURFACE_BLOCKS = [
+    "minecraft:grass_block", "minecraft:dirt", "minecraft:coarse_dirt", "minecraft:podzol",
+    "minecraft:snow", "minecraft:snow_block", "minecraft:stone", "minecraft:sand", "minecraft:gravel",
+    "minecraft:mycelium", "minecraft:moss_block", "minecraft:rooted_dirt", "minecraft:deepslate"
+];
+const VALID_ABOVE_BLOCKS = [
+    "minecraft:air", "minecraft:tallgrass", "minecraft:grass", "minecraft:snow_layer", "minecraft:leaves"
+];
 
 /**
  * Get the maximum stack size for an item type
@@ -1227,6 +1250,83 @@ function simulateGenericInfectedDeath(player) {
         player.sendMessage("§8[MBI] §cYou succumbed to the infection...");
     }, 40); // 2 seconds
 }
+
+// === Scripted Spawning for Maple Bears ===
+function getRandomSurfaceLocationNear(player) {
+    const dim = player.dimension;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = MIN_SPAWN_RADIUS + Math.random() * (SPAWN_RADIUS - MIN_SPAWN_RADIUS);
+        const x = Math.floor(player.location.x + Math.cos(angle) * distance);
+        const z = Math.floor(player.location.z + Math.sin(angle) * distance);
+        let y = 128;
+        try {
+            y = dim.getHighestBlockAt ? dim.getHighestBlockAt(x, z)?.y ?? 128 : 128;
+        } catch (e) {}
+        const blockBelow = dim.getBlock({ x, y: y - 1, z });
+        const blockAt = dim.getBlock({ x, y, z });
+        const blockAbove = dim.getBlock({ x, y: y + 1, z });
+        if (
+            blockBelow && VALID_SURFACE_BLOCKS.includes(blockBelow.typeId) &&
+            blockAt && VALID_ABOVE_BLOCKS.includes(blockAt.typeId) &&
+            (!blockAbove || VALID_ABOVE_BLOCKS.includes(blockAbove.typeId))
+        ) {
+            return { x, y, z };
+        }
+    }
+    return null;
+}
+
+system.runInterval(() => {
+    if (typeof getCurrentDay !== "function") {
+        console.warn("[MBI] getCurrentDay is not a function!");
+        return;
+    }
+    const currentDay = getCurrentDay();
+    console.warn(`[MBI] Scripted spawn tick. Current day: ${currentDay}`);
+    for (const player of world.getAllPlayers()) {
+        const playerName = player.name;
+        // Maple Bear
+        const mapleBearRoll = Math.random();
+        if (currentDay >= MAPLE_BEAR_MIN_DAY && mapleBearRoll < MAPLE_BEAR_SPAWN_CHANCE) {
+            const loc = getRandomSurfaceLocationNear(player);
+            if (loc) {
+                player.dimension.spawnEntity(MAPLE_BEAR_ID, loc);
+                console.warn(`[MBI] Spawned Maple Bear for ${playerName} at ${JSON.stringify(loc)}`);
+            } else {
+                console.warn(`[MBI] No valid location for Maple Bear spawn for ${playerName}.`);
+            }
+        } else {
+            console.warn(`[MBI] Maple Bear roll for ${playerName}: ${mapleBearRoll} (needed < ${MAPLE_BEAR_SPAWN_CHANCE})`);
+        }
+        // Infected Maple Bear
+        const infectedBearRoll = Math.random();
+        if (currentDay >= INFECTED_BEAR_MIN_DAY && infectedBearRoll < INFECTED_BEAR_SPAWN_CHANCE) {
+            const loc = getRandomSurfaceLocationNear(player);
+            if (loc) {
+                player.dimension.spawnEntity(INFECTED_BEAR_ID, loc);
+                console.warn(`[MBI] Spawned Infected Maple Bear for ${playerName} at ${JSON.stringify(loc)}`);
+            } else {
+                console.warn(`[MBI] No valid location for Infected Maple Bear spawn for ${playerName}.`);
+            }
+        } else {
+            console.warn(`[MBI] Infected Maple Bear roll for ${playerName}: ${infectedBearRoll} (needed < ${INFECTED_BEAR_SPAWN_CHANCE})`);
+        }
+        // Buff Maple Bear
+        const buffBearRoll = Math.random();
+        if (currentDay >= BUFF_BEAR_MIN_DAY && buffBearRoll < BUFF_BEAR_SPAWN_CHANCE) {
+            const loc = getRandomSurfaceLocationNear(player);
+            if (loc) {
+                player.dimension.spawnEntity(BUFF_BEAR_ID, loc);
+                console.warn(`[MBI] Spawned Buff Maple Bear for ${playerName} at ${JSON.stringify(loc)}`);
+            } else {
+                console.warn(`[MBI] No valid location for Buff Maple Bear spawn for ${playerName}.`);
+            }
+        } else {
+            console.warn(`[MBI] Buff Maple Bear roll for ${playerName}: ${buffBearRoll} (needed < ${BUFF_BEAR_SPAWN_CHANCE})`);
+        }
+    }
+}, SPAWN_INTERVAL);
 
 // --- Day Tracking System Initialization (forced for debugging) ---
 system.run(() => {
