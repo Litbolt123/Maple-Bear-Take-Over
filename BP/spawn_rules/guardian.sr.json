@@ -19,7 +19,7 @@
 				},
 				"minecraft:world_age_filter": {
 					"min": 0,
-					"max": 2400
+					"max": 3600
 				},
 				"minecraft:weight": {
 					"default": 0

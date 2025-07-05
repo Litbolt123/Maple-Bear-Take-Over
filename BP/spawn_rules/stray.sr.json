@@ -38,7 +38,8 @@
 						"operator": "!=",
 						"value": "ocean"
 					}
-				]
+				],
+				"minecraft:world_age_filter": { "min": 0, "max": 3600 }
 			},
 			{
 				"minecraft:spawns_on_surface": {},
@@ -77,7 +78,8 @@
 						"operator": "==",
 						"value": "ocean"
 					}
-				]
+				],
+				"minecraft:world_age_filter": { "min": 0, "max": 3600 }
 			}
 		]
 	}

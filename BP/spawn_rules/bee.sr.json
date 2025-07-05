@@ -8,6 +8,9 @@
 		"conditions": [
 			{
 				"minecraft:spawns_on_surface": {},
+				"minecraft:world_age_filter": {
+					"max": 3600
+				},
 				"minecraft:brightness_filter": {
 					"min": 7,
 					"max": 15,

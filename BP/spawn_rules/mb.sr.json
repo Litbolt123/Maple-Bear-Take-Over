@@ -49,7 +49,7 @@
                 "minecraft:biome_filter": [
                     { "test": "has_biome_tag", "operator": "==", "value": "overworld" }
                 ],
-                "minecraft:world_age_filter": { "min": 10 }
+                "minecraft:world_age_filter": { "min": 1800, "max": 999999 }
             }
         ]
     }
