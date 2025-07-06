@@ -6,55 +6,46 @@
 			"states": {
 				"idle": {
 					"animations": [
-						{"idle": "query.variant == 0"},
-						{"idle2": "query.variant == 1"},
-						{"idle3": "query.variant == 2"},
-						{"idle4": "query.variant == 3"},
-						{"idle5": "query.variant == 4"}
+						{"idle": "variable.idle_anim==1"},
+						{"idle2": "variable.idle_anim==2"},
+						{"idle3": "variable.idle_anim==3"},
+						{"idle4": "variable.idle_anim==4"},
+						{"idle5": "variable.idle_anim==5"}
 					],
+					"on_entry": ["variable.idle_anim=math.random_integer(1,5);"],
 					"transitions": [
-						{
-							"walk": "query.ground_speed > 0.1"
-						},
-						{
-							"falling": "!query.is_on_ground"
-						}
+						{"walk": "query.ground_speed > 0.1"},
+						{"falling": "!query.is_on_ground"}
 					],
 					"blend_transition": 0.2
 				},
 				"walk": {
 					"animations": [
-						{"walk": "query.variant == 0"},
-						{"walk2": "query.variant == 1"},
-						{"walk3": "query.variant == 2"},
-						{"walk4": "query.variant == 3"},
-						{"walk5": "query.variant == 4"}
+						{"walk": "variable.walk_anim==1"},
+						{"walk2": "variable.walk_anim==2"},
+						{"walk3": "variable.walk_anim==3"},
+						{"walk4": "variable.walk_anim==4"},
+						{"walk5": "variable.walk_anim==5"}
 					],
+					"on_entry": ["variable.walk_anim=math.random_integer(1,5);"],
 					"transitions": [
-						{
-							"idle": "query.ground_speed < 0.1"
-						},
-						{
-							"falling": "!query.is_on_ground"
-						}
+						{"idle": "query.ground_speed < 0.1"},
+						{"falling": "!query.is_on_ground"}
 					],
 					"blend_transition": 0.2
 				},
 				"falling": {
 					"animations": [
-						{"falling": "query.variant == 0"},
-						{"falling2": "query.variant == 1"},
-						{"falling3": "query.variant == 2"},
-						{"falling4": "query.variant == 3"},
-						{"falling5": "query.variant == 4"}
+						{"falling": "variable.falling_anim==1"},
+						{"falling2": "variable.falling_anim==2"},
+						{"falling3": "variable.falling_anim==3"},
+						{"falling4": "variable.falling_anim==4"},
+						{"falling5": "variable.falling_anim==5"}
 					],
+					"on_entry": ["variable.falling_anim=math.random_integer(1,5);"],
 					"transitions": [
-						{
-							"idle": "query.is_on_ground && query.ground_speed < 0.1"
-						},
-						{
-							"walk": "query.is_on_ground && query.ground_speed > 0.1"
-						}
+						{"idle": "query.is_on_ground && query.ground_speed < 0.1"},
+						{"walk": "query.is_on_ground && query.ground_speed > 0.1"}
 					],
 					"blend_transition": 0.2
 				}
