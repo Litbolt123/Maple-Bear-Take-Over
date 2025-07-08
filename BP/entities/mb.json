@@ -208,7 +208,23 @@
 					"minecraft:hard_brown_stained_glass_pane"
 				]
 			},
-			"minecraft:conditional_bandwidth_optimization": {}
+			"minecraft:conditional_bandwidth_optimization": {},
+			"minecraft:behavior.pickup_items": {
+				"priority": 6,
+				"max_dist": 4,
+				"goal_radius": 1.5,
+				"speed_multiplier": 1.2,
+				"pickup_based_on_chance": false,
+				"can_pickup_any_item": true,
+				"excluded_items": [
+					"minecraft:glow_ink_sac"
+				]
+			},
+			"minecraft:inventory": {
+				"inventory_size": 1,
+				"private": false,
+				"restrict_to_owner": false
+			}
 		},
 		"events": {}
 	}

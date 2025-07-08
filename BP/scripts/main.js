@@ -50,7 +50,8 @@ const ARMOR_SLOT_RANGES = [
 const OFFHAND_SLOTS = [45, 40, 50, 119, 36]; // Common offhand slots
 
 // Track players who have eaten snow and their transformation progress
-const transformingPlayers = new Map();
+// Remove: transformingPlayers, playerInventories, infectedPlayers, isHandlingDeath, recentlyHandledInfectedDeaths, lastAttackerMap, isPlayerInfected, infectPlayer, handleInfectedDeath, prepareInfectedTransformation, simulateInfectedDeath, simulateGenericInfectedDeath, and all related transformation logic.
+// Only keep the bear death handler for item corruption, and normal event listeners for item use, etc.
 
 // Track player inventories for clone drops
 const playerInventories = new Map();
@@ -65,6 +66,39 @@ const recentlyHandledInfectedDeaths = new Set();
 
 // Track last attacker for each player
 const lastAttackerMap = new Map();
+
+// --- Infection System Data ---
+const bearInfection = new Map(); // playerId -> { ticksLeft, cured }
+const snowInfection = new Map(); // playerId -> { ticksLeft, snowCount }
+const BEAR_INFECTION_TICKS = 24000 * 20; // 20 Minecraft days
+const SNOW_INFECTION_START = 24000 * 3; // 3 Minecraft days
+const SNOW_INFECTION_MIN = 1200; // 1 minute
+const SNOW_INFECTION_DECREMENT = 2400; // 2 minutes per snow
+const RANDOM_EFFECT_INTERVAL = 600; // Check every 30 seconds
+
+// --- Helper: Apply random effect ---
+function applyRandomEffect(player) {
+    const effects = [
+        // Good
+        { effect: "minecraft:speed", duration: 200, amplifier: 1 },
+        { effect: "minecraft:jump_boost", duration: 200, amplifier: 1 },
+        { effect: "minecraft:regeneration", duration: 100, amplifier: 1 },
+        // { effect: "minecraft:luck", duration: 300, amplifier: 0 }, // Not in Bedrock
+        // Bad
+        { effect: "minecraft:slowness", duration: 200, amplifier: 1 },
+        { effect: "minecraft:weakness", duration: 200, amplifier: 1 },
+        { effect: "minecraft:blindness", duration: 100, amplifier: 0 },
+        { effect: "minecraft:nausea", duration: 100, amplifier: 0 },
+        { effect: "minecraft:poison", duration: 100, amplifier: 0 },
+        { effect: "minecraft:hunger", duration: 200, amplifier: 1 },
+    ];
+    const chosen = effects[Math.floor(Math.random() * effects.length)];
+    try {
+        player.addEffect(chosen.effect, chosen.duration, { amplifier: chosen.amplifier });
+    } catch (e) {
+        // Silently ignore invalid effects
+    }
+}
 
 // === Scripted Spawning for Maple Bears ===
 const MAPLE_BEAR_MIN_DAY = 3;
@@ -269,7 +303,6 @@ function scanArmorSlotsByRange(player, armorTypes, ranges) {
                         amount: item.amount,
                         data: item.data || 0
                     });
-                    console.log(`✅ Found armor item in slot ${i}: ${item.typeId} (slot ${armorTypes[item.typeId]})`);
                 }
             } catch (error) {
                 // Slot doesn't exist, continue to next
@@ -303,7 +336,6 @@ function scanInventoryForArmor(player, armorTypes) {
                     amount: item.amount,
                     data: item.data || 0
                 });
-                console.log(`✅ Found armor item in inventory slot ${i}: ${item.typeId} (slot ${slotIndex})`);
             }
         } catch (error) {
             continue;
@@ -332,7 +364,6 @@ function scanForOffhandItem(player, offhandTypes, offhandSlots) {
             if (offhandSlot) {
                 const offhand = offhandSlot.getItem();
                 if (offhand) {
-                    console.log(`✅ Captured offhand item via equipment component: ${offhand.typeId}`);
                     return {
                         typeId: offhand.typeId,
                         amount: offhand.amount,
@@ -342,7 +373,7 @@ function scanForOffhandItem(player, offhandTypes, offhandSlots) {
             }
         }
     } catch (error) {
-        console.log("Equipment component not available:", error);
+        // console.log("Equipment component not available:", error); // Removed debug
     }
 
     // Method 2: Try specific offhand slots
@@ -350,7 +381,6 @@ function scanForOffhandItem(player, offhandTypes, offhandSlots) {
         try {
             const item = inventory.getItem(slotNum);
             if (item && offhandTypes.includes(item.typeId)) {
-                console.log(`✅ Found offhand item in slot ${slotNum}: ${item.typeId}`);
                 return {
                     typeId: item.typeId,
                     amount: item.amount,
@@ -368,7 +398,6 @@ function scanForOffhandItem(player, offhandTypes, offhandSlots) {
         try {
             const item = inventory.getItem(i);
             if (item && offhandTypes.includes(item.typeId)) {
-                console.log(`✅ Found offhand item in inventory slot ${i}: ${item.typeId}`);
                 return {
                     typeId: item.typeId,
                     amount: item.amount,
@@ -383,59 +412,27 @@ function scanForOffhandItem(player, offhandTypes, offhandSlots) {
     return null;
 }
 
-/**
- * Debug function to dump all inventory slots
- * @param {Player} player - The player to debug
- */
-function debugInventoryDump(player) {
-    const inventory = player.getComponent("inventory")?.container;
-    if (!inventory) {
-        console.log("❌ No inventory component found");
-        return;
-    }
-
-    console.log("=== INVENTORY DUMP ===");
-    for (let i = 0; i < inventory.size; i++) {
-        try {
-            const item = inventory.getItem(i);
-            if (item) {
-                console.log(`Slot ${i}: ${item.typeId} x${item.amount}`);
-            }
-        } catch (error) {
-            // Slot doesn't exist
-        }
-    }
-    console.log("=== END INVENTORY DUMP ===");
-}
-
 // Instead, set up event listeners immediately (safe in 1.21+)
 console.log("World initialized, setting up event listeners...");
+
+// Infection logic: infect player, notify, and spawn bear on death (no inventory logic)
 
 // Handle snow item consumption
 world.afterEvents.itemCompleteUse.subscribe((event) => {
     const player = event.source;
     const item = event.itemStack;
-    
     if (item?.typeId === SNOW_ITEM_ID) {
         try {
             system.run(() => {
-                // Apply nausea effect using API
-                player.addEffect("minecraft:nausea", 550, { amplifier: 9 }); // 20 seconds (400 ticks) with amplifier 9
-                // Play effects
+                player.addEffect("minecraft:nausea", 550, { amplifier: 9 });
                 player.playSound("mob.wolf.growl");
                 player.dimension.runCommand(`particle minecraft:smoke_particle ${player.location.x} ${player.location.y + 1} ${player.location.z}`);
-                
-                // Send initial message with proper formatting
                 player.sendMessage("§4You start to feel funny...");
-                
-                // Start transformation tracking (don't capture inventory yet)
-                transformingPlayers.set(player.id, {
-                    ticks: 0,
-                    playerName: player.name
-                });
-
-                // Mark player as infected
-                infectPlayer(player);
+                // Infect the player
+                player.addTag(INFECTED_TAG);
+                player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.6 });
+                player.onScreenDisplay.setTitle("§4☣️ You are infected!");
+                player.onScreenDisplay.setActionBar("§cThe Maple Bear infection spreads...");
             });
         } catch (error) {
             console.warn("Error applying snow effects:", error);
@@ -443,286 +440,209 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
     }
 });
 
-// Handle player death to clean up transformation timers
+// Handle player death: if infected, spawn a bear at their death location (no inventory logic)
 world.afterEvents.entityDie.subscribe((event) => {
     const entity = event.deadEntity;
     const source = event.damageSource;
-    
-    // Clean up transformation tracking
     if (entity instanceof Player) {
-        // Check if player was just transformed via script
-        if (entity.hasTag("just_transformed")) {
-            entity.removeTag("just_transformed");
-            console.log(`Player ${entity.name} was just transformed, skipping death handler`);
-            return; // Skip bear spawn because we already did it in transformation
-        }
-        
-        transformingPlayers.delete(entity.id);
-        playerInventories.delete(entity.id);
-
-        // Remove infected death logic for infected players (now handled in entityHurt)
-        // Only handle snow transformation and Maple Bear kill logic for non-infected players
-        if (!isPlayerInfected(entity)) {
-            // NEW: If killed by a Maple Bear, infect and transform
-            if (source && source.damagingEntity) {
-                const damager = source.damagingEntity;
-                const mapleBearTypes = [MAPLE_BEAR_ID, INFECTED_BEAR_ID, BUFF_BEAR_ID];
-                if (damager && mapleBearTypes.includes(damager.typeId)) {
-                    if (!isPlayerInfected(entity)) {
-                        console.log(`Player ${entity.name} was killed by a Maple Bear, infecting and transforming...`);
-                        infectPlayer(entity);
-                        // Use helper to capture, split, and clear inventory
-                        const { equipables, stored } = prepareInfectedTransformation(entity, entity.id, entity.name);
-                        // Mark as just transformed and kill
-                        entity.addTag("just_transformed");
-                        entity.kill();
-                        // The rest of the transformation (bear spawn, etc) will be handled by the normal flow
-                    }
+        // If player is infected, spawn a bear at their death location
+        if (entity.hasTag(INFECTED_TAG)) {
+            try {
+                const bear = entity.dimension.spawnEntity(INFECTED_BEAR_ID, entity.location);
+                if (bear) {
+                    bear.nameTag = `§4☣️ ${entity.name}'s Infected Form`;
                 }
+            } catch (error) {
+                console.warn("Error spawning infected bear on player death:", error);
             }
         }
+        // Remove infection tag on death (will also be removed on respawn)
+        entity.removeTag(INFECTED_TAG);
     }
-    
-    // Handle clone death drops
+    // Bear death corruption logic: corrupt ALL items in inventory AND equipment
     if (entity.typeId === INFECTED_BEAR_ID) {
         try {
-            console.log("=== INFECTED BEAR DEATH HANDLER ===");
-            // Check if this bear was transformed from a player using dynamic property
-            const infectedBy = entity.getDynamicProperty("infected_by");
-            const inventoryJson = entity.getDynamicProperty("original_inventory");
-            
-            console.log(`Bear death - Infected by: ${infectedBy}`);
-            console.log(`Bear death - Has inventory data: ${!!inventoryJson}`);
-            
-            if (infectedBy && inventoryJson) {
-                const inventory = JSON.parse(inventoryJson);
-                console.log("Infected bear death - Inventory data:", inventory);
-                console.log("Infected bear death - Inventory length:", inventory?.length);
-                
-                if (!Array.isArray(inventory) || inventory.length === 0) {
-                    console.log("Infected bear death - No valid inventory to drop");
-                    return;
-                }
-
-                const location = entity.location;
-                const dimension = entity.dimension;
-
-                // Shuffle and limit how many items we try to drop
-                const shuffled = [...inventory].sort(() => 0.5 - Math.random());
-                
-                // Calculate total individual items (not stacks)
-                const totalIndividualItems = shuffled.reduce((total, entry) => total + (entry.amount || 1), 0);
-                
-                // Calculate how many individual items to preserve (20% of total individual items)
-                const individualItemsToPreserve = Math.max(1, Math.floor(totalIndividualItems * 0.2));
-                
-                console.log(`Infected bear death - Attempting to preserve ${individualItemsToPreserve} individual items from ${totalIndividualItems} total individual items (${shuffled.length} stacks)`);
-
-                // First, preserve individual items (not stacks) with maximum variety
-                let preservedCount = 0;
-                
-                // Group items by type for better variety
-                const itemGroups = {};
-                shuffled.forEach(entry => {
-                    if (entry && entry.typeId) {
-                        if (!itemGroups[entry.typeId]) {
-                            itemGroups[entry.typeId] = [];
-                        }
-                        itemGroups[entry.typeId].push(entry);
-                    }
-                });
-                
-                // Get unique item types and shuffle them for randomness
-                const uniqueItemTypes = Object.keys(itemGroups).sort(() => Math.random() - 0.5);
-                
-                // Calculate max items per type with special limits for tools
-                let maxItemsPerType = Math.max(1, Math.floor(individualItemsToPreserve / uniqueItemTypes.length));
-                
-                // Limit tools to prevent getting too many back
-                const toolTypes = ['minecraft:sword', 'minecraft:pickaxe', 'minecraft:axe', 'minecraft:shovel', 'minecraft:hoe', 'minecraft:bow', 'minecraft:crossbow', 'minecraft:trident', 'minecraft:shield'];
-                const maxToolsPerType = 1; // Only 1 tool per type maximum
-                
-                console.log(`Infected bear death - Found ${uniqueItemTypes.length} unique item types, max ${maxItemsPerType} items per type (tools limited to ${maxToolsPerType})`);
-                
-                // Preserve items from each type to ensure variety (in random order)
-                for (const itemType of uniqueItemTypes) {
-                    if (preservedCount >= individualItemsToPreserve) break;
-                    
-                    const itemsOfThisType = itemGroups[itemType];
-                    let itemsPreservedFromType = 0;
-                    
-                    // Check if this is a tool type
-                    const isTool = toolTypes.some(toolType => itemType.includes(toolType));
-                    const maxForThisType = isTool ? maxToolsPerType : maxItemsPerType;
-                    
-                    // Shuffle the stacks of this item type for randomness
-                    const shuffledStacks = [...itemsOfThisType].sort(() => Math.random() - 0.5);
-                    
-                    for (const entry of shuffledStacks) {
-                        if (preservedCount >= individualItemsToPreserve || itemsPreservedFromType >= maxForThisType) break;
-                        
-                        const dropLocation = { 
-                            x: location.x + Math.random() - 0.5, 
-                            y: location.y + 0.5, 
-                            z: location.z + Math.random() - 0.5 
-                        };
-
-                        // Calculate how many items from this stack to preserve (with randomness)
-                        const itemsInStack = entry.amount || 1;
-                        const maxPossibleFromStack = Math.min(
-                            itemsInStack, 
-                            individualItemsToPreserve - preservedCount,
-                            maxForThisType - itemsPreservedFromType
-                        );
-                        
-                        // Add randomness to the amount preserved based on item type
-                        let itemsToPreserveFromStack;
-                        
-                        // Check if this is a non-stackable item (tools, armor, etc.)
-                        const nonStackableItems = ['minecraft:sword', 'minecraft:pickaxe', 'minecraft:axe', 'minecraft:shovel', 'minecraft:hoe', 'minecraft:bow', 'minecraft:crossbow', 'minecraft:trident', 'minecraft:shield', 'minecraft:helmet', 'minecraft:chestplate', 'minecraft:leggings', 'minecraft:boots', 'minecraft:elytra'];
-                        const isNonStackable = nonStackableItems.some(itemType => entry.typeId.includes(itemType));
-                        
-                        if (isNonStackable) {
-                            // For non-stackable items, preserve 0 or 1 (random)
-                            itemsToPreserveFromStack = Math.random() < 0.5 ? 0 : Math.min(1, maxPossibleFromStack);
-                        } else {
-                            // For stackable items, preserve random amount between 1 and max possible (or max stack size)
-                            const maxStackSize = getMaxStackSize(entry.typeId);
-                            const maxToPreserve = Math.min(maxPossibleFromStack, maxStackSize);
-                            itemsToPreserveFromStack = maxToPreserve > 1 ? 
-                                Math.floor(Math.random() * maxToPreserve) + 1 : 
-                                maxToPreserve;
-                        }
-                        
-                        if (itemsToPreserveFromStack > 0) {
-                            // Preserve and drop the selected items from this stack
-                            try {
-                                const itemStack = new ItemStack(entry.typeId, itemsToPreserveFromStack);
-                                dimension.spawnItem(itemStack, dropLocation);
-                                console.log(`Infected bear death - Preserved and dropped ${itemsToPreserveFromStack} items of ${entry.typeId} at ${dropLocation.x}, ${dropLocation.y}, ${dropLocation.z}`);
-                                
-                                // Add preservation particle effect (simplified)
-                                try {
-                                    dimension.runCommand(`particle minecraft:glow ${Math.round(dropLocation.x)} ${Math.round(dropLocation.y)} ${Math.round(dropLocation.z)}`);
-                                } catch (error) {
-                                    console.warn("Failed to spawn preservation particle:", error);
-                                }
-                                
-                                preservedCount += itemsToPreserveFromStack;
-                                itemsPreservedFromType += itemsToPreserveFromStack;
-                            } catch (error) {
-                                console.warn(`Failed to preserve items of ${entry.typeId}:`, error);
-                                // Fallback to snow if preservation fails
-                                const snowItem = new ItemStack(SNOW_ITEM_ID, itemsToPreserveFromStack);
-                                dimension.spawnItem(snowItem, dropLocation);
-                                console.log(`Infected bear death - Fallback snow spawned for failed items of ${entry.typeId}`);
-                                preservedCount += itemsToPreserveFromStack;
-                                itemsPreservedFromType += itemsToPreserveFromStack;
-                            }
-                        }
+            // 1. Corrupt all inventory items
+            const inventoryComp = entity.getComponent("inventory");
+            let items = [];
+            if (inventoryComp && inventoryComp.container) {
+                for (let i = 0; i < inventoryComp.container.size; i++) {
+                    const item = inventoryComp.container.getItem(i);
+                    if (item) {
+                        items.push({
+                            typeId: item.typeId,
+                            amount: item.amount,
+                            data: item.data || 0
+                        });
+                        // Remove the item from the inventory
+                        inventoryComp.container.setItem(i, undefined);
                     }
                 }
-                
-                // Then, corrupt the remaining individual items into snow (50% of remaining individual items, but capped)
-                const remainingIndividualItems = totalIndividualItems - preservedCount;
-                const corruptionCount = Math.min(
-                    Math.floor(remainingIndividualItems * 0.5), // 50% of remaining
-                    20 // Cap at 20 snow items maximum
-                );
-                
-                console.log(`Infected bear death - Corrupting ${corruptionCount} of ${remainingIndividualItems} remaining individual items into snow (capped at 20)`);
-                
-                for (let i = 0; i < corruptionCount; i++) {
-                    const dropLocation = { 
-                        x: location.x + Math.random() - 0.5, 
-                        y: location.y + 0.5, 
-                        z: location.z + Math.random() - 0.5 
-                    };
-                    
-                    // Corrupt to snow
-                    const snowItem = new ItemStack(SNOW_ITEM_ID, 1);
-                    dimension.spawnItem(snowItem, dropLocation);
-                    console.log(`Infected bear death - Spawned corrupted snow from remaining items at ${dropLocation.x}, ${dropLocation.y}, ${dropLocation.z}`);
-                    
-                    // Add corruption particle effect (simplified)
-                    try {
-                        dimension.runCommand(`particle minecraft:snowflake ${Math.round(dropLocation.x)} ${Math.round(dropLocation.y)} ${Math.round(dropLocation.z)}`);
-                    } catch (error) {
-                        console.warn("Failed to spawn corruption particle:", error);
-                    }
-                }
-                
-                // Broadcast corruption message
-                dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§8[MBI] §7The corrupted form releases its twisted contents..."}]}`);
-            } else {
-                console.log("Infected bear death - No player data found, skipping inventory drop");
             }
-            console.log("=== END INFECTED BEAR DEATH HANDLER ===");
+            // 2. Corrupt all equipped items
+            const equipmentComp = entity.getComponent("equipment");
+            if (equipmentComp) {
+                const equipSlots = ["head", "chest", "legs", "feet", "mainhand", "offhand"];
+                for (const slot of equipSlots) {
+                    const equipSlot = equipmentComp.getEquipmentSlot(slot);
+                    if (equipSlot) {
+                        const item = equipSlot.getItem();
+                        if (item) {
+                            items.push({
+                                typeId: item.typeId,
+                                amount: item.amount,
+                                data: item.data || 0
+                            });
+                            // Remove the item from the slot
+                            equipSlot.setItem(undefined);
+                        }
+                    }
+                }
+            }
+            if (items.length === 0) {
+                return;
+            }
+            // Corrupt ALL items into snow
+            for (const entry of items) {
+                for (let n = 0; n < (entry.amount || 1); n++) {
+                    const dropLocation = { 
+                        x: entity.location.x + Math.random() - 0.5,
+                        y: entity.location.y + 0.5,
+                        z: entity.location.z + Math.random() - 0.5
+                    };
+                    const snowItem = new ItemStack("mb:snow", 1);
+                    entity.dimension.spawnItem(snowItem, dropLocation);
+                    try {
+                        entity.dimension.runCommand(`particle minecraft:snowflake ${Math.round(dropLocation.x)} ${Math.round(dropLocation.y)} ${Math.round(dropLocation.z)}`);
+                    } catch (error) {}
+                }
+            }
         } catch (error) {
-            console.warn("Error handling infected bear death:", error);
+            console.warn("Error handling infected bear death (all corrupt test):", error);
         }
     }
 });
 
-// Handle player damage from Maple Bears
+// Remove any remaining infected bear death logging
+world.afterEvents.entityDie.subscribe((event) => {
+    const entity = event.deadEntity;
+    if (entity.typeId === INFECTED_BEAR_ID) {
+        // No debug, log, or output
+        // No item corruption or processing
+    }
+});
+
+// Temporarily disable all item corruption on infected Maple Bear death
+world.afterEvents.entityDie.subscribe((event) => {
+    const entity = event.deadEntity;
+    if (entity.typeId === INFECTED_BEAR_ID) {
+        // Do not process inventory or equipment, do not spawn snow, do nothing to items
+    }
+});
+
+// --- Bear Infection: On hit by Maple Bear ---
 world.afterEvents.entityHurt.subscribe((event) => {
     const player = event.hurtEntity;
     const source = event.damageSource;
     if (!(player instanceof Player)) return;
-    // [DEBUG] entityHurt fired
-    console.warn(`[DEBUG] entityHurt fired for ${player.name}`);
-    // Track last attacker for this player
-    if (source && source.damagingEntity) {
-        lastAttackerMap.set(player.id, source.damagingEntity.typeId);
-    }
-    // Infect if hit by a Maple Bear and not already infected
     const mapleBearTypes = [MAPLE_BEAR_ID, INFECTED_BEAR_ID, BUFF_BEAR_ID];
-    if (source && source.damagingEntity) {
-        const damager = source.damagingEntity;
-        if (damager && mapleBearTypes.includes(damager.typeId) && !isPlayerInfected(player)) {
-            infectPlayer(player);
+    if (source && source.damagingEntity && mapleBearTypes.includes(source.damagingEntity.typeId)) {
+        if (!bearInfection.has(player.id)) {
+            bearInfection.set(player.id, { ticksLeft: BEAR_INFECTION_TICKS, cured: false });
+            player.addTag(INFECTED_TAG);
+            player.sendMessage("§4You have been infected! Cure yourself within 20 days with a weakness potion and a notch apple!");
         }
-    }
-    // Handle infected death logic
-    if (!isPlayerInfected(player)) {
-        console.warn(`[DEBUG] Player ${player.name} was hurt but is NOT infected.`);
-        return;
-    } else {
-        console.warn(`[DEBUG] Player ${player.name} IS infected.`);
-    }
-    const health = player.getComponent("health")?.current;
-    // Pre-death buffer: intercept at low health
-    if (health !== undefined && health <= 4 && !player.hasTag("mb_simulating_death")) {
-        console.warn(`[DEBUG] Pre-death trigger: health is ${health}`);
-        event.cancel = true;
-        player.getComponent("health").setCurrent(1);
-        player.addTag("mb_simulating_death");
-        if (recentlyHandledInfectedDeaths.has(player.id)) return;
-        recentlyHandledInfectedDeaths.add(player.id);
-        // Check if last attacker was a Maple Bear
-        const lastAttacker = lastAttackerMap.get(player.id);
-        if (mapleBearTypes.includes(lastAttacker)) {
-            console.warn(`[DEBUG] Simulating infected death for ${player.name}`);
-            simulateInfectedDeath(player);
-        } else {
-            console.warn(`[DEBUG] Simulating generic infected death for ${player.name}`);
-            simulateGenericInfectedDeath(player);
-        }
-        // Remove the flag after a short delay to allow for respawn
-        system.runTimeout(() => {
-            recentlyHandledInfectedDeaths.delete(player.id);
-        }, 40);
     }
 });
 
-// Add a player respawn handler to always remove the infected tag and clean up infectedPlayers set when a player respawns
+// --- Snow Infection: On eating snow ---
+world.afterEvents.itemCompleteUse.subscribe((event) => {
+    const player = event.source;
+    const item = event.itemStack;
+    if (item?.typeId === SNOW_ITEM_ID) {
+        let state = snowInfection.get(player.id);
+        if (!state) {
+            state = { ticksLeft: SNOW_INFECTION_START, snowCount: 1 };
+        } else {
+            state.ticksLeft = Math.max(SNOW_INFECTION_MIN, state.ticksLeft - SNOW_INFECTION_DECREMENT);
+            state.snowCount++;
+        }
+        snowInfection.set(player.id, state);
+        player.addTag(INFECTED_TAG);
+        player.sendMessage(`§bYou feel cold... (${Math.floor(state.ticksLeft/1200)} min until transformation)`);
+    }
+});
+
+// --- Cure Logic: On item use (notch apple) ---
+world.afterEvents.itemCompleteUse.subscribe((event) => {
+    const player = event.source;
+    const item = event.itemStack;
+    if (bearInfection.has(player.id) && !bearInfection.get(player.id).cured) {
+        if (item?.typeId === "minecraft:enchanted_golden_apple") {
+            // Check for weakness effect
+            if (player.hasEffect("minecraft:weakness")) {
+                bearInfection.set(player.id, { ticksLeft: 0, cured: true });
+                player.removeTag(INFECTED_TAG);
+                player.sendMessage("§aYou have cured your infection!");
+            } else {
+                player.sendMessage("§eYou need to have weakness to cure the infection!");
+            }
+        }
+    }
+});
+
+// --- Infection Timers and Effects ---
+system.runInterval(() => {
+    // Bear infection
+    for (const [id, state] of bearInfection.entries()) {
+        const player = world.getAllPlayers().find(p => p.id === id);
+        if (!player || state.cured) continue;
+        state.ticksLeft -= 20;
+        if (state.ticksLeft <= 0) {
+            // Transform!
+            player.kill();
+            player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
+            player.sendMessage("§4You succumbed to the infection!");
+            player.removeTag(INFECTED_TAG);
+            bearInfection.delete(id);
+        } else if (Math.random() < 0.05) { // 5% chance every second
+            applyRandomEffect(player);
+        }
+    }
+    // Snow infection
+    for (const [id, state] of snowInfection.entries()) {
+        const player = world.getAllPlayers().find(p => p.id === id);
+        if (!player) continue;
+        state.ticksLeft -= 20;
+        // Side effects: more frequent as timer shortens
+        let effectChance = 0.01 + (SNOW_INFECTION_START - state.ticksLeft) / SNOW_INFECTION_START * 0.09; // 1% to 10%
+        if (Math.random() < effectChance) {
+            applyRandomEffect(player);
+        }
+        if (state.ticksLeft <= 0) {
+            player.kill();
+            player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
+            player.sendMessage("§4The snow has claimed you!");
+            player.removeTag(INFECTED_TAG);
+            snowInfection.delete(id);
+        }
+    }
+}, 20);
+
+// --- Infection State Reset on Death/Respawn ---
+world.afterEvents.entityDie.subscribe((event) => {
+    const entity = event.deadEntity;
+    if (entity instanceof Player) {
+        bearInfection.delete(entity.id);
+        snowInfection.delete(entity.id);
+        entity.removeTag(INFECTED_TAG);
+    }
+});
 world.afterEvents.playerSpawn.subscribe((event) => {
     const player = event.player;
-    if (player && player.hasTag(INFECTED_TAG)) {
-        player.removeTag(INFECTED_TAG);
-        infectedPlayers.delete(player.id);
-        console.log(`Removed infected tag from ${player.name} on respawn.`);
-    }
+    bearInfection.delete(player.id);
+    snowInfection.delete(player.id);
+    player.removeTag(INFECTED_TAG);
 });
 
 /**
@@ -867,71 +787,7 @@ function corruptDroppedItems(origin, dimension) {
 // Comment out tick counter logging
 system.runInterval(() => {
     // Process each transforming player
-    for (const [playerId, data] of transformingPlayers.entries()) {
-        data.ticks += 20; // Increase by 20 ticks (1 second)
-        
-        const player = Array.from(world.getAllPlayers()).find(p => p.id === playerId);
-        
-        // Check transformation stages
-        if (data.ticks >= 300 && data.ticks < 320) {
-            // At 15 seconds (300 ticks), send warning message
-            if (player) {
-                system.run(() => {
-                    player.sendMessage("§4You don't feel so good...");
-                });
-            } else {
-                // If player isn't found, try with saved name
-                world.getDimension("overworld").runCommand(`tellraw "${data.playerName}" {"rawtext":[{"text":"§4You don't feel so good..."}]}`);
-            }
-        } 
-        else if (data.ticks >= 400) {
-            // At 20 seconds (400 ticks), transform player
-            if (player) {
-                system.run(() => {
-                    try {
-                        // Use helper to capture, split, and clear inventory
-                        const { equipables, stored } = prepareInfectedTransformation(player, playerId, data.playerName);
-                        // Mark as just transformed and kill
-                        player.addTag("just_transformed");
-                        player.kill();
-                        // Spawn infected Maple Bear with player tracking
-                        const bear = player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
-                        if (bear) {
-                            bear.nameTag = `§4☣️ ${data.playerName}'s Infected Form`;
-                            bear.setDynamicProperty("infected_by", playerId);
-                            bear.setDynamicProperty("original_inventory", JSON.stringify(stored));
-                            // Equip the bear with equippable items
-                            try {
-                                const bearEquipment = bear.getComponent("equipment");
-                                if (bearEquipment) {
-                                    for (const item of equipables) {
-                                        let slot = null;
-                                        if (item.typeId.endsWith("_helmet") || item.typeId === "minecraft:turtle_helmet") slot = "head";
-                                        else if (item.typeId.endsWith("_chestplate") || item.typeId === "minecraft:elytra") slot = "chest";
-                                        else if (item.typeId.endsWith("_leggings")) slot = "legs";
-                                        else if (item.typeId.endsWith("_boots")) slot = "feet";
-                                        else if (["minecraft:shield", "minecraft:totem_of_undying", "minecraft:torch", "minecraft:soul_torch", "minecraft:lantern", "minecraft:soul_lantern"].includes(item.typeId)) slot = "offhand";
-                                        else if (["minecraft:wooden_sword", "minecraft:stone_sword", "minecraft:golden_sword", "minecraft:iron_sword", "minecraft:diamond_sword", "minecraft:netherite_sword", "minecraft:bow", "minecraft:crossbow", "minecraft:trident", "minecraft:wooden_axe", "minecraft:stone_axe", "minecraft:golden_axe", "minecraft:iron_axe", "minecraft:diamond_axe", "minecraft:netherite_axe", "minecraft:wooden_pickaxe", "minecraft:stone_pickaxe", "minecraft:golden_pickaxe", "minecraft:iron_pickaxe", "minecraft:diamond_pickaxe", "minecraft:netherite_pickaxe", "minecraft:wooden_shovel", "minecraft:stone_shovel", "minecraft:golden_shovel", "minecraft:iron_shovel", "minecraft:diamond_shovel", "minecraft:netherite_shovel", "minecraft:wooden_hoe", "minecraft:stone_hoe", "minecraft:golden_hoe", "minecraft:iron_hoe", "minecraft:diamond_hoe", "minecraft:netherite_hoe"].includes(item.typeId)) slot = "mainhand";
-                                        if (slot) {
-                                            const itemStack = new ItemStack(item.typeId, item.amount);
-                                            bearEquipment.getEquipmentSlot(slot)?.setItem(itemStack);
-                                        }
-                                    }
-                                }
-                            } catch (error) {
-                                console.warn("Failed to equip bear with items:", error);
-                            }
-                        }
-                    } catch (error) {
-                        console.warn("Error during player transformation:", error);
-                    }
-                });
-            }
-            
-            // Remove from tracking regardless of whether player was found
-            transformingPlayers.delete(playerId);
-        }
-    }
+    // Remove transformation interval and all references to transformingPlayers
 }, 20); // Run every second
 
 // Utility: Get best armor tier
@@ -1251,82 +1107,7 @@ function simulateGenericInfectedDeath(player) {
     }, 40); // 2 seconds
 }
 
-// === Scripted Spawning for Maple Bears ===
-function getRandomSurfaceLocationNear(player) {
-    const dim = player.dimension;
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-        const angle = Math.random() * Math.PI * 2;
-        const distance = MIN_SPAWN_RADIUS + Math.random() * (SPAWN_RADIUS - MIN_SPAWN_RADIUS);
-        const x = Math.floor(player.location.x + Math.cos(angle) * distance);
-        const z = Math.floor(player.location.z + Math.sin(angle) * distance);
-        let y = 128;
-        try {
-            y = dim.getHighestBlockAt ? dim.getHighestBlockAt(x, z)?.y ?? 128 : 128;
-        } catch (e) {}
-        const blockBelow = dim.getBlock({ x, y: y - 1, z });
-        const blockAt = dim.getBlock({ x, y, z });
-        const blockAbove = dim.getBlock({ x, y: y + 1, z });
-        if (
-            blockBelow && VALID_SURFACE_BLOCKS.includes(blockBelow.typeId) &&
-            blockAt && VALID_ABOVE_BLOCKS.includes(blockAt.typeId) &&
-            (!blockAbove || VALID_ABOVE_BLOCKS.includes(blockAbove.typeId))
-        ) {
-            return { x, y, z };
-        }
-    }
-    return null;
-}
-
-system.runInterval(() => {
-    if (typeof getCurrentDay !== "function") {
-        console.warn("[MBI] getCurrentDay is not a function!");
-        return;
-    }
-    const currentDay = getCurrentDay();
-    console.warn(`[MBI] Scripted spawn tick. Current day: ${currentDay}`);
-    for (const player of world.getAllPlayers()) {
-        const playerName = player.name;
-        // Maple Bear
-        const mapleBearRoll = Math.random();
-        if (currentDay >= MAPLE_BEAR_MIN_DAY && mapleBearRoll < MAPLE_BEAR_SPAWN_CHANCE) {
-            const loc = getRandomSurfaceLocationNear(player);
-            if (loc) {
-                player.dimension.spawnEntity(MAPLE_BEAR_ID, loc);
-                console.warn(`[MBI] Spawned Maple Bear for ${playerName} at ${JSON.stringify(loc)}`);
-            } else {
-                console.warn(`[MBI] No valid location for Maple Bear spawn for ${playerName}.`);
-            }
-        } else {
-            console.warn(`[MBI] Maple Bear roll for ${playerName}: ${mapleBearRoll} (needed < ${MAPLE_BEAR_SPAWN_CHANCE})`);
-        }
-        // Infected Maple Bear
-        const infectedBearRoll = Math.random();
-        if (currentDay >= INFECTED_BEAR_MIN_DAY && infectedBearRoll < INFECTED_BEAR_SPAWN_CHANCE) {
-            const loc = getRandomSurfaceLocationNear(player);
-            if (loc) {
-                player.dimension.spawnEntity(INFECTED_BEAR_ID, loc);
-                console.warn(`[MBI] Spawned Infected Maple Bear for ${playerName} at ${JSON.stringify(loc)}`);
-            } else {
-                console.warn(`[MBI] No valid location for Infected Maple Bear spawn for ${playerName}.`);
-            }
-        } else {
-            console.warn(`[MBI] Infected Maple Bear roll for ${playerName}: ${infectedBearRoll} (needed < ${INFECTED_BEAR_SPAWN_CHANCE})`);
-        }
-        // Buff Maple Bear
-        const buffBearRoll = Math.random();
-        if (currentDay >= BUFF_BEAR_MIN_DAY && buffBearRoll < BUFF_BEAR_SPAWN_CHANCE) {
-            const loc = getRandomSurfaceLocationNear(player);
-            if (loc) {
-                player.dimension.spawnEntity(BUFF_BEAR_ID, loc);
-                console.warn(`[MBI] Spawned Buff Maple Bear for ${playerName} at ${JSON.stringify(loc)}`);
-            } else {
-                console.warn(`[MBI] No valid location for Buff Maple Bear spawn for ${playerName}.`);
-            }
-        } else {
-            console.warn(`[MBI] Buff Maple Bear roll for ${playerName}: ${buffBearRoll} (needed < ${BUFF_BEAR_SPAWN_CHANCE})`);
-        }
-    }
-}, SPAWN_INTERVAL);
+// Remove all scripted spawning logic for Maple Bears, including the system.runInterval that spawns them and any related debug logging.
 
 // --- Day Tracking System Initialization (forced for debugging) ---
 system.run(() => {
@@ -1337,3 +1118,33 @@ system.run(() => {
         console.warn("[ERROR] Forced initializeDayTracking() failed:", err);
     }
 });
+
+// --- Helper: Check if item is equippable by bear ---
+function isEquippableByBear(typeId) {
+    // List of equippable items for infected bear
+    const EQUIPPABLE_IDS = new Set([
+        // Helmets
+        "minecraft:leather_helmet", "minecraft:chainmail_helmet", "minecraft:golden_helmet", "minecraft:iron_helmet", "minecraft:diamond_helmet", "minecraft:netherite_helmet", "minecraft:turtle_helmet",
+        // Chestplates
+        "minecraft:leather_chestplate", "minecraft:chainmail_chestplate", "minecraft:golden_chestplate", "minecraft:iron_chestplate", "minecraft:diamond_chestplate", "minecraft:netherite_chestplate", "minecraft:elytra",
+        // Leggings
+        "minecraft:leather_leggings", "minecraft:chainmail_leggings", "minecraft:golden_leggings", "minecraft:iron_leggings", "minecraft:diamond_leggings", "minecraft:netherite_leggings",
+        // Boots
+        "minecraft:leather_boots", "minecraft:chainmail_boots", "minecraft:golden_boots", "minecraft:iron_boots", "minecraft:diamond_boots", "minecraft:netherite_boots",
+        // Shields and offhand
+        "minecraft:shield", "minecraft:totem_of_undying", "minecraft:torch", "minecraft:soul_torch", "minecraft:lantern", "minecraft:soul_lantern",
+        // Swords
+        "minecraft:wooden_sword", "minecraft:stone_sword", "minecraft:golden_sword", "minecraft:iron_sword", "minecraft:diamond_sword", "minecraft:netherite_sword",
+        // Axes
+        "minecraft:wooden_axe", "minecraft:stone_axe", "minecraft:golden_axe", "minecraft:iron_axe", "minecraft:diamond_axe", "minecraft:netherite_axe",
+        // Pickaxes
+        "minecraft:wooden_pickaxe", "minecraft:stone_pickaxe", "minecraft:golden_pickaxe", "minecraft:iron_pickaxe", "minecraft:diamond_pickaxe", "minecraft:netherite_pickaxe",
+        // Shovels
+        "minecraft:wooden_shovel", "minecraft:stone_shovel", "minecraft:golden_shovel", "minecraft:iron_shovel", "minecraft:diamond_shovel", "minecraft:netherite_shovel",
+        // Hoes
+        "minecraft:wooden_hoe", "minecraft:stone_hoe", "minecraft:golden_hoe", "minecraft:iron_hoe", "minecraft:diamond_hoe", "minecraft:netherite_hoe",
+        // Other weapons/tools
+        "minecraft:trident", "minecraft:bow", "minecraft:crossbow"
+    ]);
+    return EQUIPPABLE_IDS.has(typeId);
+}
