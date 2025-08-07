@@ -116,7 +116,7 @@
 							"subject": "other",
 							"value": "player"
 						},
-						"max_dist": 200
+						"max_dist": 64
 					},
 					{
 						"filters": {
@@ -124,18 +124,15 @@
 							"subject": "other",
 							"value": "mob"
 						},
-						"max_dist": 200
-					},
-					{
-						"max_dist": 2000
+						"max_dist": 64
 					}
 				],
 				"must_see": true,
 				"set_persistent": true,
-				"target_search_height": 300,
-				"target_invisible_multiplier": 1,
-				"must_see_forget_duration": 120,
-				"within_radius": 200,
+				"target_search_height": 20,
+				"target_invisible_multiplier": 2,
+				"must_see_forget_duration": 60,
+				"within_radius": 32,
 				"target_sneak_visibility_multiplier": 1
 			},
 			"minecraft:physics": {
@@ -161,8 +158,8 @@
 				}
 			},
 			"minecraft:follow_range": {
-				"value": 500,
-				"max": 500
+				"value": 64,
+				"max": 64
 			},
 			"minecraft:walk_animation_speed": {
 				"value": 1
