@@ -1,4 +1,5 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
+import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { initializeDayTracking, getCurrentDay } from "./mb_dayTracker.js";
 
 // Constants for Maple Bear behavior
@@ -1032,6 +1033,105 @@ function isPlayerImmune(player) {
 }
 
 /**
+ * Format a duration in ticks (20 ticks = 1 second) into a compact string
+ * @param {number} ticks
+ * @returns {string}
+ */
+function formatTicksDuration(ticks) {
+    const totalSeconds = Math.max(0, Math.floor((ticks || 0) / 20));
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+    return parts.join(" ");
+}
+
+/**
+ * Format a duration in milliseconds into a compact string
+ * @param {number} ms
+ * @returns {string}
+ */
+function formatMillisDuration(ms) {
+    const totalSeconds = Math.max(0, Math.floor((ms || 0) / 1000));
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+    return parts.join(" ");
+}
+
+/**
+ * Show an infection status report to the player
+ * @param {Player} player
+ */
+function showInfectionBookReport(player) {
+    try {
+        const hasBear = bearInfection.has(player.id) && !bearInfection.get(player.id).cured;
+        const hasSnow = snowInfection.has(player.id);
+        const immune = isPlayerImmune(player);
+
+        const typeText = hasBear && hasSnow
+            ? "Bear + Snow"
+            : hasBear
+                ? "Bear"
+                : hasSnow
+                    ? "Snow"
+                    : "None";
+
+        const lines = [];
+        lines.push("§6=== Infection Tracker ===");
+        lines.push(`§eType: §f${typeText}`);
+
+        if (hasBear) {
+            const bearTicks = bearInfection.get(player.id).ticksLeft || 0;
+            const bearDays = Math.ceil(bearTicks / 24000);
+            lines.push(`§eBear: §c${formatTicksDuration(bearTicks)} (§f~${bearDays} day${bearDays !== 1 ? 's' : ''}§c)`);
+            lines.push("§7Cure: §fDrink Weakness then eat a Golden Apple");
+        }
+
+        if (hasSnow) {
+            const snowTicks = snowInfection.get(player.id).ticksLeft || 0;
+            lines.push(`§eSnow: §c${formatTicksDuration(snowTicks)}`);
+            lines.push("§7Cure: §fNone. Transformation at timer end");
+        }
+
+        if (!hasBear && !hasSnow) {
+            lines.push("§aYou are currently healthy.");
+        }
+
+        if (immune) {
+            const end = curedPlayers.get(player.id);
+            const remainingMs = Math.max(0, end - Date.now());
+            lines.push(`§bImmunity: §fACTIVE (§b${formatMillisDuration(remainingMs)} left§f)`);
+        } else {
+            lines.push("§bImmunity: §7None");
+        }
+
+        // Build UI like a signed book page
+        const body = lines.join("\n");
+        const form = new ActionFormData()
+            .title("§6Infection Tracker")
+            .body(body)
+            .button("§8Close");
+        player.playSound("random.orb", { pitch: 1.2, volume: 0.6 });
+        form.show(player).catch(() => {});
+    } catch (err) {
+        console.warn("[BOOK] Error showing infection report:", err);
+    }
+}
+
+
+/**
  * Mark a player as infected
  * @param {Player} player - The player to infect
  */
@@ -1632,6 +1732,15 @@ console.log("[INFO] - Compass: Remove immunity for testing");
 world.beforeEvents.itemUse.subscribe((event) => {
     const player = event.source;
     const item = event.itemStack;
+    
+    // Infection Tracker Book
+    if (item?.typeId === "mb:snow_book") {
+        event.cancel = true;
+        system.run(() => {
+            showInfectionBookReport(player);
+        });
+        return;
+    }
     
     // Debug commands via item use
     if (item?.typeId === "minecraft:book") {
