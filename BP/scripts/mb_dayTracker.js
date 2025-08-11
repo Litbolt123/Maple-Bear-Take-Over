@@ -163,7 +163,7 @@ export function getCurrentDay() {
 export function setCurrentDay(day) {
     try {
         const safeDay = Math.max(0, Math.floor(day)); // Allow day 0
-        
+
         // Update both storage methods
         world.setDynamicProperty(DAY_COUNT_KEY, safeDay);
         const obj = world.scoreboard.getObjective(SCOREBOARD_OBJECTIVE);
@@ -271,7 +271,7 @@ export async function mbiHandleMilestoneDay(day) {
                 }
             }
             // Trigger specific milestone events
-            switch(day) {
+            switch (day) {
                 case 10:
                     world.sendMessage(`§8[MBI] §7The first Maple Bear clones have been spotted...`);
                     break;
@@ -374,7 +374,7 @@ export async function initializeDayTracking() {
 world.afterEvents.playerJoin.subscribe((event) => {
     try {
         const playerId = event.playerId;
-        
+
         if (!playerId) {
             console.warn("Join event has no playerId, skipping");
             return;
@@ -386,13 +386,14 @@ world.afterEvents.playerJoin.subscribe((event) => {
             startDayCycleLoop();
         }
 
-        // Add a longer delay to ensure player is fully loaded
-        system.runTimeout(async () => {
+        // Add a longer delay to ensure player is fully loaded and retry until available
+        const tryWelcome = (retries = 20) => {
             try {
                 const player = getPlayerById(playerId);
-                
                 if (!player) {
-                    console.warn(`Could not find player with ID ${playerId}`);
+                    if (retries > 0) {
+                        system.runTimeout(() => tryWelcome(retries - 1), 40);
+                    }
                     return;
                 }
 
@@ -415,7 +416,7 @@ world.afterEvents.playerJoin.subscribe((event) => {
 
                 // Check if this is the first time the world is being initialized
                 const isFirstTimeInit = !world.getDynamicProperty(INITIALIZED_FLAG);
-                
+
                 // Add an additional delay before showing messages
                 system.runTimeout(async () => {
                     try {
@@ -433,7 +434,7 @@ world.afterEvents.playerJoin.subscribe((event) => {
                             showPlayerTitle(player, `§e☀️ Day ${currentDay}`);
                             showPlayerActionbar(player, "The Maple Bear infection continues...");
                         }
-                        
+
                         // Mark player as welcomed
                         welcomedPlayers.add(playerName);
                     } catch (error) {
@@ -443,7 +444,8 @@ world.afterEvents.playerJoin.subscribe((event) => {
             } catch (error) {
                 console.warn("Error in delayed player join handler:", error);
             }
-        }, 60); // Initial 3 second delay for player lookup
+        };
+        system.runTimeout(() => tryWelcome(20), 80); // start after 4s, retry up to ~40s
     } catch (error) {
         console.warn("Error in player join event subscription:", error);
     }

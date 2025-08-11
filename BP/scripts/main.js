@@ -9,6 +9,7 @@ const BUFF_BEAR_ID = "mb:buff_mb";
 const SNOW_ITEM_ID = "mb:snow";
 const INFECTED_TAG = "mb_infected";
 const INFECTED_CORPSE_ID = "mb:infected_corpse";
+const SNOW_LAYER_BLOCK = "minecraft:snow_layer";
 
 // Constants for progressive spawning system
 const GRACE_PERIOD_DAYS = 2; // Number of days before Maple Bears start spawning
@@ -428,24 +429,24 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
                 player.playSound("mob.wolf.growl");
                 player.dimension.runCommand(`particle minecraft:smoke_particle ${player.location.x} ${player.location.y + 1} ${player.location.z}`);
                 player.sendMessage("§4You start to feel funny...");
-                    // Infect the player
-                    player.addTag(INFECTED_TAG);
-                    player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.6 });
-                    player.onScreenDisplay.setTitle("§4☣️ You are infected!");
-                    player.onScreenDisplay.setActionBar("§cThe Maple Bear infection spreads...");
+                // Infect the player
+                player.addTag(INFECTED_TAG);
+                player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.6 });
+                player.onScreenDisplay.setTitle("§4☣️ You are infected!");
+                player.onScreenDisplay.setActionBar("§cThe Maple Bear infection spreads...");
             });
         } catch (error) {
             console.warn("Error applying snow effects:", error);
-            }
         }
-    
+    }
+
     // Handle weakness potion detection
     if (item?.typeId === "minecraft:potion") {
         try {
             // Check if it's a weakness potion by looking at the potion data
             const potionData = item.data || 0;
             console.log(`[POTION] Player ${player.name} drank a potion with data: ${potionData}`);
-            
+
             // Weakness potion data values (need to verify these):
             // Let's try a broader range and log all potion data to find the correct values
             if (potionData >= 18 && potionData <= 20) {
@@ -459,22 +460,22 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
             console.warn("Error handling weakness potion:", error);
         }
     }
-    
+
     // Handle golden apple consumption for cure system
     if (item?.typeId === "minecraft:golden_apple") {
         console.log(`[APPLE] Player ${player.name} consumed a golden apple`);
-        
+
         // Check if player has bear infection (only bear infection can be cured)
         const hasBearInfection = bearInfection.has(player.id) && !bearInfection.get(player.id).cured;
         const hasSnowInfection = snowInfection.has(player.id);
-        
+
         if (hasBearInfection) {
             console.log(`[CURE] Player ${player.name} attempting to cure bear infection. Snow infection: ${hasSnowInfection}`);
-            
+
             // Check for weakness effect using our reliable detection system
             const hasWeakness = hasWeaknessEffect(player);
             console.log(`[CURE] Player has weakness effect: ${hasWeakness}`);
-            
+
             if (hasWeakness) {
                 // Cure only bear infection
                 system.run(() => {
@@ -482,16 +483,16 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
                     console.log(`[CURE] Cured bear infection for ${player.name}`);
                     player.removeTag(INFECTED_TAG);
                     player.sendMessage("§aYou have cured your bear infection!");
-                    
+
                     // Grant immunity for 5 minutes
                     const immunityEndTime = Date.now() + CURE_IMMUNITY_DURATION;
                     curedPlayers.set(player.id, immunityEndTime);
                     console.log(`[CURE] Granted ${player.name} immunity until ${new Date(immunityEndTime).toLocaleTimeString()}`);
-                    
+
                     // IMMEDIATELY save the cure data to dynamic properties
                     saveInfectionData(player);
                     console.log(`[CURE] Immediately saved cure data for ${player.name}`);
-                    
+
                     // Note: We do NOT remove the weakness effect - let it run its course naturally
                     player.sendMessage("§eYou are now immune to infection for 5 minutes!");
                 });
@@ -571,7 +572,7 @@ world.afterEvents.entityDie.subscribe((event) => {
             // Corrupt ALL items into snow
             for (const entry of items) {
                 for (let n = 0; n < (entry.amount || 1); n++) {
-                    const dropLocation = { 
+                    const dropLocation = {
                         x: entity.location.x + Math.random() - 0.5,
                         y: entity.location.y + 0.5,
                         z: entity.location.z + Math.random() - 0.5
@@ -580,7 +581,7 @@ world.afterEvents.entityDie.subscribe((event) => {
                     entity.dimension.spawnItem(snowItem, dropLocation);
                     try {
                         entity.dimension.runCommand(`particle minecraft:snowflake ${Math.round(dropLocation.x)} ${Math.round(dropLocation.y)} ${Math.round(dropLocation.z)}`);
-                    } catch (error) {}
+                    } catch (error) { }
                 }
             }
         } catch (error) {
@@ -597,9 +598,9 @@ world.afterEvents.entityHurt.subscribe((event) => {
     const source = event.damageSource;
     if (!(player instanceof Player)) return;
 
-    const mapleBearTypes = [MAPLE_BEAR_ID, INFECTED_BEAR_ID, BUFF_BEAR_ID];
+                const mapleBearTypes = [MAPLE_BEAR_ID, INFECTED_BEAR_ID, BUFF_BEAR_ID];
     if (source && source.damagingEntity && mapleBearTypes.includes(source.damagingEntity.typeId)) {
-                // Check if player is immune to infection
+        // Check if player is immune to infection
         if (isPlayerImmune(player)) {
             console.log(`[INFECTION] ${player.name} is immune to infection, hit ignored`);
             // Only show message once per immunity period
@@ -615,7 +616,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
             bearInfection.set(player.id, { ticksLeft: BEAR_INFECTION_TICKS, cured: false, hitWhileImmune: false });
             player.addTag(INFECTED_TAG);
             player.sendMessage("§4You have been infected! Cure yourself within 20 days with a weakness potion and a golden apple!");
-            
+
             // IMMEDIATELY save the infection data
             saveInfectionData(player);
             console.log(`[INFECTION] Immediately saved bear infection data for ${player.name}`);
@@ -627,7 +628,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 bearInfection.set(player.id, { ticksLeft: BEAR_INFECTION_TICKS, cured: false, hitWhileImmune: false });
                 player.addTag(INFECTED_TAG);
                 player.sendMessage("§4You have been infected again! Cure yourself within 20 days with a weakness potion and a golden apple!");
-                
+
                 // IMMEDIATELY save the new infection data
                 saveInfectionData(player);
                 console.log(`[INFECTION] Immediately saved new bear infection data for ${player.name}`);
@@ -647,14 +648,14 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
             const isImmune = isPlayerImmune(player);
             const baseTime = SNOW_INFECTION_START; // 20 seconds
             const adjustedTime = isImmune ? baseTime * 6 : baseTime; // 6x = 2 minutes
-            
+
             state = { ticksLeft: adjustedTime, snowCount: 1 };
-            
+
             if (isImmune) {
-                console.log(`[INFECTION] ${player.name} is immune, drug addiction will take 6x longer (${Math.floor(adjustedTime/20)}s)`);
+                console.log(`[INFECTION] ${player.name} is immune, drug addiction will take 6x longer (${Math.floor(adjustedTime / 20)}s)`);
                 player.sendMessage("§eYour recent cure makes you more resistant to the 'snow'...");
             } else {
-                console.log(`[INFECTION] ${player.name} normal drug addiction (${Math.floor(adjustedTime/20)}s)`);
+                console.log(`[INFECTION] ${player.name} normal drug addiction (${Math.floor(adjustedTime / 20)}s)`);
             }
         } else {
             state.ticksLeft = Math.max(SNOW_INFECTION_MIN, state.ticksLeft - SNOW_INFECTION_DECREMENT);
@@ -662,21 +663,21 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
         }
         snowInfection.set(player.id, state);
         player.addTag(INFECTED_TAG);
-        
+
         // IMMEDIATELY save the snow infection data
         saveInfectionData(player);
         console.log(`[SNOW] Immediately saved snow infection data for ${player.name}`);
-        
+
         // Apply nausea effect for the full duration of the infection
         const nauseaDuration = state.ticksLeft; // Use the actual infection duration (already adjusted for immunity)
-        
+
         try {
             player.addEffect("minecraft:nausea", nauseaDuration, { amplifier: 9 });
-            console.log(`[SNOW] Applied nausea effect for ${nauseaDuration} ticks (${Math.floor(nauseaDuration/20)} seconds) to ${player.name}`);
+            console.log(`[SNOW] Applied nausea effect for ${nauseaDuration} ticks (${Math.floor(nauseaDuration / 20)} seconds) to ${player.name}`);
         } catch (error) {
             console.warn(`[SNOW] Error applying nausea effect: ${error}`);
         }
-        
+
         // The "You start to feel funny..." message is handled in the itemCompleteUse handler above
     }
 });
@@ -686,25 +687,25 @@ if (world.beforeEvents && world.beforeEvents.playerSendMessage) {
     world.beforeEvents.playerSendMessage.subscribe((event) => {
         const message = event.message;
         const player = event.player;
-        
+
         if (message === "!testeffects") {
             event.cancel = true;
             console.log(`[TEST] Testing effects for ${player.name}`);
-            
+
             try {
                 // Test all methods
                 const effectsComponent = player.getComponent("effects");
                 if (effectsComponent) {
                     const componentEffects = effectsComponent.getEffects();
                     console.log(`[TEST] Component effects: ${componentEffects.map(e => e.typeId).join(', ')}`);
-                    
+
                     // Check for weakness specifically
                     const weaknessEffect = componentEffects.find(e => e.typeId === "minecraft:weakness");
                     if (weaknessEffect) {
                         console.log(`[TEST] Found weakness: duration=${weaknessEffect.duration}, amplifier=${weaknessEffect.amplifier}`);
                     }
                 }
-                
+
                 // Try command method
                 try {
                     const result = player.runCommand("effect @s weakness");
@@ -712,26 +713,26 @@ if (world.beforeEvents && world.beforeEvents.playerSendMessage) {
                 } catch (cmdError) {
                     console.log(`[TEST] Command failed: ${cmdError}`);
                 }
-                
+
                 player.sendMessage("§aEffect test completed! Check console for results.");
-                                } catch (error) {
+            } catch (error) {
                 console.warn("[TEST] Error testing effects:", error);
                 player.sendMessage("§cEffect test failed! Check console for error.");
             }
         }
-        
+
         // Add command to manually add weakness for testing
         if (message === "!addweakness") {
             event.cancel = true;
             try {
                 player.addEffect("minecraft:weakness", 200, { amplifier: 1 });
                 player.sendMessage("§aAdded weakness effect for testing!");
-                            } catch (error) {
+            } catch (error) {
                 console.warn("[TEST] Error adding weakness:", error);
                 player.sendMessage("§cFailed to add weakness effect!");
             }
         }
-        
+
         // Add command to check infection status
         if (message === "!infection") {
             event.cancel = true;
@@ -739,7 +740,7 @@ if (world.beforeEvents && world.beforeEvents.playerSendMessage) {
             const hasSnowInfection = snowInfection.has(player.id);
             const bearTicks = hasBearInfection ? bearInfection.get(player.id).ticksLeft : 0;
             const snowTicks = hasSnowInfection ? snowInfection.get(player.id).ticksLeft : 0;
-            
+
             player.sendMessage(`§6=== Infection Status ===`);
             player.sendMessage(`§eBear Infection: ${hasBearInfection ? '§cYES' : '§aNO'}`);
             if (hasBearInfection) {
@@ -752,19 +753,19 @@ if (world.beforeEvents && world.beforeEvents.playerSendMessage) {
                 player.sendMessage(`§eMinutes until transformation: §c${minutesLeft}`);
             }
         }
-        
+
         // Add command to check weakness status
         if (message === "!weakness") {
             event.cancel = true;
             const hasWeakness = hasWeaknessEffect(player);
             const isImmune = isPlayerImmune(player);
-            
+
             player.sendMessage(`§6=== Weakness Status ===`);
             player.sendMessage(`§eHas Weakness Effect: ${hasWeakness ? '§aYES' : '§cNO'}`);
             player.sendMessage(`§eIs Immune to Infection: ${isImmune ? '§aYES' : '§cNO'}`);
             player.sendMessage(`§7Use §e!addweakness §7to get weakness for testing`);
         }
-        
+
         // Add command to remove immunity for testing
         if (message === "!removeimmunity") {
             event.cancel = true;
@@ -772,8 +773,6 @@ if (world.beforeEvents && world.beforeEvents.playerSendMessage) {
             player.sendMessage("§aRemoved immunity for testing!");
         }
     });
-} else {
-    console.warn("[WARNING] Chat event handler not available in this API version. Debug commands disabled.");
 }
 
 // --- Cure Logic: Consolidated in itemCompleteUse above ---
@@ -781,22 +780,22 @@ if (world.beforeEvents && world.beforeEvents.playerSendMessage) {
 
 // --- Infection Timers and Effects ---
 system.runInterval(() => {
-        // Bear infection
+    // Bear infection
     for (const [id, state] of bearInfection.entries()) {
         const player = world.getAllPlayers().find(p => p.id === id);
         if (!player || state.cured) continue;
-        
+
         state.ticksLeft -= 40; // Adjusted for 40-tick interval
-        
+
         // Save data periodically
         saveInfectionData(player);
-        
+
         // Log remaining time every 10 minutes (24000 ticks)
         if (state.ticksLeft % 24000 === 0 && state.ticksLeft > 0) {
             const daysLeft = Math.ceil(state.ticksLeft / 24000);
             console.log(`[INFECTION] ${player.name} has ${daysLeft} days left until bear transformation`);
         }
-        
+
         if (state.ticksLeft <= 0) {
             // Transform!
             console.log(`[INFECTION] ${player.name} succumbs to bear infection and transforms!`);
@@ -814,10 +813,10 @@ system.runInterval(() => {
         const player = world.getAllPlayers().find(p => p.id === id);
         if (!player) continue;
         state.ticksLeft -= 40; // Adjusted for 40-tick interval
-        
+
         // Save data periodically
         saveInfectionData(player);
-        
+
         // Side effects: more frequent as timer shortens
         let effectChance = 0.005 + (SNOW_INFECTION_START - state.ticksLeft) / SNOW_INFECTION_START * 0.045; // Reduced for 40-tick interval
         if (Math.random() < effectChance) {
@@ -851,11 +850,62 @@ system.runInterval(() => {
     }
 }, 600); // Check every 30 seconds (600 ticks)
 
+// --- Maple Bear Snow Trail (lightweight placeholder) ---
+// Leaves occasional snow layers under bears, with per-type frequency and throttling
+const lastSnowTrailTickByEntity = new Map();
+const TRAIL_COOLDOWN_TICKS = 40; // 2s between placements per entity
+function tryPlaceSnowLayerUnder(entity) {
+    try {
+        const blockLoc = {
+            x: Math.floor(entity.location.x),
+            y: Math.floor(entity.location.y - 0.5),
+            z: Math.floor(entity.location.z)
+        };
+        const aboveLoc = { x: blockLoc.x, y: blockLoc.y + 1, z: blockLoc.z };
+        const dim = entity.dimension;
+        const below = dim.getBlock(blockLoc);
+        const above = dim.getBlock(aboveLoc);
+        if (!below || !above) return;
+        // Only place on solid-ish surfaces with air above
+        if (!above.isAir) return;
+        // Avoid placing inside fluids
+        if (below.isLiquid) return;
+        // Place a thin layer of vanilla snow as a placeholder
+        if (above.isAir) {
+            above.setType(SNOW_LAYER_BLOCK);
+        }
+    } catch { }
+}
+
+system.runInterval(() => {
+    try {
+        const nowTick = system.currentTick;
+        for (const entity of world.getAllEntities()) {
+            if (!entity || !entity.isValid) continue;
+            const t = entity.typeId;
+            if (t !== MAPLE_BEAR_ID && t !== INFECTED_BEAR_ID && t !== BUFF_BEAR_ID) continue;
+
+            // Per-type chance
+            let chance = 0.02; // tiny default
+            if (t === INFECTED_BEAR_ID) chance = 0.06;
+            if (t === BUFF_BEAR_ID) chance = 0.2;
+
+            // Per-entity cooldown
+            const last = lastSnowTrailTickByEntity.get(entity.id) ?? 0;
+            if (nowTick - last < TRAIL_COOLDOWN_TICKS) continue;
+            if (Math.random() < chance) {
+                tryPlaceSnowLayerUnder(entity);
+                lastSnowTrailTickByEntity.set(entity.id, nowTick);
+            }
+        }
+    } catch { }
+}, 20); // check every second
+
 // --- Monitor when players get effects added (for logging only) ---
 world.afterEvents.effectAdd.subscribe((event) => {
     const entity = event.entity;
     const effect = event.effect;
-    
+
     if (entity instanceof Player && effect.typeId === "minecraft:weakness") {
         console.log(`[EFFECT] Player ${entity.name} got weakness effect: duration=${effect.duration}, amplifier=${effect.amplifier}`);
     }
@@ -870,14 +920,14 @@ world.afterEvents.entityDie.subscribe((event) => {
         snowInfection.delete(entity.id);
         curedPlayers.delete(entity.id);
         entity.removeTag(INFECTED_TAG);
-        
+
         // Clear dynamic properties on death
         try {
             entity.setDynamicProperty("mb_bear_infection", undefined);
             entity.setDynamicProperty("mb_snow_infection", undefined);
             entity.setDynamicProperty("mb_immunity_end", undefined);
             console.log(`[DEATH] Cleared all infection data for ${entity.name}`);
-                    } catch (error) {
+                                } catch (error) {
             console.warn(`[DEATH] Error clearing dynamic properties: ${error}`);
         }
     }
@@ -907,7 +957,7 @@ function hasWeaknessEffect(player) {
         // Use the proper API method as documented
         const weaknessEffect = player.getEffect("minecraft:weakness");
         return weaknessEffect && weaknessEffect.isValid;
-        } catch (error) {
+                            } catch (error) {
         console.warn(`[WEAKNESS] Error checking weakness effect: ${error}`);
         return false;
     }
@@ -926,7 +976,7 @@ function saveInfectionData(player) {
         } else {
             player.setDynamicProperty("mb_bear_infection", undefined);
         }
-        
+
         // Save snow infection
         const snowData = snowInfection.get(player.id);
         if (snowData) {
@@ -934,12 +984,12 @@ function saveInfectionData(player) {
         } else {
             player.setDynamicProperty("mb_snow_infection", undefined);
         }
-        
+
         // Save immunity
         const immunityEndTime = curedPlayers.get(player.id);
         if (immunityEndTime) {
             player.setDynamicProperty("mb_immunity_end", immunityEndTime.toString());
-    } else {
+        } else {
             player.setDynamicProperty("mb_immunity_end", undefined);
         }
     } catch (error) {
@@ -957,16 +1007,16 @@ function loadInfectionData(player) {
         const bearDataStr = player.getDynamicProperty("mb_bear_infection");
         if (bearDataStr) {
             const bearData = JSON.parse(bearDataStr);
-            
+
             // Check if the infection was cured
             if (bearData.cured) {
                 console.log(`[LOAD] ${player.name} had cured bear infection, not loading active infection`);
                 // Don't load cured infections back into memory
                 player.setDynamicProperty("mb_bear_infection", undefined);
-        } else {
+            } else {
                 bearInfection.set(player.id, bearData);
                 console.log(`[LOAD] Loaded active bear infection for ${player.name}: ${JSON.stringify(bearData)}`);
-                
+
                 // Add infection tag if they have an active infection
                 if (!player.hasTag(INFECTED_TAG)) {
                     player.addTag(INFECTED_TAG);
@@ -974,21 +1024,21 @@ function loadInfectionData(player) {
                 }
             }
         }
-        
+
         // Load snow infection
         const snowDataStr = player.getDynamicProperty("mb_snow_infection");
         if (snowDataStr) {
             const snowData = JSON.parse(snowDataStr);
             snowInfection.set(player.id, snowData);
             console.log(`[LOAD] Loaded snow infection for ${player.name}: ${JSON.stringify(snowData)}`);
-            
+
             // Add infection tag if they have snow infection
             if (!player.hasTag(INFECTED_TAG)) {
                 player.addTag(INFECTED_TAG);
                 console.log(`[LOAD] Added infection tag to ${player.name} for snow infection`);
             }
         }
-        
+
         // Load immunity
         const immunityEndTimeStr = player.getDynamicProperty("mb_immunity_end");
         if (immunityEndTimeStr) {
@@ -1003,7 +1053,7 @@ function loadInfectionData(player) {
                 console.log(`[LOAD] Immunity expired for ${player.name}, cleaned up`);
             }
         }
-    } catch (error) {
+        } catch (error) {
         console.warn(`[LOAD] Error loading infection data for ${player.name}: ${error}`);
     }
 }
@@ -1020,7 +1070,7 @@ function isPlayerImmune(player) {
         player.removeTag("mb_immune_hit_message");
         return false;
     }
-    
+
     const currentTime = Date.now();
     if (currentTime > immunityEndTime) {
         // Immunity expired, clean up
@@ -1028,7 +1078,7 @@ function isPlayerImmune(player) {
         player.removeTag("mb_immune_hit_message");
         return false;
     }
-    
+
     return true;
 }
 
@@ -1124,7 +1174,7 @@ function showInfectionBookReport(player) {
             .body(body)
             .button("§8Close");
         player.playSound("random.orb", { pitch: 1.2, volume: 0.6 });
-        form.show(player).catch(() => {});
+        form.show(player).catch(() => { });
     } catch (err) {
         console.warn("[BOOK] Error showing infection report:", err);
     }
@@ -1325,7 +1375,7 @@ function prepareInfectedTransformation(player, playerId, playerName) {
         try {
             item.keepOnDeath = !shouldDrop; // Drop best gear, keep everything else
             playerInventory.setItem(i, item);
-        } catch (e) {}
+        } catch (e) { }
         inventory.push({ 
             slot: i, 
             typeId: item.typeId,
@@ -1452,7 +1502,7 @@ function prepareInfectedTransformation(player, playerId, playerName) {
                 equipSlot?.setItem(undefined);
             }
         }
-    } catch (error) {}
+    } catch (error) { }
     return { equipables, stored };
 }
 
@@ -1565,7 +1615,7 @@ world.afterEvents.playerJoin.subscribe((event) => {
     try {
         const playerId = event.playerId;
         if (!playerId) return;
-        
+
         // Add delay to ensure player is fully loaded
         system.runTimeout(() => {
             const player = world.getAllPlayers().find(p => p.id === playerId);
@@ -1582,7 +1632,7 @@ world.afterEvents.playerLeave.subscribe((event) => {
     try {
         const playerId = event.playerId;
         if (!playerId) return;
-        
+
         const player = world.getAllPlayers().find(p => p.id === playerId);
         if (player) {
             // Save infection data immediately when player leaves
@@ -1645,17 +1695,17 @@ function testWeaknessDetection(playerName) {
         console.log(`[TEST] Player ${playerName} not found`);
         return;
     }
-    
+
     console.log(`[TEST] Testing weakness for ${player.name}`);
-    
+
     // Use the proper API method
     const hasWeakness = hasWeaknessEffect(player);
     console.log(`[TEST] Has weakness effect (API check): ${hasWeakness}`);
-    
+
     // Check immunity status
     const isImmune = isPlayerImmune(player);
     console.log(`[TEST] Is immune to infection: ${isImmune}`);
-    
+
     // Get detailed effect info if available
     try {
         const weaknessEffect = player.getEffect("minecraft:weakness");
@@ -1667,7 +1717,7 @@ function testWeaknessDetection(playerName) {
     } catch (error) {
         console.log(`[TEST] Error getting effect details: ${error}`);
     }
-    
+
     console.log(`[TEST] Weakness test completed for ${player.name}`);
 }
 
@@ -1677,7 +1727,7 @@ function addWeaknessToPlayer(playerName) {
         console.log(`[TEST] Player ${playerName} not found`);
         return;
     }
-    
+
     try {
         player.addEffect("minecraft:weakness", 200, { amplifier: 1 });
         console.log(`[TEST] Added weakness effect to ${player.name}`);
@@ -1692,13 +1742,13 @@ function checkInfectionStatus(playerName) {
         console.log(`[TEST] Player ${playerName} not found`);
         return;
     }
-    
+
     const hasBearInfection = bearInfection.has(player.id) && !bearInfection.get(player.id).cured;
     const hasSnowInfection = snowInfection.has(player.id);
     const bearTicks = hasBearInfection ? bearInfection.get(player.id).ticksLeft : 0;
     const snowTicks = hasSnowInfection ? snowInfection.get(player.id).ticksLeft : 0;
     const isImmune = isPlayerImmune(player);
-    
+
     console.log(`[TEST] === Infection Status for ${player.name} ===`);
     console.log(`[TEST] Bear Infection: ${hasBearInfection ? 'YES' : 'NO'}`);
     if (hasBearInfection) {
@@ -1732,7 +1782,7 @@ console.log("[INFO] - Compass: Remove immunity for testing");
 world.beforeEvents.itemUse.subscribe((event) => {
     const player = event.source;
     const item = event.itemStack;
-    
+
     // Infection Tracker Book
     if (item?.typeId === "mb:snow_book") {
         event.cancel = true;
@@ -1741,7 +1791,7 @@ world.beforeEvents.itemUse.subscribe((event) => {
         });
         return;
     }
-    
+
     // Debug commands via item use
     if (item?.typeId === "minecraft:book") {
         // Test weakness detection
@@ -1770,15 +1820,15 @@ world.beforeEvents.itemUse.subscribe((event) => {
             player.removeTag("mb_immune_hit_message"); // Clear the hit message tag
             console.log(`[DEBUG] Immunity removal: wasImmune=${wasImmune}, nowImmune=${curedPlayers.has(player.id)}`);
             player.sendMessage("§aRemoved immunity for testing!");
-            
+
             // IMMEDIATELY save the immunity removal
             saveInfectionData(player);
             console.log(`[DEBUG] Immediately saved immunity removal for ${player.name}`);
-            
+
             // Check if player should be infected (they might have been hit while immune)
             const hasBearInfection = bearInfection.has(player.id) && !bearInfection.get(player.id).cured;
             const hasSnowInfection = snowInfection.has(player.id);
-            
+
             if (hasBearInfection) {
                 player.sendMessage("§4You are infected with bear infection! Cure yourself within 20 days with a weakness potion and a golden apple!");
                 player.addTag(INFECTED_TAG);

@@ -5,3 +5,5 @@ entity.mb:mb.name=Mapledabear
 item.spawn_egg.entity.mb:infected.name=Spawn Maplethralls
 entity.mb:infected.name=Maplethralls
 item.mb:snow="snow"
+tile.bridge:dusted_dirt.name=Dusted Dirt
+tile.bridge:dusted_dirt.name=Dusted Dirt

@@ -1,10 +1,16 @@
 {
   "format_version": "1.21.80",
   "minecraft:recipe_shaped": {
-    "description": { "identifier": "mb:snow_book_recipe" },
-    "tags": ["crafting_table"],
+    "description": {
+      "identifier": "mb:snow_book_recipe"
+    },
+    "tags": [
+      "crafting_table"
+    ],
     "unlock": [
-      { "item": "mb:snow" }
+      {
+        "item": "mb:snow"
+      }
     ],
     "pattern": [
       "SSS",
@@ -12,9 +18,16 @@
       "SSS"
     ],
     "key": {
-      "S": { "item": "mb:snow" },
-      "B": { "item": "minecraft:book" }
+      "S": {
+        "item": "mb:snow"
+      },
+      "B": {
+        "item": "minecraft:book"
+      }
     },
-    "result": { "item": "mb:snow_book", "count": 1 }
+    "result": {
+      "item": "mb:snow_book",
+      "count": 1
+    }
   }
 }

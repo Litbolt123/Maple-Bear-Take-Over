@@ -1,0 +1,17 @@
+{
+	"format_version": "1.20.80",
+	"minecraft:block": {
+		"description": {
+			"identifier": "bridge:dusted_dirt"
+		},
+		"components": {
+			"minecraft:geometry": "geometry.dusted_dirt",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "bridge_dusted_dirt",
+					"render_method": "alpha_test"
+				}
+			}
+		}
+	}
+}

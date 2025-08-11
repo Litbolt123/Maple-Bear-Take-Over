@@ -6,26 +6,27 @@
 - ✅ Performance optimizations
 - ✅ Bear infection system (20-day timer)
 - ✅ Snow infection system (separate mechanics)
-- ✅ Cure system for bear infection (weakness + notch apple)
+- ✅ Cure system for bear infection (weakness + golden apple)
 - ✅ Day tracking system
 - ✅ Item corruption on infected bear death
 - ✅ API 2.0.0 compatibility fixes
 - ✅ Safety checks for unavailable event handlers
 - ✅ Alternative debug system using item interactions
+- ✅ Infection Tracker Book (`mb:snow_book`) with on-demand UI
 - ✅ Robust effects detection with multiple fallback methods
 - ✅ Fixed global object and command result handling
 
 ## 🚀 Future Features
 
 ### 📖 Infection Status Book (Powdery Book)
-- [ ] Craftable "powdery book" to check all infection stats and times
-- [ ] Display current infection type (bear/snow)
-- [ ] Show time remaining until transformation/death
-- [ ] Show infection progress and symptoms
-- [ ] Display immunity status and remaining time
+- [x] Craftable infection tracker book (`mb:snow_book`)
+- [x] Display current infection type (bear/snow)
+- [x] Show time remaining until transformation/death
+- [ ] Show infection progress and symptoms (future)
+- [x] Display immunity status and remaining time
 - [ ] Show detailed effect information (weakness, nausea, etc.)
-- [ ] Recipe: Book + Redstone + Glowstone Dust + "snow" powder
-- [ ] Special UI with infection-themed styling
+- [x] Recipe available (currently 8 snow around a book)
+- [x] Simple themed UI (action form)
 
 ### 🎮 Gameplay Enhancements
 - [ ] Infection symptoms (visual effects, random events)
@@ -35,6 +36,8 @@
 - [ ] Infection spread mechanics between players
 
 ### 🏗️ World Building
+- [ ] Custom "snow" biome for increased Maple Bear activity
+- [ ] Client biome visuals (fog/sky) for "snow" biome
 - [ ] Maple Bear spawn structures
 - [ ] Infection research facilities
 - [ ] Cure crafting stations
@@ -56,6 +59,8 @@
 - [ ] Cure research progression
 
 ### 🔧 Technical Improvements
+- [x] Reduce noisy logs; keep key warnings only
+- [x] Simplify live tracking to on-demand UI (removed realtime actionbar)
 - [ ] Enhanced debug tools for testing
 - [ ] Better error handling and logging
 - [ ] Performance monitoring and optimization
@@ -73,6 +78,10 @@
 - Animation controller errors (non-critical)
 - Command syntax differences in API 2.0.0 (fixed)
 - Global object not available in API 2.0.0 (fixed)
+
+## 📌 Notes for Custom Biomes
+- Custom biomes require enabling the "Custom Biomes" experiment on the world. Partial biome replacement is experimental and may change.
+- Mixing custom biome generation with existing saved chunks can create seams; test on a fresh world or backup first.
 
 ## 📝 Notes
 - Using API version 2.0.0 with safety checks

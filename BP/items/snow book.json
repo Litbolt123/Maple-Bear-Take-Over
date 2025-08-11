@@ -8,7 +8,7 @@
 			}
 		},
 		"components": {
-			"minecraft:icon": { "texture": "mb_snow_book" },
+			"minecraft:icon": "mb_snow_book",
 			"minecraft:max_stack_size": 1,
 			"minecraft:use_animation": "none",
 			"minecraft:display_name": {
