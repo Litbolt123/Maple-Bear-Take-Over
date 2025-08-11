@@ -18,7 +18,7 @@
 			"textures": "textures/items/mb_snow"
 		},
 		"mb_snow_book": {
-			"textures": "textures/items/mb_snow"
+			"textures": "textures/items/snow_book"
 		}
 	}
 }
