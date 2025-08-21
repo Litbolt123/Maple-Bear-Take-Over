@@ -1,31 +1,17 @@
 {
 	"format_version": "1.14.0",
 	"sound_definitions": {
-		"buff_mb": {
-			"category": "ambient",
-			"sounds": [
-				{
-					"name": "sounds/buff_mb.step",
-					"stream": true,
-					"volume": 1,
-					"load_on_low_memory": true
-				}
-			],
-			"subtitle": "step of doom...",
-			"__use_legacy_max_distance": true
-		},
-		"mb:mb_sound": {
+		"tiny_mb_step": {
 			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 30,
+			"subtitle": "A tiny step...",
 			"sounds": [
 				{
-					"name": "sounds/buff_mb.step",
-					"stream": true,
-					"volume": 0.5,
-					"load_on_low_memory": true
+					"name": "sounds/tiny_mb_step",
+					"volume": 1
 				}
-			],
-			"subtitle": "tiny mb sound",
-			"__use_legacy_max_distance": true
+			]
 		}
 	}
 }
