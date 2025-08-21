@@ -2,7 +2,11 @@
 	"format_version": "1.20.80",
 	"minecraft:block": {
 		"description": {
-			"identifier": "bridge:dusted_dirt"
+			"identifier": "mb:dusted_dirt",
+			"menu_category": {
+				"category": "nature"
+			},
+			"is_experimental": false
 		},
 		"components": {
 			"minecraft:geometry": "geometry.dusted_dirt",
@@ -11,7 +15,8 @@
 					"texture": "bridge_dusted_dirt",
 					"render_method": "alpha_test"
 				}
-			}
+			},
+			"minecraft:display_name": "Dusted Dirt"
 		}
 	}
 }
