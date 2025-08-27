@@ -8,6 +8,7 @@
 		"conditions": [
 			{
 				"minecraft:spawns_on_surface": {},
+				"minecraft:spawns_underground": {},
 				"minecraft:brightness_filter": {
 					"min": 0,
 					"max": 7,
@@ -24,30 +25,8 @@
 				"minecraft:weight": {
 					"default": 100
 				},
-				"minecraft:herd": {
-					"min_size": 1,
-					"max_size": 1
-				},
-				"minecraft:density_limit": {
-					"surface": 70
-				},
-				"minecraft:disallow_spawns_in_bubble": {},
-				"minecraft:distance_filter": {
-					"min": 24,
-					"max": 128
-				},
-				"minecraft:height_filter": {
-					"min": 0,
-					"max": 128
-				},
 				"minecraft:biome_filter": {
-					"any_of": [
-						{
-							"test": "has_biome_tag",
-							"operator": "==",
-							"value": "monster"
-						}
-					]
+					"test": "has_biome_tag", "operator": "==", "value": "monster"
 				}
 			}
 		]

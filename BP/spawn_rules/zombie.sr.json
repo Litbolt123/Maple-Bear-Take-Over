@@ -8,6 +8,7 @@
 		"conditions": [
 			{
 				"minecraft:spawns_on_surface": {},
+				"minecraft:spawns_underground": {},
 				"minecraft:brightness_filter": {
 					"min": 0,
 					"max": 7,
@@ -28,26 +29,12 @@
 					"min_size": 2,
 					"max_size": 4
 				},
-				"minecraft:density_limit": {
-					"surface": 70
-				},
-				"minecraft:disallow_spawns_in_bubble": {},
-				"minecraft:distance_filter": {
-					"min": 24,
-					"max": 128
-				},
-				"minecraft:height_filter": {
-					"min": 0,
-					"max": 128
-				},
+				"minecraft:permute_type": [
+					{ "weight": 95 },
+					{ "weight": 5, "entity_type": "minecraft:zombie_villager_v2" }
+				],
 				"minecraft:biome_filter": {
-					"any_of": [
-						{
-							"test": "has_biome_tag",
-							"operator": "==",
-							"value": "monster"
-						}
-					]
+					"test": "has_biome_tag", "operator": "==", "value": "monster"
 				}
 			}
 		]
