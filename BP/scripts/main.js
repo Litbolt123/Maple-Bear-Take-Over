@@ -2,6 +2,12 @@ import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraf
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { initializeDayTracking, getCurrentDay } from "./mb_dayTracker.js";
 
+// NOTE: Debug and testing features have been commented out for playability
+// To re-enable testing features, uncomment the following sections:
+// - Test functions (testWeaknessDetection, addWeaknessToPlayer, checkInfectionStatus)
+// - Debug item use handler (book, paper, map, compass testing)
+// - Test command handler (!testeffects, !addweakness, !infection, !weakness, !removeimmunity)
+
 // Constants for Maple Bear behavior
 const MAPLE_BEAR_ID = "mb:mb";
 const INFECTED_BEAR_ID = "mb:infected";
@@ -428,12 +434,12 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
             system.run(() => {
                 player.playSound("mob.wolf.growl");
                 player.dimension.runCommand(`particle minecraft:smoke_particle ${player.location.x} ${player.location.y + 1} ${player.location.z}`);
-                player.sendMessage("§4You start to feel funny...");
+                player.sendMessage("§4You start to feel really funny...");
                 // Infect the player
                 player.addTag(INFECTED_TAG);
                 player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.6 });
                 player.onScreenDisplay.setTitle("§4☣️ You are infected!");
-                player.onScreenDisplay.setActionBar("§cThe Maple Bear infection spreads...");
+                player.onScreenDisplay.setActionBar("§cWhat is this?...");
             });
         } catch (error) {
             console.warn("Error applying snow effects:", error);
@@ -451,7 +457,7 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
             // Let's try a broader range and log all potion data to find the correct values
             if (potionData >= 18 && potionData <= 20) {
                 console.log(`[POTION] Player ${player.name} drank a weakness potion (data: ${potionData})`);
-                player.sendMessage("§eYou feel weakened... This might help with curing infections!");
+                player.sendMessage("§eYou feel weak... This might help with curing infections!");
             } else {
                 // Log all potion data to help identify weakness potions
                 console.log(`[POTION] Unknown potion data: ${potionData} - please check if this is a weakness potion`);
@@ -482,7 +488,7 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
                     bearInfection.set(player.id, { ticksLeft: 0, cured: true });
                     console.log(`[CURE] Cured bear infection for ${player.name}`);
                     player.removeTag(INFECTED_TAG);
-                    player.sendMessage("§aYou have cured your bear infection!");
+                    player.sendMessage("§aYou have cured your Maple Bear infection!");
 
                     // Grant immunity for 5 minutes
                     const immunityEndTime = Date.now() + CURE_IMMUNITY_DURATION;
@@ -494,17 +500,17 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
                     console.log(`[CURE] Immediately saved cure data for ${player.name}`);
 
                     // Note: We do NOT remove the weakness effect - let it run its course naturally
-                    player.sendMessage("§eYou are now immune to infection for 5 minutes!");
+                    player.sendMessage("§eYou are now immune... maybe?");
                 });
             } else {
                 system.run(() => {
-                    player.sendMessage("§eYou need to have weakness to cure the bear infection!");
+                    player.sendMessage("§eYou need to have weakness to be cured...");
                 });
             }
         } else if (hasSnowInfection) {
             // Player has snow infection but not bear infection
             system.run(() => {
-                player.sendMessage("§eThe golden apple cannot cure snow infection. Only bear infection can be cured this way.");
+                player.sendMessage("§eNah bro, you are doomed...");
             });
         }
     }
@@ -605,7 +611,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
             console.log(`[INFECTION] ${player.name} is immune to infection, hit ignored`);
             // Only show message once per immunity period
             if (!player.hasTag("mb_immune_hit_message")) {
-                player.sendMessage("§eYou were hit by a Maple Bear, but your immunity protected you!");
+                player.sendMessage("§eYou are lucky cuh...");
                 player.addTag("mb_immune_hit_message");
             }
             return;
@@ -615,7 +621,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
         if (!bearInfection.has(player.id)) {
             bearInfection.set(player.id, { ticksLeft: BEAR_INFECTION_TICKS, cured: false, hitWhileImmune: false });
             player.addTag(INFECTED_TAG);
-            player.sendMessage("§4You have been infected! Cure yourself within 20 days with a weakness potion and a golden apple!");
+            player.sendMessage("§4You start to feel off...");
 
             // IMMEDIATELY save the infection data
             saveInfectionData(player);
@@ -627,7 +633,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 // They were cured before, can be infected again
                 bearInfection.set(player.id, { ticksLeft: BEAR_INFECTION_TICKS, cured: false, hitWhileImmune: false });
                 player.addTag(INFECTED_TAG);
-                player.sendMessage("§4You have been infected again! Cure yourself within 20 days with a weakness potion and a golden apple!");
+                player.sendMessage("§4You start to feel off...");
 
                 // IMMEDIATELY save the new infection data
                 saveInfectionData(player);
@@ -653,7 +659,7 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
 
             if (isImmune) {
                 console.log(`[INFECTION] ${player.name} is immune, drug addiction will take 6x longer (${Math.floor(adjustedTime / 20)}s)`);
-                player.sendMessage("§eYour recent cure makes you more resistant to the 'snow'...");
+                player.sendMessage("§eYour recent cure makes you more resistant to the 'snow'... but why did you eat it again cuh?");
             } else {
                 console.log(`[INFECTION] ${player.name} normal drug addiction (${Math.floor(adjustedTime / 20)}s)`);
             }
@@ -682,7 +688,8 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
     }
 });
 
-// --- Test Command for Debugging Effects ---
+// --- Test Command for Debugging Effects - COMMENTED OUT FOR PLAYABILITY ---
+/*
 if (world.beforeEvents && world.beforeEvents.playerSendMessage) {
     world.beforeEvents.playerSendMessage.subscribe((event) => {
         const message = event.message;
@@ -774,6 +781,7 @@ if (world.beforeEvents && world.beforeEvents.playerSendMessage) {
         }
     });
 }
+*/
 
 // --- Cure Logic: Consolidated in itemCompleteUse above ---
 // Removed duplicate cure logic since it's now handled in the main itemCompleteUse handler
@@ -826,7 +834,7 @@ system.runInterval(() => {
             console.log(`[INFECTION] ${player.name} succumbs to snow infection and transforms!`);
             player.kill();
             player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
-            player.sendMessage("§4The snow has claimed you!");
+            player.sendMessage("§4I knew that snow was too good to be true...");
             player.removeTag(INFECTED_TAG);
             snowInfection.delete(id);
         } else if (state.ticksLeft <= 100 && !state.warningSent) { // 5 seconds before transformation
@@ -1604,7 +1612,7 @@ function simulateGenericInfectedDeath(player) {
         player.removeTag(INFECTED_TAG);
         infectedPlayers.delete(player.id);
         player.removeTag("mb_simulating_death");
-        player.sendMessage("§8[MBI] §cYou succumbed to the infection...");
+        player.sendMessage("§8[MBI] §cWell, that's unfortunate...");
     }, 40); // 2 seconds
 }
 
@@ -1688,7 +1696,8 @@ function isEquippableByBear(typeId) {
 const curedPlayers = new Map(); // playerId -> immunityEndTime
 const CURE_IMMUNITY_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 
-// --- Test Functions (for console testing) ---
+// --- Test Functions (for console testing) - COMMENTED OUT FOR PLAYABILITY ---
+/*
 function testWeaknessDetection(playerName) {
     const player = world.getAllPlayers().find(p => p.name === playerName);
     if (!player) {
@@ -1777,13 +1786,14 @@ console.log("[INFO] - Book: Test weakness detection");
 console.log("[INFO] - Paper: Add weakness effect");
 console.log("[INFO] - Map: Check infection status");
 console.log("[INFO] - Compass: Remove immunity for testing");
+*/
 
-// --- Debug Item Use Handler (API 2.0.0 compatible) ---
+// --- Gameplay Item Use Handler (snow_book for infection tracking) ---
 world.beforeEvents.itemUse.subscribe((event) => {
     const player = event.source;
     const item = event.itemStack;
 
-    // Infection Tracker Book
+    // Infection Tracker Book - GAMEPLAY FEATURE
     if (item?.typeId === "mb:snow_book") {
         event.cancel = true;
         system.run(() => {
@@ -1792,6 +1802,9 @@ world.beforeEvents.itemUse.subscribe((event) => {
         return;
     }
 
+    // Testing features are commented out for playability
+    // Uncomment the section below if you need testing features back
+    /*
     // Debug commands via item use
     if (item?.typeId === "minecraft:book") {
         // Test weakness detection
@@ -1840,4 +1853,5 @@ world.beforeEvents.itemUse.subscribe((event) => {
             }
         });
     }
+    */
 });

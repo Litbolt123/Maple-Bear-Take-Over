@@ -89,7 +89,7 @@
 					]
 				},
 				"minecraft:world_age_filter": {
-					"min": 1800,
+					"min": 1200,
 					"max": 999999
 				}
 			},
@@ -132,7 +132,11 @@
 					"podzol",
 					"coarse_dirt",
 					"mycelium"
-				]
+				],
+				"minecraft:world_age_filter": {
+					"min": 1200,
+					"max": 999999
+				}
 			}
 		]
 	}
