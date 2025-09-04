@@ -7,6 +7,51 @@
 		},
 		"conditions": [
 			{
+				"minecraft:spawns_underground": {},
+				"minecraft:brightness_filter": {
+					"min": 0,
+					"max": 15,
+					"adjust_for_weather": false
+				},
+				"minecraft:difficulty_filter": {
+					"min": "easy",
+					"max": "hard"
+				},
+				"minecraft:weight": {
+					"default": 1
+				},
+				"minecraft:herd": {
+					"min_size": 1,
+					"max_size": 1
+				},
+				"minecraft:density_limit": {
+					"surface": 10
+				},
+				"minecraft:distance_filter": {
+					"min": 24,
+					"max": 128
+				},
+				"minecraft:height_filter": {
+					"min": 0,
+					"max": 128
+				},
+				"minecraft:spawns_on_block_filter": [
+					"dirt",
+					"stone",
+					"grass_block",
+					"sand",
+					"deepslate",
+					"gravel",
+					"podzol",
+					"coarse_dirt",
+					"mycelium"
+				],
+				"minecraft:world_age_filter": {
+					"min": 9600,
+					"max": 999999
+				}
+			},
+			{
 				"minecraft:spawns_on_surface": {},
 				"minecraft:brightness_filter": {
 					"min": 0,
@@ -48,84 +93,155 @@
 				],
 				"minecraft:biome_filter": {
 					"any_of": [
-						{ "test": "has_biome_tag", "operator": "==", "value": "overworld" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "overworld_generation" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "hills" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "mountain" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "plains" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "forest" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "birch" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "jungle" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "taiga" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "savanna" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "swamp" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "mangrove_swamp" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "mesa" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "river" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "beach" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "shore" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "ocean" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "grove" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "meadow" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "cherry_grove" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "extreme_hills" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "ice" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "frozen" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "ice_plains" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "snowy_slopes" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "caves" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "deep_dark" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "dripstone_caves" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "lush_caves" }
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "overworld"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "overworld_generation"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "hills"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "mountain"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "plains"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "forest"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "birch"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "jungle"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "taiga"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "savanna"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "swamp"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "mangrove_swamp"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "mesa"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "river"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "beach"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "shore"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "ocean"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "grove"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "meadow"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "cherry_grove"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "extreme_hills"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "ice"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "frozen"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "ice_plains"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "snowy_slopes"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "caves"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "deep_dark"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "dripstone_caves"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "lush_caves"
+						}
 					]
 				},
 				"minecraft:world_age_filter": {
-					"min": 6000,
-					"max": 999999
-				}
-			},
-			{
-				"minecraft:spawns_underground": {},
-				"minecraft:brightness_filter": {
-					"min": 0,
-					"max": 15,
-					"adjust_for_weather": false
-				},
-				"minecraft:difficulty_filter": {
-					"min": "easy",
-					"max": "hard"
-				},
-				"minecraft:weight": {
-					"default": 1
-				},
-				"minecraft:herd": {
-					"min_size": 1,
-					"max_size": 1
-				},
-				"minecraft:density_limit": {
-					"surface": 10
-				},
-				"minecraft:distance_filter": {
-					"min": 24,
-					"max": 128
-				},
-				"minecraft:height_filter": {
-					"min": 0,
-					"max": 128
-				},
-				"minecraft:spawns_on_block_filter": [
-					"dirt",
-					"stone",
-					"grass_block",
-					"sand",
-					"deepslate",
-					"gravel",
-					"podzol",
-					"coarse_dirt",
-					"mycelium"
-				],
-				"minecraft:world_age_filter": {
-					"min": 6000,
+					"min": 9600,
 					"max": 999999
 				}
 			}

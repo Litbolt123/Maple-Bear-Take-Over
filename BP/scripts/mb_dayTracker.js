@@ -38,8 +38,69 @@ let lastTimeOfDay = 0;
 // Track players who have received their welcome message
 const welcomedPlayers = new Set();
 
+// Track players who have joined before (for first-time welcome message)
+const returningPlayers = new Set();
+
 // Track if the loop is running
 let dayCycleLoopId = null;
+
+/**
+ * Get the color code and hazard symbols for a given day
+ * @param {number} day The current day
+ * @returns {object} Object with color and symbols
+ */
+function getDayDisplayInfo(day) {
+    if (day < 2) {
+        // Days 0-1: Green, no hazard symbols
+        return { color: "§a", symbols: "" };
+    } else if (day < 4) {
+        // Days 2-3: Yellow, 1 warning symbol (tiny Maple Bears start)
+        return { color: "§e", symbols: "!" };
+    } else if (day < 8) {
+        // Days 4-7: Orange, 2 warning symbols (infected Maple Bears start)
+        return { color: "§6", symbols: "!!" };
+    } else {
+        // Day 8+: Red, 3 warning symbols (buff Maple Bears start)
+        return { color: "§c", symbols: "!!!" };
+    }
+}
+
+/**
+ * Get custom welcome message for returning players based on current day
+ * @param {number} day The current day
+ * @returns {object} Object with message, title, and actionbar text
+ */
+function getReturningPlayerWelcome(day) {
+    if (day < 2) {
+        // Days 0-1: Before Maple Bears spawn
+        return {
+            message: "§aWelcome back to your normal world...",
+            title: "§aWelcome Back!",
+            actionbar: "Everything is still peaceful here..."
+        };
+    } else if (day < 4) {
+        // Days 2-3: Tiny Maple Bears have started spawning
+        return {
+            message: "§eWelcome back! The tiny ones have emerged...",
+            title: "§e! Day " + day,
+            actionbar: "Small Maple Bears roam the land..."
+        };
+    } else if (day < 8) {
+        // Days 4-7: Normal infected Maple Bears have started spawning
+        return {
+            message: "§6Welcome back! The infection spreads...",
+            title: "§6!! Day " + day,
+            actionbar: "Infected Maple Bears are growing in number..."
+        };
+    } else {
+        // Day 8+: Buff Maple Bears have started spawning
+        return {
+            message: "§cWelcome back! The end draws near...",
+            title: "§c!!! Day " + day,
+            actionbar: "The most dangerous Maple Bears have arrived..."
+        };
+    }
+}
 
 /**
  * Gets a player by their ID
@@ -209,6 +270,9 @@ function startDayCycleLoop() {
                 setCurrentDay(newDay);
                 console.log(`🌅 New day detected: Day ${newDay}`);
 
+                // Get display info for the new day
+                const displayInfo = getDayDisplayInfo(newDay);
+                
                 // Notify players
                 for (const player of world.getAllPlayers()) {
                     if (player && player.isValid) {
@@ -216,14 +280,14 @@ function startDayCycleLoop() {
                             pitch: 0.9,
                             volume: 0.4
                         });
-                        showPlayerTitle(player, `§e☀️ Day ${newDay}`);
+                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${newDay}`);
                         showPlayerActionbar(player, "The Maple Bear infection continues...");
                     }
                 }
 
                 // Send chat message for new day and world age
                 const worldAge = world.getAbsoluteTime ? world.getAbsoluteTime() : world.getTime();
-                world.sendMessage(`§6☀️ A new day begins... Day §e${newDay} §7(World age: §b${worldAge}§7 ticks)`);
+                world.sendMessage(`${displayInfo.color}${displayInfo.symbols} A new day begins... Day ${newDay} §7(World age: §b${worldAge}§7 ticks)`);
 
                 // Handle milestone days
                 if (isMilestoneDay(newDay)) {
@@ -319,6 +383,9 @@ export async function initializeDayTracking() {
             console.warn('[ERROR] getCurrentDay() did not return a valid number!');
         }
 
+        // Get display info for the current day
+        const displayInfo = getDayDisplayInfo(currentDay);
+        
         // Play welcome sound and show title for all players
         for (const player of world.getAllPlayers()) {
             if (player && player.isValid) {
@@ -327,7 +394,7 @@ export async function initializeDayTracking() {
                         pitch: 0.6,
                         volume: 0.6
                     });
-                    showPlayerTitle(player, `§e☀️ Day ${currentDay}`);
+                    showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`);
                     showPlayerActionbar(player, "The Maple Bear infection begins...");
                 });
             }
@@ -335,7 +402,7 @@ export async function initializeDayTracking() {
 
         // Show welcome message
         system.run(() => {
-            world.sendMessage(`§6☀️ Welcome to Day §e${currentDay}`);
+            world.sendMessage(`${displayInfo.color}${displayInfo.symbols} Welcome to Day ${currentDay}`);
         });
 
         // Mark as initialized
@@ -414,33 +481,60 @@ world.afterEvents.playerJoin.subscribe((event) => {
 
                 const currentDay = getCurrentDay();
 
-                // Check if this is the first time the world is being initialized
-                const isFirstTimeInit = !world.getDynamicProperty(INITIALIZED_FLAG);
+                                        // Check if this is the first time the world is being initialized
+                        const isFirstTimeInit = !world.getDynamicProperty(INITIALIZED_FLAG);
+                        const isFirstTimePlayer = !returningPlayers.has(playerName);
 
-                // Add an additional delay before showing messages
-                system.runTimeout(async () => {
-                    try {
-                        if (isFirstTimeInit) {
-                            console.log("First time world initialization");
-                            await initializeDayTracking();
-                            // initializeDayTracking already shows the welcome message
-                        } else {
-                            // Show normal join message for subsequent joins
-                            player.playSound("mob.wither.ambient", {
-                                pitch: 0.6,
-                                volume: 0.6
-                            });
-                            sendPlayerMessage(player, `§6☀️ Welcome! It is currently Day §e${currentDay}`);
-                            showPlayerTitle(player, `§e☀️ Day ${currentDay}`);
-                            showPlayerActionbar(player, "The Maple Bear infection continues...");
-                        }
+                        // Add an additional delay before showing messages
+                        system.runTimeout(async () => {
+                            try {
+                                if (isFirstTimeInit) {
+                                    console.log("First time world initialization");
+                                    await initializeDayTracking();
+                                    // initializeDayTracking already shows the welcome message
+                                } else {
+                                    // Show join message for subsequent joins
+                                    player.playSound("mob.wither.ambient", {
+                                        pitch: 0.6,
+                                        volume: 0.6
+                                    });
+                                    
+                                    if (isFirstTimePlayer && currentDay < 2) {
+                                        // First-time player in early world (day 0-1) - show "normal world" message
+                                        sendPlayerMessage(player, "§aWelcome to a totally normal world...");
+                                        showPlayerTitle(player, "§aWelcome!");
+                                        showPlayerActionbar(player, "Everything seems peaceful here...");
+                                        
+                                        // Mark as returning player for future joins
+                                        returningPlayers.add(playerName);
+                                        
+                                        // Show day info after a delay
+                                        system.runTimeout(() => {
+                                            const displayInfo = getDayDisplayInfo(currentDay);
+                                            sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} It is currently Day ${currentDay}`);
+                                            showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`);
+                                            showPlayerActionbar(player, "The Maple Bear infection continues...");
+                                        }, 3000); // 3 second delay
+                                    } else {
+                                        // Either returning player OR first-time player in progressed world
+                                        const welcomeInfo = getReturningPlayerWelcome(currentDay);
+                                        sendPlayerMessage(player, welcomeInfo.message);
+                                        showPlayerTitle(player, welcomeInfo.title);
+                                        showPlayerActionbar(player, welcomeInfo.actionbar);
+                                        
+                                        // Mark as returning player for future joins
+                                        if (isFirstTimePlayer) {
+                                            returningPlayers.add(playerName);
+                                        }
+                                    }
+                                }
 
-                        // Mark player as welcomed
-                        welcomedPlayers.add(playerName);
-                    } catch (error) {
-                        console.warn("Error in delayed welcome handler:", error);
-                    }
-                }, 200); // 10 second delay for welcome messages
+                                // Mark player as welcomed
+                                welcomedPlayers.add(playerName);
+                            } catch (error) {
+                                console.warn("Error in delayed welcome handler:", error);
+                            }
+                        }, 200); // 10 second delay for welcome messages
             } catch (error) {
                 console.warn("Error in delayed player join handler:", error);
             }
@@ -463,6 +557,7 @@ world.afterEvents.playerLeave.subscribe((event) => {
         const player = getPlayerById(playerId);
         if (player) {
             welcomedPlayers.delete(player.name);
+            // Note: We don't delete from returningPlayers to remember they've joined before
             console.log(`Cleaned up welcome status for player ${player.name}`);
         }
     } catch (error) {

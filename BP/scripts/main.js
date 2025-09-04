@@ -38,7 +38,7 @@ const ARMOR_TYPES = {
 
 const OFFHAND_TYPES = [
     "minecraft:shield",
-    "minecraft:totem_of_undying", 
+    "minecraft:totem_of_undying",
     "minecraft:torch",
     "minecraft:soul_torch",
     "minecraft:lantern",
@@ -214,11 +214,11 @@ function getMaxStackSize(itemType) {
         'minecraft:warped_fungus_on_a_stick',
         'minecraft:brush'
     ];
-    
+
     // Items that stack to 1 (non-stackable)
     const stack1Items = [
         'minecraft:sword',
-        'minecraft:pickaxe', 
+        'minecraft:pickaxe',
         'minecraft:axe',
         'minecraft:shovel',
         'minecraft:hoe',
@@ -276,7 +276,7 @@ function getMaxStackSize(itemType) {
         'minecraft:music_disc',
         'minecraft:disc_fragment_5'
     ];
-    
+
     // Check for special stack sizes
     if (stack16Items.some(item => itemType.includes(item))) {
         return 16;
@@ -438,7 +438,7 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
                 // Infect the player
                 player.addTag(INFECTED_TAG);
                 player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.6 });
-                player.onScreenDisplay.setTitle("§4☣️ You are infected!");
+                player.onScreenDisplay.setTitle("§4! You are infected!");
                 player.onScreenDisplay.setActionBar("§cWhat is this?...");
             });
         } catch (error) {
@@ -604,7 +604,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
     const source = event.damageSource;
     if (!(player instanceof Player)) return;
 
-                const mapleBearTypes = [MAPLE_BEAR_ID, INFECTED_BEAR_ID, BUFF_BEAR_ID];
+    const mapleBearTypes = [MAPLE_BEAR_ID, INFECTED_BEAR_ID, BUFF_BEAR_ID];
     if (source && source.damagingEntity && mapleBearTypes.includes(source.damagingEntity.typeId)) {
         // Check if player is immune to infection
         if (isPlayerImmune(player)) {
@@ -858,10 +858,13 @@ system.runInterval(() => {
     }
 }, 600); // Check every 30 seconds (600 ticks)
 
-// --- Maple Bear Snow Trail (lightweight placeholder) ---
-// Leaves occasional snow layers under bears, with per-type frequency and throttling
+// --- Maple Bear Snow Trail and Item Drops ---
+// Leaves occasional snow layers under bears and drops snow items, with per-type frequency and throttling
 const lastSnowTrailTickByEntity = new Map();
+const lastSnowDropTickByEntity = new Map();
 const TRAIL_COOLDOWN_TICKS = 40; // 2s between placements per entity
+const SNOW_DROP_COOLDOWN_TICKS = 200; // 10s between snow item drops per entity
+
 function tryPlaceSnowLayerUnder(entity) {
     try {
         const blockLoc = {
@@ -885,6 +888,21 @@ function tryPlaceSnowLayerUnder(entity) {
     } catch { }
 }
 
+function tryDropSnowItem(entity) {
+    try {
+        const dropLocation = {
+            x: entity.location.x + (Math.random() - 0.5) * 2,
+            y: entity.location.y + 0.5,
+            z: entity.location.z + (Math.random() - 0.5) * 2
+        };
+        const snowItem = new ItemStack(SNOW_ITEM_ID, 1);
+        entity.dimension.spawnItem(snowItem, dropLocation);
+        
+        // Add particle effect
+        entity.dimension.runCommand(`particle minecraft:snowflake ${Math.floor(dropLocation.x)} ${Math.floor(dropLocation.y)} ${Math.floor(dropLocation.z)}`);
+    } catch { }
+}
+
 system.runInterval(() => {
     try {
         const nowTick = system.currentTick;
@@ -893,17 +911,24 @@ system.runInterval(() => {
             const t = entity.typeId;
             if (t !== MAPLE_BEAR_ID && t !== INFECTED_BEAR_ID && t !== BUFF_BEAR_ID) continue;
 
-            // Per-type chance
-            let chance = 0.02; // tiny default
-            if (t === INFECTED_BEAR_ID) chance = 0.06;
-            if (t === BUFF_BEAR_ID) chance = 0.2;
+            // Snow trail placement (for all types)
+            let trailChance = 0.02; // tiny default
+            if (t === INFECTED_BEAR_ID) trailChance = 0.06;
+            if (t === BUFF_BEAR_ID) trailChance = 0.2;
 
-            // Per-entity cooldown
-            const last = lastSnowTrailTickByEntity.get(entity.id) ?? 0;
-            if (nowTick - last < TRAIL_COOLDOWN_TICKS) continue;
-            if (Math.random() < chance) {
+            const lastTrail = lastSnowTrailTickByEntity.get(entity.id) ?? 0;
+            if (nowTick - lastTrail >= TRAIL_COOLDOWN_TICKS && Math.random() < trailChance) {
                 tryPlaceSnowLayerUnder(entity);
                 lastSnowTrailTickByEntity.set(entity.id, nowTick);
+            }
+
+            // Snow item drops (only for tiny Maple Bears - MAPLE_BEAR_ID)
+            if (t === MAPLE_BEAR_ID) {
+                const lastDrop = lastSnowDropTickByEntity.get(entity.id) ?? 0;
+                if (nowTick - lastDrop >= SNOW_DROP_COOLDOWN_TICKS && Math.random() < 0.6) { // 60% chance
+                    tryDropSnowItem(entity);
+                    lastSnowDropTickByEntity.set(entity.id, nowTick);
+                }
             }
         }
     } catch { }
@@ -935,7 +960,7 @@ world.afterEvents.entityDie.subscribe((event) => {
             entity.setDynamicProperty("mb_snow_infection", undefined);
             entity.setDynamicProperty("mb_immunity_end", undefined);
             console.log(`[DEATH] Cleared all infection data for ${entity.name}`);
-                                } catch (error) {
+        } catch (error) {
             console.warn(`[DEATH] Error clearing dynamic properties: ${error}`);
         }
     }
@@ -965,7 +990,7 @@ function hasWeaknessEffect(player) {
         // Use the proper API method as documented
         const weaknessEffect = player.getEffect("minecraft:weakness");
         return weaknessEffect && weaknessEffect.isValid;
-                            } catch (error) {
+    } catch (error) {
         console.warn(`[WEAKNESS] Error checking weakness effect: ${error}`);
         return false;
     }
@@ -1061,7 +1086,7 @@ function loadInfectionData(player) {
                 console.log(`[LOAD] Immunity expired for ${player.name}, cleaned up`);
             }
         }
-        } catch (error) {
+    } catch (error) {
         console.warn(`[LOAD] Error loading infection data for ${player.name}: ${error}`);
     }
 }
@@ -1201,7 +1226,7 @@ function infectPlayer(player) {
         pitch: 0.8,
         volume: 0.6
     });
-    player.onScreenDisplay.setTitle("§4☣️ You are infected!");
+    player.onScreenDisplay.setTitle("§4! You are infected!");
     player.onScreenDisplay.setActionBar("§cThe Maple Bear infection spreads...");
 }
 
@@ -1213,32 +1238,32 @@ function handleInfectedDeath(player) {
     try {
         const location = player.location;
         const dimension = player.dimension;
-        
+
         // Remove infection status
         player.removeTag(INFECTED_TAG);
         infectedPlayers.delete(player.id);
-        
+
         // Get the player's inventory before spawning the bear
         const inventory = playerInventories.get(player.id);
-        
+
         // Spawn infected Maple Bear at death location
         const bear = dimension.spawnEntity(INFECTED_BEAR_ID, location);
         if (bear) {
             // Set name tag for visual identification
-            bear.nameTag = `§4☣️ ${player.name}'s Infected Form`;
-            
+            bear.nameTag = `§4! ${player.name}'s Infected Form`;
+
             // Set dynamic property for tracking
             bear.setDynamicProperty("infected_by", player.id);
-            
+
             // Store inventory in the bear's dynamic properties
-                bear.setDynamicProperty("original_inventory", JSON.stringify(inventory));
-            
+            bear.setDynamicProperty("original_inventory", JSON.stringify(inventory));
+
             // Add particle effects, sounds, and broadcast as before
             spreadSnowEffect(location, dimension);
             dimension.playSound("mob.wither.death", location, { pitch: 0.7, volume: 0.5 });
             dimension.playSound("random.glass", location, { pitch: 0.5, volume: 1.0 });
             dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} transformed into a Maple Bear!"}]}`);
-            
+
 
         }
     } catch (error) {
@@ -1282,7 +1307,7 @@ function corruptDroppedItems(origin, dimension) {
                 const loc = item.location;
                 item.remove();
                 dimension.spawnItem(SNOW_ITEM_ID, loc);
-                
+
                 // Add a small particle effect for the conversion
                 dimension.runCommand(`particle minecraft:snowflake ${loc.x} ${loc.y} ${loc.z} 0.2 0.2 0.2 0.01 5 force`);
             }
@@ -1384,8 +1409,8 @@ function prepareInfectedTransformation(player, playerId, playerName) {
             item.keepOnDeath = !shouldDrop; // Drop best gear, keep everything else
             playerInventory.setItem(i, item);
         } catch (e) { }
-        inventory.push({ 
-            slot: i, 
+        inventory.push({
+            slot: i,
             typeId: item.typeId,
             amount: item.amount,
             data: item.data || 0
@@ -1532,7 +1557,7 @@ function simulateInfectedDeath(player) {
     // Spawn infected bear
     const bear = player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
     if (bear) {
-        bear.nameTag = `§4☣️ ${playerName}'s Infected Form`;
+        bear.nameTag = `§4! ${playerName}'s Infected Form`;
         bear.setDynamicProperty("infected_by", playerId);
         bear.setDynamicProperty("original_inventory", JSON.stringify(stored));
         try {
