@@ -6,7 +6,7 @@ import { initializeDayTracking, getCurrentDay } from "./mb_dayTracker.js";
 // To re-enable testing features, uncomment the following sections:
 // - Test functions (testWeaknessDetection, addWeaknessToPlayer, checkInfectionStatus)
 // - Debug item use handler (book, paper, map, compass testing)
-// - Test command handler (!testeffects, !addweakness, !infection, !weakness, !removeimmunity)
+// - Test command handler (!testeffects, !addweakness, !infection, !weakness, !removeimmunity, !spawnrate)
 
 // Constants for Maple Bear behavior
 const MAPLE_BEAR_ID = "mb:mb";
@@ -21,6 +21,15 @@ const SNOW_LAYER_BLOCK = "minecraft:snow_layer";
 const GRACE_PERIOD_DAYS = 2; // Number of days before Maple Bears start spawning
 const MAX_SPAWN_DAY = 100; // Day when spawn rate reaches maximum
 const FOOD_MOBS = ["minecraft:cow", "minecraft:pig", "minecraft:sheep", "minecraft:chicken"];
+
+// Spawn rate progression system (like Raboy's Zombie Apocalypse)
+const SPAWN_RATE_CONFIG = {
+    baseWeight: 5,        // Starting weight (very low)
+    maxWeight: 50,        // Maximum weight (high spawn rate)
+    gracePeriodDays: 2,   // Days before any spawning
+    rampUpDays: 20,       // Days to reach max spawn rate
+    currentWeight: 5      // Current spawn weight (will be updated)
+};
 
 // Freaky effects for the tiny mb bear
 const FREAKY_EFFECTS = [
@@ -83,6 +92,135 @@ const SNOW_INFECTION_START = 20 * 20; // 20 seconds (20 ticks per second)
 const SNOW_INFECTION_MIN = 400; // 20 seconds minimum
 const SNOW_INFECTION_DECREMENT = 400; // 20 seconds per additional snow
 const RANDOM_EFFECT_INTERVAL = 600; // Check every 30 seconds
+
+// --- Helper: Convert mob to Maple Bear based on size ---
+function convertMobToMapleBear(deadMob, killer) {
+    try {
+        const mobType = deadMob.typeId;
+        const killerType = killer.typeId;
+        const location = deadMob.location;
+        
+        // Determine Maple Bear type to spawn based on killer and mob size
+        let newBearType;
+        let bearSize = "normal";
+        
+        // Buff Maple Bears always spawn normal human-sized Maple Bears
+        if (killerType === BUFF_BEAR_ID) {
+            newBearType = MAPLE_BEAR_ID;
+            bearSize = "normal";
+        } else if (killer.hasTag("mb_tiny")) {
+            // Tiny Maple Bears always spawn tiny Maple Bears (regardless of victim size)
+            newBearType = killerType; // Same type as killer
+            bearSize = "tiny";
+        } else {
+            // Normal Maple Bears spawn based on victim's size
+            const mobSize = getMobSize(mobType);
+            
+            // Determine the correct entity type based on size
+            if (mobSize === "tiny") {
+                newBearType = MAPLE_BEAR_ID; // mb.json for tiny bears
+            } else {
+                newBearType = INFECTED_BEAR_ID; // infected.json for normal bears
+            }
+            bearSize = mobSize;
+        }
+        
+        // Spawn the new Maple Bear
+        const newBear = world.getDimension("overworld").spawnEntity(newBearType, location);
+        
+        // Apply size adjustments
+        if (bearSize === "tiny") {
+            newBear.addTag("mb_tiny");
+            newBear.addTag("mb_snow_dropper"); // Enable snow drops for tiny bears
+        }
+        // Note: Normal size bears don't need special tags
+        
+        console.log(`[CONVERSION] ${mobType} killed by ${killerType} → spawned ${newBearType} (${bearSize})`);
+        
+        // Add some visual feedback
+        world.getDimension("overworld").spawnParticle("minecraft:explosion_particle", location);
+        
+    } catch (error) {
+        console.warn("Error converting mob to Maple Bear:", error);
+    }
+}
+
+// --- Helper: Get mob size category ---
+function getMobSize(mobType) {
+    // Tiny mobs (bats, chickens, etc.)
+    const tinyMobs = [
+        "minecraft:bat", "minecraft:chicken", "minecraft:parrot", "minecraft:rabbit",
+        "minecraft:silverfish", "minecraft:endermite", "minecraft:bee", "minecraft:cod",
+        "minecraft:salmon", "minecraft:tropical_fish", "minecraft:pufferfish", "minecraft:tadpole"
+    ];
+    
+    // Normal-sized mobs (horses, cows, etc.) - these should spawn normal Maple Bears
+    const normalMobs = [
+        "minecraft:horse", "minecraft:cow", "minecraft:mooshroom", "minecraft:llama",
+        "minecraft:donkey", "minecraft:mule", "minecraft:pig", "minecraft:sheep",
+        "minecraft:goat", "minecraft:strider", "minecraft:camel", "minecraft:sniffer"
+    ];
+    
+    if (tinyMobs.includes(mobType)) {
+        return "tiny";
+    } else if (normalMobs.includes(mobType)) {
+        return "normal"; // These are normal-sized mobs, not "large"
+    } else {
+        return "normal"; // Default size for most mobs
+    }
+}
+
+// --- Helper: Calculate spawn rate based on current day ---
+function calculateSpawnRate(day) {
+    const config = SPAWN_RATE_CONFIG;
+    
+    // Grace period - no spawning
+    if (day < config.gracePeriodDays) {
+        return 0;
+    }
+    
+    // Ramp up period - gradually increase spawn rate
+    if (day < config.gracePeriodDays + config.rampUpDays) {
+        const progress = (day - config.gracePeriodDays) / config.rampUpDays;
+        const weight = config.baseWeight + (config.maxWeight - config.baseWeight) * progress;
+        return Math.round(weight);
+    }
+    
+    // Maximum spawn rate reached
+    return config.maxWeight;
+}
+
+// --- Helper: Update spawn rates dynamically ---
+function updateSpawnRates() {
+    try {
+        const currentDay = getCurrentDay();
+        const newWeight = calculateSpawnRate(currentDay);
+        
+        // Only update if weight has changed significantly
+        if (Math.abs(newWeight - SPAWN_RATE_CONFIG.currentWeight) >= 5) {
+            SPAWN_RATE_CONFIG.currentWeight = newWeight;
+            
+            // Log spawn rate changes for debugging
+            if (newWeight > 0) {
+                console.log(`[SPAWN] Day ${currentDay}: Maple Bear spawn weight updated to ${newWeight}`);
+            }
+            
+            // Note: In Bedrock Edition, we can't dynamically modify spawn rules at runtime
+            // This system tracks the intended spawn rate for future spawn rule updates
+            // The actual spawn rate changes would need to be implemented via:
+            // 1. Multiple spawn rule files with different weights
+            // 2. Manual spawn rule file updates
+            // 3. Custom spawning logic in scripts
+            
+            return newWeight;
+        }
+        
+        return SPAWN_RATE_CONFIG.currentWeight;
+    } catch (error) {
+        console.warn("Error updating spawn rates:", error);
+        return SPAWN_RATE_CONFIG.currentWeight;
+    }
+}
 
 // --- Helper: Apply random effect ---
 function applyRandomEffect(player) {
@@ -516,10 +654,26 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
     }
 });
 
-// Handle player death: if infected, spawn a bear at their death location (no inventory logic)
+// Handle entity death: player infection and mob conversion
 world.afterEvents.entityDie.subscribe((event) => {
     const entity = event.deadEntity;
     const source = event.damageSource;
+    
+    // --- MOB CONVERSION SYSTEM ---
+    // If a Maple Bear killed a mob, convert it to a Maple Bear
+    if (source && source.damagingEntity && !(entity instanceof Player)) {
+        const killer = source.damagingEntity;
+        const killerType = killer.typeId;
+        
+        // Check if killer is a Maple Bear
+        if (killerType === MAPLE_BEAR_ID || killerType === INFECTED_BEAR_ID || killerType === BUFF_BEAR_ID) {
+            system.run(() => {
+                convertMobToMapleBear(entity, killer);
+            });
+        }
+    }
+    
+    // --- PLAYER INFECTION SYSTEM ---
     if (entity instanceof Player) {
         // If player is infected, handle the full transformation
         if (entity.hasTag(INFECTED_TAG)) {
@@ -771,6 +925,31 @@ if (world.beforeEvents && world.beforeEvents.playerSendMessage) {
             player.sendMessage(`§eHas Weakness Effect: ${hasWeakness ? '§aYES' : '§cNO'}`);
             player.sendMessage(`§eIs Immune to Infection: ${isImmune ? '§aYES' : '§cNO'}`);
             player.sendMessage(`§7Use §e!addweakness §7to get weakness for testing`);
+        }
+
+        // Add command to check spawn rates
+        if (message === "!spawnrate") {
+            event.cancel = true;
+            const currentDay = getCurrentDay();
+            const currentWeight = SPAWN_RATE_CONFIG.currentWeight;
+            const calculatedWeight = calculateSpawnRate(currentDay);
+            
+            player.sendMessage(`§6=== Spawn Rate Status ===`);
+            player.sendMessage(`§eCurrent Day: §a${currentDay}`);
+            player.sendMessage(`§eCurrent Weight: §a${currentWeight}`);
+            player.sendMessage(`§eCalculated Weight: §a${calculatedWeight}`);
+            player.sendMessage(`§eGrace Period: §c${SPAWN_RATE_CONFIG.gracePeriodDays} days`);
+            player.sendMessage(`§eRamp Up Period: §e${SPAWN_RATE_CONFIG.rampUpDays} days`);
+            player.sendMessage(`§eMax Weight: §a${SPAWN_RATE_CONFIG.maxWeight}`);
+            
+            if (currentDay < SPAWN_RATE_CONFIG.gracePeriodDays) {
+                player.sendMessage(`§cMaple Bears are in grace period - no spawning yet!`);
+            } else if (currentDay < SPAWN_RATE_CONFIG.gracePeriodDays + SPAWN_RATE_CONFIG.rampUpDays) {
+                const progress = ((currentDay - SPAWN_RATE_CONFIG.gracePeriodDays) / SPAWN_RATE_CONFIG.rampUpDays * 100).toFixed(1);
+                player.sendMessage(`§eSpawn rate is ramping up: §a${progress}%§e complete`);
+            } else {
+                player.sendMessage(`§aMaximum spawn rate reached!`);
+            }
         }
 
         // Add command to remove immunity for testing
@@ -1685,6 +1864,12 @@ system.run(() => {
         console.warn("[ERROR] initializeDayTracking() failed:", err);
     }
 });
+
+// --- Spawn Rate Management System ---
+// Update spawn rates every 5 minutes (6000 ticks)
+system.runInterval(() => {
+    updateSpawnRates();
+}, 6000);
 
 // --- Helper: Check if item is equippable by bear ---
 function isEquippableByBear(typeId) {

@@ -181,6 +181,9 @@
 				]
 			},
 			"minecraft:conditional_bandwidth_optimization": {},
+			"minecraft:loot": {
+				"table": "loot_tables/mb_loot_tables/tiny_bear_loot_table.json"
+			},
 			"minecraft:behavior.pickup_items": {
 				"priority": 6,
 				"max_dist": 4,

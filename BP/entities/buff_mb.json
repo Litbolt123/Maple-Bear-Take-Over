@@ -265,7 +265,7 @@
 			},
 			"minecraft:conditional_bandwidth_optimization": {},
 			"minecraft:loot": {
-				"table": "loot_tables/mb_loot_tables/infected_loot_table.json"
+				"table": "loot_tables/mb_loot_tables/buff_bear_loot_table.json"
 			},
 			"minecraft:push_through": {
 				"value": 5
