@@ -33,6 +33,13 @@
 					"broadcast_anger_on_being_attacked": true,
 					"broadcast_anger_on_attack": true
 				}
+			},
+			"mb_step_sound": {
+				"minecraft:ambient_sound_interval": {
+					"event_name": "buff_mb_step",
+					"range": 16.0,
+					"value": 0.5
+				}
 			}
 		},
 		"components": {
@@ -278,6 +285,7 @@
 				"priority": 1
 			}
 		},
-		"events": {}
+		"events": {
+		}
 	}
 }

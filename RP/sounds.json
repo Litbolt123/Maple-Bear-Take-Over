@@ -19,6 +19,19 @@
 						]
 					}
 				}
+			},
+			"mb:buff_mb": {
+				"volume": [
+					1
+				],
+				"pitch": 1,
+				"events": {
+					"step": {
+						"sound": "buff_mb_step",
+						"volume": 1,
+						"pitch": 1
+					}
+				}
 			}
 		}
 	}

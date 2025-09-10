@@ -122,13 +122,35 @@ world.afterEvents.playerJoin.subscribe(() => {
 });
 
 /**
+ * Get sound based on infection level (day)
+ * @param {number} day The current day
+ * @returns {object} Sound configuration
+ */
+function getInfectionSound(day) {
+    if (day < 2) {
+        // Days 0-1: Peaceful sounds
+        return { sound: "random.levelup", pitch: 1.2, volume: 0.6 };
+    } else if (day < 4) {
+        // Days 2-3: Slightly ominous
+        return { sound: "mob.enderman.portal", pitch: 0.8, volume: 0.5 };
+    } else if (day < 8) {
+        // Days 4-7: More threatening
+        return { sound: "mob.wither.ambient", pitch: 0.7, volume: 0.6 };
+    } else {
+        // Day 8+: Full threat
+        return { sound: "mob.wither.spawn", pitch: 0.6, volume: 0.7 };
+    }
+}
+
+/**
  * Shows a title to a player with optional subtitle and timing
  * @param {Player} player The player to show the title to
  * @param {string|RawMessage} text The text to display as the title
  * @param {string|RawMessage} [subtitle] Optional subtitle
  * @param {object} [options] Optional TitleDisplayOptions (fadeInDuration, stayDuration, fadeOutDuration)
+ * @param {number} [day] Optional day for sound selection
  */
-function showPlayerTitle(player, text, subtitle = undefined, options = {}) {
+function showPlayerTitle(player, text, subtitle = undefined, options = {}, day = null) {
     try {
         if (player && player.isValid) {
             const titleOptions = {
@@ -140,7 +162,15 @@ function showPlayerTitle(player, text, subtitle = undefined, options = {}) {
                 titleOptions.subtitle = subtitle;
             }
             player.onScreenDisplay.setTitle(text, titleOptions);
-            player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.5 });
+            
+            // Use infection-based sound if day is provided
+            if (day !== null) {
+                const soundConfig = getInfectionSound(day);
+                player.playSound(soundConfig.sound, { pitch: soundConfig.pitch, volume: soundConfig.volume });
+            } else {
+                // Default sound for backwards compatibility
+                player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.5 });
+            }
         }
     } catch (error) {
         console.warn("Error showing title to player:", error);
@@ -276,11 +306,12 @@ function startDayCycleLoop() {
                 // Notify players
                 for (const player of world.getAllPlayers()) {
                     if (player && player.isValid) {
-                        player.playSound("mob.wither.hurt", {
-                            pitch: 0.9,
-                            volume: 0.4
+                        const soundConfig = getInfectionSound(newDay);
+                        player.playSound(soundConfig.sound, {
+                            pitch: soundConfig.pitch,
+                            volume: soundConfig.volume
                         });
-                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${newDay}`);
+                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${newDay}`, undefined, {}, newDay);
                         showPlayerActionbar(player, "The Maple Bear infection continues...");
                     }
                 }
@@ -320,12 +351,13 @@ export async function mbiHandleMilestoneDay(day) {
                 try {
                     if (player && player.isValid) {
                         try {
+                            // Use wither death for milestone (special occasion)
                             player.playSound("mob.wither.death", { pitch: 0.7, volume: 0.7 });
                         } catch (err) {
                             console.warn("[ERROR] in player.playSound:", err);
                         }
                         try {
-                            showPlayerTitle(player, `§eDay ${day} Milestone!`);
+                            showPlayerTitle(player, `§eDay ${day} Milestone!`, undefined, {}, day);
                         } catch (err) {
                             console.warn("[ERROR] in showPlayerTitle:", err);
                         }
@@ -390,12 +422,18 @@ export async function initializeDayTracking() {
         for (const player of world.getAllPlayers()) {
             if (player && player.isValid) {
                 system.run(() => {
-                    player.playSound("mob.wither.ambient", {
-                        pitch: 0.6,
-                        volume: 0.6
-                    });
-                    showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`);
-                    showPlayerActionbar(player, "The Maple Bear infection begins...");
+                    // Use nice sound for world start
+                    if (currentDay < 2) {
+                        player.playSound("random.levelup", { pitch: 1.2, volume: 0.6 });
+                        showPlayerTitle(player, "§aa completely normal world...", undefined, {}, currentDay);
+                        showPlayerActionbar(player, "Everything seems peaceful here...");
+                    } else {
+                        // Use infection-based sound for progressed worlds
+                        const soundConfig = getInfectionSound(currentDay);
+                        player.playSound(soundConfig.sound, { pitch: soundConfig.pitch, volume: soundConfig.volume });
+                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay);
+                        showPlayerActionbar(player, "The Maple Bear infection continues...");
+                    }
                 });
             }
         }
@@ -494,16 +532,17 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                     // initializeDayTracking already shows the welcome message
                                 } else {
                                     // Show join message for subsequent joins
-                                    player.playSound("mob.wither.ambient", {
-                                        pitch: 0.6,
-                                        volume: 0.6
+                                    const soundConfig = getInfectionSound(currentDay);
+                                    player.playSound(soundConfig.sound, {
+                                        pitch: soundConfig.pitch,
+                                        volume: soundConfig.volume
                                     });
                                     
                                     if (isFirstTimePlayer && currentDay < 2) {
-                                        // First-time player in early world (day 0-1) - show "normal world" message
-                                        sendPlayerMessage(player, "§aWelcome to a totally normal world...");
-                                        showPlayerTitle(player, "§aWelcome!");
-                                        showPlayerActionbar(player, "Everything seems peaceful here...");
+                                        // First-time player in early world (day 0-1) - show unique welcome message
+                                        sendPlayerMessage(player, "§aYou've arrived in a peaceful world...");
+                                        showPlayerTitle(player, "§aWelcome, Traveler!", undefined, {}, currentDay);
+                                        showPlayerActionbar(player, "The air feels fresh and clean...");
                                         
                                         // Mark as returning player for future joins
                                         returningPlayers.add(playerName);
@@ -512,14 +551,14 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                         system.runTimeout(() => {
                                             const displayInfo = getDayDisplayInfo(currentDay);
                                             sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} It is currently Day ${currentDay}`);
-                                            showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`);
+                                            showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay);
                                             showPlayerActionbar(player, "The Maple Bear infection continues...");
                                         }, 3000); // 3 second delay
                                     } else {
                                         // Either returning player OR first-time player in progressed world
                                         const welcomeInfo = getReturningPlayerWelcome(currentDay);
                                         sendPlayerMessage(player, welcomeInfo.message);
-                                        showPlayerTitle(player, welcomeInfo.title);
+                                        showPlayerTitle(player, welcomeInfo.title, undefined, {}, currentDay);
                                         showPlayerActionbar(player, welcomeInfo.actionbar);
                                         
                                         // Mark as returning player for future joins

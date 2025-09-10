@@ -12,6 +12,18 @@
 					"volume": 1
 				}
 			]
+		},
+		"buff_mb_step": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 40,
+			"subtitle": "A heavy step...",
+			"sounds": [
+				{
+					"name": "sounds/buff_mb_step",
+					"volume": 1
+				}
+			]
 		}
 	}
 }
