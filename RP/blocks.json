@@ -1,4 +1,9 @@
 {
+	"format_version": [
+		1,
+		1,
+		0
+	],
 	"mb:dusted_dirt": {
 		"sound": "dirt_with_roots"
 	}

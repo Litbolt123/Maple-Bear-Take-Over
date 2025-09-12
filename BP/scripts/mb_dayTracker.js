@@ -25,7 +25,7 @@ const INITIALIZED_FLAG = "mb_day_tracker_initialized";
 const DAY_COUNT_KEY = "mb_day_count";
 const SCOREBOARD_NAME = "mb_day_tracker";
 const DAY_SCORE_ID = "current_day";
-const MILESTONE_DAYS = [10, 25, 50, 75, 100];
+const MILESTONE_DAYS = [2, 4, 8]; // Tiny Maple Bears, Infected Maple Bears, Buff Maple Bears
 
 // Scoreboard
 const SCOREBOARD_OBJECTIVE = "mb_days";
@@ -368,20 +368,14 @@ export async function mbiHandleMilestoneDay(day) {
             }
             // Trigger specific milestone events
             switch (day) {
-                case 10:
-                    world.sendMessage(`§8[MBI] §7The first Maple Bear clones have been spotted...`);
+                case 2:
+                    world.sendMessage(`§8[MBI] §eThe tiny ones have emerged...`);
                     break;
-                case 25:
-                    world.sendMessage(`§8[MBI] §7Reports of infected Maple Bears are increasing...`);
+                case 4:
+                    world.sendMessage(`§8[MBI] §6Who is that over there...?`);
                     break;
-                case 50:
-                    world.sendMessage(`§8[MBI] §7The Buff Maple Bears have emerged...`);
-                    break;
-                case 75:
-                    world.sendMessage(`§8[MBI] §7The infection is spreading rapidly...`);
-                    break;
-                case 100:
-                    world.sendMessage(`§8[MBI] §4Maximum infection rate reached. The end is near...`);
+                case 8:
+                    world.sendMessage(`§8[MBI] §cIf you see one, run.`);
                     break;
             }
         } catch (error) {
@@ -538,11 +532,11 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                         volume: soundConfig.volume
                                     });
                                     
-                                    if (isFirstTimePlayer && currentDay < 2) {
-                                        // First-time player in early world (day 0-1) - show unique welcome message
-                                        sendPlayerMessage(player, "§aYou've arrived in a peaceful world...");
-                                        showPlayerTitle(player, "§aWelcome, Traveler!", undefined, {}, currentDay);
-                                        showPlayerActionbar(player, "The air feels fresh and clean...");
+                                    if (isFirstTimePlayer) {
+                                        // First-time player - show welcome to normal world message
+                                        sendPlayerMessage(player, "§aWelcome to a completely normal world...");
+                                        showPlayerTitle(player, "§aWelcome...", undefined, { stayDuration: 40 }, currentDay);
+                                        showPlayerActionbar(player, "Everything seems peaceful here...");
                                         
                                         // Mark as returning player for future joins
                                         returningPlayers.add(playerName);
@@ -555,16 +549,11 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                             showPlayerActionbar(player, "The Maple Bear infection continues...");
                                         }, 3000); // 3 second delay
                                     } else {
-                                        // Either returning player OR first-time player in progressed world
-                                        const welcomeInfo = getReturningPlayerWelcome(currentDay);
-                                        sendPlayerMessage(player, welcomeInfo.message);
-                                        showPlayerTitle(player, welcomeInfo.title, undefined, {}, currentDay);
-                                        showPlayerActionbar(player, welcomeInfo.actionbar);
-                                        
-                                        // Mark as returning player for future joins
-                                        if (isFirstTimePlayer) {
-                                            returningPlayers.add(playerName);
-                                        }
+                                        // Returning player - just show the day
+                                        const displayInfo = getDayDisplayInfo(currentDay);
+                                        sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`);
+                                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay);
+                                        showPlayerActionbar(player, "The Maple Bear infection continues...");
                                     }
                                 }
 

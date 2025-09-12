@@ -1,5 +1,6 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
+import { getCodex, markCodex, showCodexBook } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay } from "./mb_dayTracker.js";
 
 // NOTE: Debug and testing features have been commented out for playability
@@ -16,6 +17,75 @@ const SNOW_ITEM_ID = "mb:snow";
 const INFECTED_TAG = "mb_infected";
 const INFECTED_CORPSE_ID = "mb:infected_corpse";
 const SNOW_LAYER_BLOCK = "minecraft:snow_layer";
+
+// --- Player Codex (Unlock System) ---
+function getDefaultCodex() {
+    return {
+        infections: { bear: { discovered: false, firstHitAt: 0 }, snow: { discovered: false, firstUseAt: 0 } },
+        status: { immuneKnown: false, immuneUntil: 0, bearTimerSeen: false, snowTimerSeen: false },
+        cures: { bearCureKnown: false, bearCureDoneAt: 0 },
+        symptoms: { weaknessSeen: false, nauseaSeen: false, blindnessSeen: false, slownessSeen: false, hungerSeen: false },
+        items: { snowSeen: false, snowBookCrafted: false, cureItemsSeen: false },
+        mobs: { mapleBearSeen: false, infectedBearSeen: false, buffBearSeen: false }
+    };
+}
+
+function getCodex(player) {
+    try {
+        const raw = player.getDynamicProperty("mb_codex");
+        if (!raw) return getDefaultCodex();
+        const parsed = JSON.parse(raw);
+        return { ...getDefaultCodex(), ...parsed };
+    } catch (e) {
+        return getDefaultCodex();
+    }
+}
+
+function saveCodex(player, codex) {
+    try {
+        player.setDynamicProperty("mb_codex", JSON.stringify(codex));
+    } catch (e) { }
+}
+
+function markCodex(player, path, timestamp = false) {
+    const codex = getCodex(player);
+    const parts = path.split(".");
+    let ref = codex;
+    for (let i = 0; i < parts.length - 1; i++) {
+        const key = parts[i];
+        if (typeof ref[key] !== "object" || ref[key] === null) ref[key] = {};
+        ref = ref[key];
+    }
+    const leaf = parts[parts.length - 1];
+    if (timestamp) {
+        ref[leaf] = Date.now();
+    } else {
+        ref[leaf] = true;
+    }
+    saveCodex(player, codex);
+}
+
+// --- Bear Symptom Scaling ---
+const lastBearSymptomTick = new Map(); // playerId -> last tick applied
+function getBearSymptomLevel(ticksLeft) {
+    const total = BEAR_INFECTION_TICKS;
+    const ratio = Math.max(0, Math.min(1, (ticksLeft || 0) / total));
+    if (ratio > 0.75) return 0; // none
+    if (ratio > 0.5) return 1;  // mild
+    if (ratio > 0.2) return 2;  // moderate
+    return 3;                   // severe
+}
+
+// --- Snow Symptom Scaling ---
+const lastSnowSymptomTick = new Map(); // playerId -> last tick applied
+function getSnowSymptomLevel(ticksLeft) {
+    const total = SNOW_INFECTION_TICKS;
+    const ratio = Math.max(0, Math.min(1, (ticksLeft || 0) / total));
+    if (ratio > 0.75) return 0; // none
+    if (ratio > 0.5) return 1;  // mild
+    if (ratio > 0.2) return 2;  // moderate
+    return 3;                   // severe
+}
 
 // Constants for progressive spawning system
 const GRACE_PERIOD_DAYS = 2; // Number of days before Maple Bears start spawning
@@ -47,7 +117,7 @@ const ARMOR_TYPES = {
 
 const OFFHAND_TYPES = [
     "minecraft:shield",
-    "minecraft:totem_of_undying",
+    "minecraft:totem_of_undying", 
     "minecraft:torch",
     "minecraft:soul_torch",
     "minecraft:lantern",
@@ -93,6 +163,15 @@ const BEAR_INFECTION_TICKS = 24000 * 20; // 20 Minecraft days
 const SNOW_INFECTION_TICKS = 24000 * 1; // 1 Minecraft day (nausea then death)
 const HITS_TO_INFECT = 3; // Number of hits required to get infected
 const RANDOM_EFFECT_INTERVAL = 600; // Check every 30 seconds
+
+// --- Helper: Snow time reduction tiers ---
+function getSnowTimeReductionByCount(snowCount) {
+    const c = snowCount || 1;
+    if (c <= 5) return 1200; // 60s
+    if (c <= 10) return 6000; // 5m
+    if (c <= 20) return 12000; // 10m
+    return 18000; // 15m
+}
 
 // --- Helper: Convert mob to Maple Bear based on size ---
 function convertMobToMapleBear(deadMob, killer) {
@@ -267,7 +346,7 @@ function applyRandomPotionEffect(player, duration) {
         { effect: "minecraft:poison", amplifier: 1 },
         { effect: "minecraft:hunger", amplifier: 1 },
         { effect: "minecraft:mining_fatigue", amplifier: 1 },
-        { effect: "minecraft:wither", amplifier: 0 },
+        // removed wither per design
     ];
     const chosen = effects[Math.floor(Math.random() * effects.length)];
     try {
@@ -275,6 +354,26 @@ function applyRandomPotionEffect(player, duration) {
         console.log(`[SNOW] Applied ${chosen.effect} (amplifier ${chosen.amplifier}) for ${Math.floor(duration / 20)} seconds to ${player.name}`);
     } catch (e) {
         console.warn(`[SNOW] Error applying random effect ${chosen.effect}: ${e}`);
+    }
+}
+
+// Apply a random snow effect with scaled duration and amplifier
+function applyRandomSnowEffectScaled(player, duration, amplifier) {
+    const effects = [
+        // Bad-leaning set for snow
+        { effect: "minecraft:slowness" },
+        { effect: "minecraft:weakness" },
+        { effect: "minecraft:blindness" },
+        { effect: "minecraft:nausea" },
+        { effect: "minecraft:hunger" },
+        { effect: "minecraft:mining_fatigue" }
+    ];
+    const chosen = effects[Math.floor(Math.random() * effects.length)];
+    try {
+        player.addEffect(chosen.effect, duration, { amplifier: Math.max(0, Math.min(3, amplifier || 0)) });
+        console.log(`[SNOW] Applied scaled ${chosen.effect} (amp ${Math.max(0, Math.min(3, amplifier || 0))}) for ${Math.floor((duration||0)/20)}s to ${player.name}`);
+    } catch (e) {
+        console.warn(`[SNOW] Error applying scaled effect ${chosen.effect}: ${e}`);
     }
 }
 
@@ -384,11 +483,11 @@ function getMaxStackSize(itemType) {
         'minecraft:warped_fungus_on_a_stick',
         'minecraft:brush'
     ];
-
+    
     // Items that stack to 1 (non-stackable)
     const stack1Items = [
         'minecraft:sword',
-        'minecraft:pickaxe',
+        'minecraft:pickaxe', 
         'minecraft:axe',
         'minecraft:shovel',
         'minecraft:hoe',
@@ -446,7 +545,7 @@ function getMaxStackSize(itemType) {
         'minecraft:music_disc',
         'minecraft:disc_fragment_5'
     ];
-
+    
     // Check for special stack sizes
     if (stack16Items.some(item => itemType.includes(item))) {
         return 16;
@@ -638,7 +737,7 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
 
             if (hasWeakness) {
                 // Cure only bear infection
-                system.run(() => {
+            system.run(() => {
                     bearInfection.set(player.id, { ticksLeft: 0, cured: true });
                     console.log(`[CURE] Cured bear infection for ${player.name}`);
                     player.removeTag(INFECTED_TAG);
@@ -655,6 +754,7 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
 
                     // Note: We do NOT remove the weakness effect - let it run its course naturally
                     player.sendMessage("§eYou are now immune... maybe?");
+                    try { markCodex(player, "cures.bearCureKnown"); markCodex(player, "cures.bearCureDoneAt", true); markCodex(player, "items.cureItemsSeen"); } catch {}
                 });
             } else {
                 system.run(() => {
@@ -683,9 +783,24 @@ world.afterEvents.entityDie.subscribe((event) => {
         
         // Check if killer is a Maple Bear
         if (killerType === MAPLE_BEAR_ID || killerType === INFECTED_BEAR_ID || killerType === BUFF_BEAR_ID) {
-            system.run(() => {
-                convertMobToMapleBear(entity, killer);
-            });
+            // 50% chance for Maple Bear to convert mob
+            if (Math.random() < 0.5) {
+                system.run(() => {
+                    convertMobToMapleBear(entity, killer);
+                });
+            }
+            // Unlock mob sightings for nearby players
+            for (const p of world.getAllPlayers()) {
+                if (!p || !p.dimension || p.dimension.id !== killer.dimension.id) continue;
+                const dx = p.location.x - killer.location.x;
+                const dy = p.location.y - killer.location.y;
+                const dz = p.location.z - killer.location.z;
+                if (dx * dx + dy * dy + dz * dz <= 64 * 64) {
+                    if (killerType === MAPLE_BEAR_ID) markCodex(p, "mobs.mapleBearSeen");
+                    if (killerType === INFECTED_BEAR_ID) markCodex(p, "mobs.infectedBearSeen");
+                    if (killerType === BUFF_BEAR_ID) markCodex(p, "mobs.buffBearSeen");
+                }
+            }
         }
     }
     
@@ -774,8 +889,71 @@ world.afterEvents.entityHurt.subscribe((event) => {
     const source = event.damageSource;
     if (!(player instanceof Player)) return;
 
-    const mapleBearTypes = [MAPLE_BEAR_ID, INFECTED_BEAR_ID, BUFF_BEAR_ID];
+                const mapleBearTypes = [MAPLE_BEAR_ID, INFECTED_BEAR_ID, BUFF_BEAR_ID];
     if (source && source.damagingEntity && mapleBearTypes.includes(source.damagingEntity.typeId)) {
+        // If already infected (bear or snow), do not progress hit counter; instead reduce active timer by half of a snow-eat reduction
+        try {
+            const hasBearActive = bearInfection.has(player.id) && !bearInfection.get(player.id).cured;
+            const snowStateActive = (() => { const s = snowInfection.get(player.id); return !!s && (s.ticksLeft || 0) > 0; })();
+            if (hasBearActive || snowStateActive) {
+                // Ensure snow infection data exists for tracking snow tier
+                if (!snowInfection.has(player.id)) {
+                    snowInfection.set(player.id, { ticksLeft: 0, snowCount: 0 });
+                }
+                
+                const snowRef = snowInfection.get(player.id);
+                const refCount = (snowRef?.snowCount || 0);
+                const halfReduction = Math.max(1, Math.floor(getSnowTimeReductionByCount(Math.max(1, refCount)) / 2));
+                
+                // Increase snow severity based on Maple Bear type
+                let snowIncrease = 0.25; // Default for tiny Maple Bears (1/4 of snow consumption)
+                if (source.damagingEntity.typeId === INFECTED_BEAR_ID) {
+                    snowIncrease = 0.5; // Infected Maple Bears (1/2 of snow consumption)
+                } else if (source.damagingEntity.typeId === BUFF_BEAR_ID) {
+                    snowIncrease = 1.0; // Buff Maple Bears (1 whole snow consumption)
+                }
+                
+                snowRef.snowCount = (snowRef.snowCount || 0) + snowIncrease;
+                snowInfection.set(player.id, snowRef);
+                
+                if (hasBearActive) {
+                    const s = bearInfection.get(player.id);
+                    s.ticksLeft = Math.max(0, (s.ticksLeft || 0) - halfReduction);
+                    bearInfection.set(player.id, s);
+                    if (s.ticksLeft <= 0) {
+                        try { player.kill(); } catch {}
+                        try {
+                            const bear = player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
+                            if (bear) { bear.nameTag = `§4! ${player.name}'s Infected Form`; bear.setDynamicProperty("infected_by", player.id); }
+                            player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} transformed into a Maple Bear!"}]}`);
+                        } catch {}
+                        player.removeTag(INFECTED_TAG);
+                        bearInfection.delete(player.id);
+                    }
+                } else if (snowStateActive) {
+                    const s = snowInfection.get(player.id);
+                    s.ticksLeft = Math.max(0, (s.ticksLeft || 0) - halfReduction);
+                    snowInfection.set(player.id, s);
+                    if (s.ticksLeft <= 0) {
+                        try { player.kill(); } catch {}
+                        try {
+                            const bear = player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
+                            if (bear) { bear.nameTag = `§4! ${player.name}'s Infected Form`; bear.setDynamicProperty("infected_by", player.id); }
+                            player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} transformed into a Maple Bear!"}]}`);
+                        } catch {}
+                        player.removeTag(INFECTED_TAG);
+                        snowInfection.delete(player.id);
+                    }
+                }
+                return;
+            }
+        } catch {}
+        // Mob discovery on being hit
+        try {
+            if (source.damagingEntity.typeId === MAPLE_BEAR_ID) markCodex(player, "mobs.mapleBearSeen");
+            if (source.damagingEntity.typeId === INFECTED_BEAR_ID) markCodex(player, "mobs.infectedBearSeen");
+            if (source.damagingEntity.typeId === BUFF_BEAR_ID) markCodex(player, "mobs.buffBearSeen");
+        } catch {}
         // Check if player is immune to infection
         if (isPlayerImmune(player)) {
             console.log(`[INFECTION] ${player.name} is immune to infection, hit ignored`);
@@ -784,8 +962,8 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 player.sendMessage("§eYou are lucky cuh...");
                 player.addTag("mb_immune_hit_message");
             }
-            return;
-        }
+                    return;
+                }
 
         // Track hits before infection
         const currentHits = bearHitCount.get(player.id) || 0;
@@ -796,6 +974,12 @@ world.afterEvents.entityHurt.subscribe((event) => {
 
         // Check if this hit causes infection
         if (newHitCount >= HITS_TO_INFECT) {
+            // Apply strong immediate effects at infection moment (3rd hit)
+            try {
+                player.addEffect("minecraft:blindness", 200, { amplifier: 0 });
+                player.addEffect("minecraft:nausea", 200, { amplifier: 0 });
+                player.addEffect("minecraft:mining_fatigue", 200, { amplifier: 0 });
+            } catch {}
             // Player is now infected
             bearInfection.set(player.id, { ticksLeft: BEAR_INFECTION_TICKS, cured: false, hitCount: newHitCount });
             player.addTag(INFECTED_TAG);
@@ -805,7 +989,6 @@ world.afterEvents.entityHurt.subscribe((event) => {
             
             if (!firstTime.hasBeenInfected) {
                 player.sendMessage("§4You start to feel off...");
-                player.sendMessage(`§cYou have been infected! Cure yourself within 20 days with a weakness potion and an enchanted golden apple!`);
                 firstTime.hasBeenInfected = true;
             } else {
                 player.sendMessage("§4You start to feel off...");
@@ -819,6 +1002,8 @@ world.afterEvents.entityHurt.subscribe((event) => {
             // IMMEDIATELY save the infection data
             saveInfectionData(player);
             console.log(`[INFECTION] Immediately saved bear infection data for ${player.name}`);
+            try { markCodex(player, "status.bearTimerSeen"); } catch {}
+            try { markCodex(player, "infections.bear.discovered"); markCodex(player, "infections.bear.firstHitAt", true); } catch {}
         } else {
             // Not infected yet, show progress only for first-time hits
             const firstTime = firstTimeMessages.get(player.id) || { hasBeenHit: false, hasBeenInfected: false, snowTier: 0 };
@@ -829,6 +1014,15 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 firstTime.hasBeenHit = true;
                 firstTimeMessages.set(player.id, firstTime);
             }
+            // Apply staged effects based on hit count (pre-infection)
+            try {
+                if (newHitCount === 1) {
+                    player.addEffect("minecraft:blindness", 60, { amplifier: 0 });
+                } else if (newHitCount === 2) {
+                    player.addEffect("minecraft:blindness", 100, { amplifier: 0 });
+                    player.addEffect("minecraft:nausea", 160, { amplifier: 0 });
+                }
+            } catch {}
         }
     }
 });
@@ -864,6 +1058,25 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
             
             bearState.ticksLeft = Math.max(0, bearState.ticksLeft - timeReduction);
             bearInfection.set(player.id, bearState);
+
+            // Immediate death if timer exhausted by snow consumption
+            if (bearState.ticksLeft <= 0) {
+                console.log(`[SNOW] ${player.name} accelerated bear infection to 0 via snow. Transforming immediately.`);
+                try {
+                    player.kill();
+                } catch {}
+                try {
+                    const bear = player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
+                    if (bear) {
+                        bear.nameTag = `§4! ${player.name}'s Infected Form`;
+                        bear.setDynamicProperty("infected_by", player.id);
+                    }
+                    player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} transformed into a Maple Bear!"}]}`);
+                } catch {}
+                player.removeTag(INFECTED_TAG);
+                bearInfection.delete(player.id);
+                return;
+            }
             
             console.log(`[SNOW] ${player.name} ate snow while bear infected (${snowCount} total). Reduced bear infection by ${Math.floor(timeReduction / 20)} seconds`);
             
@@ -898,9 +1111,16 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
         } else {
             // Player doesn't have bear infection - handle snow infection
             if (!snowState) {
-                // First time eating snow - start snow infection
+                // First time eating snow - start snow infection and apply immediate strong effects (3rd-hit set)
                 snowInfection.set(player.id, { ticksLeft: SNOW_INFECTION_TICKS, snowCount: 1 });
                 player.addTag(INFECTED_TAG);
+                try { markCodex(player, "infections.snow.discovered"); markCodex(player, "infections.snow.firstUseAt", true); markCodex(player, "items.snowFound"); markCodex(player, "items.snowIdentified"); } catch {}
+                // Immediate 3rd-hit effects
+                try {
+                    player.addEffect("minecraft:blindness", 200, { amplifier: 0 });
+                    player.addEffect("minecraft:nausea", 200, { amplifier: 0 });
+                    player.addEffect("minecraft:mining_fatigue", 200, { amplifier: 0 });
+                } catch {}
                 
                 // Get first-time message state
                 const firstTime = firstTimeMessages.get(player.id) || { hasBeenHit: false, hasBeenInfected: false, snowTier: 0, hasBeenSnowInfected: false };
@@ -929,12 +1149,28 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
                 // Reduce snow infection timer by 20 minutes (1200 ticks) per additional snow
                 const timeReduction = 1200; // 20 minutes
                 snowState.ticksLeft = Math.max(0, snowState.ticksLeft - timeReduction);
-                
                 snowInfection.set(player.id, snowState);
                 console.log(`[SNOW] ${player.name} ate snow again (count: ${snowState.snowCount}, reduced timer by ${timeReduction} ticks, ${snowState.ticksLeft} ticks left)`);
-                
+                try { markCodex(player, "items.snowFound"); markCodex(player, "items.snowIdentified"); } catch {}
                 // No message - details available in infection book
-            } else {
+                if (snowState.ticksLeft <= 0) {
+                    console.log(`[SNOW] ${player.name} reduced snow infection to 0 via snow. Transforming immediately.`);
+                    try {
+                        player.kill();
+                    } catch {}
+                    try {
+                        const bear = player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
+                        if (bear) {
+                            bear.nameTag = `§4! ${player.name}'s Infected Form`;
+                            bear.setDynamicProperty("infected_by", player.id);
+                        }
+                        player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} transformed into a Maple Bear!"}]}`);
+                    } catch {}
+                    player.removeTag(INFECTED_TAG);
+                    snowInfection.delete(player.id);
+                    return;
+                }
+                        } else {
                 // Snow infection expired but still tracking count - restart infection
                 snowState.ticksLeft = SNOW_INFECTION_TICKS;
                 snowState.snowCount++;
@@ -954,19 +1190,32 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
             }
         }
         
-        // Apply random potion effect
-        const effectDuration = Math.min(600 + (snowState?.snowCount || 1) * 60, 1800); // 30s base, up to 90s max
-        applyRandomPotionEffect(player, effectDuration);
+        // Apply random snow effect scaled by snowCount (skip on first-snow)
+        const snowNow = snowInfection.get(player.id);
+        const snowCountNow = snowNow?.snowCount || 1;
+        if (snowState && snowState.ticksLeft > 0 || snowCountNow > 1) {
+            let severity = 1;
+            if (snowCountNow <= 5) severity = 1; else if (snowCountNow <= 10) severity = 2; else severity = 3;
+            const base = 200; // 10s
+            const perCount = 20 * severity; // +1s per snow * severity
+            const dur = Math.min(base + snowCountNow * perCount, 2400);
+            const amp = Math.min(3, Math.floor(snowCountNow / 7));
+            applyRandomSnowEffectScaled(player, dur, amp);
+        }
         
         // Apply nausea for snow infection
         if (snowState && !bearState) {
             try {
                 player.addEffect("minecraft:nausea", SNOW_INFECTION_TICKS, { amplifier: 9 });
                 console.log(`[SNOW] Applied nausea effect for 1 day to ${player.name}`);
+                try { markCodex(player, "symptoms.nauseaSeen"); } catch {}
             } catch (error) {
                 console.warn(`[SNOW] Error applying nausea effect: ${error}`);
             }
         }
+
+        // Clear bear hit progress when consuming snow (tutorial/progress shouldn't persist)
+        try { bearHitCount.delete(player.id); } catch {}
 
         // IMMEDIATELY save the infection data
         saveInfectionData(player);
@@ -1008,7 +1257,7 @@ if (world.beforeEvents && world.beforeEvents.playerSendMessage) {
                 }
 
                 player.sendMessage("§aEffect test completed! Check console for results.");
-            } catch (error) {
+                                } catch (error) {
                 console.warn("[TEST] Error testing effects:", error);
                 player.sendMessage("§cEffect test failed! Check console for error.");
             }
@@ -1020,7 +1269,7 @@ if (world.beforeEvents && world.beforeEvents.playerSendMessage) {
             try {
                 player.addEffect("minecraft:weakness", 200, { amplifier: 1 });
                 player.sendMessage("§aAdded weakness effect for testing!");
-            } catch (error) {
+                            } catch (error) {
                 console.warn("[TEST] Error adding weakness:", error);
                 player.sendMessage("§cFailed to add weakness effect!");
             }
@@ -1123,8 +1372,28 @@ system.runInterval(() => {
             player.sendMessage("§4You succumbed to the infection!");
             player.removeTag(INFECTED_TAG);
             bearInfection.delete(id);
-        } else if (Math.random() < 0.025) { // Reduced chance for 40-tick interval
-            applyRandomEffect(player);
+            } else {
+            // Scale symptom chance and intensity
+            const level = getBearSymptomLevel(state.ticksLeft);
+            const nowTick = system.currentTick;
+            const lastTick = lastBearSymptomTick.get(id) ?? 0;
+            const cooldown = level === 0 ? 1200 : level === 1 ? 600 : level === 2 ? 300 : 120; // ticks between symptoms
+            if (nowTick - lastTick >= cooldown) {
+                const effectsByLevel = [
+                    [],
+                    [ { effect: "minecraft:slowness", duration: 60, amp: 0 } ],
+                    [ { effect: "minecraft:slowness", duration: 100, amp: 1 }, { effect: "minecraft:hunger", duration: 80, amp: 1 } ],
+                    [ { effect: "minecraft:slowness", duration: 140, amp: 2 }, { effect: "minecraft:weakness", duration: 140, amp: 1 }, { effect: "minecraft:blindness", duration: 60, amp: 0 } ]
+                ];
+                const options = effectsByLevel[level];
+                if (options && options.length > 0) {
+                    const chosen = options[Math.floor(Math.random() * options.length)];
+                    try {
+                        player.addEffect(chosen.effect, chosen.duration, { amplifier: chosen.amp });
+                    } catch {}
+                }
+                lastBearSymptomTick.set(id, nowTick);
+            }
         }
     }
     // Snow infection
@@ -1163,9 +1432,47 @@ system.runInterval(() => {
                 player.sendMessage("§4You don't feel so good...");
                 state.warningSent = true;
                 snowInfection.set(id, state);
+            } else {
+                // Progressive snow symptoms
+                const level = getSnowSymptomLevel(state.ticksLeft);
+                const nowTick = system.currentTick;
+                const lastTick = lastSnowSymptomTick.get(id) ?? 0;
+                const cooldown = level === 0 ? 1600 : level === 1 ? 800 : level === 2 ? 400 : 160;
+                if (nowTick - lastTick >= cooldown) {
+                    const effectsByLevel = [
+                        [],
+                        [ { effect: "minecraft:nausea", duration: 60, amp: 0 } ],
+                        [ { effect: "minecraft:nausea", duration: 100, amp: 0 }, { effect: "minecraft:slowness", duration: 80, amp: 0 } ],
+                        [ { effect: "minecraft:nausea", duration: 140, amp: 0 }, { effect: "minecraft:slowness", duration: 120, amp: 1 }, { effect: "minecraft:blindness", duration: 60, amp: 0 } ]
+                    ];
+                    const options = effectsByLevel[level];
+                    if (options && options.length > 0) {
+                        const chosen = options[Math.floor(Math.random() * options.length)];
+                        try { player.addEffect(chosen.effect, chosen.duration, { amplifier: chosen.amp }); } catch {}
+                    }
+                    lastSnowSymptomTick.set(id, nowTick);
+                }
             }
         }
     }
+
+    // One-shot inventory scan for snow discovery (stops after found)
+    try {
+        for (const p of world.getAllPlayers()) {
+            const inv = p.getComponent("inventory")?.container;
+            if (!inv) continue;
+            const raw = p.getDynamicProperty("mb_codex");
+            let found = false;
+            if (raw) {
+                try { found = !!(JSON.parse(raw)?.items?.snowFound); } catch {}
+            }
+            if (found) continue;
+            for (let i = 0; i < inv.size; i++) {
+                const it = inv.getItem(i);
+                if (it && it.typeId === SNOW_ITEM_ID) { try { markCodex(p, "items.snowFound"); } catch {} break; }
+            }
+        }
+    } catch {}
 }, 40); // Changed from 20 to 40 ticks for better performance
 
 // --- Immunity Cleanup System ---
@@ -1263,6 +1570,46 @@ world.afterEvents.effectAdd.subscribe((event) => {
 
     if (entity instanceof Player && effect.typeId === "minecraft:weakness") {
         console.log(`[EFFECT] Player ${entity.name} got weakness effect: duration=${effect.duration}, amplifier=${effect.amplifier}`);
+        try { markCodex(entity, "symptoms.weaknessSeen"); } catch {}
+    }
+    // Log to symptoms meta for known effects
+    if (entity instanceof Player) {
+        try {
+            const id = effect.typeId;
+            const durationTicks = effect.duration ?? 0;
+            const amp = effect.amplifier ?? 0;
+            let source = null;
+            const hasBear = bearInfection.has(entity.id) && !(bearInfection.get(entity.id)?.cured);
+            const hasSnow = snowInfection.has(entity.id) && (snowInfection.get(entity.id)?.ticksLeft || 0) > 0;
+            if (hasBear) source = "bear"; else if (hasSnow) source = "snow";
+            let timingBucket = null;
+            if (hasBear) {
+                const st = bearInfection.get(entity.id)?.ticksLeft || 0;
+                const total = BEAR_INFECTION_TICKS;
+                const ratio = Math.max(0, Math.min(1, st / total));
+                timingBucket = ratio > 0.5 ? (ratio > 0.8 ? "early" : "mid") : "late";
+            } else if (hasSnow) {
+                const st = snowInfection.get(entity.id)?.ticksLeft || 0;
+                const total = SNOW_INFECTION_TICKS;
+                const ratio = Math.max(0, Math.min(1, st / total));
+                timingBucket = ratio > 0.5 ? (ratio > 0.8 ? "early" : "mid") : "late";
+            }
+            let snowCountBucket = null;
+            if (hasSnow) {
+                const c = (snowInfection.get(entity.id)?.snowCount) || 0;
+                snowCountBucket = c <= 5 ? "low" : (c <= 10 ? "mid" : "high");
+            }
+            // Mark seen flag for known effects
+            try {
+                if (id === "minecraft:weakness") markCodex(entity, "symptoms.weaknessSeen");
+                if (id === "minecraft:nausea") markCodex(entity, "symptoms.nauseaSeen");
+                if (id === "minecraft:blindness") markCodex(entity, "symptoms.blindnessSeen");
+                if (id === "minecraft:slowness") markCodex(entity, "symptoms.slownessSeen");
+                if (id === "minecraft:hunger") markCodex(entity, "symptoms.hungerSeen");
+            } catch {}
+            // Update meta
+            try { import("./mb_codex.js").then(m => m.updateSymptomMeta(entity, id, durationTicks, amp, source, timingBucket, snowCountBucket)); } catch {}
+        } catch {}
     }
 });
 
@@ -1270,12 +1617,11 @@ world.afterEvents.effectAdd.subscribe((event) => {
 world.afterEvents.entityDie.subscribe((event) => {
     const entity = event.deadEntity;
     if (entity instanceof Player) {
-        // Clear all infection data on death
+        // Clear all infection data on death - you're a new person when you respawn
         bearInfection.delete(entity.id);
         snowInfection.delete(entity.id);
         curedPlayers.delete(entity.id);
         bearHitCount.delete(entity.id);
-        firstTimeMessages.delete(entity.id);
         entity.removeTag(INFECTED_TAG);
 
         // Clear dynamic properties on death
@@ -1284,8 +1630,9 @@ world.afterEvents.entityDie.subscribe((event) => {
             entity.setDynamicProperty("mb_snow_infection", undefined);
             entity.setDynamicProperty("mb_immunity_end", undefined);
             entity.setDynamicProperty("mb_bear_hit_count", undefined);
-            entity.setDynamicProperty("mb_first_time_messages", undefined);
-            console.log(`[DEATH] Cleared all infection data for ${entity.name}`);
+            // Keep first-time tutorial flags so players don't see them again after death
+            // Keep codex knowledge - that persists across deaths
+            console.log(`[DEATH] Cleared all infection data for ${entity.name} - they are a new person now`);
         } catch (error) {
             console.warn(`[DEATH] Error clearing dynamic properties: ${error}`);
         }
@@ -1521,61 +1868,96 @@ function formatMillisDuration(ms) {
  */
 function showInfectionBookReport(player) {
     try {
+        const codex = getCodex(player);
         const hasBear = bearInfection.has(player.id) && !bearInfection.get(player.id).cured;
         const hasSnow = snowInfection.has(player.id);
         const immune = isPlayerImmune(player);
 
-        const typeText = hasBear && hasSnow
-            ? "Bear + Snow"
-            : hasBear
-                ? "Bear"
-                : hasSnow
-                    ? "Snow"
-                    : "None";
-
-        const lines = [];
-        lines.push("§6=== Infection Tracker ===");
-        lines.push(`§eType: §f${typeText}`);
-
+        // Status summary at top
+        const summary = [];
+        const typeText = hasBear && hasSnow ? "Bear + Snow" : hasBear ? "Bear" : hasSnow ? "Snow" : codex.infections.bear.discovered || codex.infections.snow.discovered ? "Known (no active)" : "None";
+        summary.push(`§eType: §f${typeText}`);
         if (hasBear) {
             const bearTicks = bearInfection.get(player.id).ticksLeft || 0;
             const bearDays = Math.ceil(bearTicks / 24000);
-            lines.push(`§eBear: §c${formatTicksDuration(bearTicks)} (§f~${bearDays} day${bearDays !== 1 ? 's' : ''}§c)`);
-            lines.push("§7Cure: §fDrink Weakness then eat an Enchanted Golden Apple");
+            summary.push(`§eBear: §c${formatTicksDuration(bearTicks)} (§f~${bearDays} day${bearDays !== 1 ? 's' : ''}§c)`);
+            if (codex.cures.bearCureKnown) summary.push("§7Cure: §fWeakness + Enchanted Golden Apple");
+        } else if (codex.infections.bear.discovered) {
+            summary.push("§7Bear infection: §8Known (no active infection)");
         }
-
         if (hasSnow) {
             const snowTicks = snowInfection.get(player.id).ticksLeft || 0;
-            lines.push(`§eSnow: §c${formatTicksDuration(snowTicks)}`);
-            lines.push("§7Cure: §fNone. Transformation at timer end");
+            summary.push(`§eSnow: §c${formatTicksDuration(snowTicks)}`);
+        } else if (codex.infections.snow.discovered) {
+            summary.push("§7Snow infection: §8Known (no active infection)");
         }
-
-        if (!hasBear && !hasSnow) {
-            lines.push("§aYou are currently healthy.");
-        }
-
         if (immune) {
             const end = curedPlayers.get(player.id);
             const remainingMs = Math.max(0, end - Date.now());
-            lines.push(`§bImmunity: §fACTIVE (§b${formatMillisDuration(remainingMs)} left§f)`);
+            summary.push(`§bImmunity: §fACTIVE (§b${formatMillisDuration(remainingMs)} left§f)`);
         } else {
-            lines.push("§bImmunity: §7None");
+            summary.push("§bImmunity: §7None");
         }
-
-        // Show hit count if not infected yet
         const hitCount = bearHitCount.get(player.id) || 0;
         if (hitCount > 0 && !hasBear) {
-            lines.push(`§eBear Hits: §f${hitCount}/${HITS_TO_INFECT} (${HITS_TO_INFECT - hitCount} more to infect)`);
+            summary.push(`§eBear Hits: §f${hitCount}/${HITS_TO_INFECT}`);
         }
 
-        // Build UI like a signed book page
-        const body = lines.join("\n");
-        const form = new ActionFormData()
-            .title("§6Infection Tracker")
-            .body(body)
-            .button("§8Close");
+        // Mark knowledge
+        try {
+            if (hasBear) markCodex(player, "status.bearTimerSeen");
+            if (hasSnow) markCodex(player, "status.snowTimerSeen");
+            if (immune) markCodex(player, "status.immuneKnown");
+        } catch {}
+
+        // Paged UI
+        const main = new ActionFormData().title("§6Powdery Journal");
+        main.body(`${summary.join("\n")}\n\n§eChoose a section:`);
+        main.button("§fMy Status");
+        main.button("§fInfections");
+        main.button("§fSymptoms");
+        main.button("§fMobs");
+        main.button("§fItems");
         player.playSound("random.orb", { pitch: 1.2, volume: 0.6 });
-        form.show(player).catch(() => { });
+        main.show(player).then((res) => {
+            if (!res || res.canceled) return;
+            const sel = res.selection;
+            if (sel === 0) {
+                new ActionFormData().title("§6Status").body(summary.join("\n")).button("§8Back").show(player);
+            }
+            if (sel === 1) {
+                const lines = [];
+                lines.push("§eBear Infection:");
+                lines.push(codex.infections.bear.discovered ? (codex.cures.bearCureKnown ? "§7Spread by Maple Bears. Cure exists." : "§7Spread by Maple Bears. §8(Cure unknown)") : "§8Unknown");
+                lines.push("");
+                lines.push("§eSnow Infection:");
+                lines.push(codex.infections.snow.discovered ? "§7Self-inflicted via powder. No cure." : "§8Unknown");
+                new ActionFormData().title("§6Infections").body(lines.join("\n")).button("§8Back").show(player);
+            }
+            if (sel === 2) {
+                const lines = [];
+                lines.push(`§eWeakness: ${codex.symptoms.weaknessSeen ? '§fSeen' : '§8Unknown'}`);
+                lines.push(`§eNausea: ${codex.symptoms.nauseaSeen ? '§fSeen' : '§8Unknown'}`);
+                lines.push(`§eBlindness: ${codex.symptoms.blindnessSeen ? '§fSeen' : '§8Unknown'}`);
+                lines.push(`§eSlowness: ${codex.symptoms.slownessSeen ? '§fSeen' : '§8Unknown'}`);
+                lines.push(`§eHunger: ${codex.symptoms.hungerSeen ? '§fSeen' : '§8Unknown'}`);
+                new ActionFormData().title("§6Symptoms").body(lines.join("\n")).button("§8Back").show(player);
+            }
+            if (sel === 3) {
+                const lines = [];
+                lines.push(`§eMaple Bear: ${codex.mobs.mapleBearSeen ? '§fSeen' : '§8Unknown'}`);
+                lines.push(`§eInfected Bear: ${codex.mobs.infectedBearSeen ? '§fSeen' : '§8Unknown'}`);
+                lines.push(`§eBuff Maple Bear: ${codex.mobs.buffBearSeen ? '§fSeen' : '§8Unknown'}`);
+                new ActionFormData().title("§6Mobs").body(lines.join("\n")).button("§8Back").show(player);
+            }
+            if (sel === 4) {
+                const lines = [];
+                lines.push(`§eSnow: ${codex.items.snowSeen ? '§fKnown' : '§8Unknown'}`);
+                lines.push(`§ePowdery Book: ${codex.items.snowBookCrafted ? '§fKnown' : '§8Unknown'}`);
+                lines.push(`§eCure Items: ${codex.items.cureItemsSeen ? '§fKnown' : '§8Unknown'}`);
+                new ActionFormData().title("§6Items").body(lines.join("\n")).button("§8Back").show(player);
+            }
+        }).catch(() => { });
     } catch (err) {
         console.warn("[BOOK] Error showing infection report:", err);
     }
@@ -1606,32 +1988,32 @@ function handleInfectedDeath(player) {
     try {
         const location = player.location;
         const dimension = player.dimension;
-
+        
         // Remove infection status
         player.removeTag(INFECTED_TAG);
         infectedPlayers.delete(player.id);
-
+        
         // Get the player's inventory before spawning the bear
         const inventory = playerInventories.get(player.id);
-
+        
         // Spawn infected Maple Bear at death location
         const bear = dimension.spawnEntity(INFECTED_BEAR_ID, location);
         if (bear) {
             // Set name tag for visual identification
             bear.nameTag = `§4! ${player.name}'s Infected Form`;
-
+            
             // Set dynamic property for tracking
             bear.setDynamicProperty("infected_by", player.id);
-
+            
             // Store inventory in the bear's dynamic properties
-            bear.setDynamicProperty("original_inventory", JSON.stringify(inventory));
-
+                bear.setDynamicProperty("original_inventory", JSON.stringify(inventory));
+            
             // Add particle effects, sounds, and broadcast as before
             spreadSnowEffect(location, dimension);
             dimension.playSound("mob.wither.death", location, { pitch: 0.7, volume: 0.5 });
             dimension.playSound("random.glass", location, { pitch: 0.5, volume: 1.0 });
             dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} transformed into a Maple Bear!"}]}`);
-
+            
 
         }
     } catch (error) {
@@ -1675,7 +2057,7 @@ function corruptDroppedItems(origin, dimension) {
                 const loc = item.location;
                 item.remove();
                 dimension.spawnItem(SNOW_ITEM_ID, loc);
-
+                
                 // Add a small particle effect for the conversion
                 dimension.runCommand(`particle minecraft:snowflake ${loc.x} ${loc.y} ${loc.z} 0.2 0.2 0.2 0.01 5 force`);
             }
@@ -1777,8 +2159,8 @@ function prepareInfectedTransformation(player, playerId, playerName) {
             item.keepOnDeath = !shouldDrop; // Drop best gear, keep everything else
             playerInventory.setItem(i, item);
         } catch (e) { }
-        inventory.push({
-            slot: i,
+        inventory.push({ 
+            slot: i, 
             typeId: item.typeId,
             amount: item.amount,
             data: item.data || 0
@@ -2196,7 +2578,8 @@ world.beforeEvents.itemUse.subscribe((event) => {
     if (item?.typeId === "mb:snow_book") {
         event.cancel = true;
         system.run(() => {
-            showInfectionBookReport(player);
+            try { markCodex(player, "items.snowBookCrafted"); } catch {}
+            showCodexBook(player, { bearInfection, snowInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount });
         });
         return;
     }

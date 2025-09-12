@@ -37,7 +37,7 @@
 			"mb_step_sound": {
 				"minecraft:ambient_sound_interval": {
 					"event_name": "buff_mb_step",
-					"range": 16.0,
+					"range": 16,
 					"value": 0.5
 				}
 			}
@@ -283,9 +283,18 @@
 			},
 			"minecraft:behavior.float": {
 				"priority": 1
+			},
+			"minecraft:despawn": {
+				"despawn_from_distance": {
+					"max_distance": 128,
+					"min_distance": 64
+				},
+				"despawn_from_inactivity": true,
+				"min_range_inactivity_timer": 60,
+				"despawn_from_chance": true,
+				"min_range_random_chance": 800
 			}
 		},
-		"events": {
-		}
+		"events": {}
 	}
 }
