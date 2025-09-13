@@ -9,7 +9,7 @@ export function getDefaultCodex() {
         symptoms: { weaknessSeen: false, nauseaSeen: false, blindnessSeen: false, slownessSeen: false, hungerSeen: false },
         // Aggregated metadata by effect id
         symptomsMeta: {},
-        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, cureItemsSeen: false },
+        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false },
         mobs: { mapleBearSeen: false, infectedBearSeen: false, buffBearSeen: false }
     };
 }
@@ -80,7 +80,7 @@ export function updateSymptomMeta(player, effectId, durationTicks, amp, source, 
 }
 
 export function showCodexBook(player, context) {
-    const { bearInfection, snowInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount } = context;
+    const { bearInfection, snowInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels } = context;
     function maskTitle(title, known) {
         return known ? title : "?".repeat(title.length);
     }
@@ -107,12 +107,12 @@ export function showCodexBook(player, context) {
             const snowTicks = snowInfection.get(player.id).ticksLeft || 0;
             const snowCount = snowInfection.get(player.id).snowCount || 0;
             summary.push(`§e${snowLabel}: §c${formatTicksDuration(snowTicks)}`);
-            if (codex.items.snowIdentified && snowCount > 0) {
+            if (codex.items.snowIdentified) {
                 summary.push(`§7Snow Tier: §f${snowCount.toFixed(1)}`);
             }
         }
         
-        // Show snow tier for bear infection too (since snow affects bear infection)
+        // Show snow tier ONLY when infected (since snow affects bear infection)
         if (hasBear) {
             const snowCount = snowInfection.has(player.id) ? (snowInfection.get(player.id).snowCount || 0) : 0;
             if (codex.items.snowIdentified) {
@@ -196,34 +196,114 @@ export function showCodexBook(player, context) {
             { key: "slownessSeen", title: "Slowness", id: "minecraft:slowness" },
             { key: "hungerSeen", title: "Hunger", id: "minecraft:hunger" }
         ];
+        
+        // Add snow tier analysis if player has discovered snow
+        const hasSnowKnowledge = codex.items.snowIdentified;
+        const maxSnow = maxSnowLevels.get(player.id);
+        
         const form = new ActionFormData().title("§6Symptoms");
         form.body("§7Entries:");
+        
+        // Add snow tier analysis at the top if available
+        if (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0) {
+            form.button(`§eSnow Tier Analysis`);
+        }
+        
         for (const e of entries) form.button(`§f${maskTitle(e.title, codex.symptoms[e.key])}`);
         form.button("§8Back");
         form.show(player).then((res) => {
             if (!res || res.canceled) return openMain();
-            if (res.selection >= 0 && res.selection < entries.length) {
-                const e = entries[res.selection];
-                const known = codex.symptoms[e.key];
-                let body = "§e???";
-                if (known) {
-                    const meta = (codex.symptomsMeta || {})[e.id] || {};
-                    const srcs = Object.keys(meta.sources || {}).length ? Object.keys(meta.sources).join(", ") : "unknown";
-                    const minDur = meta.minDuration != null ? Math.floor((meta.minDuration||0)/20) : "?";
-                    const maxDur = meta.maxDuration != null ? Math.floor((meta.maxDuration||0)/20) : "?";
-                    const minAmp = meta.minAmp != null ? meta.minAmp : "?";
-                    const maxAmp = meta.maxAmp != null ? meta.maxAmp : "?";
-                    const timing = meta.timing || {}; 
-                    const timingStr = [ timing.early?`early(${timing.early})`:null, timing.mid?`mid(${timing.mid})`:null, timing.late?`late(${timing.late})`:null ].filter(Boolean).join(", ") || "unknown";
-                    const sc = meta.snowCounts || {};
-                    const snowStr = [ sc.low?`1-5(${sc.low})`:null, sc.mid?`6-10(${sc.mid})`:null, sc.high?`11+(${sc.high})`:null ].filter(Boolean).join(", ") || "-";
-                    body = `§e${e.title}\n§7Sources: §f${srcs}\n§7Duration: §f${minDur}s - ${maxDur}s\n§7Amplifier: §f${minAmp} - ${maxAmp}\n§7Timing: §f${timingStr}\n§7Snow Count: §f${snowStr}`;
-                }
-                new ActionFormData().title(`§6Symptoms: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => openSymptoms());
+            
+            // Check if snow tier analysis is available and selected (selection 0)
+            if (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0 && res.selection === 0) {
+                // Show snow tier analysis
+                openSnowTierAnalysis();
             } else {
-                openMain();
+                // Calculate the offset based on whether snow tier analysis is shown
+                const offset = (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0) ? 1 : 0;
+                const adjustedSelection = res.selection - offset;
+                
+                if (adjustedSelection >= 0 && adjustedSelection < entries.length) {
+                    const e = entries[adjustedSelection];
+                    const known = codex.symptoms[e.key];
+                    let body = "§e???";
+                    if (known) {
+                        const meta = (codex.symptomsMeta || {})[e.id] || {};
+                        const srcs = Object.keys(meta.sources || {}).length ? Object.keys(meta.sources).join(", ") : "unknown";
+                        const minDur = meta.minDuration != null ? Math.floor((meta.minDuration||0)/20) : "?";
+                        const maxDur = meta.maxDuration != null ? Math.floor((meta.maxDuration||0)/20) : "?";
+                        const minAmp = meta.minAmp != null ? meta.minAmp : "?";
+                        const maxAmp = meta.maxAmp != null ? meta.maxAmp : "?";
+                        const timing = meta.timing || {}; 
+                        const timingStr = [ timing.early?`early(${timing.early})`:null, timing.mid?`mid(${timing.mid})`:null, timing.late?`late(${timing.late})`:null ].filter(Boolean).join(", ") || "unknown";
+                        const sc = meta.snowCounts || {};
+                        const snowStr = [ sc.low?`1-5(${sc.low})`:null, sc.mid?`6-10(${sc.mid})`:null, sc.high?`11+(${sc.high})`:null ].filter(Boolean).join(", ") || "-";
+                        body = `§e${e.title}\n§7Sources: §f${srcs}\n§7Duration: §f${minDur}s - ${maxDur}s\n§7Amplifier: §f${minAmp} - ${maxAmp}\n§7Timing: §f${timingStr}\n§7Snow Count: §f${snowStr}`;
+                    }
+                    new ActionFormData().title(`§6Symptoms: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => openSymptoms());
+                } else {
+                    openMain();
+                }
             }
         });
+    }
+    
+    function openSnowTierAnalysis() {
+        const codex = getCodex(player);
+        const maxSnow = maxSnowLevels.get(player.id);
+        const currentSnow = snowInfection.has(player.id) ? (snowInfection.get(player.id).snowCount || 0) : 0;
+        
+        const form = new ActionFormData().title("§6Snow Tier Analysis");
+        
+        let body = `§eMaximum Snow Level Achieved: §f${maxSnow.maxLevel.toFixed(1)}\n\n`;
+        
+        // Detailed analysis based on experience
+        if (maxSnow.maxLevel >= 5) {
+            body += `§7Tier 1 (1-5): §fMild effects\n`;
+            body += `§7• Time reduction: 1 min per snow\n`;
+            body += `§7• Effects: Mild random potions\n`;
+        }
+        
+        if (maxSnow.maxLevel >= 10) {
+            body += `\n§7Tier 2 (6-10): §fModerate effects\n`;
+            body += `§7• Time reduction: 5 min per snow\n`;
+            body += `§7• Effects: Stronger random potions\n`;
+        }
+        
+        if (maxSnow.maxLevel >= 20) {
+            body += `\n§7Tier 3 (11-20): §fSevere effects\n`;
+            body += `§7• Time reduction: 10 min per snow\n`;
+            body += `§7• Effects: Very strong random potions\n`;
+        }
+        
+        if (maxSnow.maxLevel >= 50) {
+            body += `\n§7Tier 4 (20+): §fExtreme effects\n`;
+            body += `§7• Time reduction: 15 min per snow\n`;
+            body += `§7• Effects: Maximum intensity potions\n`;
+        }
+        
+        // Show current status if infected
+        const hasBear = bearInfection.has(player.id) && !bearInfection.get(player.id).cured;
+        const hasSnow = snowInfection.has(player.id) && (snowInfection.get(player.id).ticksLeft || 0) > 0;
+        
+        if (hasBear || hasSnow) {
+            body += `\n§eCurrent Snow Level: §f${currentSnow.toFixed(1)}`;
+            if (currentSnow > 0) {
+                const tier = currentSnow <= 5 ? 1 : currentSnow <= 10 ? 2 : currentSnow <= 20 ? 3 : 4;
+                body += `\n§7Current Tier: §f${tier}`;
+            }
+        }
+        
+        // Show warnings based on experience
+        if (maxSnow.maxLevel >= 20) {
+            body += `\n\n§c⚠ Warning: High snow levels are extremely dangerous!`;
+        } else if (maxSnow.maxLevel >= 10) {
+            body += `\n\n§e⚠ Caution: Snow effects become severe at higher levels.`;
+        }
+        
+        form.body(body);
+        form.button("§8Back");
+        form.show(player).then(() => openSymptoms());
     }
 
     function openMobs() {

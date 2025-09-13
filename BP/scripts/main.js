@@ -87,19 +87,8 @@ function getSnowSymptomLevel(ticksLeft) {
     return 3;                   // severe
 }
 
-// Constants for progressive spawning system
-const GRACE_PERIOD_DAYS = 2; // Number of days before Maple Bears start spawning
-const MAX_SPAWN_DAY = 100; // Day when spawn rate reaches maximum
-const FOOD_MOBS = ["minecraft:cow", "minecraft:pig", "minecraft:sheep", "minecraft:chicken"];
-
-// Spawn rate progression system (like Raboy's Zombie Apocalypse)
-const SPAWN_RATE_CONFIG = {
-    baseWeight: 5,        // Starting weight (very low)
-    maxWeight: 50,        // Maximum weight (high spawn rate)
-    gracePeriodDays: 2,   // Days before any spawning
-    rampUpDays: 20,       // Days to reach max spawn rate
-    currentWeight: 5      // Current spawn weight (will be updated)
-};
+// Note: Spawn rate progression now handled via spawn rules and multiple entity files
+// Different entity files will have different spawn weights and day requirements
 
 // Freaky effects for the tiny mb bear
 const FREAKY_EFFECTS = [
@@ -159,6 +148,7 @@ const bearInfection = new Map(); // playerId -> { ticksLeft, cured, hitCount }
 const snowInfection = new Map(); // playerId -> { ticksLeft, snowCount }
 const bearHitCount = new Map(); // playerId -> hitCount (tracks hits before infection)
 const firstTimeMessages = new Map(); // playerId -> { hasBeenHit: false, hasBeenInfected: false, snowTier: 0 }
+const maxSnowLevels = new Map(); // playerId -> { maxLevel: 0, achievedAt: timestamp }
 const BEAR_INFECTION_TICKS = 24000 * 20; // 20 Minecraft days
 const SNOW_INFECTION_TICKS = 24000 * 1; // 1 Minecraft day (nausea then death)
 const HITS_TO_INFECT = 3; // Number of hits required to get infected
@@ -173,14 +163,32 @@ function getSnowTimeReductionByCount(snowCount) {
     return 18000; // 15m
 }
 
-// --- Helper: Convert mob to Maple Bear based on size ---
+// --- Helper: Update maximum snow level achieved ---
+function updateMaxSnowLevel(player, snowCount) {
+    const currentMax = maxSnowLevels.get(player.id) || { maxLevel: 0, achievedAt: 0 };
+    if (snowCount > currentMax.maxLevel) {
+        maxSnowLevels.set(player.id, { maxLevel: snowCount, achievedAt: Date.now() });
+        console.log(`[SNOW] ${player.name} achieved new max snow level: ${snowCount.toFixed(1)}`);
+        
+        // Mark codex based on achievement level
+        try {
+            if (snowCount >= 5) markCodex(player, "items.snowTier5Reached");
+            if (snowCount >= 10) markCodex(player, "items.snowTier10Reached");
+            if (snowCount >= 20) markCodex(player, "items.snowTier20Reached");
+            if (snowCount >= 50) markCodex(player, "items.snowTier50Reached");
+        } catch {}
+    }
+}
+
+// --- Helper: Convert mob to Maple Bear based on size and day ---
 function convertMobToMapleBear(deadMob, killer) {
     try {
         const mobType = deadMob.typeId;
         const killerType = killer.typeId;
         const location = deadMob.location;
+        const currentDay = getCurrentDay();
         
-        // Determine Maple Bear type to spawn based on killer and mob size
+        // Determine Maple Bear type to spawn based on killer, mob size, and current day
         let newBearType;
         let bearSize = "normal";
         
@@ -189,20 +197,51 @@ function convertMobToMapleBear(deadMob, killer) {
             newBearType = MAPLE_BEAR_ID;
             bearSize = "normal";
         } else if (killer.hasTag("mb_tiny")) {
-            // Tiny Maple Bears always spawn tiny Maple Bears (regardless of victim size)
-            newBearType = killerType; // Same type as killer
-            bearSize = "tiny";
+            // Tiny Maple Bears behavior changes based on day
+            if (currentDay < 4) {
+                // Before day 4: Tiny Maple Bears always spawn tiny Maple Bears (regardless of victim size)
+                newBearType = killerType; // Same type as killer (tiny)
+                bearSize = "tiny";
+            } else {
+                // Day 4+: Tiny Maple Bears use size-based system
+                const mobSize = getMobSize(mobType);
+                if (mobSize === "tiny") {
+                    newBearType = MAPLE_BEAR_ID; // mb.json for tiny bears
+                    bearSize = "tiny";
+                } else if (mobSize === "large") {
+                    // Large mobs become Buff Maple Bears if it's day 8+
+                    if (currentDay >= 8) {
+                        newBearType = BUFF_BEAR_ID;
+                        bearSize = "buff";
+                    } else {
+                        newBearType = INFECTED_BEAR_ID; // infected.json for normal bears
+                        bearSize = "normal";
+                    }
+                } else {
+                    newBearType = INFECTED_BEAR_ID; // infected.json for normal bears
+                    bearSize = "normal";
+                }
+            }
         } else {
-            // Normal Maple Bears spawn based on victim's size
+            // Normal/Infected Maple Bears spawn based on victim's size and day
             const mobSize = getMobSize(mobType);
             
-            // Determine the correct entity type based on size
             if (mobSize === "tiny") {
                 newBearType = MAPLE_BEAR_ID; // mb.json for tiny bears
+                bearSize = "tiny";
+            } else if (mobSize === "large") {
+                // Large mobs become Buff Maple Bears if it's day 8+
+                if (currentDay >= 8) {
+                    newBearType = BUFF_BEAR_ID;
+                    bearSize = "buff";
+                } else {
+                    newBearType = INFECTED_BEAR_ID; // infected.json for normal bears
+                    bearSize = "normal";
+                }
             } else {
                 newBearType = INFECTED_BEAR_ID; // infected.json for normal bears
+                bearSize = "normal";
             }
-            bearSize = mobSize;
         }
         
         // Spawn the new Maple Bear
@@ -215,7 +254,7 @@ function convertMobToMapleBear(deadMob, killer) {
         }
         // Note: Normal size bears don't need special tags
         
-        console.log(`[CONVERSION] ${mobType} killed by ${killerType} → spawned ${newBearType} (${bearSize})`);
+        console.log(`[CONVERSION] Day ${currentDay}: ${mobType} killed by ${killerType} → spawned ${newBearType} (${bearSize})`);
         
         // Add some visual feedback
         world.getDimension("overworld").spawnParticle("minecraft:explosion_particle", location);
@@ -234,73 +273,42 @@ function getMobSize(mobType) {
         "minecraft:salmon", "minecraft:tropical_fish", "minecraft:pufferfish", "minecraft:tadpole"
     ];
     
+    // Large/boss mobs that should spawn Buff Maple Bears (day 8+)
+    const largeMobs = [
+        "minecraft:warden", "minecraft:sniffer", "minecraft:ravager", "minecraft:iron_golem",
+        "minecraft:snow_golem", "minecraft:enderman", "minecraft:endermite", "minecraft:shulker",
+        "minecraft:elder_guardian", "minecraft:ender_dragon", "minecraft:wither", "minecraft:ghast",
+        "minecraft:magma_cube", "minecraft:slime", "minecraft:phantom", "minecraft:vex",
+        "minecraft:evoker", "minecraft:vindicator", "minecraft:pillager", "minecraft:witch",
+        "minecraft:blaze", "minecraft:zombified_piglin", "minecraft:piglin_brute", "minecraft:hoglin",
+        "minecraft:zoglin", "minecraft:strider", "minecraft:camel"
+    ];
+    
     // Normal-sized mobs (horses, cows, etc.) - these should spawn normal Maple Bears
     const normalMobs = [
         "minecraft:horse", "minecraft:cow", "minecraft:mooshroom", "minecraft:llama",
         "minecraft:donkey", "minecraft:mule", "minecraft:pig", "minecraft:sheep",
-        "minecraft:goat", "minecraft:strider", "minecraft:camel", "minecraft:sniffer"
+        "minecraft:goat", "minecraft:zombie", "minecraft:skeleton", "minecraft:creeper",
+        "minecraft:spider", "minecraft:cave_spider", "minecraft:zombie_villager", "minecraft:husk",
+        "minecraft:stray", "minecraft:drowned", "minecraft:witch", "minecraft:pillager",
+        "minecraft:vindicator", "minecraft:evoker", "minecraft:vex", "minecraft:zombified_piglin",
+        "minecraft:piglin", "minecraft:piglin_brute", "minecraft:hoglin", "minecraft:zoglin",
+        "minecraft:blaze", "minecraft:magma_cube", "minecraft:slime", "minecraft:phantom",
+        "minecraft:enderman", "minecraft:shulker", "minecraft:elder_guardian", "minecraft:ghast"
     ];
     
     if (tinyMobs.includes(mobType)) {
         return "tiny";
+    } else if (largeMobs.includes(mobType)) {
+        return "large";
     } else if (normalMobs.includes(mobType)) {
-        return "normal"; // These are normal-sized mobs, not "large"
+        return "normal";
     } else {
         return "normal"; // Default size for most mobs
     }
 }
 
-// --- Helper: Calculate spawn rate based on current day ---
-function calculateSpawnRate(day) {
-    const config = SPAWN_RATE_CONFIG;
-    
-    // Grace period - no spawning
-    if (day < config.gracePeriodDays) {
-        return 0;
-    }
-    
-    // Ramp up period - gradually increase spawn rate
-    if (day < config.gracePeriodDays + config.rampUpDays) {
-        const progress = (day - config.gracePeriodDays) / config.rampUpDays;
-        const weight = config.baseWeight + (config.maxWeight - config.baseWeight) * progress;
-        return Math.round(weight);
-    }
-    
-    // Maximum spawn rate reached
-    return config.maxWeight;
-}
-
-// --- Helper: Update spawn rates dynamically ---
-function updateSpawnRates() {
-    try {
-        const currentDay = getCurrentDay();
-        const newWeight = calculateSpawnRate(currentDay);
-        
-        // Only update if weight has changed significantly
-        if (Math.abs(newWeight - SPAWN_RATE_CONFIG.currentWeight) >= 5) {
-            SPAWN_RATE_CONFIG.currentWeight = newWeight;
-            
-            // Log spawn rate changes for debugging
-            if (newWeight > 0) {
-                console.log(`[SPAWN] Day ${currentDay}: Maple Bear spawn weight updated to ${newWeight}`);
-            }
-            
-            // Note: In Bedrock Edition, we can't dynamically modify spawn rules at runtime
-            // This system tracks the intended spawn rate for future spawn rule updates
-            // The actual spawn rate changes would need to be implemented via:
-            // 1. Multiple spawn rule files with different weights
-            // 2. Manual spawn rule file updates
-            // 3. Custom spawning logic in scripts
-            
-            return newWeight;
-        }
-        
-        return SPAWN_RATE_CONFIG.currentWeight;
-    } catch (error) {
-        console.warn("Error updating spawn rates:", error);
-        return SPAWN_RATE_CONFIG.currentWeight;
-    }
-}
+// Note: Spawn rate calculation removed - now handled via spawn rules and multiple entity files
 
 // --- Helper: Apply random effect ---
 function applyRandomEffect(player) {
@@ -377,28 +385,9 @@ function applyRandomSnowEffectScaled(player, duration, amplifier) {
     }
 }
 
-// === Scripted Spawning for Maple Bears ===
-const MAPLE_BEAR_MIN_DAY = 3;
-const INFECTED_BEAR_MIN_DAY = 3;
-const BUFF_BEAR_MIN_DAY = 10;
-
-const MAPLE_BEAR_SPAWN_CHANCE = 1.0; // 100% per interval per player (for testing)
-const INFECTED_BEAR_SPAWN_CHANCE = 1.0; // 100%
-const BUFF_BEAR_SPAWN_CHANCE = 1.0; // 100%
-
-const SPAWN_INTERVAL = 600; // every 30 seconds (600 ticks)
-const SPAWN_RADIUS = 48; // blocks from player
-const MIN_SPAWN_RADIUS = 16; // don't spawn right on top of player
-const MAX_ATTEMPTS = 30; // increased from 10 for better spawn chance
-
-const VALID_SURFACE_BLOCKS = [
-    "minecraft:grass_block", "minecraft:dirt", "minecraft:coarse_dirt", "minecraft:podzol",
-    "minecraft:snow", "minecraft:snow_block", "minecraft:stone", "minecraft:sand", "minecraft:gravel",
-    "minecraft:mycelium", "minecraft:moss_block", "minecraft:rooted_dirt", "minecraft:deepslate"
-];
-const VALID_ABOVE_BLOCKS = [
-    "minecraft:air", "minecraft:tallgrass", "minecraft:grass", "minecraft:snow_layer", "minecraft:leaves"
-];
+// === Maple Bear Spawning ===
+// Note: Custom spawning logic removed - using spawn rules and multiple entity files instead
+// Different entity files will be created for different day ranges (e.g., day 4+ tiny bears, day 8+ normal bears)
 
 /**
  * Get the maximum stack size for an item type
@@ -916,6 +905,9 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 snowRef.snowCount = (snowRef.snowCount || 0) + snowIncrease;
                 snowInfection.set(player.id, snowRef);
                 
+                // Update maximum snow level achieved
+                updateMaxSnowLevel(player, snowRef.snowCount);
+                
                 if (hasBearActive) {
                     const s = bearInfection.get(player.id);
                     s.ticksLeft = Math.max(0, (s.ticksLeft || 0) - halfReduction);
@@ -953,6 +945,14 @@ world.afterEvents.entityHurt.subscribe((event) => {
             if (source.damagingEntity.typeId === MAPLE_BEAR_ID) markCodex(player, "mobs.mapleBearSeen");
             if (source.damagingEntity.typeId === INFECTED_BEAR_ID) markCodex(player, "mobs.infectedBearSeen");
             if (source.damagingEntity.typeId === BUFF_BEAR_ID) markCodex(player, "mobs.buffBearSeen");
+            
+            // If player is infected and gets hit by Maple Bear, unlock snow level display
+            const hasBearActive = bearInfection.has(player.id) && !bearInfection.get(player.id).cured;
+            const snowStateActive = (() => { const s = snowInfection.get(player.id); return !!s && (s.ticksLeft || 0) > 0; })();
+            if (hasBearActive || snowStateActive) {
+                markCodex(player, "items.snowFound");
+                markCodex(player, "items.snowIdentified");
+            }
         } catch {}
         // Check if player is immune to infection
         if (isPlayerImmune(player)) {
@@ -1036,6 +1036,9 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
         const bearState = bearInfection.get(player.id);
         const snowState = snowInfection.get(player.id);
         
+        // ALWAYS mark snow as discovered and identified when consumed
+        try { markCodex(player, "items.snowFound"); markCodex(player, "items.snowIdentified"); } catch {}
+        
         if (bearState && !bearState.cured) {
             // Player has bear infection - snow accelerates it
             const snowCount = (snowState?.snowCount || 0) + 1;
@@ -1108,13 +1111,16 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
                 snowInfection.set(player.id, { ticksLeft: 0, snowCount: snowCount });
             }
             
+            // Update maximum snow level achieved
+            updateMaxSnowLevel(player, snowCount);
+            
         } else {
             // Player doesn't have bear infection - handle snow infection
             if (!snowState) {
                 // First time eating snow - start snow infection and apply immediate strong effects (3rd-hit set)
                 snowInfection.set(player.id, { ticksLeft: SNOW_INFECTION_TICKS, snowCount: 1 });
                 player.addTag(INFECTED_TAG);
-                try { markCodex(player, "infections.snow.discovered"); markCodex(player, "infections.snow.firstUseAt", true); markCodex(player, "items.snowFound"); markCodex(player, "items.snowIdentified"); } catch {}
+                try { markCodex(player, "infections.snow.discovered"); markCodex(player, "infections.snow.firstUseAt", true); } catch {}
                 // Immediate 3rd-hit effects
                 try {
                     player.addEffect("minecraft:blindness", 200, { amplifier: 0 });
@@ -1142,6 +1148,9 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
                 player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.6 });
                 
                 console.log(`[SNOW] ${player.name} started snow infection (1 day = ${SNOW_INFECTION_TICKS} ticks)`);
+                
+                // Update maximum snow level achieved (started with 1)
+                updateMaxSnowLevel(player, 1);
             } else if (snowState.ticksLeft > 0) {
                 // Already have active snow infection - reduce timer and increment count
                 snowState.snowCount++;
@@ -1151,7 +1160,9 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
                 snowState.ticksLeft = Math.max(0, snowState.ticksLeft - timeReduction);
                 snowInfection.set(player.id, snowState);
                 console.log(`[SNOW] ${player.name} ate snow again (count: ${snowState.snowCount}, reduced timer by ${timeReduction} ticks, ${snowState.ticksLeft} ticks left)`);
-                try { markCodex(player, "items.snowFound"); markCodex(player, "items.snowIdentified"); } catch {}
+                
+                // Update maximum snow level achieved
+                updateMaxSnowLevel(player, snowState.snowCount);
                 // No message - details available in infection book
                 if (snowState.ticksLeft <= 0) {
                     console.log(`[SNOW] ${player.name} reduced snow infection to 0 via snow. Transforming immediately.`);
@@ -1187,6 +1198,9 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
                 player.onScreenDisplay.setActionBar("§cWhat is this?...");
                 
                 console.log(`[SNOW] ${player.name} restarted snow infection (count: ${snowState.snowCount}, ticks: ${SNOW_INFECTION_TICKS})`);
+                
+                // Update maximum snow level achieved
+                updateMaxSnowLevel(player, snowState.snowCount);
             }
         }
         
@@ -1622,6 +1636,7 @@ world.afterEvents.entityDie.subscribe((event) => {
         snowInfection.delete(entity.id);
         curedPlayers.delete(entity.id);
         bearHitCount.delete(entity.id);
+        // Note: Keep maxSnowLevels persistent across deaths - it's a lifetime achievement
         entity.removeTag(INFECTED_TAG);
 
         // Clear dynamic properties on death
@@ -1632,6 +1647,7 @@ world.afterEvents.entityDie.subscribe((event) => {
             entity.setDynamicProperty("mb_bear_hit_count", undefined);
             // Keep first-time tutorial flags so players don't see them again after death
             // Keep codex knowledge - that persists across deaths
+            // Keep max snow level - it's a lifetime achievement
             console.log(`[DEATH] Cleared all infection data for ${entity.name} - they are a new person now`);
         } catch (error) {
             console.warn(`[DEATH] Error clearing dynamic properties: ${error}`);
@@ -1714,6 +1730,14 @@ function saveInfectionData(player) {
         } else {
             player.setDynamicProperty("mb_first_time_messages", undefined);
         }
+
+        // Save maximum snow level
+        const maxSnow = maxSnowLevels.get(player.id);
+        if (maxSnow) {
+            player.setDynamicProperty("mb_max_snow_level", JSON.stringify(maxSnow));
+        } else {
+            player.setDynamicProperty("mb_max_snow_level", undefined);
+        }
     } catch (error) {
         console.warn(`[SAVE] Error saving infection data for ${player.name}: ${error}`);
     }
@@ -1793,6 +1817,18 @@ function loadInfectionData(player) {
                 console.log(`[LOAD] Loaded first-time message state for ${player.name}: ${JSON.stringify(firstTime)}`);
             } catch (error) {
                 console.warn(`[LOAD] Error parsing first-time message state for ${player.name}: ${error}`);
+            }
+        }
+
+        // Load maximum snow level
+        const maxSnowStr = player.getDynamicProperty("mb_max_snow_level");
+        if (maxSnowStr) {
+            try {
+                const maxSnow = JSON.parse(maxSnowStr);
+                maxSnowLevels.set(player.id, maxSnow);
+                console.log(`[LOAD] Loaded max snow level for ${player.name}: ${JSON.stringify(maxSnow)}`);
+            } catch (error) {
+                console.warn(`[LOAD] Error parsing max snow level for ${player.name}: ${error}`);
             }
         }
     } catch (error) {
@@ -2067,12 +2103,7 @@ function corruptDroppedItems(origin, dimension) {
     }
 }
 
-// Run transformation process every second
-// Comment out tick counter logging
-system.runInterval(() => {
-    // Process each transforming player
-    // Remove transformation interval and all references to transformingPlayers
-}, 20); // Run every second
+// Note: Transformation interval removed - no longer needed
 
 // Utility: Get best armor tier
 function getBestArmorTier(player) {
@@ -2391,7 +2422,7 @@ function simulateGenericInfectedDeath(player) {
     }, 40); // 2 seconds
 }
 
-// Remove all scripted spawning logic for Maple Bears, including the system.runInterval that spawns them and any related debug logging.
+// Note: All scripted spawning logic removed - using spawn rules and multiple entity files instead
 
 // --- Player Join/Leave Handlers for Infection Data ---
 world.afterEvents.playerJoin.subscribe((event) => {
@@ -2436,11 +2467,7 @@ system.run(() => {
     }
 });
 
-// --- Spawn Rate Management System ---
-// Update spawn rates every 5 minutes (6000 ticks)
-system.runInterval(() => {
-    updateSpawnRates();
-}, 6000);
+// Note: Spawn rate management removed - now handled via spawn rules and multiple entity files
 
 // --- Helper: Check if item is equippable by bear ---
 function isEquippableByBear(typeId) {
@@ -2579,7 +2606,7 @@ world.beforeEvents.itemUse.subscribe((event) => {
         event.cancel = true;
         system.run(() => {
             try { markCodex(player, "items.snowBookCrafted"); } catch {}
-            showCodexBook(player, { bearInfection, snowInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount });
+            showCodexBook(player, { bearInfection, snowInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels });
         });
         return;
     }
