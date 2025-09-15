@@ -1,0 +1,51 @@
+{
+	"format_version": "1.20.80",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "mb:mb_day4",
+			"materials": {
+				"default": "enderman"
+			},
+			"textures": {
+				"default": "textures/entity/mb_day4"
+			},
+			"geometry": {
+				"default": "geometry.mb"
+			},
+			"particle_effects": {
+				"death_dust": "mb:white_dust_particale"
+			},
+			"render_controllers": [
+				"controller.render.mb"
+			],
+			"spawn_egg": {
+				"texture": "mb_mb_day4_egg",
+				"texture_index": 0
+			},
+			"scripts": {
+				"animate": [
+					{
+						"death_particles": "!query.is_alive"
+					},
+					{
+						"tiny_mb": true
+					},
+					{
+						"look_at_target": true
+					}
+				]
+			},
+			"animations": {
+				"idle": "animation.mb.idle",
+				"idle2": "animation.mb.idle2",
+				"walk": "animation.mb.walk",
+				"walk2": "animation.mb.walk2",
+				"climb": "animation.mb.climb",
+				"attack": "animation.mb.attack",
+				"death_particles": "animation.mb.death_particles",
+				"tiny_mb": "controller.animation.tiny_mb",
+				"look_at_target": "animation.common.look_at_target"
+			}
+		}
+	}
+}

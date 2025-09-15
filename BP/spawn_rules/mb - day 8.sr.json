@@ -2,7 +2,7 @@
 	"format_version": "1.8.0",
 	"minecraft:spawn_rules": {
 		"description": {
-			"identifier": "mb:infected",
+			"identifier": "mb:mb_day8",
 			"population_control": "monster"
 		},
 		"conditions": [
@@ -18,7 +18,7 @@
 					"max": "hard"
 				},
 				"minecraft:weight": {
-					"default": 10
+					"default": 20
 				},
 				"minecraft:herd": {
 					"min_size": 1,
@@ -47,7 +47,7 @@
 					"mycelium"
 				],
 				"minecraft:world_age_filter": {
-					"min": 4800,
+					"min": 9600,
 					"max": 999999
 				}
 			},
@@ -63,14 +63,14 @@
 					"max": "hard"
 				},
 				"minecraft:weight": {
-					"default": 10
+					"default": 21
 				},
 				"minecraft:herd": {
 					"min_size": 1,
 					"max_size": 2
 				},
 				"minecraft:density_limit": {
-					"surface": 70
+					"surface": 20
 				},
 				"minecraft:distance_filter": {
 					"min": 24,
@@ -217,11 +217,71 @@
 							"test": "has_biome_tag",
 							"operator": "==",
 							"value": "snowy_slopes"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "caves"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "deep_dark"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "dripstone_caves"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "lush_caves"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "flower_forest"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "roofed"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "stone"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "plateau"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "rare"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "mega"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "warm"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "cold"
 						}
 					]
 				},
 				"minecraft:world_age_filter": {
-					"min": 4800,
+					"min": 9600,
 					"max": 999999
 				}
 			}

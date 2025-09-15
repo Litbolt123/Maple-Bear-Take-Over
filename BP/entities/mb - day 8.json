@@ -1,0 +1,233 @@
+{
+	"format_version": "1.21.80",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "mb:mb_day8",
+			"is_spawnable": true,
+			"is_summonable": true,
+			"is_experimental": false,
+			"scripts": {}
+		},
+		"component_groups": {
+			"bridge:": {
+				"minecraft:on_target_acquired": {
+					"filters": [
+						{
+							"all_of": [
+								{
+									"any_of": [
+										{
+											"test": "is_family",
+											"value": "player"
+										}
+									]
+								}
+							]
+						}
+					],
+					"target": "player"
+				},
+				"minecraft:angry": {
+					"broadcast_anger": true,
+					"broadcast_range": 20,
+					"broadcast_anger_on_being_attacked": true,
+					"broadcast_anger_on_attack": true
+				}
+			}
+		},
+		"components": {
+			"minecraft:jump.static": {
+				"jump_power": 0.4
+			},
+			"minecraft:damage_sensor": {
+				"triggers": {
+					"cause": "fall",
+					"deals_damage": "no"
+				}
+			},
+			"minecraft:can_climb": {},
+			"minecraft:health": {
+				"value": 2,
+				"max": 2
+			},
+			"minecraft:collision_box": {
+				"width": 0.3,
+				"height": 0.5
+			},
+			"minecraft:attack": {
+				"damage": 2
+			},
+			"minecraft:movement": {
+				"value": 0.35
+			},
+			"minecraft:behavior.melee_attack": {
+				"priority": 1,
+				"speed_multiplier": 1.3,
+				"track_target": true,
+				"y_max_head_rotation": 360,
+				"reach_multiplier": 1.2
+			},
+			"minecraft:behavior.random_stroll": {
+				"priority": 2,
+				"speed_multiplier": 1.3
+			},
+			"minecraft:behavior.look_at_player": {
+				"priority": 5,
+				"look_distance": 50
+			},
+			"minecraft:pushable": {
+				"is_pushable": true,
+				"is_pushable_by_piston": true
+			},
+			"minecraft:breathable": {
+				"breathes_water": true,
+				"total_supply": 15,
+				"suffocate_time": 0
+			},
+			"minecraft:fire_immune": false,
+			"minecraft:behavior.hurt_by_target": {
+				"priority": 1
+			},
+			"minecraft:behavior.nearest_attackable_target": {
+				"priority": 1,
+				"reselect_targets": true,
+				"entity_types": [
+					{
+						"filters": {
+							"test": "is_family",
+							"subject": "other",
+							"value": "player"
+						},
+						"max_dist": 64
+					},
+					{
+						"filters": {
+							"test": "is_family",
+							"subject": "other",
+							"value": "mob"
+						},
+						"max_dist": 64
+					}
+				],
+				"must_see": true,
+				"set_persistent": true,
+				"target_search_height": 20,
+				"target_invisible_multiplier": 2,
+				"must_see_forget_duration": 60,
+				"within_radius": 32,
+				"target_sneak_visibility_multiplier": 1
+			},
+			"minecraft:physics": {
+				"has_collision": true,
+				"has_gravity": true
+			},
+			"minecraft:angry": {
+				"broadcast_anger": true,
+				"broadcast_range": 20,
+				"broadcast_anger_on_attack": true,
+				"broadcast_anger_on_being_attacked": true,
+				"filters": {
+					"all_of": [
+						{
+							"any_of": [
+								{
+									"test": "is_family",
+									"value": "mob"
+								}
+							]
+						}
+					]
+				}
+			},
+			"minecraft:follow_range": {
+				"value": 64,
+				"max": 64
+			},
+			"minecraft:walk_animation_speed": {
+				"value": 1
+			},
+			"minecraft:annotation.break_door": {
+				"break_time": 30,
+				"min_difficulty": "peaceful"
+			},
+			"minecraft:knockback_resistance": {
+				"value": -1,
+				"max": -2
+			},
+			"minecraft:behavior.jump_to_block": {
+				"priority": 2,
+				"search_width": 10,
+				"search_height": 10,
+				"minimum_path_length": 4,
+				"minimum_distance": 0,
+				"scale_factor": 0.5,
+				"cooldown_range": [
+					0.5,
+					5
+				]
+			},
+			"minecraft:break_blocks": {
+				"breakable_blocks": [
+					"minecraft:glass_pane",
+					"minecraft:black_stained_glass_pane",
+					"minecraft:blue_stained_glass_pane",
+					"minecraft:hard_red_stained_glass_pane",
+					"minecraft:red_stained_glass_pane",
+					"minecraft:hard_purple_stained_glass_pane",
+					"minecraft:gray_stained_glass_pane",
+					"minecraft:hard_gray_stained_glass_pane",
+					"minecraft:brown_stained_glass_pane",
+					"minecraft:hard_brown_stained_glass_pane"
+				]
+			},
+			"minecraft:conditional_bandwidth_optimization": {},
+			"minecraft:loot": {
+				"table": "loot_tables/mb_loot_tables/tiny_bear_day8_loot_table.json"
+			},
+			"minecraft:behavior.pickup_items": {
+				"priority": 6,
+				"max_dist": 4,
+				"goal_radius": 1.5,
+				"speed_multiplier": 1.2,
+				"pickup_based_on_chance": false,
+				"can_pickup_any_item": true,
+				"excluded_items": [
+					"minecraft:glow_ink_sac"
+				]
+			},
+			"minecraft:inventory": {
+				"inventory_size": 1,
+				"private": false,
+				"restrict_to_owner": false
+			},
+			"minecraft:navigation.climb": {
+				"can_path_over_water": true,
+				"is_amphibious": true,
+				"avoid_portals": true,
+				"can_float": true,
+				"can_walk": true,
+				"can_jump": true,
+				"can_swim": true,
+				"can_walk_in_lava": true,
+				"can_sink": true,
+				"can_path_from_air": true,
+				"can_path_over_lava": true,
+				"can_break_doors": true,
+				"can_open_doors": false,
+				"can_pass_doors": true
+			},
+			"minecraft:movement.generic": {},
+			"minecraft:despawn": {
+				"despawn_from_distance": {
+					"max_distance": 128,
+					"min_distance": 64
+				},
+				"despawn_from_inactivity": true,
+				"min_range_inactivity_timer": 60,
+				"despawn_from_chance": true,
+				"min_range_random_chance": 800
+			}
+		},
+		"events": {}
+	}
+}

@@ -80,7 +80,12 @@ export function updateSymptomMeta(player, effectId, durationTicks, amp, source, 
 }
 
 export function showCodexBook(player, context) {
-    const { bearInfection, snowInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels } = context;
+    const { bearInfection, snowInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, checkVariantUnlock, getCurrentDay } = context;
+    
+    // Check for variant unlocks when opening the codex
+    if (checkVariantUnlock) {
+        checkVariantUnlock(player);
+    }
     function maskTitle(title, known) {
         return known ? title : "?".repeat(title.length);
     }
@@ -93,6 +98,11 @@ export function showCodexBook(player, context) {
             return !!end && Date.now() < end;
         })();
         const summary = [];
+        
+        // Add current day
+        const currentDay = getCurrentDay ? getCurrentDay() : 0;
+        summary.push(`§6Current Day: §f${currentDay}`);
+        
         const bearLabel = "Bear";
         const snowLabel = "Snow";
         const typeText = hasBear ? bearLabel : hasSnow ? snowLabel : "None";
@@ -107,15 +117,14 @@ export function showCodexBook(player, context) {
             const snowTicks = snowInfection.get(player.id).ticksLeft || 0;
             const snowCount = snowInfection.get(player.id).snowCount || 0;
             summary.push(`§e${snowLabel}: §c${formatTicksDuration(snowTicks)}`);
-            if (codex.items.snowIdentified) {
-                summary.push(`§7Snow Tier: §f${snowCount.toFixed(1)}`);
-            }
+            // Always show snow tier when infected with snow
+            summary.push(`§7Snow Tier: §f${snowCount.toFixed(1)}`);
         }
         
-        // Show snow tier ONLY when infected (since snow affects bear infection)
+        // Show snow tier when bear infected (since snow affects bear infection)
         if (hasBear) {
             const snowCount = snowInfection.has(player.id) ? (snowInfection.get(player.id).snowCount || 0) : 0;
-            if (codex.items.snowIdentified) {
+            if (snowCount > 0) {
                 summary.push(`§7Snow Tier: §f${snowCount.toFixed(1)}`);
             }
         }
@@ -140,6 +149,7 @@ export function showCodexBook(player, context) {
         form.button("§fSymptoms");
         form.button("§fMobs");
         form.button("§fItems");
+        form.button("§fDaily Log");
         form.show(player).then((res) => {
             if (!res || res.canceled) return;
             const sel = res.selection;
@@ -147,6 +157,7 @@ export function showCodexBook(player, context) {
             if (sel === 1) openSymptoms();
             if (sel === 2) openMobs();
             if (sel === 3) openItems();
+            if (sel === 4) openDailyLog();
         }).catch(() => {});
     }
 
@@ -197,15 +208,20 @@ export function showCodexBook(player, context) {
             { key: "hungerSeen", title: "Hunger", id: "minecraft:hunger" }
         ];
         
-        // Add snow tier analysis if player has discovered snow
+        // Calculate infection status from context
+        const hasBear = bearInfection.has(player.id) && !bearInfection.get(player.id).cured;
+        const hasSnow = snowInfection.has(player.id) && (snowInfection.get(player.id).ticksLeft || 0) > 0;
+        
+        // Add snow tier analysis if player has discovered snow OR is currently infected
         const hasSnowKnowledge = codex.items.snowIdentified;
         const maxSnow = maxSnowLevels.get(player.id);
+        const hasAnyInfection = hasBear || hasSnow;
         
         const form = new ActionFormData().title("§6Symptoms");
         form.body("§7Entries:");
         
-        // Add snow tier analysis at the top if available
-        if (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0) {
+        // Add snow tier analysis at the top if available (either discovered snow or currently infected)
+        if ((hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0) || hasAnyInfection) {
             form.button(`§eSnow Tier Analysis`);
         }
         
@@ -215,12 +231,13 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled) return openMain();
             
             // Check if snow tier analysis is available and selected (selection 0)
-            if (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0 && res.selection === 0) {
+            const showSnowTier = (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0) || hasAnyInfection;
+            if (showSnowTier && res.selection === 0) {
                 // Show snow tier analysis
                 openSnowTierAnalysis();
             } else {
                 // Calculate the offset based on whether snow tier analysis is shown
-                const offset = (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0) ? 1 : 0;
+                const offset = showSnowTier ? 1 : 0;
                 const adjustedSelection = res.selection - offset;
                 
                 if (adjustedSelection >= 0 && adjustedSelection < entries.length) {
@@ -309,15 +326,33 @@ export function showCodexBook(player, context) {
     function openMobs() {
         const codex = getCodex(player);
         const entries = [
-            { key: "mapleBearSeen", title: "Tiny Maple Bear", icon: "textures/items/mb" },
-            { key: "infectedBearSeen", title: "Infected Maple Bear", icon: "textures/items/Infected_human_mb_egg" },
-            { key: "buffBearSeen", title: "Buff Maple Bear", icon: "textures/items/buff_mb_egg" }
+            { key: "mapleBearSeen", title: "Tiny Maple Bear", icon: "textures/items/mb", variant: "original" },
+            { key: "infectedBearSeen", title: "Infected Maple Bear", icon: "textures/items/Infected_human_mb_egg", variant: "original" },
+            { key: "buffBearSeen", title: "Buff Maple Bear", icon: "textures/items/buff_mb_egg", variant: "original" }
         ];
+        
+        // Add day 4+ variants if unlocked
+        if (codex.mobs.day4VariantsUnlocked) {
+            entries.push(
+                { key: "mapleBearSeen", title: "Tiny Maple Bear (Day 4+)", icon: "textures/items/mb", variant: "day4" },
+                { key: "infectedBearSeen", title: "Infected Maple Bear (Day 4+)", icon: "textures/items/Infected_human_mb_egg", variant: "day4" }
+            );
+        }
+        
+        // Add day 8+ variants if unlocked
+        if (codex.mobs.day8VariantsUnlocked) {
+            entries.push(
+                { key: "mapleBearSeen", title: "Tiny Maple Bear (Day 8+)", icon: "textures/items/mb", variant: "day8" },
+                { key: "infectedBearSeen", title: "Infected Maple Bear (Day 8+)", icon: "textures/items/Infected_human_mb_egg", variant: "day8" }
+            );
+        }
+        
         const form = new ActionFormData().title("§6Mobs");
         form.body("§7Entries:");
         for (const e of entries) {
-            const label = `§f${maskTitle(e.title, codex.mobs[e.key])}`;
-            if (codex.mobs[e.key]) form.button(label, e.icon);
+            const known = codex.mobs[e.key];
+            const label = `§f${maskTitle(e.title, known)}`;
+            if (known) form.button(label, e.icon);
             else form.button(label);
         }
         form.button("§8Back");
@@ -326,7 +361,35 @@ export function showCodexBook(player, context) {
             if (res.selection >= 0 && res.selection < entries.length) {
                 const e = entries[res.selection];
                 const known = codex.mobs[e.key];
-                const body = known ? `§e${e.title}\n§7Hostile entity involved in the outbreak.` : "§e???";
+                let body = "§e???";
+                
+                if (known) {
+                    body = `§e${e.title}\n§7Hostile entity involved in the outbreak.`;
+                    
+                    // Add detailed info based on kill count
+                    if (e.variant === "original") {
+                        if (e.key === "mapleBearSeen" && codex.mobs.tinyBearKills >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Kills: ${codex.mobs.tinyBearKills}\n§7Drop Rate: 60% chance\n§7Loot: 1 snow item\n§7Health: 1 HP\n§7Damage: 1`;
+                        } else if (e.key === "infectedBearSeen" && codex.mobs.infectedBearKills >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Kills: ${codex.mobs.infectedBearKills}\n§7Drop Rate: 80% chance\n§7Loot: 1-5 snow items\n§7Health: 20 HP\n§7Damage: 2.5`;
+                        } else if (e.key === "buffBearSeen" && codex.mobs.buffBearKills >= 10) {
+                            body += `\n\n§6Detailed Analysis:\n§7Kills: ${codex.mobs.buffBearKills}\n§7Drop Rate: 80% chance\n§7Loot: 3-15 snow items\n§7Health: 100 HP\n§7Damage: 8`;
+                        }
+                    } else if (e.variant === "day4") {
+                        if (e.key === "mapleBearSeen" && codex.mobs.tinyBearKills >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Kills: ${codex.mobs.tinyBearKills}\n§7Drop Rate: 65% chance\n§7Loot: 1-2 snow items\n§7Health: 1.5 HP\n§7Damage: 1.5`;
+                        } else if (e.key === "infectedBearSeen" && codex.mobs.infectedBearKills >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Kills: ${codex.mobs.infectedBearKills}\n§7Drop Rate: 80% chance\n§7Loot: 1-5 snow items\n§7Health: 20 HP\n§7Damage: 2.5`;
+                        }
+                    } else if (e.variant === "day8") {
+                        if (e.key === "mapleBearSeen" && codex.mobs.tinyBearKills >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Kills: ${codex.mobs.tinyBearKills}\n§7Drop Rate: 70% chance\n§7Loot: 1-3 snow items\n§7Health: 2 HP\n§7Damage: 2`;
+                        } else if (e.key === "infectedBearSeen" && codex.mobs.infectedBearKills >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Kills: ${codex.mobs.infectedBearKills}\n§7Drop Rate: 90% chance\n§7Loot: 2-8 snow items\n§7Health: 25 HP\n§7Damage: 4`;
+                        }
+                    }
+                }
+                
                 new ActionFormData().title(`§6Mobs: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => openMobs());
             } else {
                 openMain();
@@ -337,19 +400,45 @@ export function showCodexBook(player, context) {
     function openItems() {
         const codex = getCodex(player);
         const entries = [
-            { key: "snowFound", title: "Snow (Powder)" },
+            { key: "snowFound", title: "'Snow' (Powder)" },
             { key: "snowBookCrafted", title: "Powdery Book" },
             { key: "cureItemsSeen", title: "Cure Items" }
         ];
+        
+        // Calculate infection status from context
+        const hasBear = bearInfection.has(player.id) && !bearInfection.get(player.id).cured;
+        const hasSnow = snowInfection.has(player.id) && (snowInfection.get(player.id).ticksLeft || 0) > 0;
+        
         const form = new ActionFormData().title("§6Items");
         form.body("§7Entries:");
         for (const e of entries) {
-            const title = e.key === 'snowFound' ? (codex.items.snowIdentified ? e.title : 'Unknown White Substance') : e.title;
-            const label = `§f${maskTitle(title, codex.items[e.key])}`;
-            // Add icons for known items only
-            if (e.key === 'snowFound' && codex.items.snowIdentified) {
-                form.button(label, "textures/items/mb_snow");
+            let title = e.title;
+            let showIcon = false;
+            
+            if (e.key === 'snowFound') {
+                // Show as "'Snow' (Powder)" if player has been infected AND has found snow
+                const hasBeenInfected = hasBear || hasSnow;
+                const hasFoundSnow = codex.items.snowFound;
+                
+                if (hasBeenInfected && hasFoundSnow) {
+                    title = e.title; // "'Snow' (Powder)"
+                    showIcon = true;
+                } else if (codex.items.snowIdentified) {
+                    title = e.title; // "'Snow' (Powder)" 
+                    showIcon = true;
+                } else {
+                    title = 'Unknown White Substance';
+                }
             } else if (e.key === 'snowBookCrafted' && codex.items.snowBookCrafted) {
+                showIcon = true;
+            }
+            
+            const label = `§f${maskTitle(title, codex.items[e.key])}`;
+            
+            // Add icons for known items only
+            if (e.key === 'snowFound' && showIcon) {
+                form.button(label, "textures/items/mb_snow");
+            } else if (e.key === 'snowBookCrafted' && showIcon) {
                 form.button(label, "textures/items/snow_book");
             } else {
                 form.button(label);
@@ -363,11 +452,74 @@ export function showCodexBook(player, context) {
                 const known = codex.items[e.key];
                 let body = "§e???";
                 if (known) {
-                    if (e.key === "snowFound") body = codex.items.snowIdentified ? "§eSnow (Powder)\n§7Risky substance. Leads to symptoms and doom." : "§eUnknown White Substance\n§7A powdery white substance. Effects unknown.";
-                    else if (e.key === "snowBookCrafted") body = "§ePowdery Book\n§7Keeps track of your discoveries.";
+                    if (e.key === "snowFound") {
+                        const hasBeenInfected = hasBear || hasSnow;
+                        const hasFoundSnow = codex.items.snowFound;
+                        
+                        if (hasBeenInfected && hasFoundSnow) {
+                            body = "§eSnow (Powder)\n§7Risky substance. Leads to symptoms and doom.";
+                        } else if (codex.items.snowIdentified) {
+                            body = "§eSnow (Powder)\n§7Risky substance. Leads to symptoms and doom.";
+                        } else {
+                            body = "§eUnknown White Substance\n§7A powdery white substance. Effects unknown.";
+                        }
+                    } else if (e.key === "snowBookCrafted") body = "§ePowdery Book\n§7Keeps track of your discoveries.";
                     else if (e.key === "cureItemsSeen") body = "§eCure Items\n§7Weakness + Enchanted Golden Apple (for Bear).";
                 }
                 new ActionFormData().title(`§6Items: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => openItems());
+            } else {
+                openMain();
+            }
+        });
+    }
+
+    function openDailyLog() {
+        const codex = getCodex(player);
+        const currentDay = getCurrentDay ? getCurrentDay() : 0;
+        
+        // Get all days with events, sorted by day number
+        const daysWithEvents = Object.keys(codex.dailyEvents || {})
+            .map(day => parseInt(day))
+            .filter(day => day > 0 && day < currentDay)
+            .sort((a, b) => b - a); // Most recent first
+        
+        if (daysWithEvents.length === 0) {
+            const form = new ActionFormData().title("§6Daily Log");
+            form.body("§7No significant events recorded yet.\n\n§8Events are recorded one day after they occur, as you reflect on the previous day's discoveries.");
+            form.button("§8Back");
+            form.show(player).then((res) => {
+                if (!res || res.canceled) return openMain();
+                openMain();
+            });
+            return;
+        }
+        
+        const form = new ActionFormData().title("§6Daily Log");
+        form.body("§7Reflections on past days:\n");
+        
+        // Add buttons for each day with events
+        for (const day of daysWithEvents) {
+            const events = codex.dailyEvents[day];
+            if (events && events.length > 0) {
+                form.button(`§fDay ${day}`);
+            }
+        }
+        
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled) return openMain();
+            if (res.selection >= 0 && res.selection < daysWithEvents.length) {
+                const selectedDay = daysWithEvents[res.selection];
+                const events = codex.dailyEvents[selectedDay];
+                
+                let body = `§6Day ${selectedDay}\n\n`;
+                if (events && events.length > 0) {
+                    body += events.join("\n\n");
+                } else {
+                    body += "§7No significant events recorded for this day.";
+                }
+                
+                new ActionFormData().title(`§6Daily Log: Day ${selectedDay}`).body(body).button("§8Back").show(player).then(() => openDailyLog());
             } else {
                 openMain();
             }

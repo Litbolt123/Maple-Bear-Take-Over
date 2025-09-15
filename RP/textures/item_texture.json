@@ -19,6 +19,15 @@
 		},
 		"mb_snow_book": {
 			"textures": "textures/items/snow_book"
+		},
+		"mb_mb_day4_egg": {
+			"textures": "textures/items/mb_day4"
+		},
+		"mb_mb_day8_egg": {
+			"textures": "textures/items/mb_day8"
+		},
+		"mb_infected_day8_egg": {
+			"textures": "textures/items/infected_day8_egg"
 		}
 	}
 }

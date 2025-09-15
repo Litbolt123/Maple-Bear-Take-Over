@@ -1,4 +1,5 @@
 import { world, system } from "@minecraft/server";
+import { getCodex, saveCodex } from "./mb_codex.js";
 
 // Minimal dynamic property test (must be delayed until after startup)
 // system.run(() => {
@@ -139,6 +140,139 @@ function getInfectionSound(day) {
     } else {
         // Day 8+: Full threat
         return { sound: "mob.wither.spawn", pitch: 0.6, volume: 0.7 };
+    }
+}
+
+/**
+ * Get color-coded infection messages based on world state
+ * @param {string} type The infection type ("bear" or "snow")
+ * @param {string} level The message level ("hit", "infected", "severe")
+ * @returns {string} The color-coded message
+ */
+export function recordDailyEvent(player, day, event) {
+    try {
+        const codex = getCodex(player);
+        if (!codex.dailyEvents) {
+            codex.dailyEvents = {};
+        }
+        if (!codex.dailyEvents[day]) {
+            codex.dailyEvents[day] = [];
+        }
+        codex.dailyEvents[day].push(event);
+        saveCodex(player, codex);
+    } catch (error) {
+        console.warn("Error recording daily event:", error);
+    }
+}
+
+export function checkDailyEventsForAllPlayers() {
+    try {
+        const currentDay = getCurrentDay();
+        
+        // Record events one day after they occur (reflection on previous day)
+        const dayToRecord = currentDay - 1;
+        
+        if (dayToRecord <= 0) return; // No events to record for day 0 or negative days
+        
+        const events = [];
+        
+        // Day 2: Tiny Maple Bears start spawning
+        if (dayToRecord === 2) {
+            events.push("Tiny Maple Bears began appearing in the world. The infection spreads...");
+        }
+        
+        // Day 4: Normal Infected Maple Bears start spawning
+        if (dayToRecord === 4) {
+            events.push("Larger, more dangerous Infected Maple Bears have emerged. The situation grows dire.");
+        }
+        
+        // Day 8: Buff Maple Bears start spawning
+        if (dayToRecord === 8) {
+            events.push("Massive Buff Maple Bears now roam the land. The infection has reached a critical stage.");
+        }
+        
+        // Day 5: Day 4+ variants unlock (reflection on day 4)
+        if (dayToRecord === 5) {
+            events.push("New variants of the Maple Bears have been observed. They appear stronger and more aggressive than before.");
+        }
+        
+        // Day 9: Day 8+ variants unlock (reflection on day 8)
+        if (dayToRecord === 9) {
+            events.push("The most dangerous Maple Bear variants yet have been documented. The infection continues to evolve.");
+        }
+        
+        // Record events for all players if any events occurred
+        if (events.length > 0) {
+            const eventText = events.join(" ");
+            for (const player of world.getAllPlayers()) {
+                if (player && player.isValid()) {
+                    const codex = getCodex(player);
+                    // Only record if we haven't already recorded for this day
+                    if (!codex.dailyEvents || !codex.dailyEvents[dayToRecord]) {
+                        recordDailyEvent(player, dayToRecord, eventText);
+                    }
+                }
+            }
+        }
+        
+    } catch (error) {
+        console.warn("Error checking daily events for all players:", error);
+    }
+}
+
+
+export function getInfectionMessage(type, level = "normal") {
+    const currentDay = getCurrentDay();
+    
+    // Early days (0-3): Calm, mysterious
+    if (currentDay < 4) {
+        const earlyMessages = {
+            bear: {
+                hit: "§7Something brushes against you...",
+                infected: "§7You feel a strange presence...",
+                severe: "§8The shadows seem to follow you..."
+            },
+            snow: {
+                hit: "§7A cold sensation spreads through you...",
+                infected: "§7You feel drawn to something...",
+                severe: "§8The craving grows stronger..."
+            }
+        };
+        return earlyMessages[type]?.[level] || earlyMessages[type]?.infected || "§7Something feels different...";
+    }
+    
+    // Mid days (4-7): More direct, concerning
+    else if (currentDay < 8) {
+        const midMessages = {
+            bear: {
+                hit: "§eYou were struck by something unnatural!",
+                infected: "§6You start to feel off...",
+                severe: "§cThe infection spreads through your body..."
+            },
+            snow: {
+                hit: "§eThe powder burns as it enters your system...",
+                infected: "§6You start to feel funny...",
+                severe: "§cThe substance takes hold of your mind..."
+            }
+        };
+        return midMessages[type]?.[level] || midMessages[type]?.infected || "§6Something is wrong...";
+    }
+    
+    // Late days (8+): Urgent, dangerous
+    else {
+        const lateMessages = {
+            bear: {
+                hit: "§cA Maple Bear attacks you!",
+                infected: "§4You start to feel off...",
+                severe: "§4The transformation begins..."
+            },
+            snow: {
+                hit: "§cThe powder sears through your veins!",
+                infected: "§4You start to feel funny...",
+                severe: "§4The substance consumes your soul..."
+            }
+        };
+        return lateMessages[type]?.[level] || lateMessages[type]?.infected || "§4You are in grave danger...";
     }
 }
 
@@ -299,6 +433,9 @@ function startDayCycleLoop() {
                 let newDay = getCurrentDay() + 1;
                 setCurrentDay(newDay);
                 console.log(`🌅 New day detected: Day ${newDay}`);
+                
+                // Check for daily events to record (reflection on previous day)
+                checkDailyEventsForAllPlayers();
 
                 // Get display info for the new day
                 const displayInfo = getDayDisplayInfo(newDay);
@@ -533,10 +670,17 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                     });
                                     
                                     if (isFirstTimePlayer) {
-                                        // First-time player - show welcome to normal world message
-                                        sendPlayerMessage(player, "§aWelcome to a completely normal world...");
-                                        showPlayerTitle(player, "§aWelcome...", undefined, { stayDuration: 40 }, currentDay);
-                                        showPlayerActionbar(player, "Everything seems peaceful here...");
+                                        // First-time player - show welcome message based on current day
+                                        const displayInfo = getDayDisplayInfo(currentDay);
+                                        if (currentDay < 2) {
+                                            sendPlayerMessage(player, "§aWelcome to a completely normal world...");
+                                            showPlayerTitle(player, "§aWelcome...", undefined, { stayDuration: 40 }, currentDay);
+                                            showPlayerActionbar(player, "Everything seems peaceful here...");
+                                        } else {
+                                            sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Welcome to Day ${currentDay}...`);
+                                            showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Welcome...`, undefined, { stayDuration: 40 }, currentDay);
+                                            showPlayerActionbar(player, "The Maple Bear infection continues...");
+                                        }
                                         
                                         // Mark as returning player for future joins
                                         returningPlayers.add(playerName);
@@ -591,4 +735,4 @@ world.afterEvents.playerLeave.subscribe((event) => {
     } catch (error) {
         console.warn("Error in player leave handler:", error);
     }
-}); 
+});
