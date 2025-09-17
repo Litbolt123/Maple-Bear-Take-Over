@@ -2,7 +2,7 @@
 	"format_version": 2,
 	"metadata": {
 		"authors": [
-			"MapleBear industries"
+			"Maple Bear Industries"
 		],
 		"generated_with": {
 			"bridge": [
@@ -19,7 +19,7 @@
 		"min_engine_version": [
 			1,
 			21,
-			80
+			101
 		],
 		"uuid": "064b6f9c-349b-4ab1-80d3-c95f732db577",
 		"version": [
