@@ -32,6 +32,17 @@
 						"pitch": 1
 					}
 				}
+			},
+			"mb:infected": {
+				"volume": 1,
+				"pitch": 1,
+				"events": {
+					"ambient": {
+						"sound": "ambient.infected",
+						"volume": 1,
+						"pitch": 1
+					}
+				}
 			}
 		}
 	}

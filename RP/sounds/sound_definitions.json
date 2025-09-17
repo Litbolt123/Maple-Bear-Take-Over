@@ -24,6 +24,21 @@
 					"volume": 1
 				}
 			]
+		},
+		"ambient.infected": {
+			"__use_legacy_max_distance": false,
+			"category": "ambient",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				"sounds/infected_mb/Dust_choked_roar1",
+				"sounds/infected_mb/Dust_choked_roar2",
+				"sounds/infected_mb/Dust_choked_roar3",
+				{
+					"volume": 1,
+					"name": "sounds/infected_mb/Dust_choked_roar1"
+				}
+			]
 		}
 	}
 }
