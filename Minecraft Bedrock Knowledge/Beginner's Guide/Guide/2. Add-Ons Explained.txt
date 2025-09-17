@@ -1,0 +1,43 @@
+https://wiki.bedrock.dev/guide/addons
+
+Add-Ons Explained
+What are add-ons? ​
+Add-ons allow us to modify the contents of our Minecraft Experience by modifying or removing existing content and adding our own. Add-ons are very powerful and allow us to create custom entities, items, and blocks, as well as things like custom loot tables and crafting recipes. Your imagination is the limit!
+
+Add-ons are primarily written in json, which is a structured data-format. An add-on is essentially a collection of json files, images, and sounds, which modify or add to the game in some way.
+
+Javascripting
+
+Since this guide was written, the definition of 'Add-On' has expanded to include the Javascript scripting API. You can learn more about this API elsewhere on this site.
+
+What's the difference between a Behavior Pack & a Resource Pack? ​
+Add-ons are split into two pack types: Resource Packs, and Behavior Packs. Both can function independently, but they are most commonly used together. When you have both a Resource Pack and Behavior Pack, this is referred to as an add-on.
+
+Resource Pack ​
+The Resource Pack, also known as the client, or RP, is responsible for the visuals and sounds in your add-on. This includes things like:
+
+Textures
+Sounds
+Geometry
+Animations
+Particles
+Behavior Pack ​
+The Behavior Pack, also known as the server, or BP, is responsible for the logic of your add-on. This can include things like:
+
+How your entity acts
+Crafting recipes
+Loot tables
+Custom functions
+Communication between packs ​
+In most cases, you will have both a RP and a BP together. These packs can communicate with or will require each other for them to function properly, in the sense that assets defined in one can be accessed in the other. For example, when creating a custom entity, you need two files:
+
+An RP entity definition, which describes how your entity will look
+A BP entity definition, which describes how your entity will act
+Next ​
+What you have learned
+
+ Add-ons modify Minecraft content or add their own
+ Add-ons are mostly written in JSON
+ An add-on is split into the Resource Pack and the Behavior Pack:
+Resource Packs contain textures, sounds, … and control how the game looks
+Behavior Packs contain entity behavior, crafting recipes, … and control the logic of your game

@@ -1,0 +1,74 @@
+https://wiki.bedrock.dev/guide/blockbench
+
+Blockbench: Modeling, Texturing & Animating
+Blockbench is a free software designed to make Minecraft modeling, texturing, and animating possible. It is available for mobile browsers, Windows 10, and macOS. Please install it at blockbench.net.
+
+Modeling ​
+Let's get started.
+
+Open Blockbench.
+
+Choose File>New>Bedrock Model. This is important because Minecraft Bedrock will not be able to read Java models.
+
+A screen like this will have popped up.
+
+
+
+"File name:" is self-explanatory. My file will generate as "skele_yaklin.geo.json".
+"Model Identifier:" is the model identifier (namespace not required), a short name for this ID will be defined later.
+"Box UV" has to be checked on for automatic UV editing and unwrapping for texturing.
+"Texture Height" and "Texture Width" define the resolution of the model's textures.
+Press confirm. You'll see a screen like this:
+
+
+
+You can see many tools here: move, resize, rotate, etc.
+You can add bones and cubes in the menu on the right-bottom corner. Cubes can rotate on their own; the bones will carry everything in them along;
+Now, you are ready to create your model! For more in-depth tutorials on modeling, please check out the videos by Everbloom Studio below.
+
+https://youtu.be/XqzxL_-XjA0
+
+https://youtu.be/j7ISUImhgpc
+
+Texturing ​
+Now that you have your model in place let's start texturing!
+
+On the left-bottom panel, click "Create Texture"
+
+Write down your image file name under "Name:". Mine will export as ghost.png. Check "Template:" to make a template texture - it'll be easier to work with.
+
+
+
+Check everything and change your resolution to the one you set in the very first step.
+
+
+
+Go to "Paint" in the upper right corner and paint your texture.
+
+Animating ​
+Once your model and texture are done, you can start animating. Go to "Animate" in the upper right corner.
+
+You might want to adjust one of the toolbars by adding "Export Animations" and "Import Animations" like this: 
+
+Click "Add Animation" [the plus icon on the top right side] and name it animation.{yourEntityName}.move. Create the first frame of your walking animation under 0 on the timeline by moving the legs.
+
+
+
+Create the second frame under 0.5 on the timeline.
+
+
+
+Finally, copy the first frame to the third frame by placing your timeline cursor on 1.0 and selecting the first frame, then ctrl+c, ctrl+v.
+
+Right-click the animation and tick "Loop" for the animation to loop. 
+
+Saving Your Work ​
+Now that our model, texture, and walk animation are complete, you can save your work.
+
+Go to File > Save Model or File > Export Bedrock Geometry. Save the model in RP/models/entity, the texture in RP/textures/entity/ and the animation in RP/animations. Congratulations! You've successfully created your first entity's visuals! You can see the file examples below.
+
+Meanwhile, why not upgrade the visuals of your own unique entities' or create another one?
+
+What You Have Learned ​
+ How to create an entity in Blockbench
+ How to use Blockbench to model, texture, and animate your entity

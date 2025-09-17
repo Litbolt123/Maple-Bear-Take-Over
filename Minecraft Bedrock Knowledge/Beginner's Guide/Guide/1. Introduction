@@ -1,0 +1,51 @@
+https://wiki.bedrock.dev/guide/introduction
+
+Introduction
+guide
+Introduction
+What Are Add-Ons?
+What Will I Learn?
+Is the Guide Up-to-Date?
+Appendix Pages
+After Finishing the Guide
+Next
+What Are Add-Ons? ​
+An add-on is the Minecraft: Bedrock Edition (Android, Chromebook, Console, Windows, iOS) equivalent to Java Edition mods.
+
+In contrast to Java Edition however, Bedrock Edition APIs are officially maintained by Mojang instead of the community and have backwards compatibility, meaning add-ons made for older versions of Minecraft will continue to work in future versions.
+
+In general, you can think of mods as modifying the game, and add-ons as adding onto the game, following the development opportunities provided by Mojang. While directly modifying vanilla content is supported, it can lead to incompatibilities if multiple add-ons modify the same thing and is therefore not recommended.
+
+ALTERNATIVE RESOURCES
+
+Although we're very pleased with this guide, it's not the only option for getting started. Mojang maintains their own getting started guide on the Creator Platform, which you can consider following if you need alternative explanations.
+
+What Will I Learn? ​
+This guide is a beginner tutorial, intended to walk you through the first stages of add-on creation. You will create your very own fully-functional Ghost entity, as well as an Ectoplasm item, and some other associated files.
+
+By the end of this guide, you will have created an entire add-on all by yourself, which you can play with and modify!
+
+Is the Guide Up-to-Date? ​
+This guide is written for the most recent stable release of Minecraft: Bedrock Edition. Many things won't work in previous versions, and some will be changed in later ones.
+
+We will keep the guide as up-to-date as possible, so no need to worry.
+
+Appendix Pages ​
+Alongside the step-by-step guide, we have a few other pages here in this section, which you can browse at your convenience.
+
+Understanding JSON
+Downloading Example Packs
+Troubleshooting
+After Finishing the Guide ​
+At the end of the guide section, your first add-on will be done! To further expand your knowledge, consider doing these:
+
+Start your own project!
+
+Dive into the other aspects of adding onto MCBE (Minecraft: Bedrock Edition), by using the different sections' sub guides listed in the appendix.
+
+This includes (but is not limited to) blocks, biomes, items, animation controllers, and even scripting with JavaScript.
+
+Some sections provide more technical in-depth tutorials and documents for each relevant topic.
+
+Next ​
+Next: Add-Ons Explained
