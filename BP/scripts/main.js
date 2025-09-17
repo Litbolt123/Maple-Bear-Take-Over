@@ -21,6 +21,26 @@ const INFECTED_TAG = "mb_infected";
 const INFECTED_CORPSE_ID = "mb:infected_corpse";
 const SNOW_LAYER_BLOCK = "minecraft:snow_layer";
 
+// Progressive Infection Rate System
+function getInfectionRate(day) {
+    if (day < 2) return 0; // No infection before day 2
+    if (day === 2) return 0.20; // 20% on day 2
+    if (day === 3) return 0.30; // 30% on day 3
+    if (day === 4) return 0.40; // 40% on day 4
+    if (day === 5) return 0.40; // 40% on day 5
+    if (day === 6) return 0.50; // 50% on day 6
+    if (day === 7) return 0.50; // 50% on day 7
+    if (day === 8) return 0.60; // 60% on day 8
+    
+    // After day 8, increase by 10% every 5 days
+    const daysAfter8 = day - 8;
+    const rateIncrease = Math.floor(daysAfter8 / 5) * 0.10;
+    const baseRate = 0.60;
+    const finalRate = Math.min(baseRate + rateIncrease, 1.0); // Cap at 100%
+    
+    return finalRate;
+}
+
 // --- Player Codex (Unlock System) ---
 
 // Use the getCodex function from mb_codex.js
@@ -147,13 +167,19 @@ function trackBearKill(player, bearType) {
     try {
         const codex = getCodex(player);
         
-        // Track kills based on bear type
+        // Track kills based on bear type and unlock discovery
         if (bearType === MAPLE_BEAR_ID || bearType === MAPLE_BEAR_DAY4_ID || bearType === MAPLE_BEAR_DAY8_ID) {
             codex.mobs.tinyBearKills = (codex.mobs.tinyBearKills || 0) + 1;
+            // Unlock tiny bear discovery
+            markCodex(player, "mobs.mapleBearSeen");
         } else if (bearType === INFECTED_BEAR_ID || bearType === INFECTED_BEAR_DAY8_ID) {
             codex.mobs.infectedBearKills = (codex.mobs.infectedBearKills || 0) + 1;
+            // Unlock infected bear discovery
+            markCodex(player, "mobs.infectedBearSeen");
         } else if (bearType === BUFF_BEAR_ID) {
             codex.mobs.buffBearKills = (codex.mobs.buffBearKills || 0) + 1;
+            // Unlock buff bear discovery
+            markCodex(player, "mobs.buffBearSeen");
         }
         
         saveCodex(player, codex);
@@ -841,8 +867,13 @@ world.afterEvents.entityDie.subscribe((event) => {
         
         // Check if killer is a Maple Bear
         if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === BUFF_BEAR_ID) {
-            // 50% chance for Maple Bear to convert mob
-            if (Math.random() < 0.5) {
+            // Progressive conversion rate based on current day
+            const currentDay = getCurrentDay();
+            const conversionRate = getInfectionRate(currentDay);
+            
+            console.log(`[CONVERSION] Maple Bear killing mob on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
+            
+            if (Math.random() < conversionRate) {
                 system.run(() => {
                     convertMobToMapleBear(entity, killer);
                 });

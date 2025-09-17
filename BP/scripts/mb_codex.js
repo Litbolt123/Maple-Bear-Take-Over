@@ -353,18 +353,20 @@ export function showCodexBook(player, context) {
             const known = codex.mobs[e.key];
             let label = `§f${maskTitle(e.title, known)}`;
             
-            // Always show kill count if available
-            let killCount = 0;
-            if (e.key === "mapleBearSeen") {
-                killCount = codex.mobs.tinyBearKills || 0;
-            } else if (e.key === "infectedBearSeen") {
-                killCount = codex.mobs.infectedBearKills || 0;
-            } else if (e.key === "buffBearSeen") {
-                killCount = codex.mobs.buffBearKills || 0;
-            }
-            
-            if (killCount > 0) {
-                label += ` §7(${killCount} killed)`;
+            // Show kill count only if mob is known and has kills
+            if (known) {
+                let killCount = 0;
+                if (e.key === "mapleBearSeen") {
+                    killCount = codex.mobs.tinyBearKills || 0;
+                } else if (e.key === "infectedBearSeen") {
+                    killCount = codex.mobs.infectedBearKills || 0;
+                } else if (e.key === "buffBearSeen") {
+                    killCount = codex.mobs.buffBearKills || 0;
+                }
+                
+                if (killCount > 0) {
+                    label += ` §7(${killCount})`;
+                }
             }
             
             if (known) form.button(label, e.icon);
