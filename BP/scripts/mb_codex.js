@@ -6,6 +6,7 @@ export function getDefaultCodex() {
         infections: { bear: { discovered: false, firstHitAt: 0 }, snow: { discovered: false, firstUseAt: 0 } },
         status: { immuneKnown: false, immuneUntil: 0, bearTimerSeen: false, snowTimerSeen: false },
         cures: { bearCureKnown: false, bearCureDoneAt: 0 },
+        history: { totalInfections: 0, totalCures: 0, firstInfectionAt: 0, lastInfectionAt: 0, lastCureAt: 0 },
         symptoms: { weaknessSeen: false, nauseaSeen: false, blindnessSeen: false, slownessSeen: false, hungerSeen: false },
         // Aggregated metadata by effect id
         symptomsMeta: {},
@@ -80,7 +81,7 @@ export function updateSymptomMeta(player, effectId, durationTicks, amp, source, 
 }
 
 export function showCodexBook(player, context) {
-    const { bearInfection, snowInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, checkVariantUnlock, getCurrentDay } = context;
+    const { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, checkVariantUnlock, getCurrentDay } = context;
     
     // Check for variant unlocks when opening the codex
     if (checkVariantUnlock) {
@@ -91,8 +92,8 @@ export function showCodexBook(player, context) {
     }
     function buildSummary() {
         const codex = getCodex(player);
-        const hasBear = bearInfection.has(player.id) && !bearInfection.get(player.id).cured;
-        const hasSnow = snowInfection.has(player.id) && (snowInfection.get(player.id).ticksLeft || 0) > 0;
+        const infectionState = playerInfection.get(player.id);
+        const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
         const immune = (() => {
             const end = curedPlayers.get(player.id);
             return !!end && Date.now() < end;
@@ -103,29 +104,22 @@ export function showCodexBook(player, context) {
         const currentDay = getCurrentDay ? getCurrentDay() : 0;
         summary.push(`§6Current Day: §f${currentDay}`);
         
-        const bearLabel = "Bear";
-        const snowLabel = "Snow";
-        const typeText = hasBear ? bearLabel : hasSnow ? snowLabel : "None";
-        summary.push(`§eType: §f${typeText}`);
-        if (hasBear) {
-            const bearTicks = bearInfection.get(player.id).ticksLeft || 0;
-            const bearDays = Math.ceil(bearTicks / 24000);
-            summary.push(`§e${bearLabel}: §c${formatTicksDuration(bearTicks)} (§f~${bearDays} day${bearDays !== 1 ? 's' : ''}§c)`);
+        // Health status logic
+        if (hasInfection) {
+            summary.push(`§eStatus: §cINFECTED`);
+            const ticks = infectionState.ticksLeft || 0;
+            const days = Math.ceil(ticks / 24000);
+            const snowCount = infectionState.snowCount || 0;
+            summary.push(`§eTime: §c${formatTicksDuration(ticks)} (§f~${days} day${days !== 1 ? 's' : ''}§c)`);
+            summary.push(`§eSnow consumed: §c${snowCount}`);
             if (getCodex(player).cures.bearCureKnown) summary.push("§7Cure: §fWeakness + Enchanted Golden Apple");
-        }
-        if (hasSnow) {
-            const snowTicks = snowInfection.get(player.id).ticksLeft || 0;
-            const snowCount = snowInfection.get(player.id).snowCount || 0;
-            summary.push(`§e${snowLabel}: §c${formatTicksDuration(snowTicks)}`);
-            // Always show snow tier when infected with snow
-            summary.push(`§7Snow Tier: §f${snowCount.toFixed(1)}`);
-        }
-        
-        // Show snow tier when bear infected (since snow affects bear infection)
-        if (hasBear) {
-            const snowCount = snowInfection.has(player.id) ? (snowInfection.get(player.id).snowCount || 0) : 0;
-            if (snowCount > 0) {
-                summary.push(`§7Snow Tier: §f${snowCount.toFixed(1)}`);
+        } else {
+            // Check if player has ever been infected
+            const hasBeenInfected = codex.history.totalInfections > 0;
+            if (hasBeenInfected) {
+                summary.push(`§eStatus: §aHealthy (Previously Infected)`);
+            } else {
+                summary.push(`§eStatus: §aHealthy`);
             }
         }
         if (immune) {
@@ -136,8 +130,8 @@ export function showCodexBook(player, context) {
             summary.push("§bImmunity: §7None");
         }
         const hitCount = bearHitCount.get(player.id) || 0;
-        if (hitCount > 0 && !hasBear) summary.push(`§eBear Hits: §f${hitCount}/${HITS_TO_INFECT}`);
-        try { if (hasBear) markCodex(player, "status.bearTimerSeen"); if (hasSnow) markCodex(player, "status.snowTimerSeen"); if (immune) markCodex(player, "status.immuneKnown"); } catch {}
+        if (hitCount > 0 && !hasInfection) summary.push(`§eBear Hits: §f${hitCount}/${HITS_TO_INFECT}`);
+        try { if (hasInfection) markCodex(player, "status.bearTimerSeen"); if (immune) markCodex(player, "status.immuneKnown"); } catch {}
         return summary.join("\n");
     }
 
@@ -164,34 +158,40 @@ export function showCodexBook(player, context) {
     function openInfections() {
         const codex = getCodex(player);
         const page = new ActionFormData().title("§6Infections");
-        const bearName = maskTitle("Bear Infection", codex.infections.bear.discovered);
-        const snowName = maskTitle("Snow Infection", codex.infections.snow.discovered);
+        const infectionName = maskTitle("The Infection", codex.infections.bear.discovered || codex.infections.snow.discovered);
         page.body("§7Entries:");
-        page.button(`§f${bearName}`);
-        page.button(`§f${snowName}`);
+        page.button(`§f${infectionName}`);
         page.button("§8Back");
         page.show(player).then((res) => {
             if (!res || res.canceled) return openMain();
             if (res.selection === 0) {
                 const lines = [];
-                if (codex.infections.bear.discovered) {
-                    lines.push("§eBear Infection");
+                if (codex.infections.bear.discovered || codex.infections.snow.discovered) {
+                    lines.push("§eThe Infection");
                     lines.push(getCodex(player).cures.bearCureKnown ? "§7Cure: Weakness + Enchanted Golden Apple" : "§8Cure: ???");
-                    lines.push("§7Notes: §8Infection advances over time.");
+                    lines.push("§7Notes: §8Infection advances over time. Snow consumption affects the timer.");
+                    
+                    // Add infection history if available
+                    if (codex.history.totalInfections > 0) {
+                        lines.push("");
+                        lines.push("§6Infection History:");
+                        lines.push(`§7Total Infections: §f${codex.history.totalInfections}`);
+                        lines.push(`§7Total Cures: §f${codex.history.totalCures}`);
+                        
+                        if (codex.history.firstInfectionAt > 0) {
+                            const firstDate = new Date(codex.history.firstInfectionAt);
+                            lines.push(`§7First Infection: §f${firstDate.toLocaleDateString()}`);
+                        }
+                        
+                        if (codex.history.lastCureAt > 0) {
+                            const lastCureDate = new Date(codex.history.lastCureAt);
+                            lines.push(`§7Last Cure: §f${lastCureDate.toLocaleDateString()}`);
+                        }
+                    }
                 } else {
                     lines.push("§e???");
                 }
-                new ActionFormData().title("§6Infections: Bear").body(lines.join("\n")).button("§8Back").show(player).then(() => openInfections());
-            } else if (res.selection === 1) {
-                const lines = [];
-                if (codex.infections.snow.discovered) {
-                    lines.push("§eSnow Infection");
-                    lines.push("§7Cure: §8None");
-                    lines.push("§7Notes: §8Effects vary and time reduces with more use.");
-                } else {
-                    lines.push("§e???");
-                }
-                new ActionFormData().title("§6Infections: Snow").body(lines.join("\n")).button("§8Back").show(player).then(() => openInfections());
+                new ActionFormData().title("§6Infections: The Infection").body(lines.join("\n")).button("§8Back").show(player).then(() => openInfections());
             } else {
                 openMain();
             }
@@ -209,13 +209,13 @@ export function showCodexBook(player, context) {
         ];
         
         // Calculate infection status from context
-        const hasBear = bearInfection.has(player.id) && !bearInfection.get(player.id).cured;
-        const hasSnow = snowInfection.has(player.id) && (snowInfection.get(player.id).ticksLeft || 0) > 0;
+        const infectionState = playerInfection.get(player.id);
+        const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
         
         // Add snow tier analysis if player has discovered snow OR is currently infected
         const hasSnowKnowledge = codex.items.snowIdentified;
         const maxSnow = maxSnowLevels.get(player.id);
-        const hasAnyInfection = hasBear || hasSnow;
+        const hasAnyInfection = hasInfection;
         
         const form = new ActionFormData().title("§6Symptoms");
         form.body("§7Entries:");
@@ -268,7 +268,7 @@ export function showCodexBook(player, context) {
     function openSnowTierAnalysis() {
         const codex = getCodex(player);
         const maxSnow = maxSnowLevels.get(player.id);
-        const currentSnow = snowInfection.has(player.id) ? (snowInfection.get(player.id).snowCount || 0) : 0;
+        const currentSnow = infectionState ? (infectionState.snowCount || 0) : 0;
         
         const form = new ActionFormData().title("§6Snow Tier Analysis");
         
@@ -300,10 +300,10 @@ export function showCodexBook(player, context) {
         }
         
         // Show current status if infected
-        const hasBear = bearInfection.has(player.id) && !bearInfection.get(player.id).cured;
-        const hasSnow = snowInfection.has(player.id) && (snowInfection.get(player.id).ticksLeft || 0) > 0;
+        const infectionState = playerInfection.get(player.id);
+        const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
         
-        if (hasBear || hasSnow) {
+        if (hasInfection) {
             body += `\n§eCurrent Snow Level: §f${currentSnow.toFixed(1)}`;
             if (currentSnow > 0) {
                 const tier = currentSnow <= 5 ? 1 : currentSnow <= 10 ? 2 : currentSnow <= 20 ? 3 : 4;
@@ -351,7 +351,22 @@ export function showCodexBook(player, context) {
         form.body("§7Entries:");
         for (const e of entries) {
             const known = codex.mobs[e.key];
-            const label = `§f${maskTitle(e.title, known)}`;
+            let label = `§f${maskTitle(e.title, known)}`;
+            
+            // Always show kill count if available
+            let killCount = 0;
+            if (e.key === "mapleBearSeen") {
+                killCount = codex.mobs.tinyBearKills || 0;
+            } else if (e.key === "infectedBearSeen") {
+                killCount = codex.mobs.infectedBearKills || 0;
+            } else if (e.key === "buffBearSeen") {
+                killCount = codex.mobs.buffBearKills || 0;
+            }
+            
+            if (killCount > 0) {
+                label += ` §7(${killCount} killed)`;
+            }
+            
             if (known) form.button(label, e.icon);
             else form.button(label);
         }
@@ -364,28 +379,38 @@ export function showCodexBook(player, context) {
                 let body = "§e???";
                 
                 if (known) {
-                    body = `§e${e.title}\n§7Hostile entity involved in the outbreak.`;
+                    // Get kill count
+                    let killCount = 0;
+                    if (e.key === "mapleBearSeen") {
+                        killCount = codex.mobs.tinyBearKills || 0;
+                    } else if (e.key === "infectedBearSeen") {
+                        killCount = codex.mobs.infectedBearKills || 0;
+                    } else if (e.key === "buffBearSeen") {
+                        killCount = codex.mobs.buffBearKills || 0;
+                    }
                     
-                    // Add detailed info based on kill count
+                    body = `§e${e.title}\n§7Hostile entity involved in the outbreak.\n\n§6Kills: §f${killCount}`;
+                    
+                    // Add detailed info based on kill count thresholds
                     if (e.variant === "original") {
-                        if (e.key === "mapleBearSeen" && codex.mobs.tinyBearKills >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Kills: ${codex.mobs.tinyBearKills}\n§7Drop Rate: 60% chance\n§7Loot: 1 snow item\n§7Health: 1 HP\n§7Damage: 1`;
-                        } else if (e.key === "infectedBearSeen" && codex.mobs.infectedBearKills >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Kills: ${codex.mobs.infectedBearKills}\n§7Drop Rate: 80% chance\n§7Loot: 1-5 snow items\n§7Health: 20 HP\n§7Damage: 2.5`;
-                        } else if (e.key === "buffBearSeen" && codex.mobs.buffBearKills >= 10) {
-                            body += `\n\n§6Detailed Analysis:\n§7Kills: ${codex.mobs.buffBearKills}\n§7Drop Rate: 80% chance\n§7Loot: 3-15 snow items\n§7Health: 100 HP\n§7Damage: 8`;
+                        if (e.key === "mapleBearSeen" && killCount >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 60% chance\n§7Loot: 1 snow item\n§7Health: 1 HP\n§7Damage: 1`;
+                        } else if (e.key === "infectedBearSeen" && killCount >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 80% chance\n§7Loot: 1-5 snow items\n§7Health: 20 HP\n§7Damage: 2.5`;
+                        } else if (e.key === "buffBearSeen" && killCount >= 10) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 80% chance\n§7Loot: 3-15 snow items\n§7Health: 100 HP\n§7Damage: 8`;
                         }
                     } else if (e.variant === "day4") {
-                        if (e.key === "mapleBearSeen" && codex.mobs.tinyBearKills >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Kills: ${codex.mobs.tinyBearKills}\n§7Drop Rate: 65% chance\n§7Loot: 1-2 snow items\n§7Health: 1.5 HP\n§7Damage: 1.5`;
-                        } else if (e.key === "infectedBearSeen" && codex.mobs.infectedBearKills >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Kills: ${codex.mobs.infectedBearKills}\n§7Drop Rate: 80% chance\n§7Loot: 1-5 snow items\n§7Health: 20 HP\n§7Damage: 2.5`;
+                        if (e.key === "mapleBearSeen" && killCount >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 65% chance\n§7Loot: 1-2 snow items\n§7Health: 1.5 HP\n§7Damage: 1.5`;
+                        } else if (e.key === "infectedBearSeen" && killCount >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 80% chance\n§7Loot: 1-5 snow items\n§7Health: 20 HP\n§7Damage: 2.5`;
                         }
                     } else if (e.variant === "day8") {
-                        if (e.key === "mapleBearSeen" && codex.mobs.tinyBearKills >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Kills: ${codex.mobs.tinyBearKills}\n§7Drop Rate: 70% chance\n§7Loot: 1-3 snow items\n§7Health: 2 HP\n§7Damage: 2`;
-                        } else if (e.key === "infectedBearSeen" && codex.mobs.infectedBearKills >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Kills: ${codex.mobs.infectedBearKills}\n§7Drop Rate: 90% chance\n§7Loot: 2-8 snow items\n§7Health: 25 HP\n§7Damage: 4`;
+                        if (e.key === "mapleBearSeen" && killCount >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 70% chance\n§7Loot: 1-3 snow items\n§7Health: 2 HP\n§7Damage: 2`;
+                        } else if (e.key === "infectedBearSeen" && killCount >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 90% chance\n§7Loot: 2-8 snow items\n§7Health: 25 HP\n§7Damage: 4`;
                         }
                     }
                 }
@@ -406,8 +431,8 @@ export function showCodexBook(player, context) {
         ];
         
         // Calculate infection status from context
-        const hasBear = bearInfection.has(player.id) && !bearInfection.get(player.id).cured;
-        const hasSnow = snowInfection.has(player.id) && (snowInfection.get(player.id).ticksLeft || 0) > 0;
+        const infectionState = playerInfection.get(player.id);
+        const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
         
         const form = new ActionFormData().title("§6Items");
         form.body("§7Entries:");
@@ -417,7 +442,7 @@ export function showCodexBook(player, context) {
             
             if (e.key === 'snowFound') {
                 // Show as "'Snow' (Powder)" if player has been infected AND has found snow
-                const hasBeenInfected = hasBear || hasSnow;
+                const hasBeenInfected = hasInfection;
                 const hasFoundSnow = codex.items.snowFound;
                 
                 if (hasBeenInfected && hasFoundSnow) {
@@ -453,7 +478,7 @@ export function showCodexBook(player, context) {
                 let body = "§e???";
                 if (known) {
                     if (e.key === "snowFound") {
-                        const hasBeenInfected = hasBear || hasSnow;
+                        const hasBeenInfected = hasInfection;
                         const hasFoundSnow = codex.items.snowFound;
                         
                         if (hasBeenInfected && hasFoundSnow) {
