@@ -31,12 +31,17 @@
 			"min_distance": 0,
 			"max_distance": 32,
 			"sounds": [
-				"sounds/infected_mb/Dust_choked_roar1",
-				"sounds/infected_mb/Dust_choked_roar2",
-				"sounds/infected_mb/Dust_choked_roar3",
 				{
-					"volume": 1,
-					"name": "sounds/infected_mb/Dust_choked_roar1"
+					"name": "sounds/infected_mb/Dust_choked_roar1",
+					"volume": 1
+				},
+				{
+					"name": "sounds/infected_mb/Dust_choked_roar2",
+					"volume": 1
+				},
+				{
+					"name": "sounds/infected_mb/Dust_choked_roar3",
+					"volume": 1
 				}
 			]
 		}
