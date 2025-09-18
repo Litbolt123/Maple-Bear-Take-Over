@@ -13,8 +13,7 @@
 			"minecraft:damage_sensor": {},
 			"minecraft:type_family": {
 				"family": [
-					"monster",
-					"mob"
+					"infected"
 				]
 			},
 			"minecraft:breathable": {

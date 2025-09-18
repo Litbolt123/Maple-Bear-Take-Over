@@ -583,6 +583,11 @@
 				"min_range_inactivity_timer": 60,
 				"despawn_from_chance": true,
 				"min_range_random_chance": 800
+			},
+			"minecraft:type_family": {
+				"family": [
+					"infected"
+				]
 			}
 		},
 		"events": {

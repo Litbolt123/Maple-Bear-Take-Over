@@ -16,7 +16,10 @@
 					"render_method": "alpha_test"
 				}
 			},
-			"minecraft:display_name": "Dusted Dirt"
+			"minecraft:display_name": "Dusted Dirt",
+			"minecraft:destructible_by_explosion": true,
+			"minecraft:light_dampening": 15,
+			"minecraft:collision_box": true
 		}
 	}
 }
