@@ -335,8 +335,8 @@ export function showCodexBook(player, context) {
         const entries = [
             { key: "mapleBearSeen", title: "Tiny Maple Bear", icon: "textures/items/mb", variant: "original" },
             { key: "infectedBearSeen", title: "Infected Maple Bear", icon: "textures/items/Infected_human_mb_egg", variant: "original" },
-            { key: "infectedPigSeen", title: "Infected Pig", icon: "textures/items/infected_pig_egg", variant: "original" },
-            { key: "buffBearSeen", title: "Buff Maple Bear", icon: "textures/items/buff_mb_egg", variant: "original" }
+            { key: "buffBearSeen", title: "Buff Maple Bear", icon: "textures/items/buff_mb_egg", variant: "original" },
+            { key: "infectedPigSeen", title: "Infected Pig", icon: "textures/items/infected_pig_spawn_egg", variant: "original" }
         ];
         
         // Add day 4+ variants if unlocked

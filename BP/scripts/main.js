@@ -183,11 +183,8 @@ function trackBearKill(player, bearType) {
             markCodex(player, "mobs.buffBearSeen");
         } else if (bearType === INFECTED_PIG_ID) {
             codex.mobs.infectedPigKills = (codex.mobs.infectedPigKills || 0) + 1;
-            console.log(`[KILL] Player ${player.name} killed infected pig (total: ${codex.mobs.infectedPigKills})`);
             // Unlock infected pig discovery
-            console.log(`[KILL] Codex before markCodex: ${JSON.stringify(codex.mobs)}`);
             markCodex(player, "mobs.infectedPigSeen");
-            console.log(`[KILL] Codex after markCodex: ${JSON.stringify(getCodex(player).mobs)}`);
         }
         
         saveCodex(player, codex);
@@ -1045,26 +1042,16 @@ world.afterEvents.entityHurt.subscribe((event) => {
         } catch {}
         // Mob discovery on being hit
         try {
-            console.log(`[HIT] Player ${player.name} hit by ${source.damagingEntity.typeId}`);
             if (source.damagingEntity.typeId === MAPLE_BEAR_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY4_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY8_ID) {
-                console.log(`[HIT] Unlocking maple bear for ${player.name}`);
                 markCodex(player, "mobs.mapleBearSeen");
             }
             if (source.damagingEntity.typeId === INFECTED_BEAR_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY8_ID) {
-                console.log(`[HIT] Unlocking infected bear for ${player.name}`);
                 markCodex(player, "mobs.infectedBearSeen");
             }
             if (source.damagingEntity.typeId === INFECTED_PIG_ID) {
-                console.log(`[HIT] Unlocking infected pig for ${player.name}`);
                 markCodex(player, "mobs.infectedPigSeen");
-                // Also mark the codex as saved
-                const codex = getCodex(player);
-                console.log(`[HIT] Codex before save: ${JSON.stringify(codex.mobs)}`);
-                saveCodex(player, codex);
-                console.log(`[HIT] Codex after save: ${JSON.stringify(getCodex(player).mobs)}`);
             }
             if (source.damagingEntity.typeId === BUFF_BEAR_ID) {
-                console.log(`[HIT] Unlocking buff bear for ${player.name}`);
                 markCodex(player, "mobs.buffBearSeen");
             }
             
@@ -1177,7 +1164,7 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
             
             // Track infection history
             trackInfectionHistory(player, "infected");
-        } else {
+                        } else {
             // Player is infected - apply deceptive snow mechanics
             const timeEffect = getSnowTimeEffect(infectionState.ticksLeft, infectionState.snowCount);
             const newTicksLeft = Math.max(0, Math.min(INFECTION_TICKS, infectionState.ticksLeft + timeEffect));
@@ -1243,7 +1230,7 @@ if (world.beforeEvents && world.beforeEvents.playerSendMessage) {
                 }
 
                 player.sendMessage("§aEffect test completed! Check console for results.");
-        } catch (error) {
+                                } catch (error) {
                 console.warn("[TEST] Error testing effects:", error);
                 player.sendMessage("§cEffect test failed! Check console for error.");
             }
@@ -1362,7 +1349,7 @@ system.runInterval(() => {
             player.sendMessage("§4You don't feel so good...");
             state.warningSent = true;
             playerInfection.set(id, state);
-        } else {
+            } else {
             // Scale symptom chance and intensity
             const level = getSymptomLevel(state.ticksLeft);
             const nowTick = system.currentTick;
@@ -2501,6 +2488,7 @@ world.beforeEvents.itemUse.subscribe((event) => {
         });
         return;
     }
+    
 
     // Testing features are commented out for playability
     // Uncomment the section below if you need testing features back
