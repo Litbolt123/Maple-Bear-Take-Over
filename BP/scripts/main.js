@@ -265,10 +265,37 @@ function trackInfectionHistory(player, event) {
 }
 
 
+// --- Helper: Convert pig to infected pig ---
+function convertPigToInfectedPig(deadPig, killer) {
+    try {
+        const location = deadPig.location;
+        const killerType = killer.typeId;
+        const currentDay = getCurrentDay();
+        
+        // Spawn infected pig at the pig's location
+        const infectedPig = world.getDimension("overworld").spawnEntity(INFECTED_PIG_ID, location);
+        
+        // Add some visual feedback
+        world.getDimension("overworld").spawnParticle("mb:white_dust_particale", location);
+        
+        console.log(`[PIG CONVERSION] Day ${currentDay}: Pig killed by ${killerType} → spawned Infected Pig`);
+        
+    } catch (error) {
+        console.warn("Error converting pig to infected pig:", error);
+    }
+}
+
 // --- Helper: Convert mob to Maple Bear based on size and day ---
 function convertMobToMapleBear(deadMob, killer) {
     try {
         const mobType = deadMob.typeId;
+        
+        // Don't convert pigs - they're handled by the pig conversion system
+        if (mobType === "minecraft:pig") {
+            console.log(`[CONVERSION] Ignoring pig conversion - handled by pig conversion system`);
+            return;
+        }
+        
         const killerType = killer.typeId;
         const location = deadMob.location;
         const currentDay = getCurrentDay();
@@ -382,9 +409,10 @@ function getMobSize(mobType) {
     ];
     
     // Normal-sized mobs (horses, cows, etc.) - these should spawn normal Maple Bears
+    // Note: Pigs are excluded and handled separately by the pig conversion system
     const normalMobs = [
         "minecraft:horse", "minecraft:cow", "minecraft:mooshroom", "minecraft:llama",
-        "minecraft:donkey", "minecraft:mule", "minecraft:pig", "minecraft:sheep",
+        "minecraft:donkey", "minecraft:mule", "minecraft:sheep",
         "minecraft:goat", "minecraft:zombie", "minecraft:skeleton", "minecraft:creeper",
         "minecraft:spider", "minecraft:cave_spider", "minecraft:zombie_villager", "minecraft:husk",
         "minecraft:stray", "minecraft:drowned", "minecraft:witch", "minecraft:pillager",
@@ -398,6 +426,8 @@ function getMobSize(mobType) {
         return "tiny";
     } else if (largeMobs.includes(mobType)) {
         return "large";
+    } else if (mobType === "minecraft:pig") {
+        return "pig"; // Special category for pigs - handled separately
     } else if (normalMobs.includes(mobType)) {
         return "normal";
     } else {
@@ -876,12 +906,22 @@ world.afterEvents.entityDie.subscribe((event) => {
             const currentDay = getCurrentDay();
             const conversionRate = getInfectionRate(currentDay);
             
-            console.log(`[CONVERSION] Maple Bear killing mob on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
-            
-            if (Math.random() < conversionRate) {
-                system.run(() => {
-                    convertMobToMapleBear(entity, killer);
-                });
+            // Check if victim is a pig and convert to infected pig
+            if (entity.typeId === "minecraft:pig") {
+                console.log(`[PIG CONVERSION] Maple Bear killing pig on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
+                if (Math.random() < conversionRate) {
+                    system.run(() => {
+                        convertPigToInfectedPig(entity, killer);
+                    });
+                }
+            } else {
+                console.log(`[CONVERSION] Maple Bear killing ${entity.typeId} on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
+                // Normal Maple Bear conversion for non-pigs (ignore pigs completely)
+                if (Math.random() < conversionRate) {
+                    system.run(() => {
+                        convertMobToMapleBear(entity, killer);
+                    });
+                }
             }
             // Unlock mob sightings for nearby players
             for (const p of world.getAllPlayers()) {
@@ -894,6 +934,11 @@ world.afterEvents.entityDie.subscribe((event) => {
                     if (killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID) markCodex(p, "mobs.infectedBearSeen");
                     if (killerType === INFECTED_PIG_ID) markCodex(p, "mobs.infectedPigSeen");
                     if (killerType === BUFF_BEAR_ID) markCodex(p, "mobs.buffBearSeen");
+                    
+                    // If a pig was converted to infected pig, unlock infected pig discovery
+                    if (entity.typeId === "minecraft:pig") {
+                        markCodex(p, "mobs.infectedPigSeen");
+                    }
                 }
             }
         }
