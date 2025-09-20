@@ -35,8 +35,8 @@
 				"controller.render.pig"
 			],
 			"spawn_egg": {
-				"texture": "spawn_egg",
-				"texture_index": 2
+				"texture": "mb_infected_pig_egg",
+				"texture_index": 0
 			}
 		}
 	}

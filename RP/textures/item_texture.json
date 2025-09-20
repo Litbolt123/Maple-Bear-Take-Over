@@ -28,6 +28,9 @@
 		},
 		"mb_infected_day8_egg": {
 			"textures": "textures/items/infected_day8_egg"
+		},
+		"mb_infected_pig_egg": {
+			"textures": "textures/items/infected_pig_egg"
 		}
 	}
 }

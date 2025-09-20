@@ -16,6 +16,7 @@ const MAPLE_BEAR_DAY8_ID = "mb:mb_day8";
 const INFECTED_BEAR_ID = "mb:infected";
 const INFECTED_BEAR_DAY8_ID = "mb:infected_day8";
 const BUFF_BEAR_ID = "mb:buff_mb";
+const INFECTED_PIG_ID = "mb:infected_pig";
 const SNOW_ITEM_ID = "mb:snow";
 const INFECTED_TAG = "mb_infected";
 const INFECTED_CORPSE_ID = "mb:infected_corpse";
@@ -180,6 +181,13 @@ function trackBearKill(player, bearType) {
             codex.mobs.buffBearKills = (codex.mobs.buffBearKills || 0) + 1;
             // Unlock buff bear discovery
             markCodex(player, "mobs.buffBearSeen");
+        } else if (bearType === INFECTED_PIG_ID) {
+            codex.mobs.infectedPigKills = (codex.mobs.infectedPigKills || 0) + 1;
+            console.log(`[KILL] Player ${player.name} killed infected pig (total: ${codex.mobs.infectedPigKills})`);
+            // Unlock infected pig discovery
+            console.log(`[KILL] Codex before markCodex: ${JSON.stringify(codex.mobs)}`);
+            markCodex(player, "mobs.infectedPigSeen");
+            console.log(`[KILL] Codex after markCodex: ${JSON.stringify(getCodex(player).mobs)}`);
         }
         
         saveCodex(player, codex);
@@ -865,8 +873,8 @@ world.afterEvents.entityDie.subscribe((event) => {
         const killer = source.damagingEntity;
         const killerType = killer.typeId;
         
-        // Check if killer is a Maple Bear
-        if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === BUFF_BEAR_ID) {
+        // Check if killer is a Maple Bear or infected pig
+        if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === BUFF_BEAR_ID || killerType === INFECTED_PIG_ID) {
             // Progressive conversion rate based on current day
             const currentDay = getCurrentDay();
             const conversionRate = getInfectionRate(currentDay);
@@ -887,6 +895,7 @@ world.afterEvents.entityDie.subscribe((event) => {
                 if (dx * dx + dy * dy + dz * dz <= 64 * 64) {
                     if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID) markCodex(p, "mobs.mapleBearSeen");
                     if (killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID) markCodex(p, "mobs.infectedBearSeen");
+                    if (killerType === INFECTED_PIG_ID) markCodex(p, "mobs.infectedPigSeen");
                     if (killerType === BUFF_BEAR_ID) markCodex(p, "mobs.buffBearSeen");
                 }
             }
@@ -898,7 +907,7 @@ world.afterEvents.entityDie.subscribe((event) => {
     if (source && source.damagingEntity instanceof Player && !(entity instanceof Player)) {
         const entityType = entity.typeId;
         if (entityType === MAPLE_BEAR_ID || entityType === MAPLE_BEAR_DAY4_ID || entityType === MAPLE_BEAR_DAY8_ID || 
-            entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === BUFF_BEAR_ID) {
+            entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === BUFF_BEAR_ID || entityType === INFECTED_PIG_ID) {
             trackBearKill(source.damagingEntity, entityType);
         }
     }
@@ -988,7 +997,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
     const source = event.damageSource;
     if (!(player instanceof Player)) return;
 
-                const mapleBearTypes = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, BUFF_BEAR_ID];
+                const mapleBearTypes = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, BUFF_BEAR_ID, INFECTED_PIG_ID];
     if (source && source.damagingEntity && mapleBearTypes.includes(source.damagingEntity.typeId)) {
         // If already infected (bear or snow), do not progress hit counter; instead reduce active timer by half of a snow-eat reduction
         try {
@@ -998,8 +1007,8 @@ world.afterEvents.entityHurt.subscribe((event) => {
             if (hasActiveInfection) {
                 // Increase snow severity based on Maple Bear type
                 let snowIncrease = 0.25; // Default for tiny Maple Bears (1/4 of snow consumption)
-                if (source.damagingEntity.typeId === INFECTED_BEAR_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY8_ID) {
-                    snowIncrease = 0.5; // Infected Maple Bears (1/2 of snow consumption)
+                if (source.damagingEntity.typeId === INFECTED_BEAR_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY8_ID || source.damagingEntity.typeId === INFECTED_PIG_ID) {
+                    snowIncrease = 0.5; // Infected Maple Bears and infected pigs (1/2 of snow consumption)
                 } else if (source.damagingEntity.typeId === BUFF_BEAR_ID) {
                     snowIncrease = 1.0; // Buff Maple Bears (1 whole snow consumption)
                 }
@@ -1036,9 +1045,28 @@ world.afterEvents.entityHurt.subscribe((event) => {
         } catch {}
         // Mob discovery on being hit
         try {
-            if (source.damagingEntity.typeId === MAPLE_BEAR_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY4_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY8_ID) markCodex(player, "mobs.mapleBearSeen");
-            if (source.damagingEntity.typeId === INFECTED_BEAR_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY8_ID) markCodex(player, "mobs.infectedBearSeen");
-            if (source.damagingEntity.typeId === BUFF_BEAR_ID) markCodex(player, "mobs.buffBearSeen");
+            console.log(`[HIT] Player ${player.name} hit by ${source.damagingEntity.typeId}`);
+            if (source.damagingEntity.typeId === MAPLE_BEAR_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY4_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY8_ID) {
+                console.log(`[HIT] Unlocking maple bear for ${player.name}`);
+                markCodex(player, "mobs.mapleBearSeen");
+            }
+            if (source.damagingEntity.typeId === INFECTED_BEAR_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY8_ID) {
+                console.log(`[HIT] Unlocking infected bear for ${player.name}`);
+                markCodex(player, "mobs.infectedBearSeen");
+            }
+            if (source.damagingEntity.typeId === INFECTED_PIG_ID) {
+                console.log(`[HIT] Unlocking infected pig for ${player.name}`);
+                markCodex(player, "mobs.infectedPigSeen");
+                // Also mark the codex as saved
+                const codex = getCodex(player);
+                console.log(`[HIT] Codex before save: ${JSON.stringify(codex.mobs)}`);
+                saveCodex(player, codex);
+                console.log(`[HIT] Codex after save: ${JSON.stringify(getCodex(player).mobs)}`);
+            }
+            if (source.damagingEntity.typeId === BUFF_BEAR_ID) {
+                console.log(`[HIT] Unlocking buff bear for ${player.name}`);
+                markCodex(player, "mobs.buffBearSeen");
+            }
             
             // If player is infected and gets hit by Maple Bear, unlock snow level display
             const infectionState = playerInfection.get(player.id);
@@ -1143,6 +1171,9 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
             player.sendMessage("§4You have been infected! Find a cure quickly!");
             player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.6 });
             console.log(`[SNOW] ${player.name} started infection by eating snow`);
+            
+            // Mark snow infection as discovered
+            try { markCodex(player, "infections.snow.discovered"); markCodex(player, "infections.snow.firstUseAt", true); } catch {}
             
             // Track infection history
             trackInfectionHistory(player, "infected");
@@ -1438,7 +1469,7 @@ system.runInterval(() => {
         for (const entity of world.getAllEntities()) {
             if (!entity || !entity.isValid) continue;
             const t = entity.typeId;
-            if (t !== MAPLE_BEAR_ID && t !== MAPLE_BEAR_DAY4_ID && t !== MAPLE_BEAR_DAY8_ID && t !== INFECTED_BEAR_ID && t !== INFECTED_BEAR_DAY8_ID && t !== BUFF_BEAR_ID) continue;
+            if (t !== MAPLE_BEAR_ID && t !== MAPLE_BEAR_DAY4_ID && t !== MAPLE_BEAR_DAY8_ID && t !== INFECTED_BEAR_ID && t !== INFECTED_BEAR_DAY8_ID && t !== BUFF_BEAR_ID && t !== INFECTED_PIG_ID) continue;
 
             // Snow trail placement (for all types)
             let trailChance = 0.02; // tiny default
@@ -1447,6 +1478,7 @@ system.runInterval(() => {
             if (t === INFECTED_BEAR_ID) trailChance = 0.06;
             if (t === INFECTED_BEAR_DAY8_ID) trailChance = 0.08; // Day 8+ normal bears
             if (t === BUFF_BEAR_ID) trailChance = 0.2;
+            if (t === INFECTED_PIG_ID) trailChance = 0.06; // Same as infected bear
 
             const lastTrail = lastSnowTrailTickByEntity.get(entity.id) ?? 0;
             if (nowTick - lastTrail >= TRAIL_COOLDOWN_TICKS && Math.random() < trailChance) {
@@ -1885,6 +1917,12 @@ function handleInfectedDeath(player) {
         // Remove infection status
         player.removeTag(INFECTED_TAG);
         infectedPlayers.delete(player.id);
+        
+        // Mark infection as discovered when player dies from it
+        try { 
+            markCodex(player, "infections.bear.discovered"); 
+            markCodex(player, "infections.snow.discovered");
+        } catch {}
         
         // Get the player's inventory before spawning the bear
         const inventory = playerInventories.get(player.id);
