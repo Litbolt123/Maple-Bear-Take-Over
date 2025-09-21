@@ -272,11 +272,22 @@ function convertPigToInfectedPig(deadPig, killer) {
         const killerType = killer.typeId;
         const currentDay = getCurrentDay();
         
+        // Check if the location is in a loaded chunk
+        const dimension = world.getDimension("overworld");
+        
+        // Try to access the chunk to ensure it's loaded
+        try {
+            dimension.getBlock({ x: Math.floor(location.x), y: Math.floor(location.y), z: Math.floor(location.z) });
+        } catch (chunkError) {
+            console.log(`[PIG CONVERSION] Skipping pig conversion - chunk not loaded at ${Math.floor(location.x)}, ${Math.floor(location.y)}, ${Math.floor(location.z)}`);
+            return;
+        }
+        
         // Spawn infected pig at the pig's location
-        const infectedPig = world.getDimension("overworld").spawnEntity(INFECTED_PIG_ID, location);
+        const infectedPig = dimension.spawnEntity(INFECTED_PIG_ID, location);
         
         // Add some visual feedback
-        world.getDimension("overworld").spawnParticle("mb:white_dust_particale", location);
+        dimension.spawnParticle("mb:white_dust_particale", location);
         
         console.log(`[PIG CONVERSION] Day ${currentDay}: Pig killed by ${killerType} → spawned Infected Pig`);
         
@@ -377,15 +388,26 @@ function convertMobToMapleBear(deadMob, killer) {
             }
         }
         
+        // Check if the location is in a loaded chunk
+        const dimension = world.getDimension("overworld");
+        
+        // Try to access the chunk to ensure it's loaded
+        try {
+            dimension.getBlock({ x: Math.floor(location.x), y: Math.floor(location.y), z: Math.floor(location.z) });
+        } catch (chunkError) {
+            console.log(`[CONVERSION] Skipping ${mobType} conversion - chunk not loaded at ${Math.floor(location.x)}, ${Math.floor(location.y)}, ${Math.floor(location.z)}`);
+            return;
+        }
+        
         // Spawn the new Maple Bear
-        const newBear = world.getDimension("overworld").spawnEntity(newBearType, location);
+        const newBear = dimension.spawnEntity(newBearType, location);
         
         // Note: Entity type ID determines the bear type (mb:mb = tiny, mb:infected = normal, mb:buff_mb = buff)
         
         console.log(`[CONVERSION] Day ${currentDay}: ${mobType} killed by ${killerType} → spawned ${newBearType} (${bearSize})`);
         
         // Add some visual feedback
-        world.getDimension("overworld").spawnParticle("mb:white_dust_particale", location);
+        dimension.spawnParticle("mb:white_dust_particale", location);
         
     } catch (error) {
         console.warn("Error converting mob to Maple Bear:", error);
@@ -1029,6 +1051,40 @@ world.afterEvents.entityDie.subscribe((event) => {
             console.warn("Error handling infected bear death (all corrupt test):", error);
         }
     }
+    
+    // Infected pig death: drop collected porkchops as bonus loot
+    if (entity.typeId === INFECTED_PIG_ID) {
+        try {
+            // Check if pig collected any porkchops
+            const collectedPorkchops = entity.getDynamicProperty("mb_collected_porkchops") || 0;
+            
+            if (collectedPorkchops > 0) {
+                // Drop bonus porkchops based on collected amount
+                const bonusPorkchops = Math.min(collectedPorkchops, 16); // Cap at 16 to prevent lag
+                
+                for (let i = 0; i < bonusPorkchops; i++) {
+                    const dropLocation = {
+                        x: entity.location.x + (Math.random() - 0.5) * 3,
+                        y: entity.location.y + 0.5,
+                        z: entity.location.z + (Math.random() - 0.5) * 3
+                    };
+                    const porkchopItem = new ItemStack("minecraft:porkchop", 1);
+                    entity.dimension.spawnItem(porkchopItem, dropLocation);
+                }
+                
+                // Add visual feedback for bonus drops
+                entity.dimension.runCommand(`particle minecraft:heart ${Math.floor(entity.location.x)} ${Math.floor(entity.location.y + 1)} ${Math.floor(entity.location.z)} 1 1 1 0.1 10`);
+                
+                console.log(`[PORKCHOP] Infected pig died with ${collectedPorkchops} collected porkchops, dropped ${bonusPorkchops} bonus porkchops`);
+            }
+            
+            // Clear the collected porkchops counter
+            entity.setDynamicProperty("mb_collected_porkchops", 0);
+            
+        } catch (error) {
+            console.warn("Error handling infected pig death:", error);
+        }
+    }
 });
 
 
@@ -1529,6 +1585,29 @@ system.runInterval(() => {
         }
     } catch { }
 }, 20); // check every second
+
+// --- Monitor infected pig porkchop collection ---
+world.afterEvents.itemCompleteUse.subscribe((event) => {
+    const entity = event.source;
+    const item = event.itemStack;
+    
+    // Check if an infected pig is eating a porkchop
+    if (entity.typeId === INFECTED_PIG_ID && item?.typeId === "minecraft:porkchop") {
+        try {
+            // Track porkchop consumption
+            const currentPorkchops = entity.getDynamicProperty("mb_collected_porkchops") || 0;
+            entity.setDynamicProperty("mb_collected_porkchops", currentPorkchops + 1);
+            
+            // Add visual feedback
+            entity.dimension.runCommand(`particle minecraft:heart ${Math.floor(entity.location.x)} ${Math.floor(entity.location.y + 1)} ${Math.floor(entity.location.z)}`);
+            
+            console.log(`[PORKCHOP] Infected pig consumed porkchop (total collected: ${currentPorkchops + 1})`);
+            
+        } catch (error) {
+            console.warn("Error tracking porkchop consumption:", error);
+        }
+    }
+});
 
 // --- Monitor when players get effects added (for logging only) ---
 world.afterEvents.effectAdd.subscribe((event) => {
