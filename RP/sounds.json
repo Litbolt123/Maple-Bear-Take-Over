@@ -43,6 +43,31 @@
 						"pitch": 1
 					}
 				}
+			},
+			"mb:infected_pig": {
+				"volume": 1,
+				"events": {
+					"ambient": "mob.pig.say",
+					"boost": {
+						"pitch": 1,
+						"sound": "mob.pig.boost",
+						"volume": 1
+					},
+					"death": "mob.pig.death",
+					"hurt": "mob.pig.say",
+					"step": {
+						"pitch": 1,
+						"sound": "mob.pig.step",
+						"volume": 0.2
+					}
+				},
+				"variants": {
+					"key": true
+				},
+				"pitch": [
+					1.2,
+					0.8
+				]
 			}
 		}
 	}

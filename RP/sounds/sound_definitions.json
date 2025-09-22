@@ -44,6 +44,55 @@
 					"volume": 1
 				}
 			]
+		},
+		"mob.infected_pig.boost": {
+			"__use_legacy_max_distance": true,
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/infected_pig/boost1",
+				"sounds/infected_pig/boost2",
+				"sounds/infected_pig/boost3",
+				"sounds/infected_pig/boost4long",
+				"sounds/infected_pig/boost5long"
+			]
+		},
+		"mob.infected_pig.death": {
+			"__use_legacy_max_distance": true,
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/infected_pig/death"
+			]
+		},
+		"mob.infected_pig.say": {
+			"__use_legacy_max_distance": true,
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				{
+					"load_on_low_memory": true,
+					"name": "sounds/infected_pig/say1"
+				},
+				"sounds/infected_pig/say2",
+				"sounds/infected_pig/say3"
+			]
+		},
+		"mob.infected_pig.step": {
+			"__use_legacy_max_distance": true,
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/infected_pig/step1",
+				"sounds/infected_pig/step2",
+				"sounds/infected_pig/step3",
+				"sounds/infected_pig/step4",
+				"sounds/infected_pig/step5"
+			]
 		}
 	}
 }
