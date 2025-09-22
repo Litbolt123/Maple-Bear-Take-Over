@@ -61,9 +61,6 @@
 						"volume": 0.2
 					}
 				},
-				"variants": {
-					"key": true
-				},
 				"pitch": [
 					1.2,
 					0.8
