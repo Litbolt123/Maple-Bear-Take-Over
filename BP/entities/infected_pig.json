@@ -109,7 +109,7 @@
 				"speed_multiplier": 1.9,
 				"track_target": true,
 				"y_max_head_rotation": 360,
-				"reach_multiplier": 0.3
+				"reach_multiplier": 1
 			},
 			"minecraft:attack": {
 				"damage": 1

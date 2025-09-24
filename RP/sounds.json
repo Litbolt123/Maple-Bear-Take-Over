@@ -61,13 +61,27 @@
 						"volume": 0.2
 					}
 				},
-				"variants": {
-					"key": true
-				},
 				"pitch": [
-					1.2,
-					0.8
+					0.6
 				]
+			},
+			"mb:infected_cow": {
+				"events": {
+					"ambient": "mob.infected_cow.say",
+					"death": "mob.infected_cow.hurt",
+					"hurt": "mob.infected_cow.hurt",
+					"step": {
+						"pitch": [
+							1.1
+						],
+						"sound": "mob.infected_cow.step",
+						"volume": [
+							0.55
+						]
+					}
+				},
+				"volume": 1,
+				"pitch": 0.5
 			}
 		}
 	}

@@ -93,6 +93,51 @@
 				"sounds/infected_pig/step4",
 				"sounds/infected_pig/step5"
 			]
+		},
+		"mob.infected_cow.hurt": {
+			"__use_legacy_max_distance": true,
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/infected_cow/hurt1",
+				"sounds/infected_cow/hurt2",
+				"sounds/infected_cow/hurt3"
+			]
+		},
+		"mob.infected_cow.milk": {
+			"__use_legacy_max_distance": true,
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/infected_cow/milk1",
+				"sounds/infected_cow/milk2",
+				"sounds/infected_cow/milk3"
+			]
+		},
+		"mob.infected_cow.say": {
+			"__use_legacy_max_distance": true,
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/infected_cow/say2",
+				"sounds/infected_cow/say3",
+				"sounds/infected_cow/say4"
+			]
+		},
+		"mob.infected_cow.step": {
+			"__use_legacy_max_distance": true,
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/infected_cow/step1",
+				"sounds/infected_cow/step2",
+				"sounds/infected_cow/step3",
+				"sounds/infected_cow/step4"
+			]
 		}
 	}
 }
