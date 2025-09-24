@@ -9,6 +9,28 @@ import { initializeDayTracking, getCurrentDay, getInfectionMessage } from "./mb_
 // - Debug item use handler (book, paper, map, compass testing)
 // - Test command handler (!testeffects, !addweakness, !infection, !weakness, !removeimmunity, !spawnrate)
 
+// Potion data values for Bedrock 1.21
+const POTION_DATA = {
+    WEAKNESS_NORMAL: 34,    // Weakness (1:30)
+    WEAKNESS_EXTENDED: 35   // Weakness Extended (4:00)
+};
+
+// Track codex errors to prevent spam
+const codexErrorLogged = new Set();
+
+// Helper function for conditional codex error logging
+function safeMarkCodex(player, path, timestamp = false) {
+    try { 
+        markCodex(player, path, timestamp); 
+    } catch (error) {
+        // Log only first occurrence per player to prevent spam
+        if (!codexErrorLogged.has(player.id)) {
+            console.warn(`[CODEX] Error marking codex for ${player.name}:`, error);
+            codexErrorLogged.add(player.id);
+        }
+    }
+}
+
 // Constants for Maple Bear behavior
 const MAPLE_BEAR_ID = "mb:mb";
 const MAPLE_BEAR_DAY4_ID = "mb:mb_day4";
@@ -17,6 +39,7 @@ const INFECTED_BEAR_ID = "mb:infected";
 const INFECTED_BEAR_DAY8_ID = "mb:infected_day8";
 const BUFF_BEAR_ID = "mb:buff_mb";
 const INFECTED_PIG_ID = "mb:infected_pig";
+const INFECTED_COW_ID = "mb:infected_cow";
 const SNOW_ITEM_ID = "mb:snow";
 const INFECTED_TAG = "mb_infected";
 const INFECTED_CORPSE_ID = "mb:infected_corpse";
@@ -144,22 +167,8 @@ const ARMOR_SLOT_RANGES = [
 const OFFHAND_SLOTS = [45, 40, 50, 119, 36]; // Common offhand slots
 
 // Track players who have eaten snow and their transformation progress
-// Remove: transformingPlayers, playerInventories, infectedPlayers, isHandlingDeath, recentlyHandledInfectedDeaths, lastAttackerMap, isPlayerInfected, infectPlayer, handleInfectedDeath, prepareInfectedTransformation, simulateInfectedDeath, simulateGenericInfectedDeath, and all related transformation logic.
-// Only keep the bear death handler for item corruption, and normal event listeners for item use, etc.
-
-// Track player inventories for clone drops
+// Track player inventories for clone drops (used by bear equipment system)
 const playerInventories = new Map();
-
-// Track infected players
-const infectedPlayers = new Set();
-
-// Track if we're currently handling a death to prevent double spawning
-let isHandlingDeath = false;
-// Prevent double-handling of infected deaths
-const recentlyHandledInfectedDeaths = new Set();
-
-// Track last attacker for each player
-const lastAttackerMap = new Map();
 
 /**
  * @typedef {Object} InfectionState
@@ -179,6 +188,7 @@ const playerInfection = new Map(); // playerId -> InfectionState
 const bearHitCount = new Map(); // playerId -> hitCount (tracks hits before infection)
 const firstTimeMessages = new Map(); // playerId -> { hasBeenHit: false, hasBeenInfected: false, snowTier: 0 }
 const maxSnowLevels = new Map(); // playerId -> { maxLevel: 0, achievedAt: timestamp }
+const infectionExperience = new Map(); // playerId -> { bearInfected, snowInfected, maxSeverity, effectsSeen }
 const INFECTION_TICKS = 24000 * 2; // 2 Minecraft days (much faster death)
 const HITS_TO_INFECT = 3; // Number of hits required to get infected
 // Random effect interval is now handled inline in the infection system
@@ -186,13 +196,22 @@ const HITS_TO_INFECT = 3; // Number of hits required to get infected
 // Snow consumption mechanics are now handled inline in the itemCompleteUse handler
 
 // Helper function to check and unlock mob discovery
-function checkAndUnlockMobDiscovery(codex, player, killType, mobKillType, unlockKey, requiredKills = 3) {
+function checkAndUnlockMobDiscovery(codex, player, killType, mobKillType, hitType, unlockKey, requiredKills = 3, messageType = "interesting") {
+    // Early return if already discovered to prevent spam
+    if (codex.mobs[unlockKey]) {
+        return false;
+    }
+    
     const playerKills = codex.mobs[killType] || 0;
     const mobKills = codex.mobs[mobKillType] || 0;
+    const hits = codex.mobs[hitType] || 0;
+    const totalKills = playerKills + mobKills + hits;
     
-    if ((playerKills >= requiredKills || mobKills >= requiredKills) && !codex.mobs[unlockKey]) {
+    if (totalKills >= requiredKills) {
+        // Mark as discovered in the codex object immediately
+        codex.mobs[unlockKey] = true;
         markCodex(player, `mobs.${unlockKey}`);
-        player.sendMessage("§7You feel like you should check your Powdery Journal...");
+        sendDiscoveryMessage(player, codex, messageType);
         player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
         if (requiredKills === 1) {
             player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
@@ -209,16 +228,19 @@ function trackBearKill(player, bearType) {
         // Track kills based on bear type and unlock discovery
         if (bearType === MAPLE_BEAR_ID || bearType === MAPLE_BEAR_DAY4_ID || bearType === MAPLE_BEAR_DAY8_ID) {
             codex.mobs.tinyBearKills = (codex.mobs.tinyBearKills || 0) + 1; // Player kills this mob
-            checkAndUnlockMobDiscovery(codex, player, "tinyBearKills", "tinyBearMobKills", "mapleBearSeen");
+            checkAndUnlockMobDiscovery(codex, player, "tinyBearKills", "tinyBearMobKills", "tinyBearHits", "mapleBearSeen", 3, "mysterious");
         } else if (bearType === INFECTED_BEAR_ID || bearType === INFECTED_BEAR_DAY8_ID) {
             codex.mobs.infectedBearKills = (codex.mobs.infectedBearKills || 0) + 1;
-            checkAndUnlockMobDiscovery(codex, player, "infectedBearKills", "infectedBearMobKills", "infectedBearSeen");
+            checkAndUnlockMobDiscovery(codex, player, "infectedBearKills", "infectedBearMobKills", "infectedBearHits", "infectedBearSeen", 3, "dangerous");
         } else if (bearType === BUFF_BEAR_ID) {
             codex.mobs.buffBearKills = (codex.mobs.buffBearKills || 0) + 1;
-            checkAndUnlockMobDiscovery(codex, player, "buffBearKills", "buffBearMobKills", "buffBearSeen", 1);
+            checkAndUnlockMobDiscovery(codex, player, "buffBearKills", "buffBearMobKills", "buffBearHits", "buffBearSeen", 1, "threatening");
         } else if (bearType === INFECTED_PIG_ID) {
             codex.mobs.infectedPigKills = (codex.mobs.infectedPigKills || 0) + 1;
-            checkAndUnlockMobDiscovery(codex, player, "infectedPigKills", "infectedPigMobKills", "infectedPigSeen");
+            checkAndUnlockMobDiscovery(codex, player, "infectedPigKills", "infectedPigMobKills", "infectedPigHits", "infectedPigSeen", 3, "dangerous");
+        } else if (bearType === INFECTED_COW_ID) {
+            codex.mobs.infectedCowKills = (codex.mobs.infectedCowKills || 0) + 1;
+            checkAndUnlockMobDiscovery(codex, player, "infectedCowKills", "infectedCowMobKills", "infectedCowHits", "infectedCowSeen", 3, "dangerous");
         }
         
         saveCodex(player, codex);
@@ -252,16 +274,19 @@ function trackMobKill(killer, victim) {
                 // Track mob kills and check unlock conditions
                 if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID) {
                     codex.mobs.tinyBearMobKills = (codex.mobs.tinyBearMobKills || 0) + 1; // This mob kills other entities
-                    checkAndUnlockMobDiscovery(codex, player, "tinyBearKills", "tinyBearMobKills", "mapleBearSeen");
+                    checkAndUnlockMobDiscovery(codex, player, "tinyBearKills", "tinyBearMobKills", "tinyBearHits", "mapleBearSeen", 3, "mysterious");
                 } else if (killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID) {
                     codex.mobs.infectedBearMobKills = (codex.mobs.infectedBearMobKills || 0) + 1;
-                    checkAndUnlockMobDiscovery(codex, player, "infectedBearKills", "infectedBearMobKills", "infectedBearSeen");
+                    checkAndUnlockMobDiscovery(codex, player, "infectedBearKills", "infectedBearMobKills", "infectedBearHits", "infectedBearSeen", 3, "dangerous");
                 } else if (killerType === BUFF_BEAR_ID) {
                     codex.mobs.buffBearMobKills = (codex.mobs.buffBearMobKills || 0) + 1;
-                    checkAndUnlockMobDiscovery(codex, player, "buffBearKills", "buffBearMobKills", "buffBearSeen", 1);
+                    checkAndUnlockMobDiscovery(codex, player, "buffBearKills", "buffBearMobKills", "buffBearHits", "buffBearSeen", 1, "threatening");
                 } else if (killerType === INFECTED_PIG_ID) {
                     codex.mobs.infectedPigMobKills = (codex.mobs.infectedPigMobKills || 0) + 1;
-                    checkAndUnlockMobDiscovery(codex, player, "infectedPigKills", "infectedPigMobKills", "infectedPigSeen");
+                    checkAndUnlockMobDiscovery(codex, player, "infectedPigKills", "infectedPigMobKills", "infectedPigHits", "infectedPigSeen", 3, "dangerous");
+                } else if (killerType === INFECTED_COW_ID) {
+                    codex.mobs.infectedCowMobKills = (codex.mobs.infectedCowMobKills || 0) + 1;
+                    checkAndUnlockMobDiscovery(codex, player, "infectedCowKills", "infectedCowMobKills", "infectedCowHits", "infectedCowSeen", 3, "dangerous");
                 }
                 
                 saveCodex(player, codex);
@@ -377,31 +402,19 @@ function trackInfectionExperience(player, source, severity = 0) {
         
         if (source === "bear") {
             experience.bearInfected = true;
-            try { markCodex(player, "infections.bearInfected"); } catch (error) {
-                // Silently ignore codex errors to prevent spam
-            }
+            safeMarkCodex(player, "infections.bearInfected");
         } else if (source === "snow") {
             experience.snowInfected = true;
-            try { markCodex(player, "infections.snowInfected"); } catch (error) {
-                // Silently ignore codex errors to prevent spam
-            }
+            safeMarkCodex(player, "infections.snowInfected");
         }
         
         if (severity > experience.maxSeverity) {
             experience.maxSeverity = severity;
             // Mark severity-based codex entries
-            if (severity >= 1) try { markCodex(player, "infections.severity1"); } catch (error) {
-                // Silently ignore codex errors to prevent spam
-            }
-            if (severity >= 2) try { markCodex(player, "infections.severity2"); } catch (error) {
-                // Silently ignore codex errors to prevent spam
-            }
-            if (severity >= 3) try { markCodex(player, "infections.severity3"); } catch (error) {
-                // Silently ignore codex errors to prevent spam
-            }
-            if (severity >= 4) try { markCodex(player, "infections.severity4"); } catch (error) {
-                // Silently ignore codex errors to prevent spam
-            }
+            if (severity >= 1) safeMarkCodex(player, "infections.severity1");
+            if (severity >= 2) safeMarkCodex(player, "infections.severity2");
+            if (severity >= 3) safeMarkCodex(player, "infections.severity3");
+            if (severity >= 4) safeMarkCodex(player, "infections.severity4");
         }
         
         infectionExperience.set(player.id, experience);
@@ -425,28 +438,35 @@ function trackEffectExperience(player, effectId, severity) {
         infectionExperience.set(player.id, experience);
         
         // Mark specific effect experiences in codex
-        if (effectId === "minecraft:blindness") try { markCodex(player, "effects.blindnessSeen"); } catch (error) {
-            // Silently ignore codex errors to prevent spam
-        }
-        if (effectId === "minecraft:nausea") try { markCodex(player, "effects.nauseaSeen"); } catch (error) {
-            // Silently ignore codex errors to prevent spam
-        }
-        if (effectId === "minecraft:weakness") try { markCodex(player, "effects.weaknessSeen"); } catch (error) {
-            // Silently ignore codex errors to prevent spam
-        }
-        if (effectId === "minecraft:slowness") try { markCodex(player, "effects.slownessSeen"); } catch (error) {
-            // Silently ignore codex errors to prevent spam
-        }
-        if (effectId === "minecraft:hunger") try { markCodex(player, "effects.hungerSeen"); } catch (error) {
-            // Silently ignore codex errors to prevent spam
-        }
-        if (effectId === "minecraft:mining_fatigue") try { markCodex(player, "effects.miningFatigueSeen"); } catch (error) {
-            // Silently ignore codex errors to prevent spam
-        }
+        if (effectId === "minecraft:blindness") safeMarkCodex(player, "effects.blindnessSeen");
+        if (effectId === "minecraft:nausea") safeMarkCodex(player, "effects.nauseaSeen");
+        if (effectId === "minecraft:weakness") safeMarkCodex(player, "effects.weaknessSeen");
+        if (effectId === "minecraft:slowness") safeMarkCodex(player, "effects.slownessSeen");
+        if (effectId === "minecraft:hunger") safeMarkCodex(player, "effects.hungerSeen");
+        if (effectId === "minecraft:mining_fatigue") safeMarkCodex(player, "effects.miningFatigueSeen");
         
         console.log(`[EFFECT] ${player.name} experienced ${effectId} at severity ${severity}`);
     } catch (error) {
         console.warn(`[EFFECT] Error tracking effect experience for ${player.name}:`, error);
+    }
+}
+
+// --- Helper: Send contextual discovery message ---
+function sendDiscoveryMessage(player, codex, messageType = "interesting") {
+    if (codex?.items?.snowBookCrafted) {
+        player.sendMessage("§7You feel like you should check your Powdery Journal...");
+    } else {
+        if (messageType === "important") {
+            player.sendMessage("§7This seems important... I will need to remember it.");
+        } else if (messageType === "dangerous") {
+            player.sendMessage("§7This creature is dangerous... I should remember its behavior.");
+        } else if (messageType === "mysterious") {
+            player.sendMessage("§7This creature is mysterious... I need to study it more.");
+        } else if (messageType === "threatening") {
+            player.sendMessage("§7This creature is threatening... I must understand its nature.");
+        } else {
+            player.sendMessage("§7This seems interesting... I will need to remember it.");
+        }
     }
 }
 
@@ -474,10 +494,45 @@ function convertPigToInfectedPig(deadPig, killer) {
         // Add some visual feedback
         dimension.spawnParticle("mb:white_dust_particale", location);
         
+        // Note: Infected pig discovery is now handled through proper kill tracking system
+        // No direct unlocks - must reach kill requirements
+        
         console.log(`[PIG CONVERSION] Day ${currentDay}: Pig killed by ${killerType} → spawned Infected Pig`);
         
     } catch (error) {
         console.warn(`[PIG CONVERSION] Error converting pig to infected pig:`, error);
+    }
+}
+
+// --- Helper: Convert cow to infected cow ---
+function convertCowToInfectedCow(deadCow, killer) {
+    try {
+        const location = deadCow.location;
+        const killerType = killer.typeId;
+        const currentDay = getCurrentDay();
+        const dimension = deadCow.dimension;
+        
+        // Ensure chunk is loaded before spawning
+        try {
+            dimension.getBlock({ x: Math.floor(location.x), y: Math.floor(location.y), z: Math.floor(location.z) });
+        } catch (chunkError) {
+            console.log(`[COW CONVERSION] Skipping cow conversion - chunk not loaded at ${Math.floor(location.x)}, ${Math.floor(location.y)}, ${Math.floor(location.z)}`);
+            return;
+        }
+        
+        // Spawn infected cow at the cow's location
+        const infectedCow = dimension.spawnEntity(INFECTED_COW_ID, location);
+        
+        // Add some visual feedback
+        dimension.spawnParticle("mb:white_dust_particale", location);
+        
+        // Note: Infected cow discovery is now handled through proper kill tracking system
+        // No direct unlocks - must reach kill requirements
+        
+        console.log(`[COW CONVERSION] Day ${currentDay}: Cow killed by ${killerType} → spawned Infected Cow`);
+        
+    } catch (error) {
+        console.warn(`[COW CONVERSION] Error converting cow to infected cow:`, error);
     }
 }
 
@@ -486,9 +541,13 @@ function convertMobToMapleBear(deadMob, killer) {
     try {
         const mobType = deadMob.typeId;
         
-        // Don't convert pigs - they're handled by the pig conversion system
+        // Don't convert pigs and cows - they're handled by their respective conversion systems
         if (mobType === "minecraft:pig") {
             console.log(`[CONVERSION] Ignoring pig conversion - handled by pig conversion system`);
+            return;
+        }
+        if (mobType === "minecraft:cow") {
+            console.log(`[CONVERSION] Ignoring cow conversion - handled by cow conversion system`);
             return;
         }
         
@@ -948,382 +1007,408 @@ console.log("World initialized, setting up event listeners...");
 
 // Infection logic: infect player, notify, and spawn bear on death (no inventory logic)
 
-// Handle weakness potion and enchanted golden apple consumption
-world.afterEvents.itemCompleteUse.subscribe((event) => {
-    const player = event.source;
-    const item = event.itemStack;
+// Handle potion detection
+function handlePotion(player, item) {
+    try {
+        const potionData = item.data || 0;
+        console.log(`[POTION] Player ${player.name} drank a potion with data: ${potionData}`);
 
-    // Handle weakness potion detection
-    if (item?.typeId === "minecraft:potion") {
-        try {
-            // Check if it's a weakness potion by looking at the potion data
-            const potionData = item.data || 0;
-            console.log(`[POTION] Player ${player.name} drank a potion with data: ${potionData}`);
-
-            // Weakness potion data values for Bedrock 1.21:
-            // 34 = Weakness (1:30), 35 = Weakness Extended (4:00)
-            if (potionData === 34 || potionData === 35) {
-                    console.log(`[POTION] Player ${player.name} drank a weakness potion (data: ${potionData})`);
-                    // Mark weakness potion specifically (only first time)
-                    try { 
-                        const codex = getCodex(player);
-                        if (!codex.items.weaknessPotionSeen) {
-                            markCodex(player, "items.weaknessPotionSeen"); 
-                            player.sendMessage("§7You feel like you should check your Powdery Journal...");
-                            player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-                            player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
-                        }
-                    } catch {}
-                    player.sendMessage("§eYou feel weak... This might help with curing infections!");
-                } else {
-                    // Log all potion data to help identify weakness potions
-                    console.log(`[POTION] Unknown potion data: ${potionData} - please check if this is a weakness potion`);
+        // Mark potions tab as discovered (only first time)
+        try { 
+            const codex = getCodex(player);
+            if (!codex.items.potionsSeen) {
+                markCodex(player, "items.potionsSeen"); 
+                sendDiscoveryMessage(player, codex, "interesting");
+                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
             }
-        } catch (error) {
-                console.warn(`[POTION] Error handling weakness potion for ${player.name}:`, error);
-            }
-        }
+        } catch {}
 
-        // Handle enchanted golden apple consumption for cure system
-        if (item?.typeId === "minecraft:enchanted_golden_apple") {
-            console.log(`[APPLE] Player ${player.name} consumed a golden apple`);
-
-            // Mark enchanted golden apple as discovered (only first time)
+        // Weakness potion data values for Bedrock 1.21:
+        // 34 = Weakness (1:30), 35 = Weakness Extended (4:00)
+        if (potionData === POTION_DATA.WEAKNESS_NORMAL || potionData === POTION_DATA.WEAKNESS_EXTENDED) {
+            console.log(`[POTION] Player ${player.name} drank a weakness potion (data: ${potionData})`);
+            // Mark weakness potion specifically (only first time)
             try { 
                 const codex = getCodex(player);
-                if (!codex.items.enchantedGoldenAppleSeen) {
-                    markCodex(player, "items.enchantedGoldenAppleSeen"); 
-                    player.sendMessage("§7You feel like you should check your Powdery Journal...");
+                if (!codex.items.weaknessPotionSeen) {
+                    markCodex(player, "items.weaknessPotionSeen"); 
+                    sendDiscoveryMessage(player, codex, "important");
                     player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
                     player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
                 }
             } catch {}
-
-            // Check if player has infection
-            const infectionState = playerInfection.get(player.id);
-            const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
-
-            if (hasInfection) {
-                console.log(`[CURE] Player ${player.name} attempting to cure infection`);
-
-                // Check for weakness effect using our reliable detection system
-                const hasWeakness = hasWeaknessEffect(player);
-                console.log(`[CURE] Player has weakness effect: ${hasWeakness}`);
-
-                if (hasWeakness) {
-                    // Cure infection
-system.run(() => {
-                        playerInfection.set(player.id, { ticksLeft: 0, cured: true, snowCount: 0, hitCount: 0 });
-                        console.log(`[CURE] Cured infection for ${player.name}`);
-                        player.removeTag(INFECTED_TAG);
-                        player.sendMessage("§aYou have cured your infection!");
-                        
-                        // Track cure history and attempt
-                        trackInfectionHistory(player, "cured");
-                        trackCureAttempt(player);
-
-                        // Grant immunity for 5 minutes
-                        const immunityEndTime = Date.now() + CURE_IMMUNITY_DURATION;
-                        curedPlayers.set(player.id, immunityEndTime);
-                        console.log(`[CURE] Granted ${player.name} immunity until ${new Date(immunityEndTime).toLocaleTimeString()}`);
-
-                        // IMMEDIATELY save the cure data to dynamic properties
-                        saveInfectionData(player);
-                        console.log(`[CURE] Immediately saved cure data for ${player.name}`);
-
-                        // Note: We do NOT remove the weakness effect - let it run its course naturally
-                        player.sendMessage("§eYou are now immune... maybe?");
-                        try { markCodex(player, "cures.bearCureKnown"); markCodex(player, "cures.bearCureDoneAt", true); markCodex(player, "items.cureItemsSeen"); } catch {}
-                    });
-                } else {
-                    // No message for now - hint system will be added later
-                }
-            } else {
-                // Player is not infected
-                system.run(() => {
-                    player.sendMessage("§aYou are not currently infected.");
-                });
-            }
+            player.sendMessage("§eYou feel weak... This might help with curing infections!");
+        } else {
+            // Log all potion data to help identify weakness potions
+            console.log(`[POTION] Unknown potion data: ${potionData} - please check if this is a weakness potion`);
         }
-        
-        // Handle normal golden apple consumption for hint system
-        if (item?.typeId === "minecraft:golden_apple") {
-            // Mark normal golden apple as discovered (only first time)
-            try { 
+    } catch (error) {
+        console.warn(`[POTION] Error handling potion for ${player.name}:`, error);
+    }
+}
+
+// Handle enchanted golden apple consumption for cure system
+function handleEnchantedGoldenApple(player, item) {
+    console.log(`[APPLE] Player ${player.name} consumed a golden apple`);
+
+    // Mark enchanted golden apple as discovered (only first time)
+    try { 
+        const codex = getCodex(player);
+        if (!codex.items.enchantedGoldenAppleSeen) {
+            markCodex(player, "items.enchantedGoldenAppleSeen"); 
+            sendDiscoveryMessage(player, codex, "important");
+            player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+            player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+        }
+    } catch {}
+
+    // Check if player has infection
+    const infectionState = playerInfection.get(player.id);
+    const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
+
+    if (hasInfection) {
+        console.log(`[CURE] Player ${player.name} attempting to cure infection`);
+
+        // Check for weakness effect using our reliable detection system
+        const hasWeakness = hasWeaknessEffect(player);
+        console.log(`[CURE] Player has weakness effect: ${hasWeakness}`);
+
+        if (hasWeakness) {
+            // Cure infection
+            system.run(() => {
+                playerInfection.set(player.id, { ticksLeft: 0, cured: true, snowCount: 0, hitCount: 0 });
+                console.log(`[CURE] Cured infection for ${player.name}`);
+                player.removeTag(INFECTED_TAG);
+                player.sendMessage("§aYou have cured your infection!");
+                
+                // Track cure history and attempt
+                trackInfectionHistory(player, "cured");
+                trackCureAttempt(player);
+                
+                // Check if this is first-time cure for special effects
                 const codex = getCodex(player);
-                if (!codex.items.goldenAppleSeen) {
-                    markCodex(player, "items.goldenAppleSeen"); 
-                    player.sendMessage("§7You feel like you should check your Powdery Journal...");
-                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                const isFirstCure = !codex.items.cureItemsSeen;
+                
+                // Mark cure items as discovered
+                try { markCodex(player, "items.cureItemsSeen"); } catch {}
+                
+                if (isFirstCure) {
+                    // Happy and relieved first-time cure sounds
+                    player.playSound("mob.villager.idle", { pitch: 1.8, volume: 1.0 });
+                    player.playSound("random.orb", { pitch: 1.8, volume: 1.0 });
+                    player.playSound("mob.villager.celebrate", { pitch: 1.5, volume: 0.8 });
+                    player.playSound("random.levelup", { pitch: 1.2, volume: 0.8 });
+                    player.playSound("mob.villager.yes", { pitch: 1.3, volume: 0.6 });
+                } else {
+                    // Regular cure sounds - still happy but less dramatic
+                    player.playSound("random.orb", { pitch: 1.4, volume: 0.8 });
+                    player.playSound("mob.villager.idle", { pitch: 1.5, volume: 0.6 });
+                    player.playSound("mob.villager.yes", { pitch: 1.2, volume: 0.4 });
                 }
-            } catch {}
+
+                // Grant immunity for 5 minutes
+                const immunityEndTime = Date.now() + CURE_IMMUNITY_DURATION;
+                curedPlayers.set(player.id, immunityEndTime);
+                console.log(`[CURE] Granted ${player.name} immunity until ${new Date(immunityEndTime).toLocaleTimeString()}`);
+
+                // IMMEDIATELY save the cure data to dynamic properties
+                saveInfectionData(player);
+                console.log(`[CURE] Immediately saved cure data for ${player.name}`);
+
+                // Note: We do NOT remove the weakness effect - let it run its course naturally
+                player.sendMessage("§eYou are now immune... maybe?");
+                try { markCodex(player, "cures.bearCureKnown"); markCodex(player, "cures.bearCureDoneAt", true); } catch {}
+            });
+        } else {
+            // No message for now - hint system will be added later
         }
-        
-        // Handle snow consumption
-    if (item?.typeId === SNOW_ITEM_ID) {
-            // Handle snow consumption with new deceptive mechanics
-            const infectionState = playerInfection.get(player.id);
-            const isImmune = isPlayerImmune(player);
-            
-            // ALWAYS mark snow as discovered and identified when consumed
-            try { 
-                markCodex(player, "items.snowFound"); 
-                markCodex(player, "items.snowIdentified");
-            } catch {}
-            
-            // Handle snow consumption while immune
-            if (isImmune && (!infectionState || infectionState.cured)) {
-                // Reduce immunity time by 1 minute (60000 milliseconds)
-                const currentImmunityEnd = curedPlayers.get(player.id);
-                if (currentImmunityEnd) {
-                    const newImmunityEnd = Math.max(Date.now(), currentImmunityEnd - 60000);
-                    curedPlayers.set(player.id, newImmunityEnd);
-                    
-                    if (newImmunityEnd <= Date.now()) {
-                        // Immunity ended, remove it
-                        curedPlayers.delete(player.id);
-                        player.removeTag("mb_immune_hit_message");
-                        player.sendMessage("§cYour immunity has been broken by the snow! This was your last warning...");
-                        try { markCodex(player, "items.snowBreaksImmunity"); } catch {}
-                    } else {
-                        const remainingMs = newImmunityEnd - Date.now();
-                        const remainingMinutes = Math.ceil(remainingMs / 60000);
-                        player.sendMessage(`§eThe snow weakens your immunity! ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''} remaining...`);
-                    }
-                }
-                return; // Don't proceed with normal snow consumption
+    } else {
+        // Player is not infected
+        system.run(() => {
+            player.sendMessage("§aYou are not currently infected.");
+        });
+    }
+}
+
+// Track cure attempts for progression
+function trackCureAttempt(player) {
+    if (!player) return;
+    const codex = getCodex(player);
+    codex.items.cureAttempted = true;
+    saveCodex(player, codex);
+}
+
+// Handle snow consumption
+function handleSnowConsumption(player, item) {
+    const infectionState = playerInfection.get(player.id);
+    const isImmune = isPlayerImmune(player);
+    
+    // ALWAYS mark snow as discovered and identified when consumed
+    try { 
+        markCodex(player, "items.snowFound"); 
+        markCodex(player, "items.snowIdentified");
+    } catch {}
+    
+    // Handle snow consumption while immune
+    if (isImmune && (!infectionState || infectionState.cured)) {
+        // Mark that player now knows they have immunity
+        try { 
+            const codex = getCodex(player);
+            if (!codex.status.immuneKnown) {
+                markCodex(player, "status.immuneKnown");
+                player.sendMessage("§bYou realize you are immune to infection!");
             }
+        } catch {}
+        
+        // Reduce immunity time by 1 minute (60000 milliseconds)
+        const currentImmunityEnd = curedPlayers.get(player.id);
+        if (currentImmunityEnd) {
+            const newImmunityEnd = Math.max(Date.now(), currentImmunityEnd - 60000);
+            curedPlayers.set(player.id, newImmunityEnd);
             
-            if (!infectionState || infectionState.cured) {
-                // Clear any existing immunity when infected
+            if (newImmunityEnd <= Date.now()) {
+                // Immunity ended, remove it
                 curedPlayers.delete(player.id);
                 player.removeTag("mb_immune_hit_message");
-                
-                // Not infected - start infection
-                playerInfection.set(player.id, { 
-                    ticksLeft: INFECTION_TICKS, 
-                    cured: false, 
-                    hitCount: 0, 
-                    snowCount: 1,
-                    source: "snow",
-                    maxSeverity: 0,
-                    lastTierMessage: 0
-                });
-                player.addTag(INFECTED_TAG);
-                player.sendMessage("§4You have been infected! Find a cure quickly!");
-                player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.6 });
-                console.log(`[SNOW] ${player.name} started infection by eating snow`);
-                
-                // Track infection experience
-                trackInfectionExperience(player, "snow", 0);
-                
-                // Mark snow infection as discovered
-                try { markCodex(player, "infections.snow.discovered"); markCodex(player, "infections.snow.firstUseAt", true); } catch {}
-                
-                // Track infection history
-                trackInfectionHistory(player, "infected");
+                player.sendMessage("§cYour immunity has been broken by the snow! This was your last warning...");
+                try { markCodex(player, "items.snowBreaksImmunity"); } catch {}
             } else {
-                // Player is infected - apply progressive snow mechanics based on tier
-                const snowCount = (infectionState.snowCount || 0) + 1;
-                infectionState.snowCount = snowCount;
-                
-                // Calculate time effect based on snow tier
-                const timeEffect = getSnowTimeEffect(snowCount);
-                let message = "";
-                
-                if (snowCount <= 5) {
-                    message = "§eThe substance seems to slow down the infection...";
-                } else if (snowCount <= 10) {
-                    message = "§eThe substance has no noticeable effect...";
-                } else if (snowCount <= 20) {
-                    message = "§cThe substance accelerates the infection!";
-                } else if (snowCount <= 50) {
-                    message = "§4The substance heavily accelerates the infection!";
-                } else if (snowCount <= 100) {
-                    message = "§4The substance has consumed you completely!";
-                } else {
-                    message = "§0How are you even here? The void consumes all...";
-                }
-                
-                // Apply time effect
-                infectionState.ticksLeft = Math.max(0, Math.min(INFECTION_TICKS, infectionState.ticksLeft + timeEffect));
-                
-                updateMaxSnowLevel(player, snowCount);
-                
-                // Show message only for first time reaching each tier
-                const currentTier = snowCount <= 5 ? 1 : snowCount <= 10 ? 2 : snowCount <= 20 ? 3 : snowCount <= 50 ? 4 : snowCount <= 100 ? 5 : 6;
-                if (currentTier > (infectionState.lastTierMessage || 0)) {
-                    player.sendMessage(message);
-                    infectionState.lastTierMessage = currentTier;
-                }
-                
-                console.log(`[SNOW] ${player.name} consumed snow (count: ${snowCount}, time effect: ${timeEffect}, new ticks: ${infectionState.ticksLeft})`);
+                const remainingMs = newImmunityEnd - Date.now();
+                const remainingMinutes = Math.ceil(remainingMs / 60000);
+                player.sendMessage(`§eThe snow weakens your immunity! ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''} remaining...`);
             }
+        }
+        return; // Don't proceed with normal snow consumption
+    }
+    
+    if (!infectionState || infectionState.cured) {
+        // Clear any existing immunity when infected
+        curedPlayers.delete(player.id);
+        player.removeTag("mb_immune_hit_message");
+        
+        // Not infected - start infection
+        playerInfection.set(player.id, { 
+            ticksLeft: INFECTION_TICKS, 
+            cured: false, 
+            hitCount: 0, 
+            snowCount: 1,
+            source: "snow",
+            maxSeverity: 0,
+            lastTierMessage: 0
+        });
+        player.addTag(INFECTED_TAG);
+        player.sendMessage("§4You have been infected! Find a cure quickly!");
+        
+        // Scary infection sounds
+        player.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.8 });
+        player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 0.6 });
+        player.playSound("mob.enderman.teleport", { pitch: 1.0, volume: 0.4 });
+        player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.6 });
+        
+        console.log(`[SNOW] ${player.name} started infection by eating snow`);
+        
+        // Track infection experience
+        trackInfectionExperience(player, "snow", 0);
+        
+        // Mark snow infection as discovered
+        try { markCodex(player, "infections.snow.discovered"); markCodex(player, "infections.snow.firstUseAt", true); } catch {}
+        
+        // Track infection history
+        trackInfectionHistory(player, "infected");
+    } else {
+        // Player is infected - apply progressive snow mechanics based on tier
+        const snowCount = (infectionState.snowCount || 0) + 1;
+        infectionState.snowCount = snowCount;
+        
+        // Calculate time effect based on snow tier
+        const timeEffect = getSnowTimeEffect(snowCount);
+        let message = "";
+        
+        if (snowCount <= 5) {
+            message = "§eThe substance seems to slow down the infection...";
+        } else if (snowCount <= 10) {
+            message = "§eThe substance has no noticeable effect...";
+        } else if (snowCount <= 20) {
+            message = "§cThe substance accelerates the infection!";
+        } else if (snowCount <= 50) {
+            message = "§4The substance heavily accelerates the infection!";
+        } else if (snowCount <= 100) {
+            message = "§4The substance has consumed you completely!";
+        } else {
+            message = "§0How are you even here? The void consumes all...";
+        }
+        
+        // Apply time effect
+        infectionState.ticksLeft = Math.max(0, Math.min(INFECTION_TICKS, infectionState.ticksLeft + timeEffect));
+        
+        updateMaxSnowLevel(player, snowCount);
+        
+        // Show message only for first time reaching each tier
+        const currentTier = snowCount <= 5 ? 1 : snowCount <= 10 ? 2 : snowCount <= 20 ? 3 : snowCount <= 50 ? 4 : snowCount <= 100 ? 5 : 6;
+        if (currentTier > (infectionState.lastTierMessage || 0)) {
+            player.sendMessage(message);
+            infectionState.lastTierMessage = currentTier;
+        }
+        
+        console.log(`[SNOW] ${player.name} consumed snow (count: ${snowCount}, time effect: ${timeEffect}, new ticks: ${infectionState.ticksLeft})`);
+    }
+}
 
+// Main item consumption handler
+world.afterEvents.itemCompleteUse.subscribe((event) => {
+    const player = event.source;
+    const item = event.itemStack;
+
+    // Handle potion detection
+    if (item?.typeId === "minecraft:potion") {
+        handlePotion(player, item);
+    }
+    
     // Handle enchanted golden apple consumption for cure system
     if (item?.typeId === "minecraft:enchanted_golden_apple") {
-        console.log(`[APPLE] Player ${player.name} consumed a golden apple`);
-
-        // Check if player has infection
-        const infectionState = playerInfection.get(player.id);
-        const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
-
-        if (hasInfection) {
-            console.log(`[CURE] Player ${player.name} attempting to cure infection`);
-
-            // Check for weakness effect using our reliable detection system
-            const hasWeakness = hasWeaknessEffect(player);
-            console.log(`[CURE] Player has weakness effect: ${hasWeakness}`);
-
-            if (hasWeakness) {
-                // Cure infection
-            system.run(() => {
-                    playerInfection.set(player.id, { ticksLeft: 0, cured: true, snowCount: 0, hitCount: 0 });
-                    console.log(`[CURE] Cured infection for ${player.name}`);
-                    player.removeTag(INFECTED_TAG);
-                    player.sendMessage("§aYou have cured your infection!");
-                    
-                    // Track cure history
-                    trackInfectionHistory(player, "cured");
-
-                    // Grant immunity for 5 minutes
-                    const immunityEndTime = Date.now() + CURE_IMMUNITY_DURATION;
-                    curedPlayers.set(player.id, immunityEndTime);
-                    console.log(`[CURE] Granted ${player.name} immunity until ${new Date(immunityEndTime).toLocaleTimeString()}`);
-
-                    // IMMEDIATELY save the cure data to dynamic properties
-                    saveInfectionData(player);
-                    console.log(`[CURE] Immediately saved cure data for ${player.name}`);
-
-                    // Note: We do NOT remove the weakness effect - let it run its course naturally
-                    player.sendMessage("§eYou are now immune... maybe?");
-                    try { markCodex(player, "cures.bearCureKnown"); markCodex(player, "cures.bearCureDoneAt", true); markCodex(player, "items.cureItemsSeen"); } catch {}
-                });
-            } else {
-                system.run(() => {
-                    player.sendMessage("§eYou need to have weakness to be cured...");
-                });
+        handleEnchantedGoldenApple(player, item);
+    }
+    
+    // Handle normal golden apple consumption for hint system
+    if (item?.typeId === "minecraft:golden_apple") {
+        // Mark normal golden apple as discovered (only first time)
+        try { 
+            const codex = getCodex(player);
+            if (!codex.items.goldenAppleSeen) {
+                markCodex(player, "items.goldenAppleSeen"); 
+                sendDiscoveryMessage(player, codex, "interesting");
+                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
             }
-        } else {
-            // Player is not infected
-            system.run(() => {
-                player.sendMessage("§aYou are not currently infected.");
-            });
-        }
+        } catch {}
+    }
+    
+    // Handle snow consumption
+    if (item?.typeId === SNOW_ITEM_ID) {
+        handleSnowConsumption(player, item);
     }
 });
 
-// Handle entity death: player infection and mob conversion
-world.afterEvents.entityDie.subscribe((event) => {
-    const entity = event.deadEntity;
-    const source = event.damageSource;
-    
-    // Handle player death - clear infection data
-    if (entity instanceof Player) {
-        // Clear all infection data on death - you're a new person when you respawn
-        playerInfection.delete(entity.id);
-        curedPlayers.delete(entity.id);
-        bearHitCount.delete(entity.id);
-        infectionExperience.delete(entity.id);
-        // Note: Keep maxSnowLevels persistent across deaths - it's a lifetime achievement
-        entity.removeTag(INFECTED_TAG);
+// Handle player death - clear infection data
+function handlePlayerDeath(player) {
+    // Clear all infection data on death - you're a new person when you respawn
+    playerInfection.delete(player.id);
+    curedPlayers.delete(player.id);
+    bearHitCount.delete(player.id);
+    infectionExperience.delete(player.id);
+    // Note: Keep maxSnowLevels persistent across deaths - it's a lifetime achievement
+    player.removeTag(INFECTED_TAG);
 
-        // Clear dynamic properties on death
-        try {
-            entity.setDynamicProperty("mb_bear_infection", undefined);
-            entity.setDynamicProperty("mb_snow_infection", undefined);
-            entity.setDynamicProperty("mb_immunity_end", undefined);
-            entity.setDynamicProperty("mb_bear_hit_count", undefined);
-            // Keep first-time tutorial flags so players don't see them again after death
-            // Keep codex knowledge - that persists across deaths
-            // Keep max snow level - it's a lifetime achievement
-            console.log(`[DEATH] Cleared all infection data for ${entity.name} - they are a new person now`);
-        } catch (error) {
-            console.warn(`[DEATH] Error clearing dynamic properties for ${entity.name}:`, error);
-        }
-        return; // Exit early for player deaths
+    // Clear dynamic properties on death
+    try {
+        player.setDynamicProperty("mb_bear_infection", undefined);
+        player.setDynamicProperty("mb_snow_infection", undefined);
+        player.setDynamicProperty("mb_immunity_end", undefined);
+        player.setDynamicProperty("mb_bear_hit_count", undefined);
+        // Keep first-time tutorial flags so players don't see them again after death
+        // Keep codex knowledge - that persists across deaths
+        // Keep max snow level - it's a lifetime achievement
+        console.log(`[DEATH] Cleared all infection data for ${player.name} - they are a new person now`);
+    } catch (error) {
+        console.warn(`[DEATH] Error clearing dynamic properties for ${player.name}:`, error);
     }
-    // --- MOB CONVERSION SYSTEM ---
-    // If a Maple Bear killed a mob, convert it to a Maple Bear
-    if (source && source.damagingEntity && !(entity instanceof Player)) {
-        const killer = source.damagingEntity;
-        const killerType = killer.typeId;
-        
-        // Check if killer is a Maple Bear or infected pig
-        if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === BUFF_BEAR_ID || killerType === INFECTED_PIG_ID) {
-            // Progressive conversion rate based on current day
-            const currentDay = getCurrentDay();
-            const conversionRate = getInfectionRate(currentDay);
-            
-            // Check if victim is a pig and convert to infected pig
-            if (entity.typeId === "minecraft:pig") {
-                console.log(`[PIG CONVERSION] Maple Bear killing pig on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
-                if (Math.random() < conversionRate) {
-                    system.run(() => {
-                        convertPigToInfectedPig(entity, killer);
-                    });
-                }
-            } else {
-                console.log(`[CONVERSION] Maple Bear killing ${entity.typeId} on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
-                // Normal Maple Bear conversion for non-pigs (ignore pigs completely)
-                if (Math.random() < conversionRate) {
-                    system.run(() => {
-                        convertMobToMapleBear(entity, killer);
-                    });
-                }
+}
+
+// Handle mob conversion when killed by Maple Bears
+function handleMobConversion(entity, killer) {
+    const killerType = killer.typeId;
+    
+    // Progressive conversion rate based on current day
+    const currentDay = getCurrentDay();
+    const conversionRate = getInfectionRate(currentDay);
+    
+    // Check if killer is a Maple Bear or infected pig
+    if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === BUFF_BEAR_ID || killerType === INFECTED_PIG_ID) {
+        // Check if victim is a pig and convert to infected pig
+        if (entity.typeId === "minecraft:pig") {
+            console.log(`[PIG CONVERSION] Maple Bear killing pig on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
+            if (Math.random() < conversionRate) {
+                system.run(() => {
+                    convertPigToInfectedPig(entity, killer);
+                });
+            }
+        } else if (entity.typeId === "minecraft:cow") {
+            console.log(`[COW CONVERSION] Maple Bear killing cow on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
+            if (Math.random() < conversionRate) {
+                system.run(() => {
+                    convertCowToInfectedCow(entity, killer);
+                });
             }
         } else {
             console.log(`[CONVERSION] Maple Bear killing ${entity.typeId} on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
-            // Normal Maple Bear conversion for non-pig mobs
+            // Normal Maple Bear conversion for non-pigs (ignore pigs completely)
             if (Math.random() < conversionRate) {
                 system.run(() => {
                     convertMobToMapleBear(entity, killer);
                 });
             }
         }
-            // Unlock mob sightings for nearby players
-            for (const p of world.getAllPlayers()) {
-                if (!p || !p.dimension || p.dimension.id !== killer.dimension.id) continue;
-                const dx = p.location.x - killer.location.x;
-                const dy = p.location.y - killer.location.y;
-                const dz = p.location.z - killer.location.z;
-                if (dx * dx + dy * dy + dz * dz <= 64 * 64) {
-                    if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID) markCodex(p, "mobs.mapleBearSeen");
-                    if (killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID) markCodex(p, "mobs.infectedBearSeen");
-                    if (killerType === INFECTED_PIG_ID) markCodex(p, "mobs.infectedPigSeen");
-                    if (killerType === BUFF_BEAR_ID) markCodex(p, "mobs.buffBearSeen");
-                    
-                    // If a pig was converted to infected pig, unlock infected pig discovery
-                    if (entity.typeId === "minecraft:pig") {
-                        markCodex(p, "mobs.infectedPigSeen");
-                    }
-                }
-            }
+    } else {
+        console.log(`[CONVERSION] Non-Maple Bear killing ${entity.typeId} on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
+        // Normal Maple Bear conversion for non-pig mobs
+        if (Math.random() < conversionRate) {
+            system.run(() => {
+                convertMobToMapleBear(entity, killer);
+            });
         }
     }
-    
-    // --- KILL TRACKING FOR MAPLE BEARS ---
-    // Track when a Maple Bear is killed by a player
-    if (source && source.damagingEntity instanceof Player && !(entity instanceof Player)) {
+        // Unlock mob sightings for nearby players
+        for (const p of world.getAllPlayers()) {
+            if (!p || !p.dimension || p.dimension.id !== killer.dimension.id) continue;
+            const dx = p.location.x - killer.location.x;
+            const dy = p.location.y - killer.location.y;
+            const dz = p.location.z - killer.location.z;
+            if (dx * dx + dy * dy + dz * dz <= 64 * 64) {
+                // Mob discovery is now handled through proper kill tracking system
+                // No direct unlocks - must reach kill requirements
+                
+                // Note: Infected pig discovery is now handled in convertPigToInfectedPig function
+            }
+        }
+}
+
+// Handle Maple Bear kill tracking
+function handleMapleBearKillTracking(entity, killer) {
+    if (killer instanceof Player && !(entity instanceof Player)) {
         const entityType = entity.typeId;
         if (entityType === MAPLE_BEAR_ID || entityType === MAPLE_BEAR_DAY4_ID || entityType === MAPLE_BEAR_DAY8_ID || 
-            entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === BUFF_BEAR_ID || entityType === INFECTED_PIG_ID) {
-            trackBearKill(source.damagingEntity, entityType);
+            entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === BUFF_BEAR_ID || entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID) {
+            trackBearKill(killer, entityType);
         }
     }
+}
+
+// Handle infected player death
+function handleInfectedPlayerDeath(player) {
+    // Note: Infected player death handling removed - using unified infection system
+    // Remove infection tag on death (will also be removed on respawn)
+    player.removeTag(INFECTED_TAG);
+}
+
+// Main entity death handler
+world.afterEvents.entityDie.subscribe((event) => {
+    const entity = event.deadEntity;
+    const source = event.damageSource;
     
-    // --- PLAYER INFECTION SYSTEM ---
+    // Handle player death - clear infection data
     if (entity instanceof Player) {
-        // If player is infected, handle the full transformation
-        if (entity.hasTag(INFECTED_TAG)) {
-            try {
-                handleInfectedDeath(entity);
-            } catch (error) {
-                console.warn(`[DEATH] Error handling infected player death for ${entity.name}:`, error);
-            }
-        }
-        // Remove infection tag on death (will also be removed on respawn)
-        entity.removeTag(INFECTED_TAG);
+        handlePlayerDeath(entity);
+        handleInfectedPlayerDeath(entity);
+        return; // Exit early for player deaths
+    }
+    
+    // Handle mob conversion when killed by Maple Bears
+    if (source && source.damagingEntity && !(entity instanceof Player)) {
+        handleMobConversion(entity, source.damagingEntity);
+    }
+    
+    // Handle Maple Bear kill tracking
+    if (source && source.damagingEntity) {
+        handleMapleBearKillTracking(entity, source.damagingEntity);
     }
     // Bear death corruption logic: corrupt ALL items in inventory AND equipment
     if (entity.typeId === INFECTED_BEAR_ID) {
@@ -1380,7 +1465,9 @@ world.afterEvents.entityDie.subscribe((event) => {
                     entity.dimension.spawnItem(snowItem, dropLocation);
                     try {
                         entity.dimension.runCommand(`particle minecraft:snowflake ${Math.round(dropLocation.x)} ${Math.round(dropLocation.y)} ${Math.round(dropLocation.z)}`);
-                    } catch (error) { }
+                    } catch (error) {
+                        console.warn(`[SNOW DROP] Error spawning particle effect:`, error);
+                    }
                 }
             }
         } catch (error) {
@@ -1421,6 +1508,40 @@ world.afterEvents.entityDie.subscribe((event) => {
             console.warn("Error handling infected pig death:", error);
         }
     }
+    
+    // Infected cow death: drop collected beef as bonus loot
+    if (entity.typeId === INFECTED_COW_ID) {
+        try {
+            // Check if cow collected any beef
+            const collectedBeef = entity.getDynamicProperty("mb_collected_beef") || 0;
+            
+            if (collectedBeef > 0) {
+                // Drop bonus beef based on collected amount
+                const bonusBeef = Math.min(collectedBeef, 16); // Cap at 16 to prevent lag
+                
+                for (let i = 0; i < bonusBeef; i++) {
+                    const dropLocation = {
+                        x: entity.location.x + (Math.random() - 0.5) * 3,
+                        y: entity.location.y + 0.5,
+                        z: entity.location.z + (Math.random() - 0.5) * 3
+                    };
+                    const beefItem = new ItemStack("minecraft:beef", 1);
+                    entity.dimension.spawnItem(beefItem, dropLocation);
+                }
+                
+                // Add visual feedback for bonus drops
+                entity.dimension.runCommand(`particle minecraft:heart ${Math.floor(entity.location.x)} ${Math.floor(entity.location.y + 1)} ${Math.floor(entity.location.z)} 1 1 1 0.1 10`);
+                
+                console.log(`[BEEF] Infected cow died with ${collectedBeef} collected beef, dropped ${bonusBeef} bonus beef`);
+            }
+            
+            // Clear the collected beef counter
+            entity.setDynamicProperty("mb_collected_beef", 0);
+            
+        } catch (error) {
+            console.warn("Error handling infected cow death:", error);
+        }
+    }
 });
 
 
@@ -1431,8 +1552,34 @@ world.afterEvents.entityHurt.subscribe((event) => {
     const source = event.damageSource;
     if (!(player instanceof Player)) return;
 
-                const mapleBearTypes = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, BUFF_BEAR_ID, INFECTED_PIG_ID];
+                const mapleBearTypes = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, BUFF_BEAR_ID, INFECTED_PIG_ID, INFECTED_COW_ID];
     if (source && source.damagingEntity && mapleBearTypes.includes(source.damagingEntity.typeId)) {
+        // Track hits for mob discovery
+        try {
+            const codex = getCodex(player);
+            const mobType = source.damagingEntity.typeId;
+            
+            // Increment hit counter based on mob type
+            if (mobType === MAPLE_BEAR_ID || mobType === MAPLE_BEAR_DAY4_ID || mobType === MAPLE_BEAR_DAY8_ID) {
+                codex.mobs.tinyBearHits = (codex.mobs.tinyBearHits || 0) + 1;
+                checkAndUnlockMobDiscovery(codex, player, "tinyBearKills", "tinyBearMobKills", "tinyBearHits", "mapleBearSeen", 3, "mysterious");
+            } else if (mobType === INFECTED_BEAR_ID || mobType === INFECTED_BEAR_DAY8_ID) {
+                codex.mobs.infectedBearHits = (codex.mobs.infectedBearHits || 0) + 1;
+                checkAndUnlockMobDiscovery(codex, player, "infectedBearKills", "infectedBearMobKills", "infectedBearHits", "infectedBearSeen", 3, "dangerous");
+            } else if (mobType === BUFF_BEAR_ID) {
+                codex.mobs.buffBearHits = (codex.mobs.buffBearHits || 0) + 1;
+                checkAndUnlockMobDiscovery(codex, player, "buffBearKills", "buffBearMobKills", "buffBearHits", "buffBearSeen", 1, "threatening");
+            } else if (mobType === INFECTED_PIG_ID) {
+                codex.mobs.infectedPigHits = (codex.mobs.infectedPigHits || 0) + 1;
+                checkAndUnlockMobDiscovery(codex, player, "infectedPigKills", "infectedPigMobKills", "infectedPigHits", "infectedPigSeen", 3, "dangerous");
+            } else if (mobType === INFECTED_COW_ID) {
+                codex.mobs.infectedCowHits = (codex.mobs.infectedCowHits || 0) + 1;
+                checkAndUnlockMobDiscovery(codex, player, "infectedCowKills", "infectedCowMobKills", "infectedCowHits", "infectedCowSeen", 3, "dangerous");
+            }
+            
+            saveCodex(player, codex);
+        } catch {}
+        
         // If already infected (bear or snow), do not progress hit counter; instead reduce active timer by half of a snow-eat reduction
         try {
             const infectionState = playerInfection.get(player.id);
@@ -1482,21 +1629,10 @@ world.afterEvents.entityHurt.subscribe((event) => {
                     return;
                 }
         } catch {}
-        // Mob discovery on being hit
+        // Mob discovery is now handled through proper kill tracking system
+        // No direct unlocks on being hit - must reach kill requirements
+        
         try {
-            if (source.damagingEntity.typeId === MAPLE_BEAR_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY4_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY8_ID) {
-                markCodex(player, "mobs.mapleBearSeen");
-            }
-            if (source.damagingEntity.typeId === INFECTED_BEAR_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY8_ID) {
-                markCodex(player, "mobs.infectedBearSeen");
-            }
-            if (source.damagingEntity.typeId === INFECTED_PIG_ID) {
-                markCodex(player, "mobs.infectedPigSeen");
-            }
-            if (source.damagingEntity.typeId === BUFF_BEAR_ID) {
-                markCodex(player, "mobs.buffBearSeen");
-            }
-            
             // If player is infected and gets hit by Maple Bear, unlock snow level display
             const infectionState = playerInfection.get(player.id);
             const hasActiveInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
@@ -1508,6 +1644,16 @@ world.afterEvents.entityHurt.subscribe((event) => {
         // Check if player is immune to infection
         if (isPlayerImmune(player)) {
             console.log(`[INFECTION] ${player.name} is immune to infection, hit ignored`);
+            
+            // Mark that player now knows they have immunity
+            try { 
+                const codex = getCodex(player);
+                if (!codex.status.immuneKnown) {
+                    markCodex(player, "status.immuneKnown");
+                    player.sendMessage("§bYou realize you are immune to infection! Hopefully?");
+                }
+            } catch {}
+            
             // Only show message once per immunity period
             if (!player.hasTag("mb_immune_hit_message")) {
                 player.sendMessage("§eYou are lucky cuh...");
@@ -1523,6 +1669,21 @@ world.afterEvents.entityHurt.subscribe((event) => {
 
         console.log(`[INFECTION] ${player.name} hit by Maple Bear (${newHitCount}/${HITS_TO_INFECT})`);
 
+        // Ramping hit sounds - progressively more disturbing
+        if (newHitCount < HITS_TO_INFECT) {
+            if (newHitCount === 1) {
+                // First hit: mild concern - like a tap on the shoulder
+                player.playSound("mob.villager.hmm", { pitch: 0.8, volume: 0.5 });
+                player.playSound("random.pop", { pitch: 0.6, volume: 0.4 });
+            } else if (newHitCount === 2) {
+                // Second hit: getting hit - more impactful but not terrifying
+                player.playSound("mob.villager.hmm", { pitch: 0.6, volume: 0.6 });
+                player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.5 });
+                player.playSound("random.pop", { pitch: 0.8, volume: 0.5 });
+                player.playSound("mob.wolf.growl", { pitch: 0.7, volume: 0.3 });
+            }
+        }
+
         // Check if this hit causes infection
         if (newHitCount >= HITS_TO_INFECT) {
             // Apply strong immediate effects at infection moment (3rd hit)
@@ -1537,6 +1698,13 @@ world.afterEvents.entityHurt.subscribe((event) => {
             
             // Track infection history
             trackInfectionHistory(player, "infected");
+            
+            // Scary infection sounds - final hit with dog snarl (LOUD!)
+            player.playSound("mob.wither.spawn", { pitch: 0.6, volume: 1.0 });
+            player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 0.8 });
+            player.playSound("mob.enderman.teleport", { pitch: 1.0, volume: 0.6 });
+            player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.8 });
+            player.playSound("mob.wolf.growl", { pitch: 0.7, volume: 1.0 }); // Dog snarl for final hit
             
             // Get first-time message state
             const firstTime = firstTimeMessages.get(player.id) || { hasBeenHit: false, hasBeenInfected: false, snowTier: 0 };
@@ -1582,61 +1750,6 @@ world.afterEvents.entityHurt.subscribe((event) => {
     }
 });
 
-// --- Snow Infection: On eating snow ---
-world.afterEvents.itemCompleteUse.subscribe((event) => {
-    const player = event.source;
-    const item = event.itemStack;
-    if (item?.typeId === SNOW_ITEM_ID) {
-        // Handle snow consumption with new deceptive mechanics
-        const infectionState = playerInfection.get(player.id);
-        
-        // ALWAYS mark snow as discovered and identified when consumed
-        try { markCodex(player, "items.snowFound"); markCodex(player, "items.snowIdentified"); } catch {}
-        
-        if (!infectionState || infectionState.cured) {
-            // Not infected - start infection
-            playerInfection.set(player.id, { ticksLeft: INFECTION_TICKS, cured: false, hitCount: 0, snowCount: 1 });
-            player.addTag(INFECTED_TAG);
-            player.sendMessage("§4You have been infected! Find a cure quickly!");
-            player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.6 });
-            console.log(`[SNOW] ${player.name} started infection by eating snow`);
-            
-            // Mark snow infection as discovered
-            try { markCodex(player, "infections.snow.discovered"); markCodex(player, "infections.snow.firstUseAt", true); } catch {}
-            
-            // Track infection history
-            trackInfectionHistory(player, "infected");
-                        } else {
-            // Player is infected - apply deceptive snow mechanics
-            const timeEffect = getSnowTimeEffect(infectionState.ticksLeft, infectionState.snowCount);
-            const newTicksLeft = Math.max(0, Math.min(INFECTION_TICKS, infectionState.ticksLeft + timeEffect));
-            
-            // Update infection state
-            infectionState.ticksLeft = newTicksLeft;
-            infectionState.snowCount++;
-            playerInfection.set(player.id, infectionState);
-            
-            // Send appropriate message based on effect
-            if (timeEffect > 0) {
-                const minutesAdded = Math.floor(timeEffect / 1200);
-                player.sendMessage(`§aThe snow seems to help... (+${minutesAdded} minutes)`);
-            } else if (timeEffect < 0) {
-                const minutesLost = Math.floor(-timeEffect / 1200);
-                player.sendMessage(`§cThe snow burns! (-${minutesLost} minutes)`);
-            } else {
-                player.sendMessage(`§eThe snow has no effect.`);
-            }
-            
-            // Check for immediate death
-            if (newTicksLeft <= 0) {
-                player.kill();
-                player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} succumbed to the infection!"}]}`);
-                player.removeTag(INFECTED_TAG);
-                playerInfection.delete(player.id);
-            }
-        }
-    }
-});
 
 // Debug and testing features have been removed for playability
 
@@ -1737,7 +1850,7 @@ system.runInterval(() => {
             }
             const nowTick = system.currentTick;
             const lastTick = lastSymptomTick.get(id) ?? 0;
-            const cooldown = level === 0 ? 1200 : level === 1 ? 600 : level === 2 ? 300 : 120; // ticks between symptoms
+            const cooldown = severityLevel === 0 ? 1200 : severityLevel === 1 ? 600 : severityLevel === 2 ? 300 : 120; // ticks between symptoms
             if (nowTick - lastTick >= cooldown) {
                 // Calculate duration based on snow tier
                 let baseDuration = 60; // Base duration in ticks
@@ -1760,7 +1873,7 @@ system.runInterval(() => {
                     [ { effect: "minecraft:slowness", duration: 100, amp: 1 }, { effect: "minecraft:hunger", duration: 80, amp: 1 } ],
                     [ { effect: "minecraft:slowness", duration: 140, amp: 2 }, { effect: "minecraft:weakness", duration: 140, amp: 1 }, { effect: "minecraft:blindness", duration: 60, amp: 0 } ]
                 ];
-                const options = effectsByLevel[level];
+                const options = effectsByLevel[severityLevel];
                 if (options && options.length > 0) {
                     const chosen = options[Math.floor(Math.random() * options.length)];
                     try {
@@ -1772,20 +1885,82 @@ system.runInterval(() => {
         }
     }
 
-    // One-shot inventory scan for snow discovery (stops after found)
+    // One-shot inventory scan for item discoveries
     try {
         for (const p of world.getAllPlayers()) {
             const inv = p.getComponent("inventory")?.container;
             if (!inv) continue;
             const raw = p.getDynamicProperty("mb_codex");
-            let found = false;
+            let codex = null;
             if (raw) {
-                try { found = !!(JSON.parse(raw)?.items?.snowFound); } catch {}
+                try { codex = JSON.parse(raw); } catch {}
             }
-            if (found) continue;
-            for (let i = 0; i < inv.size; i++) {
-                const it = inv.getItem(i);
-                if (it && it.typeId === SNOW_ITEM_ID) { try { markCodex(p, "items.snowFound"); } catch {} break; }
+            
+            // Check for snow
+            if (!codex?.items?.snowFound) {
+                for (let i = 0; i < inv.size; i++) {
+                    const it = inv.getItem(i);
+                    if (it && it.typeId === SNOW_ITEM_ID) { 
+                        try { 
+                            markCodex(p, "items.snowFound"); 
+                            sendDiscoveryMessage(p, codex, "important");
+                        } catch {} 
+                        break; 
+                    }
+                }
+            }
+            
+            // Check for brewing stand
+            if (!codex?.items?.brewingStandSeen) {
+                for (let i = 0; i < inv.size; i++) {
+                    const it = inv.getItem(i);
+                    if (it && it.typeId === "minecraft:brewing_stand") { 
+                        try { 
+                            markCodex(p, "items.brewingStandSeen"); 
+                            sendDiscoveryMessage(p, codex, "interesting");
+                            p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                        } catch {} 
+                        break; 
+                    }
+                }
+            }
+            
+            // Check for dusted dirt
+            if (!codex?.items?.dustedDirtSeen) {
+                for (let i = 0; i < inv.size; i++) {
+                    const it = inv.getItem(i);
+                    if (it && it.typeId === "mb:dusted_dirt") { 
+                        try { 
+                            markCodex(p, "items.dustedDirtSeen"); 
+                            sendDiscoveryMessage(p, codex, "interesting");
+                            p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                        } catch {} 
+                        break; 
+                    }
+                }
+            }
+            
+            // Check for powdery journal
+            if (!codex?.items?.snowBookCrafted) {
+                for (let i = 0; i < inv.size; i++) {
+                    const it = inv.getItem(i);
+                    if (it && it.typeId === "mb:snow_book") { 
+                        try { 
+                            markCodex(p, "items.snowBookCrafted"); 
+                            p.sendMessage("§7You feel your knowledge pulled into the book...");
+                            
+                            // Dramatic sound effects
+                            p.playSound("mob.enderman.portal", { pitch: 0.8, volume: 1.0 });
+                            p.playSound("mob.enderman.teleport", { pitch: 1.2, volume: 0.8 });
+                            p.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.6 });
+                            p.playSound("random.orb", { pitch: 1.5, volume: 1.0 });
+                            
+                            // Temporary blindness effect
+                            p.addEffect("minecraft:blindness", 60, { amplifier: 0 }); // 3 seconds
+                        } catch {} 
+                        break; 
+                    }
+                }
             }
         }
     } catch {}
@@ -1944,6 +2119,23 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
             console.warn("Error tracking porkchop consumption:", error);
         }
     }
+    
+    // Check if an infected cow is eating beef
+    if (entity.typeId === INFECTED_COW_ID && item?.typeId === "minecraft:beef") {
+        try {
+            // Track beef consumption
+            const currentBeef = entity.getDynamicProperty("mb_collected_beef") || 0;
+            entity.setDynamicProperty("mb_collected_beef", currentBeef + 1);
+            
+            // Add visual feedback
+            entity.dimension.runCommand(`particle minecraft:heart ${Math.floor(entity.location.x)} ${Math.floor(entity.location.y + 1)} ${Math.floor(entity.location.z)}`);
+            
+            console.log(`[BEEF] Infected cow consumed beef (total collected: ${currentBeef + 1})`);
+            
+        } catch (error) {
+            console.warn("Error tracking beef consumption:", error);
+        }
+    }
 });
 
 // --- Monitor when players get effects added (for logging only) ---
@@ -1953,7 +2145,27 @@ world.afterEvents.effectAdd.subscribe((event) => {
 
     if (entity instanceof Player && effect.typeId === "minecraft:weakness") {
         console.log(`[EFFECT] Player ${entity.name} got weakness effect: duration=${effect.duration}, amplifier=${effect.amplifier}`);
-        try { markCodex(entity, "effects.weaknessSeen"); } catch {}
+        try { 
+            const codex = getCodex(entity);
+            if (!codex.items.weaknessPotionSeen) {
+                markCodex(entity, "items.weaknessPotionSeen");
+                sendDiscoveryMessage(entity, codex, "important");
+                entity.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                entity.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+            }
+        } catch {}
+    }
+    
+    // Unlock potions tab when player gets any effect
+    if (entity instanceof Player) {
+        try {
+            const codex = getCodex(entity);
+            if (!codex.items.potionsSeen) {
+                markCodex(entity, "items.potionsSeen");
+                sendDiscoveryMessage(entity, codex, "interesting");
+                entity.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+            }
+        } catch {}
     }
     // Log to symptoms meta for known effects
     if (entity instanceof Player) {
@@ -1997,14 +2209,6 @@ world.afterEvents.playerSpawn.subscribe((event) => {
     // Only clear on actual death
 });
 
-/**
- * Check if a player is infected
- * @param {Player} player - The player to check
- * @returns {boolean} Whether the player is infected
- */
-function isPlayerInfected(player) {
-    return player.hasTag(INFECTED_TAG) || infectedPlayers.has(player.id);
-}
 
 /**
  * Check if a player has weakness effect using the proper API
@@ -2266,14 +2470,18 @@ function showInfectionBookReport(player) {
             summary.push("§bImmunity: §7None");
         }
         const hitCount = bearHitCount.get(player.id) || 0;
-        if (hitCount > 0 && !hasBear) {
+        const infectionSource = hasInfection ? infectionState.source : null;
+        
+        if (hitCount > 0 && !hasInfection) {
             summary.push(`§eBear Hits: §f${hitCount}/${HITS_TO_INFECT}`);
         }
 
         // Mark knowledge
         try {
-            if (hasBear) markCodex(player, "status.bearTimerSeen");
-            if (hasSnow) markCodex(player, "status.snowTimerSeen");
+            if (hasInfection) {
+                if (infectionSource === "bear") markCodex(player, "status.bearTimerSeen");
+                if (infectionSource === "snow") markCodex(player, "status.snowTimerSeen");
+            }
             if (immune) markCodex(player, "status.immuneKnown");
         } catch {}
 
@@ -2331,68 +2539,7 @@ function showInfectionBookReport(player) {
 }
 
 
-/**
- * Mark a player as infected
- * @param {Player} player - The player to infect
- */
-function infectPlayer(player) {
-    player.addTag(INFECTED_TAG);
-    infectedPlayers.add(player.id);
-    // Notify the player
-    player.playSound("mob.wither.spawn", {
-        pitch: 0.8,
-        volume: 0.6
-    });
-    player.onScreenDisplay.setTitle("§4! You are infected!");
-    player.onScreenDisplay.setActionBar("§cThe Maple Bear infection spreads...");
-}
 
-/**
- * Handle the death of an infected player
- * @param {Player} player - The infected player who died
- */
-function handleInfectedDeath(player) {
-    try {
-        const location = player.location;
-        const dimension = player.dimension;
-        
-        // Remove infection status
-        player.removeTag(INFECTED_TAG);
-        infectedPlayers.delete(player.id);
-        
-        // Mark infection as discovered when player dies from it
-        try { 
-            markCodex(player, "infections.bear.discovered"); 
-            markCodex(player, "infections.snow.discovered");
-        } catch {}
-        
-        // Get the player's inventory before spawning the bear
-        const inventory = playerInventories.get(player.id);
-        
-        // Spawn infected Maple Bear at death location
-        const bear = dimension.spawnEntity(INFECTED_BEAR_ID, location);
-        if (bear) {
-            // Set name tag for visual identification
-            bear.nameTag = `§4! ${player.name}'s Infected Form`;
-            
-            // Set dynamic property for tracking
-            bear.setDynamicProperty("infected_by", player.id);
-            
-            // Store inventory in the bear's dynamic properties
-                bear.setDynamicProperty("original_inventory", JSON.stringify(inventory));
-            
-            // Add particle effects, sounds, and broadcast as before
-            spreadSnowEffect(location, dimension);
-            dimension.playSound("mob.wither.death", location, { pitch: 0.7, volume: 0.5 });
-            dimension.playSound("random.glass", location, { pitch: 0.5, volume: 1.0 });
-            dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} transformed into a Maple Bear!"}]}`);
-            
-
-        }
-                } catch (error) {
-        console.warn(`[DEATH] Error in handleInfectedDeath for ${player.name}:`, error);
-    }
-}
 
 /**
  * Spread snow effects at a location
@@ -2462,302 +2609,6 @@ function getBestArmorTier(player) {
     return bestTier;
 }
 
-// Helper to prepare infected transformation: capture, split, clear inventory, and return equipables/stored
-function prepareInfectedTransformation(player, playerId, playerName) {
-    // Capture the full inventory before clearing
-    const inventory = [];
-    let totalItemCount = 0;
-    const playerInventory = player.getComponent("inventory").container;
-
-    // --- Determine best armor and weapon ---
-    const best = {
-        head: null, chest: null, legs: null, feet: null, weapon: null
-    };
-    // Use global ARMOR_PRIORITY and TOOL_PRIORITY
-    const WEAPON_PRIORITY = [
-        "netherite_sword", "diamond_sword", "iron_sword", "golden_sword", "stone_sword", "wooden_sword",
-        "bow", "crossbow", "trident"
-    ];
-    function compareArmor(a, b) {
-        for (let i = 0; i < ARMOR_PRIORITY.length; i++) {
-            if (a.includes(ARMOR_PRIORITY[i])) return i;
-        }
-        return ARMOR_PRIORITY.length;
-    }
-    function compareWeapon(a, b) {
-        for (let i = 0; i < WEAPON_PRIORITY.length; i++) {
-            if (a.endsWith(WEAPON_PRIORITY[i])) return i;
-        }
-        return WEAPON_PRIORITY.length;
-    }
-    for (let i = 0; i < playerInventory.size; i++) {
-        const item = playerInventory.getItem(i);
-        if (!item) continue;
-        const id = item.typeId;
-        // Armor
-        if (id.endsWith("_helmet") || id === "minecraft:turtle_helmet") {
-            if (!best.head || compareArmor(id, best.head.item.typeId) < compareArmor(best.head.item.typeId, id)) best.head = { item, slot: i };
-        } else if (id.endsWith("_chestplate") || id === "minecraft:elytra") {
-            if (!best.chest || compareArmor(id, best.chest.item.typeId) < compareArmor(best.chest.item.typeId, id)) best.chest = { item, slot: i };
-        } else if (id.endsWith("_leggings")) {
-            if (!best.legs || compareArmor(id, best.legs.item.typeId) < compareArmor(best.legs.item.typeId, id)) best.legs = { item, slot: i };
-        } else if (id.endsWith("_boots")) {
-            if (!best.feet || compareArmor(id, best.feet.item.typeId) < compareArmor(best.feet.item.typeId, id)) best.feet = { item, slot: i };
-        }
-        // Weapon
-        else if (WEAPON_PRIORITY.some(w => id.endsWith(w))) {
-            if (!best.weapon || compareWeapon(id, best.weapon.item.typeId) < compareWeapon(best.weapon.item.typeId, id)) best.weapon = { item, slot: i };
-        }
-    }
-    // --- Set keepOnDeath for all items ---
-    for (let i = 0; i < playerInventory.size; i++) {
-        const item = playerInventory.getItem(i);
-        if (!item) continue;
-        let shouldDrop = false;
-        if (
-            (best.head && i === best.head.slot) ||
-            (best.chest && i === best.chest.slot) ||
-            (best.legs && i === best.legs.slot) ||
-            (best.feet && i === best.feet.slot) ||
-            (best.weapon && i === best.weapon.slot)
-        ) {
-            shouldDrop = true;
-        }
-        try {
-            item.keepOnDeath = !shouldDrop; // Drop best gear, keep everything else
-            playerInventory.setItem(i, item);
-        } catch (e) { }
-        inventory.push({ 
-            slot: i, 
-            typeId: item.typeId,
-            amount: item.amount,
-            data: item.data || 0
-        });
-        totalItemCount += item.amount;
-    }
-    // Store captured inventory in player data for later use
-    playerInventories.set(playerId, inventory);
-    // Split items into equippable and stored
-    const EQUIPPABLE_IDS = new Set([
-        // Helmets
-        "minecraft:leather_helmet", "minecraft:chainmail_helmet", "minecraft:golden_helmet", "minecraft:iron_helmet", "minecraft:diamond_helmet", "minecraft:netherite_helmet", "minecraft:turtle_helmet",
-        // Chestplates
-        "minecraft:leather_chestplate", "minecraft:chainmail_chestplate", "minecraft:golden_chestplate", "minecraft:iron_chestplate", "minecraft:diamond_chestplate", "minecraft:netherite_chestplate", "minecraft:elytra",
-        // Leggings
-        "minecraft:leather_leggings", "minecraft:chainmail_leggings", "minecraft:golden_leggings", "minecraft:iron_leggings", "minecraft:diamond_leggings", "minecraft:netherite_leggings",
-        // Boots
-        "minecraft:leather_boots", "minecraft:chainmail_boots", "minecraft:golden_boots", "minecraft:iron_boots", "minecraft:diamond_boots", "minecraft:netherite_boots",
-        // Shields and offhand
-        "minecraft:shield", "minecraft:totem_of_undying", "minecraft:torch", "minecraft:soul_torch", "minecraft:lantern", "minecraft:soul_lantern",
-        // Swords
-        "minecraft:wooden_sword", "minecraft:stone_sword", "minecraft:golden_sword", "minecraft:iron_sword", "minecraft:diamond_sword", "minecraft:netherite_sword",
-        // Axes
-        "minecraft:wooden_axe", "minecraft:stone_axe", "minecraft:golden_axe", "minecraft:iron_axe", "minecraft:diamond_axe", "minecraft:netherite_axe",
-        // Pickaxes
-        "minecraft:wooden_pickaxe", "minecraft:stone_pickaxe", "minecraft:golden_pickaxe", "minecraft:iron_pickaxe", "minecraft:diamond_pickaxe", "minecraft:netherite_pickaxe",
-        // Shovels
-        "minecraft:wooden_shovel", "minecraft:stone_shovel", "minecraft:golden_shovel", "minecraft:iron_shovel", "minecraft:diamond_shovel", "minecraft:netherite_shovel",
-        // Hoes
-        "minecraft:wooden_hoe", "minecraft:stone_hoe", "minecraft:golden_hoe", "minecraft:iron_hoe", "minecraft:diamond_hoe", "minecraft:netherite_hoe",
-        // Other weapons/tools
-        "minecraft:trident", "minecraft:bow", "minecraft:crossbow"
-    ]);
-    const ARMOR_PRIORITY = [
-        "minecraft:netherite", "minecraft:diamond", "minecraft:iron", "minecraft:golden", "minecraft:chainmail", "minecraft:leather"
-    ];
-    const TOOL_PRIORITY = [
-        "minecraft:netherite", "minecraft:diamond", "minecraft:iron", "minecraft:golden", "minecraft:stone", "minecraft:wooden"
-    ];
-    const bestEquip = {
-        head: null,
-        chest: null,
-        legs: null,
-        feet: null,
-        mainhand: null,
-        offhand: null
-    };
-    function getArmorPriority(typeId) {
-        for (let i = 0; i < ARMOR_PRIORITY.length; i++) {
-            if (typeId.includes(ARMOR_PRIORITY[i])) return i;
-        }
-        return ARMOR_PRIORITY.length;
-    }
-    function getToolPriority(typeId) {
-        for (let i = 0; i < TOOL_PRIORITY.length; i++) {
-            if (typeId.includes(TOOL_PRIORITY[i])) return i;
-        }
-        return TOOL_PRIORITY.length;
-    }
-    const equipables = [];
-    const stored = [];
-    for (const item of inventory) {
-        if (EQUIPPABLE_IDS.has(item.typeId)) {
-            let slot = null;
-            if (item.typeId.endsWith("_helmet") || item.typeId === "minecraft:turtle_helmet") slot = "head";
-            else if (item.typeId.endsWith("_chestplate") || item.typeId === "minecraft:elytra") slot = "chest";
-            else if (item.typeId.endsWith("_leggings")) slot = "legs";
-            else if (item.typeId.endsWith("_boots")) slot = "feet";
-            else if (["minecraft:shield", "minecraft:totem_of_undying", "minecraft:torch", "minecraft:soul_torch", "minecraft:lantern", "minecraft:soul_lantern"].includes(item.typeId)) slot = "offhand";
-            else if (["minecraft:wooden_sword", "minecraft:stone_sword", "minecraft:golden_sword", "minecraft:iron_sword", "minecraft:diamond_sword", "minecraft:netherite_sword", "minecraft:bow", "minecraft:crossbow", "minecraft:trident", "minecraft:wooden_axe", "minecraft:stone_axe", "minecraft:golden_axe", "minecraft:iron_axe", "minecraft:diamond_axe", "minecraft:netherite_axe", "minecraft:wooden_pickaxe", "minecraft:stone_pickaxe", "minecraft:golden_pickaxe", "minecraft:iron_pickaxe", "minecraft:diamond_pickaxe", "minecraft:netherite_pickaxe", "minecraft:wooden_shovel", "minecraft:stone_shovel", "minecraft:golden_shovel", "minecraft:iron_shovel", "minecraft:diamond_shovel", "minecraft:netherite_shovel", "minecraft:wooden_hoe", "minecraft:stone_hoe", "minecraft:golden_hoe", "minecraft:iron_hoe", "minecraft:diamond_hoe", "minecraft:netherite_hoe"].includes(item.typeId)) slot = "mainhand";
-            if (slot) {
-                if (!bestEquip[slot]) {
-                    bestEquip[slot] = item;
-                } else {
-                    if (["head", "chest", "legs", "feet"].includes(slot)) {
-                        if (getArmorPriority(item.typeId) < getArmorPriority(bestEquip[slot].typeId)) {
-                            stored.push(bestEquip[slot]);
-                            bestEquip[slot] = item;
-                        } else {
-                            stored.push(item);
-                        }
-                    } else if (slot === "mainhand") {
-                        if (getToolPriority(item.typeId) < getToolPriority(bestEquip[slot].typeId)) {
-                            stored.push(bestEquip[slot]);
-                            bestEquip[slot] = item;
-                        } else {
-                            stored.push(item);
-                        }
-                    } else if (slot === "offhand") {
-                        const offhandOrder = ["minecraft:shield", "minecraft:totem_of_undying", "minecraft:torch", "minecraft:soul_torch", "minecraft:lantern", "minecraft:soul_lantern"];
-                        if (offhandOrder.indexOf(item.typeId) < offhandOrder.indexOf(bestEquip[slot].typeId)) {
-                            stored.push(bestEquip[slot]);
-                            bestEquip[slot] = item;
-                        } else {
-                            stored.push(item);
-                        }
-                    }
-                }
-            } else {
-                stored.push(item);
-            }
-        } else {
-            stored.push(item);
-        }
-    }
-    for (const slot of Object.keys(bestEquip)) {
-        if (bestEquip[slot]) equipables.push(bestEquip[slot]);
-    }
-    // Clear all inventory slots before death
-    if (playerInventory) {
-        for (let i = 0; i < playerInventory.size; i++) {
-            playerInventory.setItem(i, undefined);
-        }
-    }
-    // Clear all equipment slots before death
-    try {
-        const equipmentComponent = player.getComponent("equipment");
-        if (equipmentComponent) {
-            const equipmentSlots = ["head", "chest", "legs", "feet", "offhand"];
-            for (const slot of equipmentSlots) {
-                const equipSlot = equipmentComponent.getEquipmentSlot(slot);
-                equipSlot?.setItem(undefined);
-            }
-        }
-    } catch (error) { }
-    return { equipables, stored };
-}
-
-// Simulate infected death instead of killing the player
-function simulateInfectedDeath(player) {
-    const playerId = player.id;
-    const playerName = player.name;
-    // Capture and split inventory, and set keepOnDeath=false for all items
-    const { equipables, stored } = prepareInfectedTransformation(player, playerId, playerName);
-    // Add dramatic effects
-    player.playSound("random.hurt");
-    player.playSound("minecraft:large_smoke");
-    player.addEffect("minecraft:blindness", 60, { amplifier: 1 });
-    player.addEffect("minecraft:slowness", 60, { amplifier: 255 });
-    player.addEffect("minecraft:weakness", 60, { amplifier: 255 });
-    // Teleport to limbo (void)
-    const DEATH_ROOM = { x: 0, y: -64, z: 0 };
-    player.teleport(DEATH_ROOM);
-    // Spawn infected bear
-    const bear = player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
-    if (bear) {
-        bear.nameTag = `§4! ${playerName}'s Infected Form`;
-        bear.setDynamicProperty("infected_by", playerId);
-        bear.setDynamicProperty("original_inventory", JSON.stringify(stored));
-        try {
-            const bearEquipment = bear.getComponent("equipment");
-            if (bearEquipment) {
-                for (const item of equipables) {
-                    let slot = null;
-                    if (item.typeId.endsWith("_helmet") || item.typeId === "minecraft:turtle_helmet") slot = "head";
-                    else if (item.typeId.endsWith("_chestplate") || item.typeId === "minecraft:elytra") slot = "chest";
-                    else if (item.typeId.endsWith("_leggings")) slot = "legs";
-                    else if (item.typeId.endsWith("_boots")) slot = "feet";
-                    else if (["minecraft:shield", "minecraft:totem_of_undying", "minecraft:torch", "minecraft:soul_torch", "minecraft:lantern", "minecraft:soul_lantern"].includes(item.typeId)) slot = "offhand";
-                    else if (["minecraft:wooden_sword", "minecraft:stone_sword", "minecraft:golden_sword", "minecraft:iron_sword", "minecraft:diamond_sword", "minecraft:netherite_sword", "minecraft:bow", "minecraft:crossbow", "minecraft:trident", "minecraft:wooden_axe", "minecraft:stone_axe", "minecraft:golden_axe", "minecraft:iron_axe", "minecraft:diamond_axe", "minecraft:netherite_axe", "minecraft:wooden_pickaxe", "minecraft:stone_pickaxe", "minecraft:golden_pickaxe", "minecraft:iron_pickaxe", "minecraft:diamond_pickaxe", "minecraft:netherite_pickaxe", "minecraft:wooden_shovel", "minecraft:stone_shovel", "minecraft:golden_shovel", "minecraft:iron_shovel", "minecraft:diamond_shovel", "minecraft:netherite_shovel", "minecraft:wooden_hoe", "minecraft:stone_hoe", "minecraft:golden_hoe", "minecraft:iron_hoe", "minecraft:diamond_hoe", "minecraft:netherite_hoe"].includes(item.typeId)) slot = "mainhand";
-                    if (slot) {
-                        const itemStack = new ItemStack(item.typeId, item.amount);
-                        bearEquipment.getEquipmentSlot(slot)?.setItem(itemStack);
-                    }
-                }
-            }
-        } catch (error) {
-            console.warn(`[BEAR EQUIP] Failed to equip bear with items:`, error);
-        }
-        bear.triggerEvent("become_buffed");
-    }
-    // Respawn player after short delay
-    system.runTimeout(() => {
-        player.runCommandAsync("effect @s clear");
-        // Teleport to spawn (bed or world spawn)
-        let spawnLoc = null;
-        if (typeof player.getSpawnPoint === 'function') {
-            spawnLoc = player.getSpawnPoint();
-        }
-        if (!spawnLoc || typeof spawnLoc.x !== 'number') {
-            spawnLoc = player.dimension.getSpawnPosition ? player.dimension.getSpawnPosition() : { x: 0, y: 100, z: 0 };
-        }
-        player.teleport(spawnLoc);
-        const health = player.getComponent("health");
-        if (health) health.setCurrent(20);
-        player.runCommandAsync("clear");
-        player.removeTag(INFECTED_TAG);
-        infectedPlayers.delete(player.id);
-        player.removeTag("mb_simulating_death");
-        player.sendMessage("§8[MBI] §cYou lost yourself to the infection...");
-    }, 40); // 2 seconds
-}
-
-// Simulate generic infected death (no bear, just effects and inventory clear)
-function simulateGenericInfectedDeath(player) {
-    const playerId = player.id;
-    const playerName = player.name;
-    // Capture and clear inventory, and set keepOnDeath=false for all items
-    prepareInfectedTransformation(player, playerId, playerName);
-    // Add dramatic effects
-    player.playSound("random.hurt");
-    player.playSound("minecraft:large_smoke");
-    player.addEffect("minecraft:blindness", 60, { amplifier: 1 });
-    player.addEffect("minecraft:slowness", 60, { amplifier: 255 });
-    player.addEffect("minecraft:weakness", 60, { amplifier: 255 });
-    // Teleport to limbo (void)
-    const DEATH_ROOM = { x: 0, y: -64, z: 0 };
-    player.teleport(DEATH_ROOM);
-    // Respawn player after short delay
-    system.runTimeout(() => {
-        player.runCommandAsync("effect @s clear");
-        // Teleport to spawn (bed or world spawn)
-        let spawnLoc = null;
-        if (typeof player.getSpawnPoint === 'function') {
-            spawnLoc = player.getSpawnPoint();
-        }
-        if (!spawnLoc || typeof spawnLoc.x !== 'number') {
-            spawnLoc = player.dimension.getSpawnPosition ? player.dimension.getSpawnPosition() : { x: 0, y: 100, z: 0 };
-        }
-        player.teleport(spawnLoc);
-        const health = player.getComponent("health");
-        if (health) health.setCurrent(20);
-        player.runCommandAsync("clear");
-        player.removeTag(INFECTED_TAG);
-        infectedPlayers.delete(player.id);
-        player.removeTag("mb_simulating_death");
-        player.sendMessage("§8[MBI] §cWell, that's unfortunate...");
-    }, 40); // 2 seconds
-}
 
 // Note: All scripted spawning logic removed - using spawn rules and multiple entity files instead
 
@@ -2866,7 +2717,22 @@ world.beforeEvents.itemUse.subscribe((event) => {
     if (item?.typeId === "mb:snow_book") {
         event.cancel = true;
         system.run(() => {
-            try { markCodex(player, "items.snowBookCrafted"); } catch {}
+            try { 
+                const codex = getCodex(player);
+                if (!codex.items.snowBookCrafted) {
+                    markCodex(player, "items.snowBookCrafted");
+                    player.sendMessage("§7You feel your knowledge pulled into the book...");
+                    
+                    // Dramatic sound effects
+                    player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 1.0 });
+                    player.playSound("mob.enderman.teleport", { pitch: 1.2, volume: 0.8 });
+                    player.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.6 });
+                    player.playSound("random.orb", { pitch: 1.5, volume: 1.0 });
+                    
+                    // Temporary blindness effect
+                    player.addEffect("minecraft:blindness", 60, { amplifier: 0 }); // 3 seconds
+                }
+            } catch {}
             showCodexBook(player, { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, checkVariantUnlock, getCurrentDay });
         });
         return;

@@ -17,16 +17,28 @@ export function getDefaultCodex() {
         },
         // Aggregated metadata by effect id
         symptomsMeta: {},
-        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false },
+        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, dustedDirtSeen: false },
         mobs: { 
             mapleBearSeen: false, 
             infectedBearSeen: false, 
             infectedPigSeen: false, 
+            infectedCowSeen: false,
             buffBearSeen: false,
             tinyBearKills: 0,
             infectedBearKills: 0,
             infectedPigKills: 0,
-            buffBearKills: 0
+            infectedCowKills: 0,
+            buffBearKills: 0,
+            tinyBearMobKills: 0,
+            infectedBearMobKills: 0,
+            infectedPigMobKills: 0,
+            infectedCowMobKills: 0,
+            buffBearMobKills: 0,
+            tinyBearHits: 0,
+            infectedBearHits: 0,
+            infectedPigHits: 0,
+            infectedCowHits: 0,
+            buffBearHits: 0
         }
     };
 }
@@ -45,7 +57,9 @@ export function getCodex(player) {
 export function saveCodex(player, codex) {
     try {
         player.setDynamicProperty("mb_codex", JSON.stringify(codex));
-    } catch (e) { }
+    } catch (e) {
+        console.warn('Failed to save codex:', e);
+    }
 }
 
 export function markCodex(player, path, timestamp = false) {
@@ -145,7 +159,8 @@ export function showCodexBook(player, context) {
                 summary.push(`§eStatus: §aHealthy`);
             }
         }
-        if (immune) {
+        // Only show immunity if player has been cured and knows about it
+        if (immune && codex.status.immuneKnown) {
             const end = curedPlayers.get(player.id);
             const remainingMs = Math.max(0, end - Date.now());
             summary.push(`§bImmunity: §fACTIVE (§b${formatMillisDuration(remainingMs)} left§f)`);
@@ -159,22 +174,54 @@ export function showCodexBook(player, context) {
     }
 
     function openMain() {
+        const codex = getCodex(player);
         const form = new ActionFormData().title("§6Powdery Journal");
         form.body(`${buildSummary()}\n\n§eChoose a section:`);
-        // Removed My Status button; summary always on main
-        form.button("§fInfection");
-        form.button("§fSymptoms");
-        form.button("§fMobs");
-        form.button("§fItems");
-        form.button("§fDaily Log");
+        
+        // Only show buttons for unlocked sections
+        const buttons = [];
+        const buttonActions = [];
+        
+        // Infection section - always available
+        buttons.push("§fInfection");
+        buttonActions.push(() => openInfections());
+        
+        // Symptoms section - only if any symptoms discovered
+        const hasAnySymptoms = Object.values(codex.effects).some(seen => seen);
+        if (hasAnySymptoms) {
+            buttons.push("§fSymptoms");
+            buttonActions.push(() => openSymptoms());
+        }
+        
+        // Mobs section - only if any mobs discovered
+        const hasAnyMobs = Object.values(codex.mobs).some(seen => seen === true);
+        if (hasAnyMobs) {
+            buttons.push("§fMobs");
+            buttonActions.push(() => openMobs());
+        }
+        
+        // Items section - only if any items discovered
+        const hasAnyItems = Object.values(codex.items).some(seen => seen);
+        if (hasAnyItems) {
+            buttons.push("§fItems");
+            buttonActions.push(() => openItems());
+        }
+        
+        // Daily Log section - always available
+        buttons.push("§fDaily Log");
+        buttonActions.push(() => openDailyLog());
+        
+        // Add buttons to form
+        for (const button of buttons) {
+            form.button(button);
+        }
+        
         form.show(player).then((res) => {
             if (!res || res.canceled) return;
             const sel = res.selection;
-            if (sel === 0) openInfections();
-            if (sel === 1) openSymptoms();
-            if (sel === 2) openMobs();
-            if (sel === 3) openItems();
-            if (sel === 4) openDailyLog();
+            if (sel >= 0 && sel < buttonActions.length) {
+                buttonActions[sel]();
+            }
         }).catch(() => {});
     }
 
@@ -246,7 +293,7 @@ export function showCodexBook(player, context) {
             form.button(`§eSnow Tier Analysis`);
         }
         
-        for (const e of entries) form.button(`§f${maskTitle(e.title, codex.symptoms[e.key])}`);
+        for (const e of entries) form.button(`§f${maskTitle(e.title, codex.effects[e.key])}`);
         form.button("§8Back");
         form.show(player).then((res) => {
             if (!res || res.canceled) return openMain();
@@ -263,7 +310,7 @@ export function showCodexBook(player, context) {
                 
                 if (adjustedSelection >= 0 && adjustedSelection < entries.length) {
                     const e = entries[adjustedSelection];
-                    const known = codex.symptoms[e.key];
+                    const known = codex.effects[e.key];
                     let body = "§e???";
                     if (known) {
                         const meta = (codex.symptomsMeta || {})[e.id] || {};
@@ -294,28 +341,30 @@ export function showCodexBook(player, context) {
         
         const form = new ActionFormData().title("§6Snow Tier Analysis");
         
-        let body = `§eMaximum Snow Level Achieved: §f${maxSnow.maxLevel.toFixed(1)}\n\n`;
+        // Check if maxSnow exists, otherwise use 0
+        const maxLevel = maxSnow ? maxSnow.maxLevel : 0;
+        let body = `§eMaximum Snow Level Achieved: §f${maxLevel.toFixed(1)}\n\n`;
         
         // Detailed analysis based on experience
-        if (maxSnow.maxLevel >= 5) {
+        if (maxLevel >= 5) {
             body += `§7Tier 1 (1-5): §fMild effects\n`;
             body += `§7• Time reduction: 1 min per snow\n`;
             body += `§7• Effects: Mild random potions\n`;
         }
         
-        if (maxSnow.maxLevel >= 10) {
+        if (maxLevel >= 10) {
             body += `\n§7Tier 2 (6-10): §fModerate effects\n`;
             body += `§7• Time reduction: 5 min per snow\n`;
             body += `§7• Effects: Stronger random potions\n`;
         }
         
-        if (maxSnow.maxLevel >= 20) {
+        if (maxLevel >= 20) {
             body += `\n§7Tier 3 (11-20): §fSevere effects\n`;
             body += `§7• Time reduction: 10 min per snow\n`;
             body += `§7• Effects: Very strong random potions\n`;
         }
         
-        if (maxSnow.maxLevel >= 50) {
+        if (maxLevel >= 50) {
             body += `\n§7Tier 4 (20+): §fExtreme effects\n`;
             body += `§7• Time reduction: 15 min per snow\n`;
             body += `§7• Effects: Maximum intensity potions\n`;
@@ -333,9 +382,9 @@ export function showCodexBook(player, context) {
         }
         
         // Show warnings based on experience
-        if (maxSnow.maxLevel >= 20) {
+        if (maxLevel >= 20) {
             body += `\n\n§c⚠ Warning: High snow levels are extremely dangerous!`;
-        } else if (maxSnow.maxLevel >= 10) {
+        } else if (maxLevel >= 10) {
             body += `\n\n§e⚠ Caution: Snow effects become severe at higher levels.`;
         }
         
@@ -350,7 +399,8 @@ export function showCodexBook(player, context) {
             { key: "mapleBearSeen", title: "Tiny Maple Bear", icon: "textures/items/mb", variant: "original" },
             { key: "infectedBearSeen", title: "Infected Maple Bear", icon: "textures/items/Infected_human_mb_egg", variant: "original" },
             { key: "buffBearSeen", title: "Buff Maple Bear", icon: "textures/items/buff_mb_egg", variant: "original" },
-            { key: "infectedPigSeen", title: "Infected Pig", icon: "textures/items/infected_pig_spawn_egg", variant: "original" }
+            { key: "infectedPigSeen", title: "Infected Pig", icon: "textures/items/infected_pig_spawn_egg", variant: "original" },
+            { key: "infectedCowSeen", title: "Infected Cow", icon: "textures/items/infected_cow_egg", variant: "original" }
         ];
         
         // Add day 4+ variants if unlocked
@@ -384,12 +434,14 @@ export function showCodexBook(player, context) {
                     killCount = codex.mobs.infectedBearKills || 0;
                 } else if (e.key === "infectedPigSeen") {
                     killCount = codex.mobs.infectedPigKills || 0;
+                } else if (e.key === "infectedCowSeen") {
+                    killCount = codex.mobs.infectedCowKills || 0;
                 } else if (e.key === "buffBearSeen") {
                     killCount = codex.mobs.buffBearKills || 0;
                 }
                 
-                if (killCount > 0 || mobKillCount > 0) {
-                    label += ` §7(Player: ${killCount}, Mobs: ${mobKillCount})`;
+                if (killCount > 0) {
+                    label += ` §7(Kills: ${killCount})`;
                 }
             }
             
@@ -413,6 +465,8 @@ export function showCodexBook(player, context) {
                         killCount = codex.mobs.infectedBearKills || 0;
                     } else if (e.key === "infectedPigSeen") {
                         killCount = codex.mobs.infectedPigKills || 0;
+                    } else if (e.key === "infectedCowSeen") {
+                        killCount = codex.mobs.infectedCowKills || 0;
                     } else if (e.key === "buffBearSeen") {
                         killCount = codex.mobs.buffBearKills || 0;
                     }
@@ -464,7 +518,8 @@ export function showCodexBook(player, context) {
             'weaknessPotionSeen': "textures/items/potion_bottle_saturation",
             'goldenAppleSeen': "textures/items/apple_golden",
             'enchantedGoldenAppleSeen': "textures/items/apple_golden",
-            'brewingStandSeen': "textures/items/brewing_stand"
+            'brewingStandSeen': "textures/items/brewing_stand",
+            'dustedDirtSeen': "textures/blocks/dusted_dirt"
         };
         
         const entries = [
@@ -474,7 +529,8 @@ export function showCodexBook(player, context) {
             { key: "potionsSeen", title: "Potions", icon: ITEM_ICONS.potionsSeen },
             { key: "goldenAppleSeen", title: "Golden Apple", icon: ITEM_ICONS.goldenAppleSeen },
             { key: "enchantedGoldenAppleSeen", title: "§5Enchanted§f Golden Apple", icon: ITEM_ICONS.enchantedGoldenAppleSeen },
-            { key: "brewingStandSeen", title: "Brewing Stand", icon: ITEM_ICONS.brewingStandSeen }
+            { key: "brewingStandSeen", title: "Brewing Stand", icon: ITEM_ICONS.brewingStandSeen },
+            { key: "dustedDirtSeen", title: "Dusted Dirt", icon: ITEM_ICONS.dustedDirtSeen }
         ];
         
         // Calculate infection status from context
@@ -535,7 +591,7 @@ export function showCodexBook(player, context) {
                         }
                     } else if (e.key === "snowBookCrafted") {
                         // Progressive journal information based on usage
-                        const totalKills = (codex.mobs.tinyBearKills || 0) + (codex.mobs.infectedBearKills || 0) + (codex.mobs.infectedPigKills || 0) + (codex.mobs.buffBearKills || 0);
+                        const totalKills = (codex.mobs.tinyBearKills || 0) + (codex.mobs.infectedBearKills || 0) + (codex.mobs.infectedPigKills || 0) + (codex.mobs.infectedCowKills || 0) + (codex.mobs.buffBearKills || 0);
                         const totalInfections = codex.history.totalInfections || 0;
                         
                         if (totalKills < 5 && totalInfections === 0) {
@@ -591,6 +647,9 @@ export function showCodexBook(player, context) {
                     } else if (e.key === "brewingStandSeen") {
                         // Brewing stand information
                         body = "§eBrewing Stand\n§7A specialized apparatus for creating alchemical concoctions. Essential for potion production.\n\n§7Function:\n§7• Allows creation of various potions\n§7• Can produce weakness potions\n§7• Essential for alchemical research\n\n§7Research Applications:\n§7• Weakness potions can be brewed here\n§7• Essential for cure research\n§7• Allows experimentation with different concoctions\n\n§eThis apparatus is crucial for developing treatments.";
+                    } else if (e.key === "dustedDirtSeen") {
+                        // Dusted dirt information
+                        body = "§eDusted Dirt\n§7A mysterious substance that appears to be contaminated with unknown particles.\n\n§7Properties:\n§7• Contains foreign particulate matter\n§7• Appears to be contaminated soil\n§7• May be related to the infection\n\n§7Research Notes:\n§7• Origin unknown\n§7• May be a byproduct of infection\n§7• Requires further investigation\n\n§eThis contaminated material may hold clues about the infection's nature.";
                     }
                 }
                 new ActionFormData().title(`§6Items: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => openItems());
