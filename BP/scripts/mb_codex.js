@@ -16,7 +16,6 @@ export function getDefaultCodex() {
         status: { immuneKnown: false, immuneUntil: 0, bearTimerSeen: false, snowTimerSeen: false },
         cures: { bearCureKnown: false, bearCureDoneAt: 0 },
         history: { totalInfections: 0, totalCures: 0, firstInfectionAt: 0, lastInfectionAt: 0, lastCureAt: 0 },
-        symptoms: { weaknessSeen: false, nauseaSeen: false, blindnessSeen: false, slownessSeen: false, hungerSeen: false },
         effects: {
             weaknessSeen: false,
             nauseaSeen: false,
@@ -90,6 +89,7 @@ export function markCodex(player, path, timestamp = false) {
 
 // Track cure attempts for progression
 export function trackCureAttempt(player) {
+    if (!player) return;
     const codex = getCodex(player);
     codex.items.cureAttempted = true;
     saveCodex(player, codex);
@@ -671,7 +671,7 @@ export function showCodexBook(player, context) {
                 }
                 
                 if (killCount > 0 || mobKillCount > 0) {
-                    label += ` §7(${killCount}K/${mobKillCount}M)`;
+                    label += ` §7(Player: ${killCount}, Mobs: ${mobKillCount})`;
                 }
             }
             
@@ -756,15 +756,27 @@ export function showCodexBook(player, context) {
 
     function openItems() {
         const codex = getCodex(player);
+        
+        // Item icon configuration
+        const ITEM_ICONS = {
+            'snowFound': "textures/items/mb_snow",
+            'snowBookCrafted': "textures/items/snow_book",
+            'cureItemsSeen': "textures/items/apple_golden",
+            'potionsSeen': "textures/items/potion_bottle_saturation",
+            'weaknessPotionSeen': "textures/items/potion_bottle_saturation",
+            'goldenAppleSeen': "textures/items/apple_golden",
+            'enchantedGoldenAppleSeen': "textures/items/apple_golden",
+            'brewingStandSeen': "textures/items/brewing_stand"
+        };
+        
         const entries = [
-            { key: "snowFound", title: "'Snow' (Powder)", icon: "textures/items/mb_snow" },
-            { key: "snowBookCrafted", title: "Powdery Journal", icon: "textures/items/snow_book" },
-            { key: "cureItemsSeen", title: "Cure Items", icon: "textures/items/apple_golden" },
-            { key: "potionsSeen", title: "Potions", icon: "textures/items/potion_bottle_saturation" },
-            { key: "weaknessPotionSeen", title: "Weakness Potion", icon: "textures/items/potion_bottle_saturation" },
-            { key: "goldenAppleSeen", title: "Golden Apple", icon: "textures/items/apple_golden" },
-            { key: "enchantedGoldenAppleSeen", title: "§5Enchanted§f Golden Apple", icon: "textures/items/apple_golden" },
-            { key: "brewingStandSeen", title: "Brewing Stand", icon: "textures/items/brewing_stand" }
+            { key: "snowFound", title: "'Snow' (Powder)", icon: ITEM_ICONS.snowFound },
+            { key: "snowBookCrafted", title: "Powdery Journal", icon: ITEM_ICONS.snowBookCrafted },
+            { key: "cureItemsSeen", title: "Cure Items", icon: ITEM_ICONS.cureItemsSeen },
+            { key: "potionsSeen", title: "Potions", icon: ITEM_ICONS.potionsSeen },
+            { key: "goldenAppleSeen", title: "Golden Apple", icon: ITEM_ICONS.goldenAppleSeen },
+            { key: "enchantedGoldenAppleSeen", title: "§5Enchanted§f Golden Apple", icon: ITEM_ICONS.enchantedGoldenAppleSeen },
+            { key: "brewingStandSeen", title: "Brewing Stand", icon: ITEM_ICONS.brewingStandSeen }
         ];
         
         // Calculate infection status from context
@@ -798,22 +810,8 @@ export function showCodexBook(player, context) {
             const label = `§f${maskTitle(title, codex.items[e.key])}`;
             
             // Add icons for known items only
-            if (e.key === 'snowFound' && showIcon) {
-                form.button(label, "textures/items/mb_snow");
-            } else if (e.key === 'snowBookCrafted' && showIcon) {
-                form.button(label, "textures/items/snow_book");
-            } else if (e.key === 'cureItemsSeen' && codex.items.cureItemsSeen) {
-                form.button(label, "textures/items/apple_golden");
-            } else if (e.key === 'potionsSeen' && codex.items.potionsSeen) {
-                form.button(label, "textures/items/potion_bottle_saturation");
-            } else if (e.key === 'weaknessPotionSeen' && codex.items.weaknessPotionSeen) {
-                form.button(label, "textures/items/potion_bottle_saturation");
-            } else if (e.key === 'goldenAppleSeen' && codex.items.goldenAppleSeen) {
-                form.button(label, "textures/items/apple_golden");
-            } else if (e.key === 'enchantedGoldenAppleSeen' && codex.items.enchantedGoldenAppleSeen) {
-                form.button(label, "textures/items/apple_golden");
-            } else if (e.key === 'brewingStandSeen' && codex.items.brewingStandSeen) {
-                form.button(label, "textures/items/brewing_stand");
+            if (codex.items[e.key] && ITEM_ICONS[e.key]) {
+                form.button(label, ITEM_ICONS[e.key]);
             } else {
                 form.button(label);
             }
@@ -890,9 +888,6 @@ export function showCodexBook(player, context) {
                         } else {
                             body = "§ePotions\n§7Alchemical concoctions that can alter biological processes. Some may have applications in treating infections.\n\n§7Basic Information:\n§7• Can be brewed using a brewing stand\n§7• Various effects available\n§7• May have therapeutic applications\n\n§8Note: Specific applications require further research.";
                         }
-                    } else if (e.key === "weaknessPotionSeen") {
-                        // Weakness potion specific information
-                        body = "§eWeakness Potion\n§7A potion that temporarily weakens the target, reducing their physical capabilities.\n\n§7Effects:\n§7• Reduces attack damage\n§7• Creates temporary vulnerability\n§7• May have therapeutic applications\n\n§7Research Notes:\n§7• Weakness effect appears to interact with infections\n§7• Timing of application may be critical\n§7• Combined with other items, may have curative properties\n\n§eThis potion shows promise in infection research.";
                     } else if (e.key === "goldenAppleSeen") {
                         // Golden apple information
                         body = "§eGolden Apple\n§7A rare fruit with powerful healing properties. Its golden nature suggests it contains concentrated life energy.\n\n§7Properties:\n§7• Provides significant healing\n§7• Contains concentrated life energy\n§7• May have applications in infection treatment\n\n§7Research Notes:\n§7• Golden apples are rare and valuable\n§7• Their healing properties are well-documented\n§7• May be useful in combination with other treatments\n\n§eThis fruit shows potential in medical applications.";
