@@ -7,3 +7,5 @@ entity.mb:infected.name=Maplethralls
 item.mb:snow="snow"
 tile.bridge:dusted_dirt.name=Dusted Dirt
 tile.bridge:dusted_dirt.name=Dusted Dirt
+item.spawn_egg.entity.mb:infected_cow.name=Spawn Infected cow
+entity.mb:infected_cow.name=Infected cow
