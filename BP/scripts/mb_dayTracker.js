@@ -233,7 +233,7 @@ export function getInfectionMessage(type, level = "normal") {
                 severe: "§8The shadows seem to follow you..."
             },
             snow: {
-                hit: "§7A strange numbness spreads through you...",
+                hit: "§7A cold sensation spreads through you...",
                 infected: "§7You feel drawn to something...",
                 severe: "§8The craving grows stronger..."
             }
