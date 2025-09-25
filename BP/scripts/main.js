@@ -452,6 +452,31 @@ function trackEffectExperience(player, effectId, severity) {
     }
 }
 
+// --- Helper: Handle infection expiration ---
+function handleInfectionExpiration(player, infectionState) {
+    const wasActiveRecently = infectionState.lastActiveTick && 
+        (system.currentTick - infectionState.lastActiveTick) < 1200; // 1 minute grace period
+    
+    if (wasActiveRecently) {
+        // Transform player
+        try { 
+            player.kill();
+            const bear = player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
+            if (bear) { 
+                bear.nameTag = `§4! ${player.name}'s Infected Form`; 
+                bear.setDynamicProperty("infected_by", player.id); 
+            }
+            player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} transformed into a Maple Bear!"}]}`);
+        } catch {}
+    } else {
+        // Infection expired while offline - just clear it
+        console.log(`[INFECTION] ${player.name}'s infection expired while offline - clearing without transformation`);
+    }
+    
+    player.removeTag(INFECTED_TAG);
+    playerInfection.delete(player.id);
+}
+
 // --- Helper: Send contextual discovery message ---
 function sendDiscoveryMessage(player, codex, messageType = "interesting", itemType = "") {
     if (codex?.items?.snowBookCrafted) {
@@ -1383,13 +1408,7 @@ function handleMobConversion(entity, killer) {
             }
         }
     } else {
-        console.log(`[CONVERSION] Non-Maple Bear killing ${entity.typeId} on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
-        // Normal Maple Bear conversion for non-pig mobs
-        if (Math.random() < conversionRate) {
-            system.run(() => {
-                convertMobToMapleBear(entity, killer);
-            });
-        }
+        console.log(`[CONVERSION] Non-Maple Bear killing ${entity.typeId} on day ${currentDay} - no conversion (only Maple Bears can convert mobs)`);
     }
         // Unlock mob sightings for nearby players
         for (const p of world.getAllPlayers()) {
@@ -1584,22 +1603,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 
                 // Check for immediate death
                 if (infectionState.ticksLeft <= 0) {
-                    // Check if this is a fresh infection expiration (not from loading old data)
-                    const wasActiveRecently = infectionState.lastActiveTick && (system.currentTick - infectionState.lastActiveTick) < 1200; // 1 minute grace period
-                    
-                    if (wasActiveRecently) {
-                        try { player.kill(); } catch {}
-                        try {
-                            const bear = player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
-                            if (bear) { bear.nameTag = `§4! ${player.name}'s Infected Form`; bear.setDynamicProperty("infected_by", player.id); }
-                            player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} transformed into a Maple Bear!"}]}`);
-                        } catch {}
-                    } else {
-                        // Infection expired while offline - just clear it without spawning bear
-                        console.log(`[INFECTION] ${player.name}'s infection expired while offline - clearing without transformation`);
-                    }
-                    player.removeTag(INFECTED_TAG);
-                    playerInfection.delete(player.id);
+                    handleInfectionExpiration(player, infectionState);
                 } else if (infectionState.ticksLeft <= 1200 && !infectionState.warningSent) { // 1 minute before transformation
                     // Send warning message a minute before transformation
                     player.sendMessage("§4You don't feel so good...");
@@ -1791,24 +1795,7 @@ system.runInterval(() => {
         }
 
         if (state.ticksLeft <= 0) {
-            // Check if this is a fresh infection expiration (not from loading old data)
-            // Only transform if the infection was active when the player was online
-            const wasActiveRecently = state.lastActiveTick && (system.currentTick - state.lastActiveTick) < 1200; // 1 minute grace period
-            
-            if (wasActiveRecently) {
-                // Transform!
-                console.log(`[INFECTION] ${player.name} succumbs to infection and transforms!`);
-                player.kill();
-                player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
-                player.sendMessage("§4You succumbed to the infection!");
-                player.removeTag(INFECTED_TAG);
-                playerInfection.delete(id);
-            } else {
-                // Infection expired while offline - just clear it without spawning bear
-                console.log(`[INFECTION] ${player.name}'s infection expired while offline - clearing without transformation`);
-                player.removeTag(INFECTED_TAG);
-                playerInfection.delete(id);
-            }
+            handleInfectionExpiration(player, state);
         } else if (state.ticksLeft <= 1200 && !state.warningSent) { // 1 minute before transformation
             // Send warning message a minute before transformation
             player.sendMessage("§4You don't feel so good...");
