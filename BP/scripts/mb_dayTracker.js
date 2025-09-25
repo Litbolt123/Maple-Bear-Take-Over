@@ -26,7 +26,7 @@ const INITIALIZED_FLAG = "mb_day_tracker_initialized";
 const DAY_COUNT_KEY = "mb_day_count";
 const SCOREBOARD_NAME = "mb_day_tracker";
 const DAY_SCORE_ID = "current_day";
-const MILESTONE_DAYS = [2, 4, 8]; // Tiny Maple Bears, Infected Maple Bears, Buff Maple Bears
+const MILESTONE_DAYS = [2, 4, 8, 13]; // Tiny Maple Bears, Infected Maple Bears, Buff Maple Bears, Day 13 variants
 
 // Scoreboard
 const SCOREBOARD_OBJECTIVE = "mb_days";
@@ -199,6 +199,16 @@ export function checkDailyEventsForAllPlayers() {
         // Day 9: Day 8+ variants unlock (reflection on day 8)
         if (dayToRecord === 9) {
             events.push("The most dangerous Maple Bear variants yet have been documented. The infection continues to evolve.");
+        }
+        
+        // Day 13: Day 13+ variants start spawning
+        if (dayToRecord === 13) {
+            events.push("The infection has increased to new heights. Powerful variants are beginning to emerge.");
+        }
+        
+        // Day 14: Day 13+ variants unlock (reflection on day 13)
+        if (dayToRecord === 14) {
+            events.push("The most advanced Maple Bear variants have been observed. The infection has reached unprecedented levels.");
         }
         
         // Record events for all players if any events occurred
@@ -513,6 +523,9 @@ export async function mbiHandleMilestoneDay(day) {
                     break;
                 case 8:
                     world.sendMessage(`§8[MBI] §cIf you see one, run.`);
+                    break;
+                case 13:
+                    world.sendMessage(`§8[MBI] §4The infection has increased to new heights...`);
                     break;
             }
         } catch (error) {

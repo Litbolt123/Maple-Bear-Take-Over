@@ -30,7 +30,6 @@
 
 ### 🎮 Gameplay Enhancements
 - [ ] Infection symptoms (visual effects, random events)
-- [ ] Different cure methods for different infection types
 - [ ] Infection resistance items/armor
 - [ ] Quarantine zones or safe areas
 - [ ] Infection spread mechanics between players

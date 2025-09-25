@@ -82,6 +82,49 @@
 				},
 				"volume": 1,
 				"pitch": 0.5
+			},
+			"mb:mb_day13": {
+				"volume": [
+					1
+				],
+				"pitch": [
+					1
+				],
+				"events": {
+					"step": {
+						"sound": "tiny_mb_step",
+						"volume": [
+							1
+						],
+						"pitch": [
+							1
+						]
+					}
+				}
+			},
+			"mb:infected_day13": {
+				"volume": 1,
+				"pitch": 1,
+				"events": {
+					"ambient": {
+						"sound": "ambient.infected",
+						"volume": 1,
+						"pitch": 1
+					}
+				}
+			},
+			"mb:buff_mb_day13": {
+				"volume": [
+					1
+				],
+				"pitch": 1,
+				"events": {
+					"step": {
+						"sound": "buff_mb_step",
+						"volume": 1,
+						"pitch": 1
+					}
+				}
 			}
 		}
 	}

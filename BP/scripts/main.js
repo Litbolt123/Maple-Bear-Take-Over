@@ -35,9 +35,12 @@ function safeMarkCodex(player, path, timestamp = false) {
 const MAPLE_BEAR_ID = "mb:mb";
 const MAPLE_BEAR_DAY4_ID = "mb:mb_day4";
 const MAPLE_BEAR_DAY8_ID = "mb:mb_day8";
+const MAPLE_BEAR_DAY13_ID = "mb:mb_day13";
 const INFECTED_BEAR_ID = "mb:infected";
 const INFECTED_BEAR_DAY8_ID = "mb:infected_day8";
+const INFECTED_BEAR_DAY13_ID = "mb:infected_day13";
 const BUFF_BEAR_ID = "mb:buff_mb";
+const BUFF_BEAR_DAY13_ID = "mb:buff_mb_day13";
 const INFECTED_PIG_ID = "mb:infected_pig";
 const INFECTED_COW_ID = "mb:infected_cow";
 const SNOW_ITEM_ID = "mb:snow";
@@ -190,7 +193,7 @@ const bearHitCount = new Map(); // playerId -> hitCount (tracks hits before infe
 const firstTimeMessages = new Map(); // playerId -> { hasBeenHit: false, hasBeenInfected: false, snowTier: 0 }
 const maxSnowLevels = new Map(); // playerId -> { maxLevel: 0, achievedAt: timestamp }
 const infectionExperience = new Map(); // playerId -> { bearInfected, snowInfected, maxSeverity, effectsSeen }
-const INFECTION_TICKS = 24000 * 2; // 2 Minecraft days (much faster death)
+const INFECTION_TICKS = 24000 * 5; // 5 Minecraft days
 const HITS_TO_INFECT = 3; // Number of hits required to get infected
 // Random effect interval is now handled inline in the infection system
 
@@ -227,13 +230,13 @@ function trackBearKill(player, bearType) {
         const codex = getCodex(player);
         
         // Track kills based on bear type and unlock discovery
-        if (bearType === MAPLE_BEAR_ID || bearType === MAPLE_BEAR_DAY4_ID || bearType === MAPLE_BEAR_DAY8_ID) {
+        if (bearType === MAPLE_BEAR_ID || bearType === MAPLE_BEAR_DAY4_ID || bearType === MAPLE_BEAR_DAY8_ID || bearType === MAPLE_BEAR_DAY13_ID) {
             codex.mobs.tinyBearKills = (codex.mobs.tinyBearKills || 0) + 1; // Player kills this mob
             checkAndUnlockMobDiscovery(codex, player, "tinyBearKills", "tinyBearMobKills", "tinyBearHits", "mapleBearSeen", 3, "mysterious", "tiny_bear");
-        } else if (bearType === INFECTED_BEAR_ID || bearType === INFECTED_BEAR_DAY8_ID) {
+        } else if (bearType === INFECTED_BEAR_ID || bearType === INFECTED_BEAR_DAY8_ID || bearType === INFECTED_BEAR_DAY13_ID) {
             codex.mobs.infectedBearKills = (codex.mobs.infectedBearKills || 0) + 1;
             checkAndUnlockMobDiscovery(codex, player, "infectedBearKills", "infectedBearMobKills", "infectedBearHits", "infectedBearSeen", 3, "dangerous", "infected_bear");
-        } else if (bearType === BUFF_BEAR_ID) {
+        } else if (bearType === BUFF_BEAR_ID || bearType === BUFF_BEAR_DAY13_ID) {
             codex.mobs.buffBearKills = (codex.mobs.buffBearKills || 0) + 1;
             checkAndUnlockMobDiscovery(codex, player, "buffBearKills", "buffBearMobKills", "buffBearHits", "buffBearSeen", 1, "threatening", "buff_bear");
         } else if (bearType === INFECTED_PIG_ID) {
@@ -243,6 +246,9 @@ function trackBearKill(player, bearType) {
             codex.mobs.infectedCowKills = (codex.mobs.infectedCowKills || 0) + 1;
             checkAndUnlockMobDiscovery(codex, player, "infectedCowKills", "infectedCowMobKills", "infectedCowHits", "infectedCowSeen", 3, "dangerous", "infected_cow");
         }
+        
+        // Check for day variant unlocks
+        checkVariantUnlock(player);
         
         saveCodex(player, codex);
     } catch (error) {
@@ -254,8 +260,8 @@ function trackMobKill(killer, victim) {
     try {
         // Only track kills by Maple Bears and Infected Pigs
         const killerType = killer.typeId;
-        if (killerType !== MAPLE_BEAR_ID && killerType !== MAPLE_BEAR_DAY4_ID && killerType !== MAPLE_BEAR_DAY8_ID && 
-            killerType !== INFECTED_BEAR_ID && killerType !== INFECTED_BEAR_DAY8_ID && killerType !== BUFF_BEAR_ID && killerType !== INFECTED_PIG_ID) {
+        if (killerType !== MAPLE_BEAR_ID && killerType !== MAPLE_BEAR_DAY4_ID && killerType !== MAPLE_BEAR_DAY8_ID && killerType !== MAPLE_BEAR_DAY13_ID && 
+            killerType !== INFECTED_BEAR_ID && killerType !== INFECTED_BEAR_DAY8_ID && killerType !== INFECTED_BEAR_DAY13_ID && killerType !== BUFF_BEAR_ID && killerType !== BUFF_BEAR_DAY13_ID && killerType !== INFECTED_PIG_ID) {
             return;
         }
         
@@ -273,13 +279,13 @@ function trackMobKill(killer, victim) {
                 const codex = getCodex(player);
                 
                 // Track mob kills and check unlock conditions
-                if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID) {
+                        if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID) {
                     codex.mobs.tinyBearMobKills = (codex.mobs.tinyBearMobKills || 0) + 1; // This mob kills other entities
                     checkAndUnlockMobDiscovery(codex, player, "tinyBearKills", "tinyBearMobKills", "tinyBearHits", "mapleBearSeen", 3, "mysterious");
-                } else if (killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID) {
+                        } else if (killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === INFECTED_BEAR_DAY13_ID) {
                     codex.mobs.infectedBearMobKills = (codex.mobs.infectedBearMobKills || 0) + 1;
                     checkAndUnlockMobDiscovery(codex, player, "infectedBearKills", "infectedBearMobKills", "infectedBearHits", "infectedBearSeen", 3, "dangerous");
-                } else if (killerType === BUFF_BEAR_ID) {
+                        } else if (killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY13_ID) {
                     codex.mobs.buffBearMobKills = (codex.mobs.buffBearMobKills || 0) + 1;
                     checkAndUnlockMobDiscovery(codex, player, "buffBearKills", "buffBearMobKills", "buffBearHits", "buffBearSeen", 1, "threatening");
                 } else if (killerType === INFECTED_PIG_ID) {
@@ -289,6 +295,9 @@ function trackMobKill(killer, victim) {
                     codex.mobs.infectedCowMobKills = (codex.mobs.infectedCowMobKills || 0) + 1;
                     checkAndUnlockMobDiscovery(codex, player, "infectedCowKills", "infectedCowMobKills", "infectedCowHits", "infectedCowSeen", 3, "dangerous");
                 }
+                
+                // Check for day variant unlocks
+                checkVariantUnlock(player);
                 
                 saveCodex(player, codex);
             }
@@ -302,20 +311,63 @@ function checkVariantUnlock(player) {
         const codex = getCodex(player);
         const currentDay = getCurrentDay();
         
-        // Check if day 4+ variants should be unlocked (1 day after they start spawning)
-        if (currentDay >= 5 && !codex.mobs.day4VariantsUnlocked) {
-            // Only unlock if player has seen the base type
-            if (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen) {
+        // Calculate total kills for each mob type
+        const totalTinyBearKills = (codex.mobs.tinyBearKills || 0) + (codex.mobs.tinyBearMobKills || 0) + (codex.mobs.tinyBearHits || 0);
+        const totalInfectedBearKills = (codex.mobs.infectedBearKills || 0) + (codex.mobs.infectedBearMobKills || 0) + (codex.mobs.infectedBearHits || 0);
+        const totalInfectedPigKills = (codex.mobs.infectedPigKills || 0) + (codex.mobs.infectedPigMobKills || 0) + (codex.mobs.infectedPigHits || 0);
+        const totalInfectedCowKills = (codex.mobs.infectedCowKills || 0) + (codex.mobs.infectedCowMobKills || 0) + (codex.mobs.infectedCowHits || 0);
+        const totalBuffBearKills = (codex.mobs.buffBearKills || 0) + (codex.mobs.buffBearMobKills || 0) + (codex.mobs.buffBearHits || 0);
+        
+        // Check for day 4+ variant unlock (either by day OR by 100 kills of any specific mob type)
+        if (!codex.mobs.day4VariantsUnlocked) {
+            const dayUnlock = currentDay >= 5 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen);
+            const killUnlock = totalTinyBearKills >= 100 || totalInfectedBearKills >= 100 || totalInfectedPigKills >= 100 || totalInfectedCowKills >= 100 || totalBuffBearKills >= 100;
+            
+            if (dayUnlock || killUnlock) {
                 codex.mobs.day4VariantsUnlocked = true;
+                markCodex(player, "mobs.day4VariantsUnlocked");
+                if (killUnlock) {
+                    player.sendMessage("§6§lNew Discovery! §eDay 4+ variants unlocked in your codex!");
+                    player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                    console.log(`[CODEX] ${player.name} unlocked day 4+ variants at 100+ kills`);
+                }
                 saveCodex(player, codex);
             }
         }
         
-        // Check if day 8+ variants should be unlocked (1 day after they start spawning)
-        if (currentDay >= 9 && !codex.mobs.day8VariantsUnlocked) {
-            // Only unlock if player has seen any bear type
-            if (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen || codex.mobs.buffBearSeen) {
+        // Check for day 8+ variant unlock (either by day OR by 100 kills of any specific mob type)
+        if (!codex.mobs.day8VariantsUnlocked) {
+            const dayUnlock = currentDay >= 9 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen || codex.mobs.buffBearSeen);
+            const killUnlock = totalTinyBearKills >= 100 || totalInfectedBearKills >= 100 || totalInfectedPigKills >= 100 || totalInfectedCowKills >= 100 || totalBuffBearKills >= 100;
+            
+            if (dayUnlock || killUnlock) {
                 codex.mobs.day8VariantsUnlocked = true;
+                markCodex(player, "mobs.day8VariantsUnlocked");
+                if (killUnlock) {
+                    player.sendMessage("§6§lNew Discovery! §eDay 8+ variants unlocked in your codex!");
+                    player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                    console.log(`[CODEX] ${player.name} unlocked day 8+ variants at 100+ kills`);
+                }
+                saveCodex(player, codex);
+            }
+        }
+        
+        // Check for day 13+ variant unlock (either by day OR by 100 kills of any specific mob type)
+        if (!codex.mobs.day13VariantsUnlocked) {
+            const dayUnlock = currentDay >= 14 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen || codex.mobs.buffBearSeen);
+            const killUnlock = totalTinyBearKills >= 100 || totalInfectedBearKills >= 100 || totalInfectedPigKills >= 100 || totalInfectedCowKills >= 100 || totalBuffBearKills >= 100;
+            
+            if (dayUnlock || killUnlock) {
+                codex.mobs.day13VariantsUnlocked = true;
+                markCodex(player, "mobs.day13VariantsUnlocked");
+                if (killUnlock) {
+                    player.sendMessage("§6§lNew Discovery! §eDay 13+ variants unlocked in your codex!");
+                    player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                    console.log(`[CODEX] ${player.name} unlocked day 13+ variants at 100+ kills`);
+                }
                 saveCodex(player, codex);
             }
         }
@@ -345,6 +397,142 @@ function getSnowTimeEffect(snowCount) {
     } else {
         // Tier 6: The Black Void - beyond comprehension
         return -Math.floor(INFECTION_TICKS * 0.15); // -15% time
+    }
+}
+
+// --- Helper: Apply random effects based on snow tier ---
+function applySnowTierEffects(player, snowCount) {
+    try {
+        // Determine tier and apply appropriate effects (mix of positive and negative)
+        if (snowCount <= 5) {
+            // Tier 1: Mild effects - mostly positive with some negative
+            const effects = ["regeneration", "speed", "weakness", "nausea"];
+            const randomEffect = effects[Math.floor(Math.random() * effects.length)];
+            const isPositive = randomEffect === "regeneration" || randomEffect === "speed";
+            const duration = isPositive ? 300 : 200;
+            const amplifier = isPositive ? 0 : 0;
+            player.addEffect(randomEffect, duration, { amplifier: amplifier, showParticles: true });
+            
+            // Track snow effects in codex
+            try {
+                if (randomEffect === "regeneration") markCodex(player, "snowEffects.regenerationSeen");
+                if (randomEffect === "speed") markCodex(player, "snowEffects.speedSeen");
+                if (randomEffect === "weakness") markCodex(player, "snowEffects.weaknessSeen");
+                if (randomEffect === "nausea") markCodex(player, "snowEffects.nauseaSeen");
+                markCodex(player, "symptomsUnlocks.snowEffectsUnlocked");
+            } catch (error) {
+                console.warn(`[SNOW EFFECTS] Error tracking snow effects:`, error);
+            }
+        } else if (snowCount <= 10) {
+            // Tier 2: Moderate effects - balanced mix
+            const effects = ["regeneration", "speed", "jump_boost", "weakness", "nausea", "slowness"];
+            const randomEffect = effects[Math.floor(Math.random() * effects.length)];
+            const isPositive = randomEffect === "regeneration" || randomEffect === "speed" || randomEffect === "jump_boost";
+            const duration = isPositive ? 400 : 300;
+            const amplifier = isPositive ? 0 : 1;
+            player.addEffect(randomEffect, duration, { amplifier: amplifier, showParticles: true });
+            
+            // Track snow effects in codex
+            try {
+                if (randomEffect === "regeneration") markCodex(player, "snowEffects.regenerationSeen");
+                if (randomEffect === "speed") markCodex(player, "snowEffects.speedSeen");
+                if (randomEffect === "jump_boost") markCodex(player, "snowEffects.jumpBoostSeen");
+                if (randomEffect === "weakness") markCodex(player, "snowEffects.weaknessSeen");
+                if (randomEffect === "nausea") markCodex(player, "snowEffects.nauseaSeen");
+                if (randomEffect === "slowness") markCodex(player, "snowEffects.slownessSeen");
+                markCodex(player, "symptomsUnlocks.snowEffectsUnlocked");
+            } catch (error) {
+                console.warn(`[SNOW EFFECTS] Error tracking snow effects:`, error);
+            }
+        } else if (snowCount <= 20) {
+            // Tier 3: Strong effects - more negative but still some positive
+            const effects = ["regeneration", "speed", "jump_boost", "strength", "weakness", "nausea", "slowness", "blindness"];
+            const randomEffect = effects[Math.floor(Math.random() * effects.length)];
+            const isPositive = randomEffect === "regeneration" || randomEffect === "speed" || randomEffect === "jump_boost" || randomEffect === "strength";
+            const duration = isPositive ? 500 : 400;
+            const amplifier = isPositive ? 1 : 1;
+            player.addEffect(randomEffect, duration, { amplifier: amplifier, showParticles: true });
+            
+            // Track snow effects in codex
+            try {
+                if (randomEffect === "regeneration") markCodex(player, "snowEffects.regenerationSeen");
+                if (randomEffect === "speed") markCodex(player, "snowEffects.speedSeen");
+                if (randomEffect === "jump_boost") markCodex(player, "snowEffects.jumpBoostSeen");
+                if (randomEffect === "strength") markCodex(player, "snowEffects.strengthSeen");
+                if (randomEffect === "weakness") markCodex(player, "snowEffects.weaknessSeen");
+                if (randomEffect === "nausea") markCodex(player, "snowEffects.nauseaSeen");
+                if (randomEffect === "slowness") markCodex(player, "snowEffects.slownessSeen");
+                if (randomEffect === "blindness") markCodex(player, "snowEffects.blindnessSeen");
+                markCodex(player, "symptomsUnlocks.snowEffectsUnlocked");
+            } catch (error) {
+                console.warn(`[SNOW EFFECTS] Error tracking snow effects:`, error);
+            }
+        } else if (snowCount <= 50) {
+            // Tier 4: Severe effects - mostly negative with rare positive
+            const effects = ["regeneration", "speed", "strength", "weakness", "nausea", "slowness", "blindness", "hunger"];
+            const randomEffect = effects[Math.floor(Math.random() * effects.length)];
+            const isPositive = randomEffect === "regeneration" || randomEffect === "speed" || randomEffect === "strength";
+            const duration = isPositive ? 600 : 500;
+            const amplifier = isPositive ? 1 : 2;
+            player.addEffect(randomEffect, duration, { amplifier: amplifier, showParticles: true });
+            
+            // Track snow effects in codex
+            try {
+                if (randomEffect === "regeneration") markCodex(player, "snowEffects.regenerationSeen");
+                if (randomEffect === "speed") markCodex(player, "snowEffects.speedSeen");
+                if (randomEffect === "strength") markCodex(player, "snowEffects.strengthSeen");
+                if (randomEffect === "weakness") markCodex(player, "snowEffects.weaknessSeen");
+                if (randomEffect === "nausea") markCodex(player, "snowEffects.nauseaSeen");
+                if (randomEffect === "slowness") markCodex(player, "snowEffects.slownessSeen");
+                if (randomEffect === "blindness") markCodex(player, "snowEffects.blindnessSeen");
+                if (randomEffect === "hunger") markCodex(player, "snowEffects.hungerSeen");
+                markCodex(player, "symptomsUnlocks.snowEffectsUnlocked");
+            } catch (error) {
+                console.warn(`[SNOW EFFECTS] Error tracking snow effects:`, error);
+            }
+        } else if (snowCount <= 100) {
+            // Tier 5: Extreme effects - mostly negative
+            const effects = ["regeneration", "weakness", "nausea", "slowness", "blindness", "hunger", "mining_fatigue"];
+            const randomEffect = effects[Math.floor(Math.random() * effects.length)];
+            const isPositive = randomEffect === "regeneration";
+            const duration = isPositive ? 700 : 600;
+            const amplifier = isPositive ? 2 : 2;
+            player.addEffect(randomEffect, duration, { amplifier: amplifier, showParticles: true });
+            
+            // Track snow effects in codex
+            try {
+                if (randomEffect === "regeneration") markCodex(player, "snowEffects.regenerationSeen");
+                if (randomEffect === "weakness") markCodex(player, "snowEffects.weaknessSeen");
+                if (randomEffect === "nausea") markCodex(player, "snowEffects.nauseaSeen");
+                if (randomEffect === "slowness") markCodex(player, "snowEffects.slownessSeen");
+                if (randomEffect === "blindness") markCodex(player, "snowEffects.blindnessSeen");
+                if (randomEffect === "hunger") markCodex(player, "snowEffects.hungerSeen");
+                if (randomEffect === "mining_fatigue") markCodex(player, "snowEffects.miningFatigueSeen");
+                markCodex(player, "symptomsUnlocks.snowEffectsUnlocked");
+            } catch (error) {
+                console.warn(`[SNOW EFFECTS] Error tracking snow effects:`, error);
+            }
+        } else {
+            // Tier 6: Devastating effects - all negative
+            const effects = ["weakness", "nausea", "slowness", "blindness", "hunger", "mining_fatigue"];
+            const randomEffect = effects[Math.floor(Math.random() * effects.length)];
+            player.addEffect(randomEffect, 800, { amplifier: 3, showParticles: true });
+            
+            // Track snow effects in codex
+            try {
+                if (randomEffect === "weakness") markCodex(player, "snowEffects.weaknessSeen");
+                if (randomEffect === "nausea") markCodex(player, "snowEffects.nauseaSeen");
+                if (randomEffect === "slowness") markCodex(player, "snowEffects.slownessSeen");
+                if (randomEffect === "blindness") markCodex(player, "snowEffects.blindnessSeen");
+                if (randomEffect === "hunger") markCodex(player, "snowEffects.hungerSeen");
+                if (randomEffect === "mining_fatigue") markCodex(player, "snowEffects.miningFatigueSeen");
+                markCodex(player, "symptomsUnlocks.snowEffectsUnlocked");
+            } catch (error) {
+                console.warn(`[SNOW EFFECTS] Error tracking snow effects:`, error);
+            }
+        }
+    } catch (error) {
+        console.warn(`[SNOW EFFECTS] Error applying snow tier effects:`, error);
     }
 }
 
@@ -446,6 +634,12 @@ function trackEffectExperience(player, effectId, severity) {
         if (effectId === "minecraft:hunger") safeMarkCodex(player, "effects.hungerSeen");
         if (effectId === "minecraft:mining_fatigue") safeMarkCodex(player, "effects.miningFatigueSeen");
         
+        // Unlock infection symptoms tab when first negative effect is experienced
+        if (effectId === "minecraft:blindness" || effectId === "minecraft:nausea" || effectId === "minecraft:weakness" || 
+            effectId === "minecraft:slowness" || effectId === "minecraft:hunger" || effectId === "minecraft:mining_fatigue") {
+            safeMarkCodex(player, "symptomsUnlocks.infectionSymptomsUnlocked");
+        }
+        
         console.log(`[EFFECT] ${player.name} experienced ${effectId} at severity ${severity}`);
     } catch (error) {
         console.warn(`[EFFECT] Error tracking effect experience for ${player.name}:`, error);
@@ -461,14 +655,24 @@ function handleInfectionExpiration(player, infectionState) {
         // Transform player
         try { 
             player.kill();
-            const bear = player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
+            const currentDay = getCurrentDay();
+            let infectedBearType = INFECTED_BEAR_ID; // Default to original
+            
+            // Choose appropriate infected bear variant based on current day
+            if (currentDay >= 13) {
+                infectedBearType = INFECTED_BEAR_DAY13_ID; // Day 13+ variant
+            } else if (currentDay >= 8) {
+                infectedBearType = INFECTED_BEAR_DAY8_ID; // Day 8+ variant
+            }
+            
+            const bear = player.dimension.spawnEntity(infectedBearType, player.location);
             if (bear) { 
                 bear.nameTag = `§4! ${player.name}'s Infected Form`; 
                 bear.setDynamicProperty("infected_by", player.id); 
             }
             player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} transformed into a Maple Bear!"}]}`);
         } catch {}
-    } else {
+            } else {
         // Infection expired while offline - just clear it
         console.log(`[INFECTION] ${player.name}'s infection expired while offline - clearing without transformation`);
     }
@@ -481,7 +685,7 @@ function handleInfectionExpiration(player, infectionState) {
 function sendDiscoveryMessage(player, codex, messageType = "interesting", itemType = "") {
     if (codex?.items?.snowBookCrafted) {
         player.sendMessage("§7You feel like you should check your Powdery Journal...");
-    } else {
+        } else {
         // Two-level mapping: messageType -> itemType -> message
         const messages = {
             important: {
@@ -536,17 +740,17 @@ function convertEntity(deadEntity, killer, targetEntityId, conversionName) {
             y: Math.floor(location.y), 
             z: Math.floor(location.z) 
         });
-    } catch (chunkError) {
+        } catch (chunkError) {
         console.log(`[${conversionName}] Skipping - chunk not loaded at ${Math.floor(location.x)}, ${Math.floor(location.y)}, ${Math.floor(location.z)}`);
         return null;
-    }
-    
+        }
+        
     // Spawn replacement entity
     const newEntity = dimension.spawnEntity(targetEntityId, location);
-    
+        
     // Add visual feedback
-    dimension.spawnParticle("mb:white_dust_particale", location);
-    
+        dimension.spawnParticle("mb:white_dust_particale", location);
+        
     console.log(`[${conversionName}] Conversion complete`);
     return newEntity;
 }
@@ -561,7 +765,7 @@ function convertPigToInfectedPig(deadPig, killer) {
         const infectedPig = convertEntity(deadPig, killer, INFECTED_PIG_ID, "PIG CONVERSION");
         
         if (infectedPig) {
-            console.log(`[PIG CONVERSION] Day ${currentDay}: Pig killed by ${killerType} → spawned Infected Pig`);
+        console.log(`[PIG CONVERSION] Day ${currentDay}: Pig killed by ${killerType} → spawned Infected Pig`);
         }
         
     } catch (error) {
@@ -579,7 +783,7 @@ function convertCowToInfectedCow(deadCow, killer) {
         const infectedCow = convertEntity(deadCow, killer, INFECTED_COW_ID, "COW CONVERSION");
         
         if (infectedCow) {
-            console.log(`[COW CONVERSION] Day ${currentDay}: Cow killed by ${killerType} → spawned Infected Cow`);
+        console.log(`[COW CONVERSION] Day ${currentDay}: Cow killed by ${killerType} → spawned Infected Cow`);
         }
         
     } catch (error) {
@@ -610,10 +814,10 @@ function convertMobToMapleBear(deadMob, killer) {
         let bearSize = "normal";
         
         // Buff Maple Bears always spawn normal human-sized Maple Bears
-        if (killerType === BUFF_BEAR_ID) {
+        if (killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY13_ID) {
             newBearType = MAPLE_BEAR_ID;
             bearSize = "normal";
-        } else if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID) {
+        } else if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID) {
             // Tiny Maple Bears behavior changes based on day
             console.log(`[CONVERSION] Tiny bear detected (${killerType}), current day: ${currentDay}`);
             if (currentDay < 4) {
@@ -634,8 +838,8 @@ function convertMobToMapleBear(deadMob, killer) {
                     newBearType = INFECTED_BEAR_ID; // infected.json for normal bears
                     bearSize = "normal";
                 }
-            } else {
-                // Day 8+: Tiny Maple Bears use size-based system with day 8+ variants
+            } else if (currentDay < 13) {
+                // Day 8-12: Tiny Maple Bears use size-based system with day 8+ variants
                 const mobSize = getMobSize(mobType);
                 if (mobSize === "tiny") {
                     newBearType = MAPLE_BEAR_DAY8_ID; // Day 8+ tiny bears
@@ -645,6 +849,19 @@ function convertMobToMapleBear(deadMob, killer) {
                     bearSize = "buff";
                 } else {
                     newBearType = INFECTED_BEAR_DAY8_ID; // Day 8+ normal bears
+                    bearSize = "normal";
+                }
+            } else {
+                // Day 13+: Tiny Maple Bears use size-based system with day 13+ variants
+                const mobSize = getMobSize(mobType);
+                if (mobSize === "tiny") {
+                    newBearType = MAPLE_BEAR_DAY13_ID; // Day 13+ tiny bears
+                    bearSize = "tiny";
+                } else if (mobSize === "large") {
+                    newBearType = BUFF_BEAR_DAY13_ID; // Day 13+ Buff Maple Bears for large mobs
+                    bearSize = "buff";
+                } else {
+                    newBearType = INFECTED_BEAR_DAY13_ID; // Day 13+ normal bears
                     bearSize = "normal";
                 }
             }
@@ -658,22 +875,29 @@ function convertMobToMapleBear(deadMob, killer) {
                     newBearType = MAPLE_BEAR_ID; // Original tiny bears
                 } else if (currentDay < 8) {
                     newBearType = MAPLE_BEAR_DAY4_ID; // Day 4+ tiny bears
-                } else {
+                } else if (currentDay < 13) {
                     newBearType = MAPLE_BEAR_DAY8_ID; // Day 8+ tiny bears
+                } else {
+                    newBearType = MAPLE_BEAR_DAY13_ID; // Day 13+ tiny bears
                 }
                 bearSize = "tiny";
             } else if (mobSize === "large") {
-                // Large mobs become Buff Maple Bears if it's day 8+
-                if (currentDay >= 8) {
-                    newBearType = BUFF_BEAR_ID;
+                // Large mobs become Buff Maple Bears based on day
+                if (currentDay >= 13) {
+                    newBearType = BUFF_BEAR_DAY13_ID; // Day 13+ Buff Maple Bears
+                    bearSize = "buff";
+                } else if (currentDay >= 8) {
+                    newBearType = BUFF_BEAR_ID; // Day 8+ Buff Maple Bears
                     bearSize = "buff";
                 } else {
-                    newBearType = INFECTED_BEAR_ID; // infected.json for normal bears
+                    newBearType = INFECTED_BEAR_ID; // Original normal bears
                     bearSize = "normal";
                 }
             } else {
                 // Choose appropriate normal bear variant based on day
-                if (currentDay >= 8) {
+                if (currentDay >= 13) {
+                    newBearType = INFECTED_BEAR_DAY13_ID; // Day 13+ normal bears
+                } else if (currentDay >= 8) {
                     newBearType = INFECTED_BEAR_DAY8_ID; // Day 8+ normal bears
                 } else {
                     newBearType = INFECTED_BEAR_ID; // Original normal bears
@@ -1250,6 +1474,9 @@ function handleSnowConsumption(player, item) {
         // Mark snow infection as discovered
         try { markCodex(player, "infections.snow.discovered"); markCodex(player, "infections.snow.firstUseAt", true); } catch {}
         
+        // Unlock snow tier analysis when first infected by snow
+        try { markCodex(player, "symptomsUnlocks.snowTierAnalysisUnlocked"); } catch {}
+        
         // Track infection history
         trackInfectionHistory(player, "infected");
     } else {
@@ -1285,7 +1512,31 @@ function handleSnowConsumption(player, item) {
         if (currentTier > (infectionState.lastTierMessage || 0)) {
             player.sendMessage(message);
             infectionState.lastTierMessage = currentTier;
+            
+            // Play appropriate sound based on tier message tone
+            if (snowCount <= 5) {
+                // Tier 1: Positive sound
+                player.playSound("random.levelup", { pitch: 1.2, volume: 0.6 });
+            } else if (snowCount <= 10) {
+                // Tier 2: Neutral sound
+                player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.5 });
+            } else if (snowCount <= 20) {
+                // Tier 3: Warning sound
+                player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 0.6 });
+            } else if (snowCount <= 50) {
+                // Tier 4: Dangerous sound
+                player.playSound("mob.wither.ambient", { pitch: 0.7, volume: 0.7 });
+            } else if (snowCount <= 100) {
+                // Tier 5: Extreme sound
+                player.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.8 });
+            } else {
+                // Tier 6: Devastating sound
+                player.playSound("mob.wither.death", { pitch: 0.5, volume: 0.9 });
+            }
         }
+        
+        // Apply random effects based on snow tier for infected players
+        applySnowTierEffects(player, snowCount);
         
         console.log(`[SNOW] ${player.name} consumed snow (count: ${snowCount}, time effect: ${timeEffect}, new ticks: ${infectionState.ticksLeft})`);
     }
@@ -1373,11 +1624,11 @@ function handleMobConversion(entity, killer) {
     const conversionRate = getInfectionRate(currentDay);
     
     // Check if killer is a Maple Bear or infected pig
-    if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === BUFF_BEAR_ID || killerType === INFECTED_PIG_ID) {
+    if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID || killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === INFECTED_BEAR_DAY13_ID || killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY13_ID || killerType === INFECTED_PIG_ID) {
         
         // PREVENT BEAR-TO-BEAR CONVERSION: Don't convert Maple Bears or infected creatures
-        const isVictimABear = entityType === MAPLE_BEAR_ID || entityType === MAPLE_BEAR_DAY4_ID || entityType === MAPLE_BEAR_DAY8_ID || 
-                              entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === BUFF_BEAR_ID;
+        const isVictimABear = entityType === MAPLE_BEAR_ID || entityType === MAPLE_BEAR_DAY4_ID || entityType === MAPLE_BEAR_DAY8_ID || entityType === MAPLE_BEAR_DAY13_ID || 
+                              entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === INFECTED_BEAR_DAY13_ID || entityType === BUFF_BEAR_ID || entityType === BUFF_BEAR_DAY13_ID;
         const isVictimInfected = entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID;
         
         if (isVictimABear || isVictimInfected) {
@@ -1431,8 +1682,8 @@ function handleMobConversion(entity, killer) {
 function handleMapleBearKillTracking(entity, killer) {
     if (killer instanceof Player && !(entity instanceof Player)) {
         const entityType = entity.typeId;
-        if (entityType === MAPLE_BEAR_ID || entityType === MAPLE_BEAR_DAY4_ID || entityType === MAPLE_BEAR_DAY8_ID || 
-            entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === BUFF_BEAR_ID || entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID) {
+        if (entityType === MAPLE_BEAR_ID || entityType === MAPLE_BEAR_DAY4_ID || entityType === MAPLE_BEAR_DAY8_ID || entityType === MAPLE_BEAR_DAY13_ID || 
+            entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === INFECTED_BEAR_DAY13_ID || entityType === BUFF_BEAR_ID || entityType === BUFF_BEAR_DAY13_ID || entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID) {
             trackBearKill(killer, entityType);
         }
     }
@@ -1545,7 +1796,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
     const source = event.damageSource;
     if (!(player instanceof Player)) return;
 
-                const mapleBearTypes = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, BUFF_BEAR_ID, INFECTED_PIG_ID, INFECTED_COW_ID];
+                const mapleBearTypes = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, INFECTED_PIG_ID, INFECTED_COW_ID];
     if (source && source.damagingEntity && mapleBearTypes.includes(source.damagingEntity.typeId)) {
         // Track hits for mob discovery
         try {
@@ -1553,13 +1804,13 @@ world.afterEvents.entityHurt.subscribe((event) => {
             const mobType = source.damagingEntity.typeId;
             
             // Increment hit counter based on mob type
-            if (mobType === MAPLE_BEAR_ID || mobType === MAPLE_BEAR_DAY4_ID || mobType === MAPLE_BEAR_DAY8_ID) {
+            if (mobType === MAPLE_BEAR_ID || mobType === MAPLE_BEAR_DAY4_ID || mobType === MAPLE_BEAR_DAY8_ID || mobType === MAPLE_BEAR_DAY13_ID) {
                 codex.mobs.tinyBearHits = (codex.mobs.tinyBearHits || 0) + 1;
                 checkAndUnlockMobDiscovery(codex, player, "tinyBearKills", "tinyBearMobKills", "tinyBearHits", "mapleBearSeen", 3, "mysterious");
-            } else if (mobType === INFECTED_BEAR_ID || mobType === INFECTED_BEAR_DAY8_ID) {
+            } else if (mobType === INFECTED_BEAR_ID || mobType === INFECTED_BEAR_DAY8_ID || mobType === INFECTED_BEAR_DAY13_ID) {
                 codex.mobs.infectedBearHits = (codex.mobs.infectedBearHits || 0) + 1;
                 checkAndUnlockMobDiscovery(codex, player, "infectedBearKills", "infectedBearMobKills", "infectedBearHits", "infectedBearSeen", 3, "dangerous");
-            } else if (mobType === BUFF_BEAR_ID) {
+            } else if (mobType === BUFF_BEAR_ID || mobType === BUFF_BEAR_DAY13_ID) {
                 codex.mobs.buffBearHits = (codex.mobs.buffBearHits || 0) + 1;
                 checkAndUnlockMobDiscovery(codex, player, "buffBearKills", "buffBearMobKills", "buffBearHits", "buffBearSeen", 1, "threatening");
             } else if (mobType === INFECTED_PIG_ID) {
@@ -1581,11 +1832,11 @@ world.afterEvents.entityHurt.subscribe((event) => {
             if (hasActiveInfection) {
                 // Increase snow count based on mob type
                 let snowIncrease = 0;
-                if (source.damagingEntity.typeId === MAPLE_BEAR_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY4_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY8_ID) {
+                if (source.damagingEntity.typeId === MAPLE_BEAR_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY4_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY8_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY13_ID) {
                     snowIncrease = SNOW_INCREASE.TINY_BEAR;
-                } else if (source.damagingEntity.typeId === INFECTED_BEAR_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY8_ID || source.damagingEntity.typeId === INFECTED_PIG_ID) {
+                } else if (source.damagingEntity.typeId === INFECTED_BEAR_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY8_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY13_ID || source.damagingEntity.typeId === INFECTED_PIG_ID) {
                     snowIncrease = SNOW_INCREASE.INFECTED;
-                } else if (source.damagingEntity.typeId === BUFF_BEAR_ID) {
+                } else if (source.damagingEntity.typeId === BUFF_BEAR_ID || source.damagingEntity.typeId === BUFF_BEAR_DAY13_ID) {
                     snowIncrease = SNOW_INCREASE.BUFF_BEAR;
                 }
                 
@@ -1832,20 +2083,20 @@ system.runInterval(() => {
             }
             const nowTick = system.currentTick;
             const lastTick = lastSymptomTick.get(id) ?? 0;
-            const cooldown = severityLevel === 0 ? 1200 : severityLevel === 1 ? 600 : severityLevel === 2 ? 300 : 120; // ticks between symptoms
+            const cooldown = severityLevel === 0 ? 2400 : severityLevel === 1 ? 1200 : severityLevel === 2 ? 600 : 240; // ticks between symptoms (adjusted for 5-day infection)
             if (nowTick - lastTick >= cooldown) {
-                // Calculate duration based on snow tier
-                let baseDuration = 60; // Base duration in ticks
+                // Calculate duration based on snow tier (adjusted for 5-day infection)
+                let baseDuration = 120; // Base duration in ticks (6 seconds)
                 if (snowCount <= 5) {
-                    baseDuration = 60; // Tier 1: 3 seconds
+                    baseDuration = 120; // Tier 1: 6 seconds
                 } else if (snowCount <= 10) {
-                    baseDuration = 120; // Tier 2: 6 seconds
+                    baseDuration = 200; // Tier 2: 10 seconds
                 } else if (snowCount <= 20) {
-                    baseDuration = 200; // Tier 3: 10 seconds
+                    baseDuration = 300; // Tier 3: 15 seconds
                 } else if (snowCount <= 50) {
-                    baseDuration = 400; // Tier 4: 20 seconds
+                    baseDuration = 480; // Tier 4: 24 seconds
                 } else if (snowCount <= 100) {
-                    baseDuration = 600; // Tier 5: 30 seconds
+                    baseDuration = 720; // Tier 5: 36 seconds
                         } else {
                     baseDuration = INFINITE_DURATION; // Tier 6: Infinite (Black Void)
                 }
@@ -1855,12 +2106,42 @@ system.runInterval(() => {
                     [ { effect: "minecraft:slowness", duration: 100, amp: 1 }, { effect: "minecraft:hunger", duration: 80, amp: 1 } ],
                     [ { effect: "minecraft:slowness", duration: 140, amp: 2 }, { effect: "minecraft:weakness", duration: 140, amp: 1 }, { effect: "minecraft:blindness", duration: 60, amp: 0 }, { effect: "minecraft:nausea", duration: 200, amp: 0 } ]
                 ];
+                
+                // Rare good effects during infection (5% chance)
+                const goodEffects = [
+                    { effect: "minecraft:regeneration", duration: 200, amp: 0 },
+                    { effect: "minecraft:speed", duration: 300, amp: 0 },
+                    { effect: "minecraft:jump_boost", duration: 400, amp: 0 },
+                    { effect: "minecraft:strength", duration: 300, amp: 0 }
+                ];
+                
+                // Check for rare good effect (5% chance)
+                if (Math.random() < 0.05) {
+                    const goodEffect = goodEffects[Math.floor(Math.random() * goodEffects.length)];
+                    try {
+                        player.addEffect(goodEffect.effect, goodEffect.duration, { amplifier: goodEffect.amp, showParticles: true });
+                        player.sendMessage("§aYou feel a brief moment of clarity...");
+                        player.playSound("random.levelup", { pitch: 1.5, volume: 0.6 });
+                        console.log(`[INFECTION] ${player.name} received rare good effect: ${goodEffect.effect}`);
+                        
+                        // Track rare good effects in codex
+                        if (goodEffect.effect === "minecraft:regeneration") markCodex(player, "snowEffects.regenerationSeen");
+                        if (goodEffect.effect === "minecraft:speed") markCodex(player, "snowEffects.speedSeen");
+                        if (goodEffect.effect === "minecraft:jump_boost") markCodex(player, "snowEffects.jumpBoostSeen");
+                        if (goodEffect.effect === "minecraft:strength") markCodex(player, "snowEffects.strengthSeen");
+                        
+                        // Unlock snow effects tab when first rare good effect is experienced
+                        markCodex(player, "symptomsUnlocks.snowEffectsUnlocked");
+                    } catch {}
+                } else {
+                    // Normal negative effects
                 const options = effectsByLevel[severityLevel];
                 if (options && options.length > 0) {
                     const chosen = options[Math.floor(Math.random() * options.length)];
                     try {
                         player.addEffect(chosen.effect, chosen.duration, { amplifier: chosen.amp });
                     } catch {}
+                    }
                 }
                 lastSymptomTick.set(id, nowTick);
             }
@@ -2051,15 +2332,18 @@ system.runInterval(() => {
         for (const entity of world.getAllEntities()) {
             if (!entity || !entity.isValid) continue;
             const t = entity.typeId;
-            if (t !== MAPLE_BEAR_ID && t !== MAPLE_BEAR_DAY4_ID && t !== MAPLE_BEAR_DAY8_ID && t !== INFECTED_BEAR_ID && t !== INFECTED_BEAR_DAY8_ID && t !== BUFF_BEAR_ID && t !== INFECTED_PIG_ID) continue;
+            if (t !== MAPLE_BEAR_ID && t !== MAPLE_BEAR_DAY4_ID && t !== MAPLE_BEAR_DAY8_ID && t !== MAPLE_BEAR_DAY13_ID && t !== INFECTED_BEAR_ID && t !== INFECTED_BEAR_DAY8_ID && t !== INFECTED_BEAR_DAY13_ID && t !== BUFF_BEAR_ID && t !== BUFF_BEAR_DAY13_ID && t !== INFECTED_PIG_ID) continue;
 
             // Snow trail placement (for all types)
             let trailChance = 0.02; // tiny default
             if (t === MAPLE_BEAR_DAY4_ID) trailChance = 0.03; // Day 4+ tiny bears
             if (t === MAPLE_BEAR_DAY8_ID) trailChance = 0.04; // Day 8+ tiny bears
+            if (t === MAPLE_BEAR_DAY13_ID) trailChance = 0.05; // Day 13+ tiny bears
             if (t === INFECTED_BEAR_ID) trailChance = 0.06;
             if (t === INFECTED_BEAR_DAY8_ID) trailChance = 0.08; // Day 8+ normal bears
+            if (t === INFECTED_BEAR_DAY13_ID) trailChance = 0.1; // Day 13+ normal bears
             if (t === BUFF_BEAR_ID) trailChance = 0.2;
+            if (t === BUFF_BEAR_DAY13_ID) trailChance = 0.25; // Day 13+ buff bears
             if (t === INFECTED_PIG_ID) trailChance = 0.06; // Same as infected bear
 
             const lastTrail = lastSnowTrailTickByEntity.get(entity.id) ?? 0;
@@ -2069,7 +2353,7 @@ system.runInterval(() => {
             }
 
             // Snow item drops (only for tiny Maple Bears)
-            if (t === MAPLE_BEAR_ID || t === MAPLE_BEAR_DAY4_ID || t === MAPLE_BEAR_DAY8_ID) {
+            if (t === MAPLE_BEAR_ID || t === MAPLE_BEAR_DAY4_ID || t === MAPLE_BEAR_DAY8_ID || t === MAPLE_BEAR_DAY13_ID) {
                 const lastDrop = lastSnowDropTickByEntity.get(entity.id) ?? 0;
                 if (nowTick - lastDrop >= SNOW_DROP_COOLDOWN_TICKS && Math.random() < 0.6) { // 60% chance
                     tryDropSnowItem(entity);
@@ -2448,8 +2732,6 @@ function showInfectionBookReport(player) {
             const end = curedPlayers.get(player.id);
             const remainingMs = Math.max(0, end - Date.now());
             summary.push(`§bImmunity: §fACTIVE (§b${formatMillisDuration(remainingMs)} left§f)`);
-        } else {
-            summary.push("§bImmunity: §7None");
         }
         const hitCount = bearHitCount.get(player.id) || 0;
         const infectionSource = hasInfection ? infectionState.source : null;

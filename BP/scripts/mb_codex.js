@@ -15,6 +15,23 @@ export function getDefaultCodex() {
             hungerSeen: false,
             miningFatigueSeen: false
         },
+        snowEffects: {
+            regenerationSeen: false,
+            speedSeen: false,
+            jumpBoostSeen: false,
+            strengthSeen: false,
+            weaknessSeen: false,
+            nauseaSeen: false,
+            slownessSeen: false,
+            blindnessSeen: false,
+            hungerSeen: false,
+            miningFatigueSeen: false
+        },
+        symptomsUnlocks: {
+            infectionSymptomsUnlocked: false,
+            snowEffectsUnlocked: false,
+            snowTierAnalysisUnlocked: false
+        },
         // Aggregated metadata by effect id
         symptomsMeta: {},
         items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, dustedDirtSeen: false },
@@ -38,7 +55,11 @@ export function getDefaultCodex() {
             infectedBearHits: 0,
             infectedPigHits: 0,
             infectedCowHits: 0,
-            buffBearHits: 0
+            buffBearHits: 0,
+            // Day variant unlock tracking
+            day4VariantsUnlocked: false,
+            day8VariantsUnlocked: false,
+            day13VariantsUnlocked: false
         }
     };
 }
@@ -186,9 +207,16 @@ export function showCodexBook(player, context) {
         buttons.push("§fInfection");
         buttonActions.push(() => openInfections());
         
-        // Symptoms section - only if any symptoms discovered
+        // Symptoms section - only if infected and any symptoms discovered
+        const infectionState = playerInfection.get(player.id);
+        const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
         const hasAnySymptoms = Object.values(codex.effects).some(seen => seen);
-        if (hasAnySymptoms) {
+        const hasAnySnowEffects = Object.values(codex.snowEffects).some(seen => seen);
+        const hasSnowKnowledge = codex.items.snowIdentified;
+        const maxSnow = maxSnowLevels.get(player.id);
+        
+        // Only show symptoms tab if currently infected AND has experienced symptoms
+        if (hasInfection && (hasAnySymptoms || hasAnySnowEffects || (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0))) {
             buttons.push("§fSymptoms");
             buttonActions.push(() => openSymptoms());
         }
@@ -268,7 +296,88 @@ export function showCodexBook(player, context) {
 
     function openSymptoms() {
         const codex = getCodex(player);
-        const entries = [
+        
+        // Calculate infection status from context
+        const infectionState = playerInfection.get(player.id);
+        const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
+        
+        // Check unlock conditions
+        const hasSnowKnowledge = codex.items.snowIdentified;
+        const maxSnow = maxSnowLevels.get(player.id);
+        const hasAnyInfection = hasInfection;
+        
+        // Progressive unlock conditions - only show if content is actually experienced
+        const showSnowTierAnalysis = codex.symptomsUnlocks.snowTierAnalysisUnlocked || 
+                                    ((hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0) || hasAnyInfection);
+        const showInfectionSymptoms = Object.values(codex.effects).some(seen => seen);
+        const showSnowEffects = Object.values(codex.snowEffects).some(seen => seen);
+        
+        const form = new ActionFormData().title("§6Symptoms");
+        
+        // Check if any content is available
+        if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects) {
+            form.body("§7No symptoms have been experienced yet.\n§8You need to experience effects while infected to unlock symptom information.");
+            form.button("§8Back");
+        } else {
+            form.body("§7Select a category to view:");
+            
+            let buttonIndex = 0;
+            
+            // Add snow tier analysis at the top if unlocked
+            if (showSnowTierAnalysis) {
+                form.button(`§eInfection Level Analysis`);
+                buttonIndex++;
+            }
+            
+            // Add infection symptoms if unlocked
+            if (showInfectionSymptoms) {
+                form.button("§cInfection Symptoms");
+                buttonIndex++;
+            }
+            
+            // Add snow effects if unlocked
+            if (showSnowEffects) {
+                form.button("§bSnow Effects");
+                buttonIndex++;
+            }
+            
+            form.button("§8Back");
+        }
+        form.show(player).then((res) => {
+            if (!res || res.canceled) return openMain();
+            
+            // If no content available, just go back
+            if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects) {
+                openMain();
+                return;
+            }
+            
+            let currentIndex = 0;
+            
+            if (showSnowTierAnalysis && res.selection === currentIndex) {
+                openSnowTierAnalysis();
+                return;
+            }
+            if (showSnowTierAnalysis) currentIndex++;
+            
+            if (showInfectionSymptoms && res.selection === currentIndex) {
+                openInfectionSymptoms();
+                return;
+            }
+            if (showInfectionSymptoms) currentIndex++;
+            
+            if (showSnowEffects && res.selection === currentIndex) {
+                openSnowEffects();
+                return;
+            }
+            
+            openMain();
+        });
+    }
+    
+    function openInfectionSymptoms() {
+        const codex = getCodex(player);
+        const allEntries = [
             { key: "weaknessSeen", title: "Weakness", id: "minecraft:weakness" },
             { key: "nauseaSeen", title: "Nausea", id: "minecraft:nausea" },
             { key: "blindnessSeen", title: "Blindness", id: "minecraft:blindness" },
@@ -276,59 +385,111 @@ export function showCodexBook(player, context) {
             { key: "hungerSeen", title: "Hunger", id: "minecraft:hunger" }
         ];
         
-        // Calculate infection status from context
-        const infectionState = playerInfection.get(player.id);
-        const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
+        // Only show experienced symptoms
+        const entries = allEntries.filter(e => codex.effects[e.key]);
         
-        // Add snow tier analysis if player has discovered snow OR is currently infected
-        const hasSnowKnowledge = codex.items.snowIdentified;
-        const maxSnow = maxSnowLevels.get(player.id);
-        const hasAnyInfection = hasInfection;
+        const form = new ActionFormData().title("§6Infection Symptoms");
         
-        const form = new ActionFormData().title("§6Symptoms");
-        form.body("§7Entries:");
-        
-        // Add snow tier analysis at the top if available (either discovered snow or currently infected)
-        if ((hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0) || hasAnyInfection) {
-            form.button(`§eSnow Tier Analysis`);
-        }
-        
-        for (const e of entries) form.button(`§f${maskTitle(e.title, codex.effects[e.key])}`);
-        form.button("§8Back");
-        form.show(player).then((res) => {
-            if (!res || res.canceled) return openMain();
+        if (entries.length === 0) {
+            form.body("§7No infection symptoms have been experienced yet.\n§8You need to experience negative effects while infected to unlock symptom information.");
+            form.button("§8Back");
+        } else {
+            form.body("§7Select a symptom to view details:");
             
-            // Check if snow tier analysis is available and selected (selection 0)
-            const showSnowTier = (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0) || hasAnyInfection;
-            if (showSnowTier && res.selection === 0) {
-                // Show snow tier analysis
-                openSnowTierAnalysis();
-            } else {
-                // Calculate the offset based on whether snow tier analysis is shown
-                const offset = showSnowTier ? 1 : 0;
-                const adjustedSelection = res.selection - offset;
-                
-                if (adjustedSelection >= 0 && adjustedSelection < entries.length) {
-                    const e = entries[adjustedSelection];
-                    const known = codex.effects[e.key];
-                    let body = "§e???";
-                    if (known) {
-                        const meta = (codex.symptomsMeta || {})[e.id] || {};
-                        const srcs = Object.keys(meta.sources || {}).length ? Object.keys(meta.sources).join(", ") : "unknown";
-                        const minDur = meta.minDuration != null ? Math.floor((meta.minDuration||0)/20) : "?";
-                        const maxDur = meta.maxDuration != null ? Math.floor((meta.maxDuration||0)/20) : "?";
-                        const minAmp = meta.minAmp != null ? meta.minAmp : "?";
-                        const maxAmp = meta.maxAmp != null ? meta.maxAmp : "?";
-                        const timing = meta.timing || {}; 
-                        const timingStr = [ timing.early?`early(${timing.early})`:null, timing.mid?`mid(${timing.mid})`:null, timing.late?`late(${timing.late})`:null ].filter(Boolean).join(", ") || "unknown";
-                        const sc = meta.snowCounts || {};
-                        const snowStr = [ sc.low?`1-5(${sc.low})`:null, sc.mid?`6-10(${sc.mid})`:null, sc.high?`11+(${sc.high})`:null ].filter(Boolean).join(", ") || "-";
-                        body = `§e${e.title}\n§7Sources: §f${srcs}\n§7Duration: §f${minDur}s - ${maxDur}s\n§7Amplifier: §f${minAmp} - ${maxAmp}\n§7Timing: §f${timingStr}\n§7Snow Count: §f${snowStr}`;
-                    }
-                    new ActionFormData().title(`§6Symptoms: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => openSymptoms());
-                } else {
-                    openMain();
+            for (const e of entries) {
+                form.button(`§f${e.title}`);
+            }
+            
+            form.button("§8Back");
+        }
+        form.show(player).then((res) => {
+            if (!res || res.canceled) return openSymptoms();
+            
+            // If no symptoms available, just go back
+            if (entries.length === 0) {
+                openSymptoms();
+                return;
+            }
+            
+            if (res.selection >= 0 && res.selection < entries.length) {
+                const e = entries[res.selection];
+                const known = codex.effects[e.key];
+                let body = "§e???";
+                if (known) {
+                    const meta = (codex.symptomsMeta || {})[e.id] || {};
+                    const srcs = Object.keys(meta.sources || {}).length ? Object.keys(meta.sources).join(", ") : "unknown";
+                    const minDur = meta.minDuration != null ? Math.floor((meta.minDuration||0)/20) : "?";
+                    const maxDur = meta.maxDuration != null ? Math.floor((meta.maxDuration||0)/20) : "?";
+                    const minAmp = meta.minAmp != null ? meta.minAmp : "?";
+                    const maxAmp = meta.maxAmp != null ? meta.maxAmp : "?";
+                    const timing = meta.timing || {}; 
+                    const timingStr = [ timing.early?`early(${timing.early})`:null, timing.mid?`mid(${timing.mid})`:null, timing.late?`late(${timing.late})`:null ].filter(Boolean).join(", ") || "unknown";
+                    const sc = meta.snowCounts || {};
+                    const snowStr = [ sc.low?`1-5(${sc.low})`:null, sc.mid?`6-10(${sc.mid})`:null, sc.high?`11+(${sc.high})`:null ].filter(Boolean).join(", ") || "-";
+                    body = `§e${e.title}\n§7Sources: §f${srcs}\n§7Duration: §f${minDur}s - ${maxDur}s\n§7Amplifier: §f${minAmp} - ${maxAmp}\n§7Timing: §f${timingStr}\n§7Snow Count: §f${snowStr}`;
                 }
+                new ActionFormData().title(`§6Infection Symptoms: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => openInfectionSymptoms());
+            } else {
+                openSymptoms();
+            }
+        });
+    }
+    
+    function openSnowEffects() {
+        const codex = getCodex(player);
+        const allEntries = [
+            { key: "regenerationSeen", title: "Regeneration", id: "minecraft:regeneration", type: "positive" },
+            { key: "speedSeen", title: "Speed", id: "minecraft:speed", type: "positive" },
+            { key: "jumpBoostSeen", title: "Jump Boost", id: "minecraft:jump_boost", type: "positive" },
+            { key: "strengthSeen", title: "Strength", id: "minecraft:strength", type: "positive" },
+            { key: "weaknessSeen", title: "Weakness", id: "minecraft:weakness", type: "negative" },
+            { key: "nauseaSeen", title: "Nausea", id: "minecraft:nausea", type: "negative" },
+            { key: "slownessSeen", title: "Slowness", id: "minecraft:slowness", type: "negative" },
+            { key: "blindnessSeen", title: "Blindness", id: "minecraft:blindness", type: "negative" },
+            { key: "hungerSeen", title: "Hunger", id: "minecraft:hunger", type: "negative" },
+            { key: "miningFatigueSeen", title: "Mining Fatigue", id: "minecraft:mining_fatigue", type: "negative" }
+        ];
+        
+        // Only show experienced snow effects
+        const entries = allEntries.filter(e => codex.snowEffects[e.key]);
+        
+        const form = new ActionFormData().title("§6Snow Effects");
+        
+        if (entries.length === 0) {
+            form.body("§7No snow effects have been experienced yet.\n§8You need to consume snow while infected to unlock effect information.");
+            form.button("§8Back");
+        } else {
+            form.body("§7Select an effect to view details:");
+            
+            for (const e of entries) {
+                const color = e.type === "positive" ? "§a" : "§c";
+                const prefix = e.type === "positive" ? "§a+" : "§c-";
+                form.button(`${color}${prefix} ${e.title}`);
+            }
+            
+            form.button("§8Back");
+        }
+        form.show(player).then((res) => {
+            if (!res || res.canceled) return openSymptoms();
+            
+            // If no effects available, just go back
+            if (entries.length === 0) {
+                openSymptoms();
+                return;
+            }
+            
+            if (res.selection >= 0 && res.selection < entries.length) {
+                const e = entries[res.selection];
+                const known = codex.snowEffects[e.key];
+                let body = "§e???";
+                if (known) {
+                    const effectType = e.type === "positive" ? "§aBeneficial" : "§cHarmful";
+                    const description = e.type === "positive" ? "This effect provides benefits when consumed with snow." : "This effect causes negative effects when consumed with snow.";
+                    body = `§e${e.title}\n§7Type: ${effectType}\n§7Description: §f${description}\n\n§7This effect can be obtained by consuming snow while infected. The chance and intensity depend on your infection level.`;
+                }
+                new ActionFormData().title(`§6Snow Effects: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => openSnowEffects());
+            } else {
+                openSymptoms();
             }
         });
     }
@@ -339,53 +500,72 @@ export function showCodexBook(player, context) {
         const infectionState = playerInfection.get(player.id);
         const currentSnow = infectionState ? (infectionState.snowCount || 0) : 0;
         
-        const form = new ActionFormData().title("§6Snow Tier Analysis");
+        const form = new ActionFormData().title("§6Infection Level Analysis");
         
         // Check if maxSnow exists, otherwise use 0
         const maxLevel = maxSnow ? maxSnow.maxLevel : 0;
-        let body = `§eMaximum Snow Level Achieved: §f${maxLevel.toFixed(1)}\n\n`;
+        let body = `§eMaximum Infection Level Achieved: §f${maxLevel.toFixed(1)}\n\n`;
         
         // Detailed analysis based on experience
         if (maxLevel >= 5) {
-            body += `§7Tier 1 (1-5): §fMild effects\n`;
-            body += `§7• Time reduction: 1 min per snow\n`;
-            body += `§7• Effects: Mild random potions\n`;
+            body += `§7Tier 1 (1-5): §fThe Awakening\n`;
+            body += `§7• Time effect: +5% infection time\n`;
+            body += `§7• Effects: Mild random potions (weakness, nausea)\n`;
+            body += `§7• Duration: 10 seconds\n`;
         }
         
         if (maxLevel >= 10) {
-            body += `\n§7Tier 2 (6-10): §fModerate effects\n`;
-            body += `§7• Time reduction: 5 min per snow\n`;
-            body += `§7• Effects: Stronger random potions\n`;
+            body += `\n§7Tier 2 (6-10): §fThe Craving\n`;
+            body += `§7• Time effect: No change\n`;
+            body += `§7• Effects: Moderate random potions (weakness, nausea, slowness)\n`;
+            body += `§7• Duration: 15 seconds\n`;
         }
         
         if (maxLevel >= 20) {
-            body += `\n§7Tier 3 (11-20): §fSevere effects\n`;
-            body += `§7• Time reduction: 10 min per snow\n`;
-            body += `§7• Effects: Very strong random potions\n`;
+            body += `\n§7Tier 3 (11-20): §fThe Descent\n`;
+            body += `§7• Time effect: -1% infection time\n`;
+            body += `§7• Effects: Strong random potions (weakness, nausea, slowness, blindness)\n`;
+            body += `§7• Duration: 20 seconds\n`;
         }
         
         if (maxLevel >= 50) {
-            body += `\n§7Tier 4 (20+): §fExtreme effects\n`;
-            body += `§7• Time reduction: 15 min per snow\n`;
-            body += `§7• Effects: Maximum intensity potions\n`;
+            body += `\n§7Tier 4 (21-50): §fThe Void\n`;
+            body += `§7• Time effect: -2.5% infection time\n`;
+            body += `§7• Effects: Severe random potions (weakness, nausea, slowness, blindness, hunger)\n`;
+            body += `§7• Duration: 25 seconds\n`;
+        }
+        
+        if (maxLevel >= 100) {
+            body += `\n§7Tier 5 (51-100): §fThe Abyss\n`;
+            body += `§7• Time effect: -5% infection time\n`;
+            body += `§7• Effects: Extreme random potions (all effects + mining fatigue)\n`;
+            body += `§7• Duration: 30 seconds\n`;
+        }
+        
+        if (maxLevel > 100) {
+            body += `\n§7Tier 6 (100+): §fThe Black Void\n`;
+            body += `§7• Time effect: -15% infection time\n`;
+            body += `§7• Effects: Devastating random potions (maximum intensity)\n`;
+            body += `§7• Duration: 40 seconds\n`;
         }
         
         // Show current status if infected
         const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
         
         if (hasInfection) {
-            body += `\n§eCurrent Snow Level: §f${currentSnow.toFixed(1)}`;
+            body += `\n§eCurrent Infection Level: §f${currentSnow.toFixed(1)}`;
             if (currentSnow > 0) {
-                const tier = currentSnow <= 5 ? 1 : currentSnow <= 10 ? 2 : currentSnow <= 20 ? 3 : 4;
-                body += `\n§7Current Tier: §f${tier}`;
+                const tier = currentSnow <= 5 ? 1 : currentSnow <= 10 ? 2 : currentSnow <= 20 ? 3 : currentSnow <= 50 ? 4 : currentSnow <= 100 ? 5 : 6;
+                const tierName = currentSnow <= 5 ? "The Awakening" : currentSnow <= 10 ? "The Craving" : currentSnow <= 20 ? "The Descent" : currentSnow <= 50 ? "The Void" : currentSnow <= 100 ? "The Abyss" : "The Black Void";
+                body += `\n§7Current Tier: §f${tier} (${tierName})`;
             }
         }
         
         // Show warnings based on experience
         if (maxLevel >= 20) {
-            body += `\n\n§c⚠ Warning: High snow levels are extremely dangerous!`;
+            body += `\n\n§c⚠ Warning: High infection levels are extremely dangerous!`;
         } else if (maxLevel >= 10) {
-            body += `\n\n§e⚠ Caution: Snow effects become severe at higher levels.`;
+            body += `\n\n§e⚠ Caution: Infection effects become severe at higher levels.`;
         }
         
         form.body(body);
@@ -407,7 +587,10 @@ export function showCodexBook(player, context) {
         if (codex.mobs.day4VariantsUnlocked) {
             entries.push(
                 { key: "mapleBearSeen", title: "Tiny Maple Bear (Day 4+)", icon: "textures/items/mb", variant: "day4" },
-                { key: "infectedBearSeen", title: "Infected Maple Bear (Day 4+)", icon: "textures/items/Infected_human_mb_egg", variant: "day4" }
+                { key: "infectedBearSeen", title: "Infected Maple Bear (Day 4+)", icon: "textures/items/Infected_human_mb_egg", variant: "day4" },
+                { key: "infectedPigSeen", title: "Infected Pig (Day 4+)", icon: "textures/items/infected_pig_spawn_egg", variant: "day4" },
+                { key: "infectedCowSeen", title: "Infected Cow (Day 4+)", icon: "textures/items/infected_cow_egg", variant: "day4" },
+                { key: "buffBearSeen", title: "Buff Maple Bear (Day 4+)", icon: "textures/items/buff_mb_egg", variant: "day4" }
             );
         }
         
@@ -415,7 +598,21 @@ export function showCodexBook(player, context) {
         if (codex.mobs.day8VariantsUnlocked) {
             entries.push(
                 { key: "mapleBearSeen", title: "Tiny Maple Bear (Day 8+)", icon: "textures/items/mb", variant: "day8" },
-                { key: "infectedBearSeen", title: "Infected Maple Bear (Day 8+)", icon: "textures/items/Infected_human_mb_egg", variant: "day8" }
+                { key: "infectedBearSeen", title: "Infected Maple Bear (Day 8+)", icon: "textures/items/Infected_human_mb_egg", variant: "day8" },
+                { key: "infectedPigSeen", title: "Infected Pig (Day 8+)", icon: "textures/items/infected_pig_spawn_egg", variant: "day8" },
+                { key: "infectedCowSeen", title: "Infected Cow (Day 8+)", icon: "textures/items/infected_cow_egg", variant: "day8" },
+                { key: "buffBearSeen", title: "Buff Maple Bear (Day 8+)", icon: "textures/items/buff_mb_egg", variant: "day8" }
+            );
+        }
+        
+        // Add day 13+ variants if unlocked
+        if (codex.mobs.day13VariantsUnlocked) {
+            entries.push(
+                { key: "mapleBearSeen", title: "Tiny Maple Bear (Day 13+)", icon: "textures/items/mb", variant: "day13" },
+                { key: "infectedBearSeen", title: "Infected Maple Bear (Day 13+)", icon: "textures/items/Infected_human_mb_egg", variant: "day13" },
+                { key: "infectedPigSeen", title: "Infected Pig (Day 13+)", icon: "textures/items/infected_pig_spawn_egg", variant: "day13" },
+                { key: "infectedCowSeen", title: "Infected Cow (Day 13+)", icon: "textures/items/infected_cow_egg", variant: "day13" },
+                { key: "buffBearSeen", title: "Buff Maple Bear (Day 13+)", icon: "textures/items/buff_mb_egg", variant: "day13" }
             );
         }
         
@@ -489,12 +686,36 @@ export function showCodexBook(player, context) {
                             body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 65% chance\n§7Loot: 1-2 snow items\n§7Health: 1.5 HP\n§7Damage: 1.5`;
                         } else if (e.key === "infectedBearSeen" && killCount >= 100) {
                             body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 80% chance\n§7Loot: 1-5 snow items\n§7Health: 20 HP\n§7Damage: 2.5`;
+                        } else if (e.key === "infectedPigSeen" && killCount >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 80% chance\n§7Loot: 1-5 snow items\n§7Health: 12 HP\n§7Damage: 2.5\n§7Special: Enhanced infection spread`;
+                        } else if (e.key === "infectedCowSeen" && killCount >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 85% chance\n§7Loot: 2-6 snow items\n§7Health: 15 HP\n§7Damage: 3\n§7Special: Improved conversion rate`;
+                        } else if (e.key === "buffBearSeen" && killCount >= 10) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 85% chance\n§7Loot: 4-18 snow items\n§7Health: 120 HP\n§7Damage: 10\n§7Special: Enhanced combat abilities`;
                         }
                     } else if (e.variant === "day8") {
                         if (e.key === "mapleBearSeen" && killCount >= 100) {
                             body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 70% chance\n§7Loot: 1-3 snow items\n§7Health: 2 HP\n§7Damage: 2`;
                         } else if (e.key === "infectedBearSeen" && killCount >= 100) {
                             body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 90% chance\n§7Loot: 2-8 snow items\n§7Health: 25 HP\n§7Damage: 4`;
+                        } else if (e.key === "infectedPigSeen" && killCount >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 90% chance\n§7Loot: 2-8 snow items\n§7Health: 15 HP\n§7Damage: 3.5\n§7Special: Maximum infection spread`;
+                        } else if (e.key === "infectedCowSeen" && killCount >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 95% chance\n§7Loot: 3-10 snow items\n§7Health: 20 HP\n§7Damage: 4\n§7Special: Maximum conversion rate`;
+                        } else if (e.key === "buffBearSeen" && killCount >= 10) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 95% chance\n§7Loot: 6-25 snow items\n§7Health: 150 HP\n§7Damage: 12\n§7Special: Ultimate combat abilities`;
+                        }
+                    } else if (e.variant === "day13") {
+                        if (e.key === "mapleBearSeen" && killCount >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 75% chance\n§7Loot: 1-4 snow items\n§7Health: 3 HP\n§7Damage: 3\n§7Special: Enhanced speed and reach`;
+                        } else if (e.key === "infectedBearSeen" && killCount >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 95% chance\n§7Loot: 3-12 snow items\n§7Health: 35 HP\n§7Damage: 6\n§7Special: Maximum threat level`;
+                        } else if (e.key === "infectedPigSeen" && killCount >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 95% chance\n§7Loot: 3-12 snow items\n§7Health: 18 HP\n§7Damage: 4.5\n§7Special: Ultimate infection spread`;
+                        } else if (e.key === "infectedCowSeen" && killCount >= 100) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 98% chance\n§7Loot: 4-15 snow items\n§7Health: 25 HP\n§7Damage: 5\n§7Special: Ultimate conversion rate`;
+                        } else if (e.key === "buffBearSeen" && killCount >= 10) {
+                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 98% chance\n§7Loot: 8-30 snow items\n§7Health: 150 HP\n§7Damage: 12\n§7Special: Ultimate combat mastery`;
                         }
                     }
                 }

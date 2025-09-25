@@ -34,6 +34,15 @@
 		},
 		"mb_infected_cow_egg": {
 			"textures": "textures/items/infected_cow_egg"
+		},
+		"mb_mb_day13_egg": {
+			"textures": "textures/items/mb_day13_egg"
+		},
+		"mb_infected_day13_egg": {
+			"textures": "textures/items/infected_day13_egg"
+		},
+		"mb_buff_mb_day13_egg": {
+			"textures": "textures/items/buff_mb_day13_egg"
 		}
 	}
 }
