@@ -204,6 +204,9 @@
 				"must_see_forget_duration": 60,
 				"within_radius": 32,
 				"target_sneak_visibility_multiplier": 1
+			},
+			"minecraft:loot": {
+				"table": "loot_tables/mb_loot_tables/infected_cow_loot_table.json"
 			}
 		},
 		"events": {
