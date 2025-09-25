@@ -521,12 +521,18 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
 // --- Helper: Convert pig to infected pig ---
 function convertPigToInfectedPig(deadPig, killer) {
     try {
+        // Validate entities are still valid
+        if (!deadPig || !deadPig.isValid || !killer || !killer.isValid) {
+            console.log(`[PIG CONVERSION] Skipping conversion - entity or killer is invalid`);
+            return;
+        }
+        
         const location = deadPig.location;
         const killerType = killer.typeId;
         const currentDay = getCurrentDay();
         
         // Check if the location is in a loaded chunk
-        const dimension = world.getDimension("overworld");
+        const dimension = deadPig.dimension;
         
         // Try to access the chunk to ensure it's loaded
         try {
@@ -555,6 +561,12 @@ function convertPigToInfectedPig(deadPig, killer) {
 // --- Helper: Convert cow to infected cow ---
 function convertCowToInfectedCow(deadCow, killer) {
     try {
+        // Validate entities are still valid
+        if (!deadCow || !deadCow.isValid || !killer || !killer.isValid) {
+            console.log(`[COW CONVERSION] Skipping conversion - entity or killer is invalid`);
+            return;
+        }
+        
         const location = deadCow.location;
         const killerType = killer.typeId;
         const currentDay = getCurrentDay();
@@ -587,6 +599,12 @@ function convertCowToInfectedCow(deadCow, killer) {
 // --- Helper: Convert mob to Maple Bear based on size and day ---
 function convertMobToMapleBear(deadMob, killer) {
     try {
+        // Validate entities are still valid
+        if (!deadMob || !deadMob.isValid || !killer || !killer.isValid) {
+            console.log(`[MOB CONVERSION] Skipping conversion - entity or killer is invalid`);
+            return;
+        }
+        
         const mobType = deadMob.typeId;
         
         // Don't convert pigs and cows - they're handled by their respective conversion systems
@@ -1364,7 +1382,21 @@ function handlePlayerDeath(player) {
 
 // Handle mob conversion when killed by Maple Bears
 function handleMobConversion(entity, killer) {
+    // Validate entities are still valid before processing
+    if (!entity || !entity.isValid || !killer || !killer.isValid) {
+        console.log(`[CONVERSION] Skipping conversion - entity or killer is invalid`);
+        return;
+    }
+    
     const killerType = killer.typeId;
+    const entityType = entity.typeId;
+    
+    // Don't convert items, XP orbs, or other non-mob entities
+    if (entityType === "minecraft:item" || entityType === "minecraft:xp_orb" || entityType === "minecraft:arrow" || 
+        entityType === "minecraft:fireball" || entityType === "minecraft:small_fireball" || entityType === "minecraft:firework_rocket") {
+        console.log(`[CONVERSION] Skipping conversion - ${entityType} is not a valid mob for conversion`);
+        return;
+    }
     
     // Progressive conversion rate based on current day
     const currentDay = getCurrentDay();
@@ -1374,24 +1406,24 @@ function handleMobConversion(entity, killer) {
     if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === BUFF_BEAR_ID || killerType === INFECTED_PIG_ID) {
         
         // PREVENT BEAR-TO-BEAR CONVERSION: Don't convert Maple Bears or infected creatures
-        const isVictimABear = entity.typeId === MAPLE_BEAR_ID || entity.typeId === MAPLE_BEAR_DAY4_ID || entity.typeId === MAPLE_BEAR_DAY8_ID || 
-                              entity.typeId === INFECTED_BEAR_ID || entity.typeId === INFECTED_BEAR_DAY8_ID || entity.typeId === BUFF_BEAR_ID;
-        const isVictimInfected = entity.typeId === INFECTED_PIG_ID || entity.typeId === INFECTED_COW_ID;
+        const isVictimABear = entityType === MAPLE_BEAR_ID || entityType === MAPLE_BEAR_DAY4_ID || entityType === MAPLE_BEAR_DAY8_ID || 
+                              entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === BUFF_BEAR_ID;
+        const isVictimInfected = entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID;
         
         if (isVictimABear || isVictimInfected) {
-            console.log(`[CONVERSION] Skipping conversion - ${killerType} killed ${entity.typeId} (bear-to-bear/infected conversion prevented)`);
+            console.log(`[CONVERSION] Skipping conversion - ${killerType} killed ${entityType} (bear-to-bear/infected conversion prevented)`);
             return;
         }
         
         // Check if victim is a pig and convert to infected pig
-        if (entity.typeId === "minecraft:pig") {
+        if (entityType === "minecraft:pig") {
             console.log(`[PIG CONVERSION] Maple Bear killing pig on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
             if (Math.random() < conversionRate) {
                 system.run(() => {
                     convertPigToInfectedPig(entity, killer);
                 });
             }
-        } else if (entity.typeId === "minecraft:cow") {
+        } else if (entityType === "minecraft:cow") {
             console.log(`[COW CONVERSION] Maple Bear killing cow on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
             if (Math.random() < conversionRate) {
                 system.run(() => {
@@ -1399,8 +1431,8 @@ function handleMobConversion(entity, killer) {
                 });
             }
         } else {
-            console.log(`[CONVERSION] Maple Bear killing ${entity.typeId} on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
-            // Normal Maple Bear conversion for non-pigs (ignore pigs completely)
+            console.log(`[CONVERSION] Maple Bear killing ${entityType} on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
+            // Normal Maple Bear conversion for other mobs (pigs and cows handled above)
             if (Math.random() < conversionRate) {
                 system.run(() => {
                     convertMobToMapleBear(entity, killer);
@@ -1408,7 +1440,7 @@ function handleMobConversion(entity, killer) {
             }
         }
     } else {
-        console.log(`[CONVERSION] Non-Maple Bear killing ${entity.typeId} on day ${currentDay} - no conversion (only Maple Bears can convert mobs)`);
+        console.log(`[CONVERSION] Non-Maple Bear killing ${entityType} on day ${currentDay} - no conversion (only Maple Bears can convert mobs)`);
     }
         // Unlock mob sightings for nearby players
         for (const p of world.getAllPlayers()) {
