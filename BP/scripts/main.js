@@ -181,6 +181,7 @@ const playerInventories = new Map();
  * @property {number} lastTierMessage - Last tier message shown (prevents spam)
  * @property {number} lastDecayTick - Last tick when daily decay was applied
  * @property {boolean} warningSent - Whether final warning was sent
+ * @property {number} lastActiveTick - Last tick when player was online and infection was active
  */
 
 // --- Unified Infection System Data ---
@@ -456,47 +457,39 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
     if (codex?.items?.snowBookCrafted) {
         player.sendMessage("§7You feel like you should check your Powdery Journal...");
     } else {
-        if (messageType === "important") {
-            if (itemType === "weakness") {
-                player.sendMessage("§7A weakness potion... This seems important for curing infections!");
-            } else if (itemType === "enchanted_apple") {
-                player.sendMessage("§7An enchanted golden apple... This seems important for healing!");
-            } else {
-                player.sendMessage("§7This seems important... I will need to remember it.");
-            }
-        } else if (messageType === "dangerous") {
-            if (itemType === "infected_bear") {
-                player.sendMessage("§7An infected bear... This creature is dangerous and corrupted!");
-            } else if (itemType === "infected_pig") {
-                player.sendMessage("§7An infected pig... This creature is dangerous and corrupted!");
-            } else if (itemType === "infected_cow") {
-                player.sendMessage("§7An infected cow... This creature is dangerous and corrupted!");
-            } else {
-                player.sendMessage("§7This creature is dangerous... I should remember its behavior.");
-            }
-        } else if (messageType === "mysterious") {
-            if (itemType === "tiny_bear") {
-                player.sendMessage("§7A tiny Maple Bear... This creature is mysterious and unsettling!");
-            } else {
-                player.sendMessage("§7This creature is mysterious... I need to study it more.");
-            }
-        } else if (messageType === "threatening") {
-            if (itemType === "buff_bear") {
-                player.sendMessage("§7A buff Maple Bear... Book it bro, run for your life.");
-            } else {
-                player.sendMessage("§7This creature is threatening... I must understand its nature.");
-            }
-        } else {
-            if (itemType === "brewing_stand") {
-                player.sendMessage("§7A brewing stand... This seems important for alchemy!");
-            } else if (itemType === "golden_apple") {
-                player.sendMessage("§7A golden apple... This seems useful for healing!");
-            } else if (itemType === "snow") {
-                player.sendMessage("§7Some mysterious powder... This seems important to remember!");
-            } else {
-                player.sendMessage("§7This seems interesting... I will need to remember it.");
-            }
-        }
+        // Two-level mapping: messageType -> itemType -> message
+        const messages = {
+            important: {
+                weakness: "§7A weakness potion... This seems important for curing infections!",
+                enchanted_apple: "§7An enchanted golden apple... This seems important for healing!",
+                default: "§7This seems important... I will need to remember it."
+            },
+            dangerous: {
+                infected_bear: "§7An infected bear... This creature is dangerous and corrupted!",
+                infected_pig: "§7An infected pig... This creature is dangerous and corrupted!",
+                infected_cow: "§7An infected cow... This creature is dangerous and corrupted!",
+                default: "§7This creature is dangerous... I should remember its behavior."
+            },
+            mysterious: {
+                tiny_bear: "§7A tiny Maple Bear... This creature is mysterious and unsettling!",
+                default: "§7This creature is mysterious... I need to study it more."
+            },
+            threatening: {
+                buff_bear: "§7A buff Maple Bear... Book it bro, run for your life.",
+                default: "§7This creature is threatening... I must understand its nature."
+            },
+            interesting: {
+                brewing_stand: "§7A brewing stand... This seems important for alchemy!",
+                golden_apple: "§7A golden apple... This seems useful for healing!",
+                snow: "§7Some mysterious powder... This seems important to remember!",
+                default: "§7This seems interesting... I will need to remember it."
+            },
+            default: "§7This seems interesting... I will need to remember it."
+        };
+
+        // Lookup message with fallback chain
+        const message = messages[messageType]?.[itemType] || messages[messageType]?.default || messages.default;
+        player.sendMessage(message);
     }
 }
 
@@ -1224,7 +1217,8 @@ function handleSnowConsumption(player, item) {
             snowCount: 1,
             source: "snow",
             maxSeverity: 0,
-            lastTierMessage: 0
+            lastTierMessage: 0,
+            lastActiveTick: system.currentTick
         });
         player.addTag(INFECTED_TAG);
         player.sendMessage("§4You have been infected! Find a cure quickly!");
@@ -1353,6 +1347,17 @@ function handleMobConversion(entity, killer) {
     
     // Check if killer is a Maple Bear or infected pig
     if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === BUFF_BEAR_ID || killerType === INFECTED_PIG_ID) {
+        
+        // PREVENT BEAR-TO-BEAR CONVERSION: Don't convert Maple Bears or infected creatures
+        const isVictimABear = entity.typeId === MAPLE_BEAR_ID || entity.typeId === MAPLE_BEAR_DAY4_ID || entity.typeId === MAPLE_BEAR_DAY8_ID || 
+                              entity.typeId === INFECTED_BEAR_ID || entity.typeId === INFECTED_BEAR_DAY8_ID || entity.typeId === BUFF_BEAR_ID;
+        const isVictimInfected = entity.typeId === INFECTED_PIG_ID || entity.typeId === INFECTED_COW_ID;
+        
+        if (isVictimABear || isVictimInfected) {
+            console.log(`[CONVERSION] Skipping conversion - ${killerType} killed ${entity.typeId} (bear-to-bear/infected conversion prevented)`);
+            return;
+        }
+        
         // Check if victim is a pig and convert to infected pig
         if (entity.typeId === "minecraft:pig") {
             console.log(`[PIG CONVERSION] Maple Bear killing pig on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
@@ -1579,12 +1584,20 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 
                 // Check for immediate death
                 if (infectionState.ticksLeft <= 0) {
-                    try { player.kill(); } catch {}
-                    try {
-                        const bear = player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
-                        if (bear) { bear.nameTag = `§4! ${player.name}'s Infected Form`; bear.setDynamicProperty("infected_by", player.id); }
-                        player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} transformed into a Maple Bear!"}]}`);
-                    } catch {}
+                    // Check if this is a fresh infection expiration (not from loading old data)
+                    const wasActiveRecently = infectionState.lastActiveTick && (system.currentTick - infectionState.lastActiveTick) < 1200; // 1 minute grace period
+                    
+                    if (wasActiveRecently) {
+                        try { player.kill(); } catch {}
+                        try {
+                            const bear = player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
+                            if (bear) { bear.nameTag = `§4! ${player.name}'s Infected Form`; bear.setDynamicProperty("infected_by", player.id); }
+                            player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} transformed into a Maple Bear!"}]}`);
+                        } catch {}
+                    } else {
+                        // Infection expired while offline - just clear it without spawning bear
+                        console.log(`[INFECTION] ${player.name}'s infection expired while offline - clearing without transformation`);
+                    }
                     player.removeTag(INFECTED_TAG);
                     playerInfection.delete(player.id);
                 } else if (infectionState.ticksLeft <= 1200 && !infectionState.warningSent) { // 1 minute before transformation
@@ -1660,7 +1673,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 player.addEffect("minecraft:mining_fatigue", 200, { amplifier: 0 });
             } catch {}
             // Player is now infected
-            playerInfection.set(player.id, { ticksLeft: INFECTION_TICKS, cured: false, hitCount: newHitCount, snowCount: 0 });
+            playerInfection.set(player.id, { ticksLeft: INFECTION_TICKS, cured: false, hitCount: newHitCount, snowCount: 0, lastActiveTick: system.currentTick });
             player.addTag(INFECTED_TAG);
             
             // Track infection history
@@ -1730,6 +1743,8 @@ system.runInterval(() => {
         const player = world.getAllPlayers().find(p => p.id === id);
         if (!player || state.cured) continue;
 
+        // Update last active tick when player is online
+        state.lastActiveTick = system.currentTick;
         state.ticksLeft -= 40; // Adjusted for 40-tick interval
 
         // Apply daily snow decay based on snow tier
@@ -1776,13 +1791,24 @@ system.runInterval(() => {
         }
 
         if (state.ticksLeft <= 0) {
-            // Transform!
-            console.log(`[INFECTION] ${player.name} succumbs to infection and transforms!`);
-            player.kill();
-            player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
-            player.sendMessage("§4You succumbed to the infection!");
-            player.removeTag(INFECTED_TAG);
-            playerInfection.delete(id);
+            // Check if this is a fresh infection expiration (not from loading old data)
+            // Only transform if the infection was active when the player was online
+            const wasActiveRecently = state.lastActiveTick && (system.currentTick - state.lastActiveTick) < 1200; // 1 minute grace period
+            
+            if (wasActiveRecently) {
+                // Transform!
+                console.log(`[INFECTION] ${player.name} succumbs to infection and transforms!`);
+                player.kill();
+                player.dimension.spawnEntity(INFECTED_BEAR_ID, player.location);
+                player.sendMessage("§4You succumbed to the infection!");
+                player.removeTag(INFECTED_TAG);
+                playerInfection.delete(id);
+            } else {
+                // Infection expired while offline - just clear it without spawning bear
+                console.log(`[INFECTION] ${player.name}'s infection expired while offline - clearing without transformation`);
+                player.removeTag(INFECTED_TAG);
+                playerInfection.delete(id);
+            }
         } else if (state.ticksLeft <= 1200 && !state.warningSent) { // 1 minute before transformation
             // Send warning message a minute before transformation
             player.sendMessage("§4You don't feel so good...");
