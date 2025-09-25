@@ -518,40 +518,51 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
     }
 }
 
+// --- Helper: Common entity conversion logic ---
+function convertEntity(deadEntity, killer, targetEntityId, conversionName) {
+    // Validate entities
+    if (!deadEntity || !deadEntity.isValid || !killer || !killer.isValid) {
+        console.log(`[${conversionName}] Skipping - entity or killer is invalid`);
+        return null;
+    }
+    
+    const location = deadEntity.location;
+    const dimension = deadEntity.dimension;
+    
+    // Check chunk is loaded
+    try {
+        dimension.getBlock({ 
+            x: Math.floor(location.x), 
+            y: Math.floor(location.y), 
+            z: Math.floor(location.z) 
+        });
+    } catch (chunkError) {
+        console.log(`[${conversionName}] Skipping - chunk not loaded at ${Math.floor(location.x)}, ${Math.floor(location.y)}, ${Math.floor(location.z)}`);
+        return null;
+    }
+    
+    // Spawn replacement entity
+    const newEntity = dimension.spawnEntity(targetEntityId, location);
+    
+    // Add visual feedback
+    dimension.spawnParticle("mb:white_dust_particale", location);
+    
+    console.log(`[${conversionName}] Conversion complete`);
+    return newEntity;
+}
+
 // --- Helper: Convert pig to infected pig ---
 function convertPigToInfectedPig(deadPig, killer) {
     try {
-        // Validate entities are still valid
-        if (!deadPig || !deadPig.isValid || !killer || !killer.isValid) {
-            console.log(`[PIG CONVERSION] Skipping conversion - entity or killer is invalid`);
-            return;
-        }
-        
-        const location = deadPig.location;
         const killerType = killer.typeId;
         const currentDay = getCurrentDay();
         
-        // Check if the location is in a loaded chunk
-        const dimension = deadPig.dimension;
+        // Use shared conversion logic
+        const infectedPig = convertEntity(deadPig, killer, INFECTED_PIG_ID, "PIG CONVERSION");
         
-        // Try to access the chunk to ensure it's loaded
-        try {
-            dimension.getBlock({ x: Math.floor(location.x), y: Math.floor(location.y), z: Math.floor(location.z) });
-        } catch (chunkError) {
-            console.log(`[PIG CONVERSION] Skipping pig conversion - chunk not loaded at ${Math.floor(location.x)}, ${Math.floor(location.y)}, ${Math.floor(location.z)}`);
-            return;
+        if (infectedPig) {
+            console.log(`[PIG CONVERSION] Day ${currentDay}: Pig killed by ${killerType} → spawned Infected Pig`);
         }
-        
-        // Spawn infected pig at the pig's location
-        const infectedPig = dimension.spawnEntity(INFECTED_PIG_ID, location);
-        
-        // Add some visual feedback
-        dimension.spawnParticle("mb:white_dust_particale", location);
-        
-        // Note: Infected pig discovery is now handled through proper kill tracking system
-        // No direct unlocks - must reach kill requirements
-        
-        console.log(`[PIG CONVERSION] Day ${currentDay}: Pig killed by ${killerType} → spawned Infected Pig`);
         
     } catch (error) {
         console.warn(`[PIG CONVERSION] Error converting pig to infected pig:`, error);
@@ -561,35 +572,15 @@ function convertPigToInfectedPig(deadPig, killer) {
 // --- Helper: Convert cow to infected cow ---
 function convertCowToInfectedCow(deadCow, killer) {
     try {
-        // Validate entities are still valid
-        if (!deadCow || !deadCow.isValid || !killer || !killer.isValid) {
-            console.log(`[COW CONVERSION] Skipping conversion - entity or killer is invalid`);
-            return;
-        }
-        
-        const location = deadCow.location;
         const killerType = killer.typeId;
         const currentDay = getCurrentDay();
-        const dimension = deadCow.dimension;
         
-        // Ensure chunk is loaded before spawning
-        try {
-            dimension.getBlock({ x: Math.floor(location.x), y: Math.floor(location.y), z: Math.floor(location.z) });
-        } catch (chunkError) {
-            console.log(`[COW CONVERSION] Skipping cow conversion - chunk not loaded at ${Math.floor(location.x)}, ${Math.floor(location.y)}, ${Math.floor(location.z)}`);
-            return;
+        // Use shared conversion logic
+        const infectedCow = convertEntity(deadCow, killer, INFECTED_COW_ID, "COW CONVERSION");
+        
+        if (infectedCow) {
+            console.log(`[COW CONVERSION] Day ${currentDay}: Cow killed by ${killerType} → spawned Infected Cow`);
         }
-        
-        // Spawn infected cow at the cow's location
-        const infectedCow = dimension.spawnEntity(INFECTED_COW_ID, location);
-        
-        // Add some visual feedback
-        dimension.spawnParticle("mb:white_dust_particale", location);
-        
-        // Note: Infected cow discovery is now handled through proper kill tracking system
-        // No direct unlocks - must reach kill requirements
-        
-        console.log(`[COW CONVERSION] Day ${currentDay}: Cow killed by ${killerType} → spawned Infected Cow`);
         
     } catch (error) {
         console.warn(`[COW CONVERSION] Error converting cow to infected cow:`, error);
@@ -599,12 +590,6 @@ function convertCowToInfectedCow(deadCow, killer) {
 // --- Helper: Convert mob to Maple Bear based on size and day ---
 function convertMobToMapleBear(deadMob, killer) {
     try {
-        // Validate entities are still valid
-        if (!deadMob || !deadMob.isValid || !killer || !killer.isValid) {
-            console.log(`[MOB CONVERSION] Skipping conversion - entity or killer is invalid`);
-            return;
-        }
-        
         const mobType = deadMob.typeId;
         
         // Don't convert pigs and cows - they're handled by their respective conversion systems
@@ -618,7 +603,6 @@ function convertMobToMapleBear(deadMob, killer) {
         }
         
         const killerType = killer.typeId;
-        const location = deadMob.location;
         const currentDay = getCurrentDay();
         
         // Determine Maple Bear type to spawn based on killer, mob size, and current day
@@ -698,26 +682,12 @@ function convertMobToMapleBear(deadMob, killer) {
             }
         }
         
-        // Check if the location is in a loaded chunk
-        const dimension = world.getDimension("overworld");
+        // Use shared conversion logic
+        const newBear = convertEntity(deadMob, killer, newBearType, "MOB CONVERSION");
         
-        // Try to access the chunk to ensure it's loaded
-        try {
-            dimension.getBlock({ x: Math.floor(location.x), y: Math.floor(location.y), z: Math.floor(location.z) });
-        } catch (chunkError) {
-            console.log(`[CONVERSION] Skipping ${mobType} conversion - chunk not loaded at ${Math.floor(location.x)}, ${Math.floor(location.y)}, ${Math.floor(location.z)}`);
-            return;
+        if (newBear) {
+            console.log(`[CONVERSION] Day ${currentDay}: ${mobType} killed by ${killerType} → spawned ${newBearType} (${bearSize})`);
         }
-        
-        // Spawn the new Maple Bear
-        const newBear = dimension.spawnEntity(newBearType, location);
-        
-        // Note: Entity type ID determines the bear type (mb:mb = tiny, mb:infected = normal, mb:buff_mb = buff)
-        
-        console.log(`[CONVERSION] Day ${currentDay}: ${mobType} killed by ${killerType} → spawned ${newBearType} (${bearSize})`);
-        
-        // Add some visual feedback
-        dimension.spawnParticle("mb:white_dust_particale", location);
         
     } catch (error) {
         console.warn(`[MOB CONVERSION] Error converting ${deadMob.typeId} to Maple Bear:`, error);
