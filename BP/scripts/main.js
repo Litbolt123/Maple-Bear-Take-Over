@@ -196,7 +196,7 @@ const HITS_TO_INFECT = 3; // Number of hits required to get infected
 // Snow consumption mechanics are now handled inline in the itemCompleteUse handler
 
 // Helper function to check and unlock mob discovery
-function checkAndUnlockMobDiscovery(codex, player, killType, mobKillType, hitType, unlockKey, requiredKills = 3, messageType = "interesting") {
+function checkAndUnlockMobDiscovery(codex, player, killType, mobKillType, hitType, unlockKey, requiredKills = 3, messageType = "interesting", itemType = "") {
     // Early return if already discovered to prevent spam
     if (codex.mobs[unlockKey]) {
         return false;
@@ -211,7 +211,7 @@ function checkAndUnlockMobDiscovery(codex, player, killType, mobKillType, hitTyp
         // Mark as discovered in the codex object immediately
         codex.mobs[unlockKey] = true;
         markCodex(player, `mobs.${unlockKey}`);
-        sendDiscoveryMessage(player, codex, messageType);
+        sendDiscoveryMessage(player, codex, messageType, itemType);
         player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
         if (requiredKills === 1) {
             player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
@@ -228,19 +228,19 @@ function trackBearKill(player, bearType) {
         // Track kills based on bear type and unlock discovery
         if (bearType === MAPLE_BEAR_ID || bearType === MAPLE_BEAR_DAY4_ID || bearType === MAPLE_BEAR_DAY8_ID) {
             codex.mobs.tinyBearKills = (codex.mobs.tinyBearKills || 0) + 1; // Player kills this mob
-            checkAndUnlockMobDiscovery(codex, player, "tinyBearKills", "tinyBearMobKills", "tinyBearHits", "mapleBearSeen", 3, "mysterious");
+            checkAndUnlockMobDiscovery(codex, player, "tinyBearKills", "tinyBearMobKills", "tinyBearHits", "mapleBearSeen", 3, "mysterious", "tiny_bear");
         } else if (bearType === INFECTED_BEAR_ID || bearType === INFECTED_BEAR_DAY8_ID) {
             codex.mobs.infectedBearKills = (codex.mobs.infectedBearKills || 0) + 1;
-            checkAndUnlockMobDiscovery(codex, player, "infectedBearKills", "infectedBearMobKills", "infectedBearHits", "infectedBearSeen", 3, "dangerous");
+            checkAndUnlockMobDiscovery(codex, player, "infectedBearKills", "infectedBearMobKills", "infectedBearHits", "infectedBearSeen", 3, "dangerous", "infected_bear");
         } else if (bearType === BUFF_BEAR_ID) {
             codex.mobs.buffBearKills = (codex.mobs.buffBearKills || 0) + 1;
-            checkAndUnlockMobDiscovery(codex, player, "buffBearKills", "buffBearMobKills", "buffBearHits", "buffBearSeen", 1, "threatening");
+            checkAndUnlockMobDiscovery(codex, player, "buffBearKills", "buffBearMobKills", "buffBearHits", "buffBearSeen", 1, "threatening", "buff_bear");
         } else if (bearType === INFECTED_PIG_ID) {
             codex.mobs.infectedPigKills = (codex.mobs.infectedPigKills || 0) + 1;
-            checkAndUnlockMobDiscovery(codex, player, "infectedPigKills", "infectedPigMobKills", "infectedPigHits", "infectedPigSeen", 3, "dangerous");
+            checkAndUnlockMobDiscovery(codex, player, "infectedPigKills", "infectedPigMobKills", "infectedPigHits", "infectedPigSeen", 3, "dangerous", "infected_pig");
         } else if (bearType === INFECTED_COW_ID) {
             codex.mobs.infectedCowKills = (codex.mobs.infectedCowKills || 0) + 1;
-            checkAndUnlockMobDiscovery(codex, player, "infectedCowKills", "infectedCowMobKills", "infectedCowHits", "infectedCowSeen", 3, "dangerous");
+            checkAndUnlockMobDiscovery(codex, player, "infectedCowKills", "infectedCowMobKills", "infectedCowHits", "infectedCowSeen", 3, "dangerous", "infected_cow");
         }
         
         saveCodex(player, codex);
@@ -452,20 +452,50 @@ function trackEffectExperience(player, effectId, severity) {
 }
 
 // --- Helper: Send contextual discovery message ---
-function sendDiscoveryMessage(player, codex, messageType = "interesting") {
+function sendDiscoveryMessage(player, codex, messageType = "interesting", itemType = "") {
     if (codex?.items?.snowBookCrafted) {
         player.sendMessage("§7You feel like you should check your Powdery Journal...");
     } else {
         if (messageType === "important") {
-            player.sendMessage("§7This seems important... I will need to remember it.");
+            if (itemType === "weakness") {
+                player.sendMessage("§7A weakness potion... This seems important for curing infections!");
+            } else if (itemType === "enchanted_apple") {
+                player.sendMessage("§7An enchanted golden apple... This seems important for healing!");
+            } else {
+                player.sendMessage("§7This seems important... I will need to remember it.");
+            }
         } else if (messageType === "dangerous") {
-            player.sendMessage("§7This creature is dangerous... I should remember its behavior.");
+            if (itemType === "infected_bear") {
+                player.sendMessage("§7An infected bear... This creature is dangerous and corrupted!");
+            } else if (itemType === "infected_pig") {
+                player.sendMessage("§7An infected pig... This creature is dangerous and corrupted!");
+            } else if (itemType === "infected_cow") {
+                player.sendMessage("§7An infected cow... This creature is dangerous and corrupted!");
+            } else {
+                player.sendMessage("§7This creature is dangerous... I should remember its behavior.");
+            }
         } else if (messageType === "mysterious") {
-            player.sendMessage("§7This creature is mysterious... I need to study it more.");
+            if (itemType === "tiny_bear") {
+                player.sendMessage("§7A tiny Maple Bear... This creature is mysterious and unsettling!");
+            } else {
+                player.sendMessage("§7This creature is mysterious... I need to study it more.");
+            }
         } else if (messageType === "threatening") {
-            player.sendMessage("§7This creature is threatening... I must understand its nature.");
+            if (itemType === "buff_bear") {
+                player.sendMessage("§7A buff Maple Bear... Book it bro, run for your life.");
+            } else {
+                player.sendMessage("§7This creature is threatening... I must understand its nature.");
+            }
         } else {
-            player.sendMessage("§7This seems interesting... I will need to remember it.");
+            if (itemType === "brewing_stand") {
+                player.sendMessage("§7A brewing stand... This seems important for alchemy!");
+            } else if (itemType === "golden_apple") {
+                player.sendMessage("§7A golden apple... This seems useful for healing!");
+            } else if (itemType === "snow") {
+                player.sendMessage("§7Some mysterious powder... This seems important to remember!");
+            } else {
+                player.sendMessage("§7This seems interesting... I will need to remember it.");
+            }
         }
     }
 }
@@ -1018,7 +1048,7 @@ function handlePotion(player, item) {
             const codex = getCodex(player);
             if (!codex.items.potionsSeen) {
                 markCodex(player, "items.potionsSeen"); 
-                sendDiscoveryMessage(player, codex, "interesting");
+                sendDiscoveryMessage(player, codex, "interesting", "potion");
                 player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
             }
         } catch {}
@@ -1032,7 +1062,7 @@ function handlePotion(player, item) {
                 const codex = getCodex(player);
                 if (!codex.items.weaknessPotionSeen) {
                     markCodex(player, "items.weaknessPotionSeen"); 
-                    sendDiscoveryMessage(player, codex, "important");
+                    sendDiscoveryMessage(player, codex, "important", "weakness");
                     player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
                     player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
                 }
@@ -1056,7 +1086,7 @@ function handleEnchantedGoldenApple(player, item) {
         const codex = getCodex(player);
         if (!codex.items.enchantedGoldenAppleSeen) {
             markCodex(player, "items.enchantedGoldenAppleSeen"); 
-            sendDiscoveryMessage(player, codex, "important");
+            sendDiscoveryMessage(player, codex, "important", "enchanted_apple");
             player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
             player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
         }
@@ -1227,15 +1257,15 @@ function handleSnowConsumption(player, item) {
         if (snowCount <= 5) {
             message = "§eThe substance seems to slow down the infection...";
         } else if (snowCount <= 10) {
-            message = "§eThe substance has no noticeable effect...";
+            message = "§eThe substance seems to have no noticeable effect anymore...";
         } else if (snowCount <= 20) {
-            message = "§cThe substance accelerates the infection!";
+            message = "§cThe substance seems to... be accelerating the infection!?";
         } else if (snowCount <= 50) {
-            message = "§4The substance heavily accelerates the infection!";
+            message = "§4The substance seems to heavily affect you and continues to accelerate the infection...";
         } else if (snowCount <= 100) {
-            message = "§4The substance has consumed you completely!";
+            message = "§4The substance seems to have nearly taken over you completely...";
         } else {
-            message = "§0How are you even here? The void consumes all...";
+            message = "§0How are you even here? The 'snow' seems to consume all...";
         }
         
         // Apply time effect
@@ -1274,11 +1304,11 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
         // Mark normal golden apple as discovered (only first time)
         try { 
             const codex = getCodex(player);
-            if (!codex.items.goldenAppleSeen) {
-                markCodex(player, "items.goldenAppleSeen"); 
-                sendDiscoveryMessage(player, codex, "interesting");
-                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-            }
+        if (!codex.items.goldenAppleSeen) {
+            markCodex(player, "items.goldenAppleSeen"); 
+            sendDiscoveryMessage(player, codex, "interesting", "golden_apple");
+            player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+        }
         } catch {}
     }
     
@@ -1410,70 +1440,7 @@ world.afterEvents.entityDie.subscribe((event) => {
     if (source && source.damagingEntity) {
         handleMapleBearKillTracking(entity, source.damagingEntity);
     }
-    // Bear death corruption logic: corrupt ALL items in inventory AND equipment
-    if (entity.typeId === INFECTED_BEAR_ID) {
-        try {
-            // 1. Corrupt all inventory items
-            const inventoryComp = entity.getComponent("inventory");
-            let items = [];
-            if (inventoryComp && inventoryComp.container) {
-                for (let i = 0; i < inventoryComp.container.size; i++) {
-                    const item = inventoryComp.container.getItem(i);
-                    if (item) {
-                        items.push({
-                            typeId: item.typeId,
-                            amount: item.amount,
-                            data: item.data || 0
-                        });
-                        // Remove the item from the inventory
-                        inventoryComp.container.setItem(i, undefined);
-                    }
-                }
-            }
-            // 2. Corrupt all equipped items
-            const equipmentComp = entity.getComponent("equipment");
-            if (equipmentComp) {
-                const equipSlots = ["head", "chest", "legs", "feet", "mainhand", "offhand"];
-                for (const slot of equipSlots) {
-                    const equipSlot = equipmentComp.getEquipmentSlot(slot);
-                    if (equipSlot) {
-                        const item = equipSlot.getItem();
-                        if (item) {
-                            items.push({
-                                typeId: item.typeId,
-                                amount: item.amount,
-                                data: item.data || 0
-                            });
-                            // Remove the item from the slot
-                            equipSlot.setItem(undefined);
-                        }
-                    }
-                }
-            }
-            if (items.length === 0) {
-                return;
-            }
-            // Corrupt ALL items into snow
-            for (const entry of items) {
-                for (let n = 0; n < (entry.amount || 1); n++) {
-                    const dropLocation = {
-                        x: entity.location.x + Math.random() - 0.5,
-                        y: entity.location.y + 0.5,
-                        z: entity.location.z + Math.random() - 0.5
-                    };
-                    const snowItem = new ItemStack("mb:snow", 1);
-                    entity.dimension.spawnItem(snowItem, dropLocation);
-                    try {
-                        entity.dimension.runCommand(`particle minecraft:snowflake ${Math.round(dropLocation.x)} ${Math.round(dropLocation.y)} ${Math.round(dropLocation.z)}`);
-                    } catch (error) {
-                        console.warn(`[SNOW DROP] Error spawning particle effect:`, error);
-                    }
-                }
-            }
-        } catch (error) {
-            console.warn(`[BEAR DEATH] Error handling infected bear death:`, error);
-        }
-    }
+    // Note: Bear death corruption logic removed - no bears should spawn on death
     
     // Infected pig death: drop collected porkchops as bonus loot
     if (entity.typeId === INFECTED_PIG_ID) {
@@ -1871,7 +1838,7 @@ system.runInterval(() => {
                     [],
                     [ { effect: "minecraft:slowness", duration: 60, amp: 0 } ],
                     [ { effect: "minecraft:slowness", duration: 100, amp: 1 }, { effect: "minecraft:hunger", duration: 80, amp: 1 } ],
-                    [ { effect: "minecraft:slowness", duration: 140, amp: 2 }, { effect: "minecraft:weakness", duration: 140, amp: 1 }, { effect: "minecraft:blindness", duration: 60, amp: 0 } ]
+                    [ { effect: "minecraft:slowness", duration: 140, amp: 2 }, { effect: "minecraft:weakness", duration: 140, amp: 1 }, { effect: "minecraft:blindness", duration: 60, amp: 0 }, { effect: "minecraft:nausea", duration: 200, amp: 0 } ]
                 ];
                 const options = effectsByLevel[severityLevel];
                 if (options && options.length > 0) {
@@ -1903,7 +1870,7 @@ system.runInterval(() => {
                     if (it && it.typeId === SNOW_ITEM_ID) { 
                         try { 
                             markCodex(p, "items.snowFound"); 
-                            sendDiscoveryMessage(p, codex, "important");
+                            sendDiscoveryMessage(p, codex, "important", "snow");
                         } catch {} 
                         break; 
                     }
@@ -1917,7 +1884,7 @@ system.runInterval(() => {
                     if (it && it.typeId === "minecraft:brewing_stand") { 
                         try { 
                             markCodex(p, "items.brewingStandSeen"); 
-                            sendDiscoveryMessage(p, codex, "interesting");
+                            sendDiscoveryMessage(p, codex, "interesting", "brewing_stand");
                             p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
                         } catch {} 
                         break; 
@@ -2650,6 +2617,9 @@ world.afterEvents.playerLeave.subscribe((event) => {
         infectionExperience.delete(playerId);
         // Note: Keep maxSnowLevels persistent - it's a lifetime achievement
         // Note: Keep playerInventories persistent - needed for bear equipment
+        
+        // Clean up codex error tracking to prevent memory leak
+        codexErrorLogged.delete(playerId);
         
         // Clean up entity tracking Maps (these track by entity ID, not player ID)
         // Note: These will be cleaned up automatically when entities are removed
