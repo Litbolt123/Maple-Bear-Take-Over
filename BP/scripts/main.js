@@ -403,6 +403,11 @@ function getSnowTimeEffect(snowCount) {
 // --- Helper: Apply random effects based on snow tier ---
 function applySnowTierEffects(player, snowCount) {
     try {
+        // Helper function to get fully-qualified effect ID
+        function getEffectId(effectName) {
+            return `minecraft:${effectName}`;
+        }
+        
         // Determine tier and apply appropriate effects (mix of positive and negative)
         if (snowCount <= 5) {
             // Tier 1: Mild effects - mostly positive with some negative
@@ -411,7 +416,7 @@ function applySnowTierEffects(player, snowCount) {
             const isPositive = randomEffect === "regeneration" || randomEffect === "speed";
             const duration = isPositive ? 300 : 200;
             const amplifier = isPositive ? 0 : 0;
-            player.addEffect(randomEffect, duration, { amplifier: amplifier, showParticles: true });
+            player.addEffect(getEffectId(randomEffect), duration, { amplifier: amplifier, showParticles: true });
             
             // Track snow effects in codex
             try {
@@ -430,7 +435,7 @@ function applySnowTierEffects(player, snowCount) {
             const isPositive = randomEffect === "regeneration" || randomEffect === "speed" || randomEffect === "jump_boost";
             const duration = isPositive ? 400 : 300;
             const amplifier = isPositive ? 0 : 1;
-            player.addEffect(randomEffect, duration, { amplifier: amplifier, showParticles: true });
+            player.addEffect(getEffectId(randomEffect), duration, { amplifier: amplifier, showParticles: true });
             
             // Track snow effects in codex
             try {
@@ -451,7 +456,7 @@ function applySnowTierEffects(player, snowCount) {
             const isPositive = randomEffect === "regeneration" || randomEffect === "speed" || randomEffect === "jump_boost" || randomEffect === "strength";
             const duration = isPositive ? 500 : 400;
             const amplifier = isPositive ? 1 : 1;
-            player.addEffect(randomEffect, duration, { amplifier: amplifier, showParticles: true });
+            player.addEffect(getEffectId(randomEffect), duration, { amplifier: amplifier, showParticles: true });
             
             // Track snow effects in codex
             try {
@@ -474,7 +479,7 @@ function applySnowTierEffects(player, snowCount) {
             const isPositive = randomEffect === "regeneration" || randomEffect === "speed" || randomEffect === "strength";
             const duration = isPositive ? 600 : 500;
             const amplifier = isPositive ? 1 : 2;
-            player.addEffect(randomEffect, duration, { amplifier: amplifier, showParticles: true });
+            player.addEffect(getEffectId(randomEffect), duration, { amplifier: amplifier, showParticles: true });
             
             // Track snow effects in codex
             try {
@@ -497,7 +502,7 @@ function applySnowTierEffects(player, snowCount) {
             const isPositive = randomEffect === "regeneration";
             const duration = isPositive ? 700 : 600;
             const amplifier = isPositive ? 2 : 2;
-            player.addEffect(randomEffect, duration, { amplifier: amplifier, showParticles: true });
+            player.addEffect(getEffectId(randomEffect), duration, { amplifier: amplifier, showParticles: true });
             
             // Track snow effects in codex
             try {

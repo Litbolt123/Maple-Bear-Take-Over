@@ -207,16 +207,14 @@ export function showCodexBook(player, context) {
         buttons.push("§fInfection");
         buttonActions.push(() => openInfections());
         
-        // Symptoms section - only if infected and any symptoms discovered
-        const infectionState = playerInfection.get(player.id);
-        const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
+        // Symptoms section - show if any symptoms/snow effects discovered
         const hasAnySymptoms = Object.values(codex.effects).some(seen => seen);
         const hasAnySnowEffects = Object.values(codex.snowEffects).some(seen => seen);
         const hasSnowKnowledge = codex.items.snowIdentified;
         const maxSnow = maxSnowLevels.get(player.id);
         
-        // Only show symptoms tab if currently infected AND has experienced symptoms
-        if (hasInfection && (hasAnySymptoms || hasAnySnowEffects || (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0))) {
+        // Show symptoms tab if any symptoms/snow effects have been recorded
+        if (hasAnySymptoms || hasAnySnowEffects || (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0)) {
             buttons.push("§fSymptoms");
             buttonActions.push(() => openSymptoms());
         }
