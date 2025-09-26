@@ -1,7 +1,7 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { getCodex, markCodex, showCodexBook, saveCodex } from "./mb_codex.js";
-import { initializeDayTracking, getCurrentDay, getInfectionMessage } from "./mb_dayTracker.js";
+import { initializeDayTracking, getCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers } from "./mb_dayTracker.js";
 
 // NOTE: Debug and testing features have been commented out for playability
 // To re-enable testing features, uncomment the following sections:
@@ -830,7 +830,7 @@ function convertMobToMapleBear(deadMob, killer) {
                 newBearType = MAPLE_BEAR_ID; // Always spawn tiny Maple Bear (mb:mb)
                 bearSize = "tiny";
                 console.log(`[CONVERSION] Pre-day 4: Tiny bear spawning tiny bear (${newBearType})`);
-            } else if (currentDay < 8) {
+            } else if (currentDay >= 4 && currentDay < 8) {
                 // Day 4-7: Tiny Maple Bears use size-based system with day 4+ variants
                 const mobSize = getMobSize(mobType);
                 if (mobSize === "tiny") {
