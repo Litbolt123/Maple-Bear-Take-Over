@@ -139,7 +139,7 @@ export function updateSymptomMeta(player, effectId, durationTicks, amp, source, 
 }
 
 export function showCodexBook(player, context) {
-    const { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, checkVariantUnlock, getCurrentDay } = context;
+    const { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, checkVariantUnlock, getCurrentDay, getDayDisplayInfo } = context;
     
     // Check for variant unlocks when opening the codex
     if (checkVariantUnlock) {
@@ -160,7 +160,8 @@ export function showCodexBook(player, context) {
         
         // Add current day
         const currentDay = getCurrentDay ? getCurrentDay() : 0;
-        summary.push(`§6Current Day: §f${currentDay}`);
+        const display = typeof getDayDisplayInfo === 'function' ? getDayDisplayInfo(currentDay) : { color: '§f', symbols: '' };
+        summary.push(`${display.color}${display.symbols} Current Day: ${currentDay}`);
         
         // Health status logic
         if (hasInfection) {

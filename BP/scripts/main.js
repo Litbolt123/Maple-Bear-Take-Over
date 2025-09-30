@@ -1,7 +1,7 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { getCodex, markCodex, showCodexBook, saveCodex } from "./mb_codex.js";
-import { initializeDayTracking, getCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers } from "./mb_dayTracker.js";
+import { initializeDayTracking, getCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo } from "./mb_dayTracker.js";
 
 // NOTE: Debug and testing features have been commented out for playability
 // To re-enable testing features, uncomment the following sections:
@@ -3005,7 +3005,7 @@ world.beforeEvents.itemUse.subscribe((event) => {
                     player.addEffect("minecraft:blindness", 60, { amplifier: 0 }); // 3 seconds
                 }
             } catch {}
-            showCodexBook(player, { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, checkVariantUnlock, getCurrentDay });
+            showCodexBook(player, { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, checkVariantUnlock, getCurrentDay, getDayDisplayInfo });
         });
         return;
     }

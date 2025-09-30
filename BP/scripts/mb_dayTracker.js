@@ -50,7 +50,7 @@ let dayCycleLoopId = null;
  * @param {number} day The current day
  * @returns {object} Object with color and symbols
  */
-function getDayDisplayInfo(day) {
+export function getDayDisplayInfo(day) {
     if (day < 2) {
         // Days 0-1: Green, no hazard symbols
         return { color: "§a", symbols: "" };
@@ -528,6 +528,9 @@ export async function mbiHandleMilestoneDay(day) {
                     world.sendMessage(`§8[MBI] §4The infection has increased to new heights...`);
                     break;
             }
+
+            // Spawn pulse to guarantee milestone visibility even if world age lags due to sleeping
+            runMilestoneSpawnPulse(day);
         } catch (error) {
             console.warn("[ERROR] in mbiHandleMilestoneDay:", error);
             if (error && error.stack) {
@@ -535,6 +538,121 @@ export async function mbiHandleMilestoneDay(day) {
             }
         }
     }, 80); // 4 seconds delay
+}
+
+// --- Milestone spawn pulse ---
+const MILESTONE_PULSE_FLAG_PREFIX = "mbi_milestone_pulse_"; // e.g. mbi_milestone_pulse_2
+
+function hasMilestonePulseRun(day) {
+    try {
+        return !!world.getDynamicProperty(MILESTONE_PULSE_FLAG_PREFIX + String(day));
+    } catch {}
+    return false;
+}
+
+function setMilestonePulseRun(day) {
+    try {
+        world.setDynamicProperty(MILESTONE_PULSE_FLAG_PREFIX + String(day), true);
+    } catch {}
+}
+
+function pickSpawnTypeForDay(day) {
+    // Use base identifiers to avoid cross-module constants
+    if (day >= 13) {
+        // Prefer day 13 variants where available
+        return ["mb:mb_day13", "mb:infected_day13", "mb:buff_mb_day13"];
+    }
+    if (day >= 8) {
+        return ["mb:mb_day8", "mb:infected_day8", "mb:buff_mb"]; // buff_mb_day13 not yet
+    }
+    if (day >= 4) {
+        return ["mb:mb_day4", "mb:infected"]; // no buff yet
+    }
+    // Day 2
+    return ["mb:mb"]; // tiny bears only
+}
+
+function runMilestoneSpawnPulse(day) {
+    // Only once per world per milestone
+    if (hasMilestonePulseRun(day)) {
+        return;
+    }
+
+    const types = pickSpawnTypeForDay(day);
+    if (!types || types.length === 0) {
+        setMilestonePulseRun(day);
+        return;
+    }
+
+    // For each player, spawn a small, capped number of entities nearby
+    const players = world.getAllPlayers();
+    for (const player of players) {
+        try {
+            if (!player || !player.isValid()) continue;
+
+            const base = player.location;
+            const dim = player.dimension;
+            // Spawn up to 2 entities per player for lower spam
+            const spawnsPerPlayer = Math.min(2, types.length);
+            for (let i = 0; i < spawnsPerPlayer; i++) {
+                const typeId = types[i % types.length];
+                // Offset around player (no brightness/biome restrictions; they spawn everywhere)
+                const angle = Math.random() * Math.PI * 2;
+                const isBuff = typeId === "mb:buff_mb" || typeId === "mb:buff_mb_day13";
+                const radius = isBuff ? (30 + Math.floor(Math.random() * 21)) : (8 + Math.floor(Math.random() * 7));
+                const targetX = base.x + Math.cos(angle) * radius;
+                const targetZ = base.z + Math.sin(angle) * radius;
+
+                let spawnLoc = { x: targetX, y: base.y, z: targetZ };
+
+                // Try to place on surface for buff (far and surface only). For others, prefer surface when available.
+                const surface = findSurfaceLocation(dim, targetX, base.y, targetZ);
+                if (surface && (isBuff || true)) {
+                    spawnLoc = surface;
+                } else if (isBuff) {
+                    // If we couldn't find surface for buff, skip to avoid cave spawns
+                    continue;
+                }
+
+                try {
+                    dim.spawnEntity(typeId, spawnLoc);
+                } catch {}
+            }
+        } catch {}
+    }
+
+    setMilestonePulseRun(day);
+}
+
+// Attempt to find a surface location near x,z by scanning downward from above the player
+function findSurfaceLocation(dimension, x, baseY, z) {
+    try {
+        // Start above the player and scan downward for first solid-with-air-above
+        const yStart = Math.min(255, Math.floor(baseY) + 40);
+        for (let y = yStart; y >= 1; y--) {
+            const below = dimension.getBlock({ x: Math.floor(x), y: y - 1, z: Math.floor(z) });
+            const at = dimension.getBlock({ x: Math.floor(x), y: y, z: Math.floor(z) });
+            if (!below || !at) continue;
+
+            const belowId = safeBlockId(below);
+            const atId = safeBlockId(at);
+
+            const belowSolid = belowId && belowId !== "minecraft:air" && !isLiquid(belowId);
+            const atAir = atId === "minecraft:air";
+            if (belowSolid && atAir) {
+                return { x, y, z };
+            }
+        }
+    } catch {}
+    return null;
+}
+
+function safeBlockId(block) {
+    try { return block.typeId; } catch { return undefined; }
+}
+
+function isLiquid(typeId) {
+    return typeId === "minecraft:water" || typeId === "minecraft:flowing_water" || typeId === "minecraft:lava" || typeId === "minecraft:flowing_lava";
 }
 
 /**
