@@ -1,0 +1,59 @@
+{
+	"format_version": "1.21.110",
+	"minecraft:biome": {
+		"description": {
+			"identifier": "mb:infected_biome"
+		},
+		"components": {
+			"minecraft:climate": {
+				"temperature": 0,
+				"downfall": 0.9,
+				"snow_accumulation": [
+					0.25,
+					0.75
+				]
+			},
+			"minecraft:tags": {
+				"tags": [
+					"animal",
+					"monster",
+					"overworld",
+					"plains",
+					"infected_biome"
+				]
+			},
+			"minecraft:replace_biomes": {
+				"replacements": [
+					{
+						"dimension": "minecraft:overworld",
+						"targets": [
+							"minecraft:plains"
+						],
+						"amount": 0.4,
+						"noise_frequency_scale": 25
+					},
+					{
+						"dimension": "minecraft:overworld",
+						"targets": [
+							"minecraft:forest",
+							"minecraft:birch_forest"
+						],
+						"amount": 0.15,
+						"noise_frequency_scale": 25
+					}
+				]
+			},
+			"minecraft:surface_builder": {
+				"builder": {
+					"type": "minecraft:overworld",
+					"sea_floor_depth": 7,
+					"sea_floor_material": "minecraft:gravel",
+					"foundation_material": "minecraft:stone",
+					"mid_material": "minecraft:dirt",
+					"top_material": "mb:dusted_dirt",
+					"sea_material": "minecraft:water"
+				}
+			}
+		}
+	}
+}
