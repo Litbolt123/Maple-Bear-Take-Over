@@ -15,7 +15,8 @@
 					"adjust_for_weather": false
 				},
 				"minecraft:weight": {
-					"default": 10
+					"default": 10,
+					"infected_biome": 25
 				},
 				"minecraft:herd": {
 					"min_size": 1,
@@ -23,6 +24,7 @@
 				},
 				"minecraft:biome_filter": {
 					"any_of": [
+						{ "test": "has_biome_tag", "operator": "==", "value": "infected_biome" },
 						{ "test": "has_biome_tag", "operator": "==", "value": "animal" },
 						{ "test": "has_biome_tag", "operator": "==", "value": "cherry_grove" }
 					]

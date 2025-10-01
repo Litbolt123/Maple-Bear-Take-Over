@@ -15,16 +15,26 @@
 					"adjust_for_weather": false
 				},
 				"minecraft:weight": {
-					"default": 8
+					"default": 8,
+					"infected_biome": 20
 				},
 				"minecraft:herd": {
 					"min_size": 2,
 					"max_size": 3
 				},
 				"minecraft:biome_filter": {
-					"test": "has_biome_tag",
-					"operator": "==",
-					"value": "animal"
+					"any_of": [
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "infected_biome"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "animal"
+						}
+					]
 				},
 				"minecraft:world_age_filter": { 
 					"min": 15000,

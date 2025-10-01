@@ -63,7 +63,8 @@
 					"max": "hard"
 				},
 				"minecraft:weight": {
-					"default": 20
+					"default": 20,
+					"infected_biome": 40
 				},
 				"minecraft:herd": {
 					"min_size": 1,
@@ -93,6 +94,11 @@
 				],
 				"minecraft:biome_filter": {
 					"any_of": [
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "infected_biome"
+						},
 						{
 							"test": "has_biome_tag",
 							"operator": "==",
