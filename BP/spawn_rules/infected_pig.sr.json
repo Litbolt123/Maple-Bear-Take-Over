@@ -28,7 +28,7 @@
 					]
 				},
 				"minecraft:world_age_filter": { 
-					"min": 15000,
+					"min": 15600,
 					"max": 1000000
 				}
 			}

@@ -46,10 +46,10 @@
 					"coarse_dirt",
 					"mycelium"
 				],
-                "minecraft:world_age_filter": {
-                    "min": 9000,
-                    "max": 999999
-                }
+				"minecraft:world_age_filter": {
+					"min": 9600,
+					"max": 999999
+				}
 			},
 			{
 				"minecraft:spawns_on_surface": {},
@@ -240,10 +240,10 @@
 						}
 					]
 				},
-                "minecraft:world_age_filter": {
-                    "min": 9000,
-                    "max": 999999
-                }
+				"minecraft:world_age_filter": {
+					"min": 9600,
+					"max": 999999
+				}
 			}
 		]
 	}
