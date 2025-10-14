@@ -3010,6 +3010,43 @@ world.beforeEvents.itemUse.subscribe((event) => {
         return;
     }
     
+    // Place dusted dirt when right-clicking a block with "snow"
+    if (item?.typeId === SNOW_ITEM_ID) {
+        try {
+            const blockEvent = event;
+            const block = blockEvent.block;
+            if (block) {
+                const dim = player.dimension;
+                const above = dim.getBlock({ x: block.x, y: block.y + 1, z: block.z });
+                // Prefer converting the clicked block top if it's replaceable/soil-ish, otherwise place above if air
+                const target = above && above.isAir ? above : block;
+                // Avoid replacing liquids
+                if (!target.isLiquid) {
+                    target.setType("mb:dusted_dirt");
+                    // Consume one snow item from the player's hand
+                    system.run(() => {
+                        try {
+                            const inv = player.getComponent("inventory")?.container;
+                            if (inv) {
+                                const selected = player.selectedSlot ?? 0;
+                                const stack = inv.getItem(selected);
+                                if (stack && stack.typeId === SNOW_ITEM_ID) {
+                                    if (stack.amount > 1) {
+                                        stack.amount -= 1;
+                                        inv.setItem(selected, stack);
+                                    } else {
+                                        inv.setItem(selected, undefined);
+                                    }
+                                }
+                            }
+                        } catch {}
+                    });
+                    // Simple feedback
+                    try { dim.runCommand(`particle minecraft:snowflake ${Math.floor(target.x)} ${Math.floor(target.y + 1)} ${Math.floor(target.z)}`); } catch {}
+                }
+            }
+        } catch {}
+    }
 
     // Debug item testing features have been removed for playability
 });

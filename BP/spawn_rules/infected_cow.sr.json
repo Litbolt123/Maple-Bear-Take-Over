@@ -8,15 +8,19 @@
 		"conditions": [
 			{
 				"minecraft:spawns_on_surface": {},
-				"minecraft:spawns_on_block_filter": "minecraft:grass_block",
+				"minecraft:spawns_on_block_filter": [
+					"mb:dusted_dirt",
+					"minecraft:grass_block"
+				],
+				"minecraft:spawns_underground": {},
 				"minecraft:brightness_filter": {
-					"min": 7,
+					"min": 0,
 					"max": 15,
 					"adjust_for_weather": false
 				},
 				"minecraft:weight": {
-					"default": 8,
-					"infected_biome": 20
+					"default": 12,
+					"infected_biome": 30
 				},
 				"minecraft:herd": {
 					"min_size": 2,
@@ -36,7 +40,7 @@
 						}
 					]
 				},
-				"minecraft:world_age_filter": { 
+				"minecraft:world_age_filter": {
 					"min": 15000,
 					"max": 1000000
 				}

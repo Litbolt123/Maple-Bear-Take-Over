@@ -7,52 +7,8 @@
 		},
 		"conditions": [
 			{
-				"minecraft:spawns_underground": {},
-				"minecraft:brightness_filter": {
-					"min": 0,
-					"max": 15,
-					"adjust_for_weather": false
-				},
-				"minecraft:difficulty_filter": {
-					"min": "easy",
-					"max": "hard"
-				},
-				"minecraft:weight": {
-					"default": 10
-				},
-				"minecraft:herd": {
-					"min_size": 1,
-					"max_size": 2
-				},
-				"minecraft:density_limit": {
-					"surface": 20
-				},
-				"minecraft:distance_filter": {
-					"min": 24,
-					"max": 128
-				},
-				"minecraft:height_filter": {
-					"min": 0,
-					"max": 128
-				},
-				"minecraft:spawns_on_block_filter": [
-					"dirt",
-					"stone",
-					"grass_block",
-					"sand",
-					"deepslate",
-					"gravel",
-					"podzol",
-					"coarse_dirt",
-					"mycelium"
-				],
-                "minecraft:world_age_filter": {
-                    "min": 1800,
-                    "max": 999999
-                }
-			},
-			{
 				"minecraft:spawns_on_surface": {},
+				"minecraft:spawns_underground": {},
 				"minecraft:brightness_filter": {
 					"min": 0,
 					"max": 15,
@@ -96,10 +52,10 @@
 					"operator": "==",
 					"value": "infected_biome"
 				},
-                "minecraft:world_age_filter": {
-                    "min": 1800,
-                    "max": 999999
-                }
+				"minecraft:world_age_filter": {
+					"min": 1800,
+					"max": 999999
+				}
 			}
 		]
 	}

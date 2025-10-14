@@ -6,12 +6,12 @@
 		},
 		"components": {
 			"minecraft:climate": {
-				"downfall": 0.8,
+				"temperature": 1,
+				"downfall": 0.9,
 				"snow_accumulation": [
-					0.0,
-					0.125
-				],
-				"temperature": 0.8
+					0.01,
+					0.1
+				]
 			},
 			"minecraft:tags": {
 				"tags": [
@@ -77,8 +77,8 @@
 							"minecraft:extreme_hills_mutated",
 							"minecraft:extreme_hills_plus_trees",
 							"minecraft:extreme_hills_plus_trees_mutated",
-							"minecraft:grove",
 							"minecraft:jagged_peaks",
+							"minecraft:frozen_peaks",
 							"minecraft:stony_peaks"
 						],
 						"amount": 0.04,
@@ -100,7 +100,6 @@
 							"minecraft:legacy_frozen_ocean",
 							"minecraft:beach",
 							"minecraft:cold_beach",
-							"minecraft:stone_beach",
 							"minecraft:river",
 							"minecraft:frozen_river"
 						],
@@ -115,8 +114,8 @@
 							"minecraft:cold_taiga",
 							"minecraft:cold_taiga_hills",
 							"minecraft:cold_taiga_mutated",
-							"minecraft:frozen_peaks",
-							"minecraft:ice_mountains"
+							"minecraft:grove",
+							"minecraft:snowy_slopes"
 						],
 						"amount": 0.03,
 						"noise_frequency_scale": 25
@@ -137,7 +136,7 @@
 				"builder": {
 					"type": "minecraft:overworld",
 					"sea_floor_depth": 7,
-					"sea_floor_material": "minecraft:gravel",
+					"sea_floor_material": "mb:dusted_dirt",
 					"foundation_material": "minecraft:stone",
 					"mid_material": "minecraft:dirt",
 					"top_material": "mb:dusted_dirt",

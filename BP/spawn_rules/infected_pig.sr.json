@@ -8,15 +8,19 @@
 		"conditions": [
 			{
 				"minecraft:spawns_on_surface": {},
-				"minecraft:spawns_on_block_filter": "minecraft:grass_block",
+				"minecraft:spawns_on_block_filter": [
+					"mb:dusted_dirt",
+					"minecraft:grass_block"
+				],
+				"minecraft:spawns_underground": {},
 				"minecraft:brightness_filter": {
-					"min": 7,
+					"min": 0,
 					"max": 15,
 					"adjust_for_weather": false
 				},
 				"minecraft:weight": {
-					"default": 10,
-					"infected_biome": 25
+					"default": 15,
+					"infected_biome": 35
 				},
 				"minecraft:herd": {
 					"min_size": 1,
@@ -24,12 +28,19 @@
 				},
 				"minecraft:biome_filter": {
 					"any_of": [
-						{ "test": "has_biome_tag", "operator": "==", "value": "infected_biome" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "animal" },
-						{ "test": "has_biome_tag", "operator": "==", "value": "cherry_grove" }
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "infected_biome"
+						},
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "animal"
+						}
 					]
 				},
-				"minecraft:world_age_filter": { 
+				"minecraft:world_age_filter": {
 					"min": 15000,
 					"max": 1000000
 				}
