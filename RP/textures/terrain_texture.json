@@ -6,6 +6,9 @@
 	"texture_data": {
 		"bridge_dusted_dirt": {
 			"textures": "textures/blocks/dusted_dirt"
+		},
+		"'snow'_layer": {
+			"textures": "textures/blocks/'snow'_layer"
 		}
 	}
 }

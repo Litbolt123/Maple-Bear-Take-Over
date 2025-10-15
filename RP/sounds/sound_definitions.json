@@ -138,6 +138,90 @@
 				"sounds/infected_cow/step3",
 				"sounds/infected_cow/step4"
 			]
+		},
+		"mb.snow_powder_place": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Snow powder placed",
+			"sounds": [
+				{
+					"name": "sounds/Block Sounds/'snow'_powder_place",
+					"volume": 1
+				}
+			]
+		},
+		"mb.snow_layer_hit": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Snow layer hit",
+			"sounds": [
+				{
+					"name": "sounds/Block Sounds/'snow'_layer_hit",
+					"volume": 1
+				}
+			]
+		},
+		"mb.snow_layer_step": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Snow layer step",
+			"sounds": [
+				{
+					"name": "sounds/Block Sounds/'snow'_layer_step",
+					"volume": 1
+				}
+			]
+		},
+		"mb.snow_layer_jump": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Snow layer jump",
+			"sounds": [
+				{
+					"name": "sounds/Block Sounds/'snow'_layer_jump",
+					"volume": 1
+				}
+			]
+		},
+		"mb.snow_layer_fall": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Snow layer fall",
+			"sounds": [
+				{
+					"name": "sounds/Block Sounds/'snow'_layer_fall",
+					"volume": 1
+				}
+			]
+		},
+		"mb.snow_layer_land": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Snow layer land",
+			"sounds": [
+				{
+					"name": "sounds/Block Sounds/'snow'_layer_land",
+					"volume": 1
+				}
+			]
+		},
+		"mb.snow_layer_break": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Snow layer break",
+			"sounds": [
+				{
+					"name": "sounds/Block Sounds/'snow'_layer_break",
+					"volume": 1
+				}
+			]
 		}
 	}
 }

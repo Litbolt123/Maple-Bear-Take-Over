@@ -19,7 +19,8 @@
 			"minecraft:display_name": "Dusted Dirt",
 			"minecraft:destructible_by_explosion": true,
 			"minecraft:light_dampening": 15,
-			"minecraft:collision_box": true
+			"minecraft:collision_box": true,
+			"minecraft:loot": "loot_tables/blocks/dusted_dirt.json"
 		}
 	}
 }

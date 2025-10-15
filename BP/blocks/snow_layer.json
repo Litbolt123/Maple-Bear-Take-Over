@@ -1,0 +1,54 @@
+{
+	"format_version": "1.21.80",
+	"minecraft:block": {
+		"description": {
+			"identifier": "mb:snow_layer",
+			"menu_category": {
+				"category": "nature"
+			},
+			"is_experimental": false
+		},
+		"sound": "mb:snow_layer",
+		"components": {
+			"minecraft:display_name": "'Snow' Layer",
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 0.1
+			},
+			"minecraft:destructible_by_explosion": {
+				"explosion_resistance": 0.1
+			},
+			"minecraft:geometry": "geometry.'snow'_layer",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "'snow'_layer",
+					"render_method": "alpha_test"
+				}
+			},
+			"minecraft:collision_box": {
+				"origin": [
+					-8,
+					0,
+					-8
+				],
+				"size": [
+					16,
+					1,
+					16
+				]
+			},
+			"minecraft:selection_box": {
+				"origin": [
+					-8,
+					0,
+					-8
+				],
+				"size": [
+					16,
+					1,
+					16
+				]
+			},
+			"minecraft:loot": "loot_tables/blocks/snow_layer.json"
+		}
+	}
+}

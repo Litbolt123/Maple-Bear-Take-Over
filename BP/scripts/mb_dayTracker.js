@@ -172,23 +172,30 @@ export function checkDailyEventsForAllPlayers() {
         // Record events one day after they occur (reflection on previous day)
         const dayToRecord = currentDay - 1;
         
+        console.log(`[DAILY EVENTS] Current Day: ${currentDay}, Recording events for Day: ${dayToRecord}`);
+        
         if (dayToRecord <= 0) return; // No events to record for day 0 or negative days
         
         const events = [];
         
         // Day 2: Tiny Maple Bears start spawning
         if (dayToRecord === 2) {
-            events.push("Tiny Maple Bears began appearing in the world. The infection spreads...");
+            events.push("You notice strange, tiny white bears beginning to emerge from the shadows. Their eyes seem to follow you wherever you go, and they leave behind a peculiar white dust wherever they step. These creatures appear to be drawn to larger animals, and you've witnessed them attacking and converting other creatures into more of their kind. The infection has begun its silent spread across the land.");
         }
         
         // Day 4: Normal Infected Maple Bears start spawning
         if (dayToRecord === 4) {
-            events.push("Larger, more dangerous Infected Maple Bears have emerged. The situation grows dire.");
+            events.push("The tiny bears have evolved into more dangerous variants. You've observed infected Maple Bears that are larger and more aggressive than their predecessors. These creatures seem to have developed a taste for corruption, actively seeking out and transforming other animals. The white dust they leave behind has become more concentrated, and you've noticed it seems to affect the very ground they walk on.");
         }
         
         // Day 8: Buff Maple Bears start spawning
         if (dayToRecord === 8) {
-            events.push("Massive Buff Maple Bears now roam the land. The infection has reached a critical stage.");
+            events.push("A new threat has emerged - massive Buff Maple Bears that tower over their smaller counterparts. These behemoths are incredibly dangerous and seem to possess an intelligence that the smaller variants lack. They actively hunt larger creatures and have been observed coordinating attacks. The infection has reached a critical point, with these powerful variants capable of spreading the corruption at an alarming rate.");
+        }
+        
+        // Day 13: Day 13+ variants start spawning
+        if (dayToRecord === 13) {
+            events.push("The infection has reached its most advanced stage. The most powerful Maple Bear variants have appeared, combining the intelligence of the Buff Bears with enhanced abilities. These creatures are no longer just spreading infection - they seem to be actively building something, creating structures from the white dust and corrupted materials. The very landscape is beginning to change under their influence, and the infection has become an unstoppable force of nature.");
         }
         
         // Day 5: Day 4+ variants unlock (reflection on day 4)
@@ -201,11 +208,6 @@ export function checkDailyEventsForAllPlayers() {
             events.push("The most dangerous Maple Bear variants yet have been documented. The infection continues to evolve.");
         }
         
-        // Day 13: Day 13+ variants start spawning
-        if (dayToRecord === 13) {
-            events.push("The infection has increased to new heights. Powerful variants are beginning to emerge.");
-        }
-        
         // Day 14: Day 13+ variants unlock (reflection on day 13)
         if (dayToRecord === 14) {
             events.push("The most advanced Maple Bear variants have been observed. The infection has reached unprecedented levels.");
@@ -213,13 +215,44 @@ export function checkDailyEventsForAllPlayers() {
         
         // Record events for all players if any events occurred
         if (events.length > 0) {
-            const eventText = events.join(" ");
             for (const player of world.getAllPlayers()) {
-                if (player && player.isValid()) {
+                if (player && player.isValid) {
                     const codex = getCodex(player);
-                    // Only record if we haven't already recorded for this day
-                    if (!codex.dailyEvents || !codex.dailyEvents[dayToRecord]) {
-                        recordDailyEvent(player, dayToRecord, eventText);
+                    if (!codex.dailyEvents) {
+                        codex.dailyEvents = {};
+                    }
+                    if (!codex.dailyEvents[dayToRecord]) {
+                        codex.dailyEvents[dayToRecord] = [];
+                    }
+                    
+                    // Record each event individually, checking for duplicates
+                    let hasNewEvents = false;
+                    for (const event of events) {
+                        if (!codex.dailyEvents[dayToRecord].includes(event)) {
+                            codex.dailyEvents[dayToRecord].push(event);
+                            hasNewEvents = true;
+                        }
+                    }
+                    
+                    // Only save and play sounds if we actually added new events
+                    if (hasNewEvents) {
+                        saveCodex(player, codex);
+                        
+                        // Play sound and send message for milestone days (like item discovery)
+                        if (dayToRecord === 2 || dayToRecord === 4 || dayToRecord === 8 || dayToRecord === 13) {
+                            try {
+                                // Play discovery sound
+                                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                                player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+                                
+                                // Send discovery message
+                                player.sendMessage("§7You feel your thoughts organizing... New insights about yesterday's events have been recorded in your mind.");
+                            } catch (err) {
+                                console.warn("[ERROR] in milestone discovery sound/message:", err);
+                            }
+                        }
+                        
+                        console.log(`[DAILY EVENTS] Recorded Day ${dayToRecord} events for ${player.name}`);
                     }
                 }
             }
@@ -283,6 +316,26 @@ export function getInfectionMessage(type, level = "normal") {
             }
         };
         return lateMessages[type]?.[level] || lateMessages[type]?.infected || "§4You are in grave danger...";
+    }
+}
+
+/**
+ * Get the milestone message for a specific day
+ * @param {number} day The day number
+ * @returns {string} The milestone message
+ */
+function getMilestoneMessage(day) {
+    switch (day) {
+        case 2:
+            return "You notice strange, tiny white bears beginning to emerge from the shadows. Their eyes seem to follow you wherever you go, and they leave behind a peculiar white dust wherever they step. These creatures appear to be drawn to larger animals, and you've witnessed them attacking and converting other creatures into more of their kind. The infection has begun its silent spread across the land.";
+        case 4:
+            return "The tiny bears have evolved into more dangerous variants. You've observed infected Maple Bears that are larger and more aggressive than their predecessors. These creatures seem to have developed a taste for corruption, actively seeking out and transforming other animals. The white dust they leave behind has become more concentrated, and you've noticed it seems to affect the very ground they walk on.";
+        case 8:
+            return "A new threat has emerged - massive Buff Maple Bears that tower over their smaller counterparts. These behemoths are incredibly dangerous and seem to possess an intelligence that the smaller variants lack. They actively hunt larger creatures and have been observed coordinating attacks. The infection has reached a critical point, with these powerful variants capable of spreading the corruption at an alarming rate.";
+        case 13:
+            return "The infection has reached its most advanced stage. The most powerful Maple Bear variants have appeared, combining the intelligence of the Buff Bears with enhanced abilities. These creatures are no longer just spreading infection - they seem to be actively building something, creating structures from the white dust and corrupted materials. The very landscape is beginning to change under their influence, and the infection has become an unstoppable force of nature.";
+        default:
+            return `Day ${day} has passed, and the infection continues to evolve in ways you never imagined possible.`;
     }
 }
 
@@ -463,9 +516,10 @@ function startDayCycleLoop() {
                     }
                 }
 
-                // Send chat message for new day and world age
+                // Send chat message for new day
                 const worldAge = world.getAbsoluteTime ? world.getAbsoluteTime() : world.getTime();
-                world.sendMessage(`${displayInfo.color}${displayInfo.symbols} A new day begins... Day ${newDay} §7(World age: §b${worldAge}§7 ticks)`);
+                console.log(`🌅 Day ${newDay} - World age: ${worldAge} ticks`);
+                world.sendMessage(`${displayInfo.color}${displayInfo.symbols} A new day begins... Day ${newDay}`);
 
                 // Handle milestone days
                 if (isMilestoneDay(newDay)) {
@@ -488,12 +542,12 @@ function startDayCycleLoop() {
  * Handles milestone day events
  * @param {number} day The milestone day reached
  */
-export async function mbiHandleMilestoneDay(day) {
+export function mbiHandleMilestoneDay(day) {
     system.runTimeout(() => {
         try {
             // Broadcast milestone message
             world.sendMessage(`§8[MBI] §6Milestone reached: Day ${day}`);
-            // Play milestone sound and show title for all players
+            // Play milestone sound, show title, and record in codex for all players
             for (const player of world.getAllPlayers()) {
                 try {
                     if (player && player.isValid) {
@@ -508,6 +562,7 @@ export async function mbiHandleMilestoneDay(day) {
                         } catch (err) {
                             console.warn("[ERROR] in showPlayerTitle:", err);
                         }
+                        
                     }
                 } catch (err) {
                     console.warn("[ERROR] in player milestone for-loop:", err);
@@ -588,7 +643,7 @@ function runMilestoneSpawnPulse(day) {
     const players = world.getAllPlayers();
     for (const player of players) {
         try {
-            if (!player || !player.isValid()) continue;
+            if (!player || !player.isValid) continue;
 
             const base = player.location;
             const dim = player.dimension;
@@ -658,7 +713,7 @@ function isLiquid(typeId) {
 /**
  * Initializes the day tracking system
  */
-export async function initializeDayTracking() {
+export function initializeDayTracking() {
     try {
         // Check if we've already initialized
         if (world.getDynamicProperty(INITIALIZED_FLAG)) {
@@ -731,8 +786,8 @@ export async function initializeDayTracking() {
             console.warn("[ERROR STACK]", error.stack);
         }
         // Retry after a short delay
-        system.runTimeout(async () => {
-            await initializeDayTracking();
+        system.runTimeout(() => {
+            initializeDayTracking();
         }, 20);
     }
 }
@@ -786,11 +841,11 @@ world.afterEvents.playerJoin.subscribe((event) => {
                         const isFirstTimePlayer = !returningPlayers.has(playerName);
 
                         // Add an additional delay before showing messages
-                        system.runTimeout(async () => {
+                        system.runTimeout(() => {
                             try {
                                 if (isFirstTimeInit) {
                                     console.log("First time world initialization");
-                                    await initializeDayTracking();
+                                    initializeDayTracking();
                                     // initializeDayTracking already shows the welcome message
                                 } else {
                                     // Show join message for subsequent joins

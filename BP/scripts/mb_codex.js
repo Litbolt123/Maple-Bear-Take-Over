@@ -234,6 +234,13 @@ export function showCodexBook(player, context) {
             buttonActions.push(() => openItems());
         }
         
+        // Biomes section - only if infected biome discovered
+        const hasAnyBiomes = codex.biomes && codex.biomes.infectedBiomeSeen;
+        if (hasAnyBiomes) {
+            buttons.push("§fBiomes");
+            buttonActions.push(() => openBiomes());
+        }
+        
         // Daily Log section - always available
         buttons.push("§fDaily Log");
         buttonActions.push(() => openDailyLog());
@@ -929,6 +936,26 @@ export function showCodexBook(player, context) {
             } else {
                 openMain();
             }
+        });
+    }
+    
+    function openBiomes() {
+        const codex = getCodex(player);
+        const form = new ActionFormData().title("§6Biomes");
+        
+        let body = "§7Biomes discovered:\n\n";
+        
+        if (codex.biomes && codex.biomes.infectedBiomeSeen) {
+            body += "§fInfected Biome\n§7A corrupted landscape where the Maple Bear infection thrives. The ground is covered in a layer of white dust, and the very air feels heavy with an unsettling presence.";
+        } else {
+            body += "§8No biomes discovered yet.";
+        }
+        
+        form.body(body);
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled) return openMain();
+            openMain();
         });
     }
 

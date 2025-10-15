@@ -2,28 +2,18 @@
 	"entity_sounds": {
 		"entities": {
 			"mb:mb": {
-				"volume": [
-					1
-				],
-				"pitch": [
-					1
-				],
+				"volume": 1,
+				"pitch": 1,
 				"events": {
 					"step": {
 						"sound": "tiny_mb_step",
-						"volume": [
-							1
-						],
-						"pitch": [
-							1
-						]
+						"volume": 1,
+						"pitch": 1
 					}
 				}
 			},
 			"mb:buff_mb": {
-				"volume": [
-					1
-				],
+				"volume": 1,
 				"pitch": 1,
 				"events": {
 					"step": {
@@ -61,9 +51,7 @@
 						"volume": 0.2
 					}
 				},
-				"pitch": [
-					0.6
-				]
+				"pitch": 0.6
 			},
 			"mb:infected_cow": {
 				"events": {
@@ -71,34 +59,22 @@
 					"death": "mob.infected_cow.hurt",
 					"hurt": "mob.infected_cow.hurt",
 					"step": {
-						"pitch": [
-							1.1
-						],
+						"pitch": 1.1,
 						"sound": "mob.infected_cow.step",
-						"volume": [
-							0.55
-						]
+						"volume": 0.55
 					}
 				},
 				"volume": 1,
 				"pitch": 0.5
 			},
 			"mb:mb_day13": {
-				"volume": [
-					1
-				],
-				"pitch": [
-					1
-				],
+				"volume": 1,
+				"pitch": 1,
 				"events": {
 					"step": {
 						"sound": "tiny_mb_step",
-						"volume": [
-							1
-						],
-						"pitch": [
-							1
-						]
+						"volume": 1,
+						"pitch": 1
 					}
 				}
 			},
@@ -114,9 +90,7 @@
 				}
 			},
 			"mb:buff_mb_day13": {
-				"volume": [
-					1
-				],
+				"volume": 1,
 				"pitch": 1,
 				"events": {
 					"step": {
@@ -124,6 +98,31 @@
 						"volume": 1,
 						"pitch": 1
 					}
+				}
+			}
+		}
+	},
+	"block_sounds": {
+		"mb:snow_layer": {
+			"pitch": 1,
+			"volume": 2,
+			"events": {
+				"break": "mb.snow_layer_break",
+				"hit": "mb.snow_layer_hit",
+				"place": "mb.snow_powder_place"
+			}
+		}
+	},
+	"interactive_sounds": {
+		"block_sounds": {
+			"mb:snow_layer": {
+				"pitch": 1,
+				"volume": 1,
+				"events": {
+					"fall": "mb.snow_layer_fall",
+					"jump": "mb.snow_layer_jump",
+					"step": "mb.snow_layer_step",
+					"land": "mb.snow_layer_land"
 				}
 			}
 		}
