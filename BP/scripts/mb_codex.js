@@ -60,7 +60,8 @@ export function getDefaultCodex() {
             day4VariantsUnlocked: false,
             day8VariantsUnlocked: false,
             day13VariantsUnlocked: false
-        }
+        },
+        biomes: { infectedBiomeSeen: false }
     };
 }
 
@@ -235,7 +236,7 @@ export function showCodexBook(player, context) {
         }
         
         // Biomes section - only if infected biome discovered
-        const hasAnyBiomes = codex.biomes && codex.biomes.infectedBiomeSeen;
+        const hasAnyBiomes = codex.biomes.infectedBiomeSeen;
         if (hasAnyBiomes) {
             buttons.push("§fBiomes");
             buttonActions.push(() => openBiomes());
@@ -350,7 +351,7 @@ export function showCodexBook(player, context) {
             form.button("§8Back");
         }
         form.show(player).then((res) => {
-            if (!res || res.canceled) return openMain();
+            if (!res || res.canceled) return;
             
             // If no content available, just go back
             if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects) {
@@ -945,7 +946,7 @@ export function showCodexBook(player, context) {
         
         let body = "§7Biomes discovered:\n\n";
         
-        if (codex.biomes && codex.biomes.infectedBiomeSeen) {
+        if (codex.biomes.infectedBiomeSeen) {
             body += "§fInfected Biome\n§7A corrupted landscape where the Maple Bear infection thrives. The ground is covered in a layer of white dust, and the very air feels heavy with an unsettling presence.";
         } else {
             body += "§8No biomes discovered yet.";
@@ -954,7 +955,6 @@ export function showCodexBook(player, context) {
         form.body(body);
         form.button("§8Back");
         form.show(player).then((res) => {
-            if (!res || res.canceled) return openMain();
             openMain();
         });
     }

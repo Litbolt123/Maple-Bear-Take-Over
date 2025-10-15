@@ -178,24 +178,10 @@ export function checkDailyEventsForAllPlayers() {
         
         const events = [];
         
-        // Day 2: Tiny Maple Bears start spawning
-        if (dayToRecord === 2) {
-            events.push("You notice strange, tiny white bears beginning to emerge from the shadows. Their eyes seem to follow you wherever you go, and they leave behind a peculiar white dust wherever they step. These creatures appear to be drawn to larger animals, and you've witnessed them attacking and converting other creatures into more of their kind. The infection has begun its silent spread across the land.");
-        }
-        
-        // Day 4: Normal Infected Maple Bears start spawning
-        if (dayToRecord === 4) {
-            events.push("The tiny bears have evolved into more dangerous variants. You've observed infected Maple Bears that are larger and more aggressive than their predecessors. These creatures seem to have developed a taste for corruption, actively seeking out and transforming other animals. The white dust they leave behind has become more concentrated, and you've noticed it seems to affect the very ground they walk on.");
-        }
-        
-        // Day 8: Buff Maple Bears start spawning
-        if (dayToRecord === 8) {
-            events.push("A new threat has emerged - massive Buff Maple Bears that tower over their smaller counterparts. These behemoths are incredibly dangerous and seem to possess an intelligence that the smaller variants lack. They actively hunt larger creatures and have been observed coordinating attacks. The infection has reached a critical point, with these powerful variants capable of spreading the corruption at an alarming rate.");
-        }
-        
-        // Day 13: Day 13+ variants start spawning
-        if (dayToRecord === 13) {
-            events.push("The infection has reached its most advanced stage. The most powerful Maple Bear variants have appeared, combining the intelligence of the Buff Bears with enhanced abilities. These creatures are no longer just spreading infection - they seem to be actively building something, creating structures from the white dust and corrupted materials. The very landscape is beginning to change under their influence, and the infection has become an unstoppable force of nature.");
+        // Use the centralized milestone message function
+        const milestoneMessage = getMilestoneMessage(dayToRecord);
+        if (milestoneMessage) {
+            events.push(milestoneMessage);
         }
         
         // Day 5: Day 4+ variants unlock (reflection on day 4)

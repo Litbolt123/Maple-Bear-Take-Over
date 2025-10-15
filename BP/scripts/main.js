@@ -48,6 +48,34 @@ const INFECTED_TAG = "mb_infected";
 const INFECTED_CORPSE_ID = "mb:infected_corpse";
 const SNOW_LAYER_BLOCK = "minecraft:snow_layer";
 
+// Biome check optimization
+const BIOME_CHECK_COOLDOWN = 200; // 10 seconds in ticks (200 ticks = 10 seconds)
+const biomeCheckCache = new Map(); // playerId -> lastCheckTick
+
+// Debug flag for snow mechanics
+const DEBUG_SNOW_MECHANICS = false;
+
+// Helper: robust biome id at location (moved to module scope for performance)
+function getBiomeIdAt(dimension, location) {
+    try {
+        const b = dimension.getBiome(location);
+        if (b && typeof b === "object" && b.id) return b.id;
+        if (typeof b === "string") return b;
+    } catch {}
+    try {
+        const loc = dimension.findClosestBiome(location, "mb:infected_biome", { boundingSize: { x: 48, y: 64, z: 48 } });
+        if (loc) {
+            const dx = Math.floor(loc.x) - Math.floor(location.x);
+            const dz = Math.floor(loc.z) - Math.floor(location.z);
+            const match = dx === 0 && dz === 0;
+            if (match) {
+                return "mb:infected_biome";
+            }
+        }
+    } catch {}
+    return null;
+}
+
 // Progressive Infection Rate System Constants
 const INFECTION_RATE_CONFIG = {
     DAY_2_RATE: 0.20,    // 20% on day 2
@@ -2233,31 +2261,18 @@ system.runInterval(() => {
         }
     } catch {}
     
-    // Biome discovery system - check if player is in infected biome (with detailed logs)
+    // Biome discovery system - check if player is in infected biome (optimized with cooldown)
     try {
-        // Helper: robust biome id at location (direct getBiome, else bounded findClosestBiome for our target biome)
-        function getBiomeIdAt(dimension, location) {
-            try {
-                const b = dimension.getBiome(location);
-                if (b && typeof b === "object" && b.id) return b.id;
-                if (typeof b === "string") return b;
-            } catch {}
-            try {
-                const loc = dimension.findClosestBiome(location, "mb:infected_biome", { boundingSize: { x: 48, y: 64, z: 48 } });
-                if (loc) {
-                    const dx = Math.floor(loc.x) - Math.floor(location.x);
-                    const dz = Math.floor(loc.z) - Math.floor(location.z);
-                    const match = dx === 0 && dz === 0;
-                    if (match) {
-                        return "mb:infected_biome";
-                    }
-                }
-            } catch {}
-            return null;
-        }
-
+        const currentTick = system.currentTick || Date.now();
+        
         for (const p of world.getAllPlayers()) {
             try {
+                // Check cooldown to avoid expensive biome checks
+                const lastCheck = biomeCheckCache.get(p.id) || 0;
+                if (currentTick - lastCheck < BIOME_CHECK_COOLDOWN) {
+                    continue; // Skip this player, cooldown not expired
+                }
+                
                 const biomeId = getBiomeIdAt(p.dimension, p.location);
                 // Extra fallback: check block underfoot for dusted dirt as a proxy (biome visuals may lag)
                 let onDusted = false;
@@ -2268,9 +2283,6 @@ system.runInterval(() => {
 
                 if ((biomeId && (biomeId === "mb:infected_biome" || biomeId.includes("infected_biome"))) || onDusted) {
                     const codex = getCodex(p);
-                    if (!codex.biomes) {
-                        codex.biomes = {};
-                    }
                     if (!codex.biomes.infectedBiomeSeen) {
                         codex.biomes.infectedBiomeSeen = true;
                         markCodex(p, "biomes.infectedBiomeSeen");
@@ -2279,6 +2291,9 @@ system.runInterval(() => {
                         saveCodex(p, codex);
                     }
                 }
+                
+                // Update cooldown cache
+                biomeCheckCache.set(p.id, currentTick);
             } catch {}
         }
     } catch {}
@@ -3045,11 +3060,15 @@ world.beforeEvents.itemUse.subscribe((event) => {
     const player = event.source;
     const item = event.itemStack;
     
-    console.log(`[SNOW DEBUG] itemUse event fired - Player: ${player?.name}, Item: ${item?.typeId}`);
+    if (DEBUG_SNOW_MECHANICS) {
+        console.log(`[SNOW DEBUG] itemUse event fired - Player: ${player?.name}, Item: ${item?.typeId}`);
+    }
 
     // Infection Tracker Book - GAMEPLAY FEATURE
     if (item?.typeId === "mb:snow_book") {
-        console.log("[SNOW DEBUG] Snow book detected, canceling event");
+        if (DEBUG_SNOW_MECHANICS) {
+            console.log("[SNOW DEBUG] Snow book detected, canceling event");
+        }
         event.cancel = true;
         system.run(() => {
             try { 
@@ -3080,20 +3099,16 @@ world.beforeEvents.itemUse.subscribe((event) => {
 
 // Handle snow layer placement and block conversion underneath
 world.afterEvents.playerPlaceBlock.subscribe((event) => {
-    const player = event.player;
     const block = event.block;
     
-    console.log(`[SNOW DEBUG] playerPlaceBlock fired - Player: ${player?.name}, Block: ${block?.typeId} at ${block?.x},${block?.y},${block?.z}`);
-    
+    // Only handle snow layer blocks
     if (block?.typeId === "mb:snow_layer") {
-        console.log(`[SNOW DEBUG] Snow layer placed at ${block.x},${block.y},${block.z}`);
-        
-        const dim = player.dimension;
+        const dim = event.player.dimension;
         const belowPos = { x: block.x, y: block.y - 1, z: block.z };
         
         const convertible = new Set([
             "minecraft:dirt",
-            "minecraft:grass_block",
+            "minecraft:grass_block", 
             "minecraft:podzol",
             "minecraft:coarse_dirt",
             "minecraft:mycelium",
@@ -3104,36 +3119,18 @@ world.afterEvents.playerPlaceBlock.subscribe((event) => {
             "minecraft:grass_path"
         ]);
 
-        // Check the block underneath the snow layer
+        // Check and convert block underneath
         const belowBlock = dim.getBlock(belowPos);
-        console.log(`[SNOW DEBUG] Block below snow layer: ${belowBlock?.typeId}`);
-        
         if (belowBlock && convertible.has(belowBlock.typeId)) {
-            console.log(`[SNOW DEBUG] Converting ${belowBlock.typeId} to mb:dusted_dirt`);
-            
-            // Convert the block underneath
             system.run(() => {
                 try {
                     belowBlock.setType("mb:dusted_dirt");
-                    console.log("[SNOW DEBUG] Block converted successfully");
-                    
                     // Add particle effect
-                    try { 
-                        dim.runCommand(`particle minecraft:snowflake ${Math.floor(belowPos.x)} ${Math.floor(belowPos.y + 1)} ${Math.floor(belowPos.z)}`); 
-                        console.log("[SNOW DEBUG] Particle effect added");
-                    } catch (e) {
-                        console.warn("[SNOW DEBUG] Error adding particle effect:", e);
-                    }
-                    
-                    // Note: Custom placement sound is now handled by block sound system
+                    dim.runCommand(`particle minecraft:snowflake ${Math.floor(belowPos.x)} ${Math.floor(belowPos.y + 1)} ${Math.floor(belowPos.z)}`);
                 } catch (e) {
-                    console.warn("[SNOW DEBUG] Error during block conversion:", e);
+                    // Silently handle errors
                 }
             });
-        } else {
-            console.log(`[SNOW DEBUG] Block ${belowBlock?.typeId} is not convertible`);
-            
-            // Note: Custom placement sound is now handled by block sound system
         }
     }
 });
