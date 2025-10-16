@@ -465,9 +465,6 @@ export function showCodexBook(player, context) {
         })();
         const summary = [];
         
-        // Check knowledge progression first
-        checkKnowledgeProgression(player);
-        
         // Add current day
         const currentDay = getCurrentDay ? getCurrentDay() : 0;
         const display = typeof getDayDisplayInfo === 'function' ? getDayDisplayInfo(currentDay) : { color: '§f', symbols: '' };

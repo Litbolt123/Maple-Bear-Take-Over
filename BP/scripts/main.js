@@ -248,6 +248,16 @@ function checkAndUnlockMobDiscovery(codex, player, killType, mobKillType, hitTyp
         if (requiredKills === 1) {
             player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
         }
+        
+        // Update knowledge progression after discovery
+        try {
+            if (typeof checkKnowledgeProgression === 'function') {
+                checkKnowledgeProgression(player);
+            }
+        } catch (error) {
+            console.warn(`[ERROR] Failed to update knowledge progression after mob discovery:`, error);
+        }
+        
         return true;
     }
     return false;
@@ -368,6 +378,34 @@ function trackMobKill(killer, victim) {
         console.warn(`[MOB KILL] Error tracking mob kill by ${killer.typeId}:`, error);
     }
 }
+
+/**
+ * Helper function to unlock day 4+ variants for a specific bear type
+ * @param {Player} player The player
+ * @param {Object} codex The codex object
+ * @param {boolean} condition The unlock condition
+ * @param {string} individualFlagKey The individual flag property name
+ * @param {string} logLabel The label for console logging
+ */
+function unlockDay4Variant(player, codex, condition, individualFlagKey, logLabel) {
+    if (condition) {
+        codex.mobs.day4VariantsUnlocked = true; // Global flag for codex display
+        codex.mobs[individualFlagKey] = true; // Individual flag
+        
+        // Show unlock message
+        if (codex.items.snowBookCrafted) {
+            player.sendMessage("§6§lNew Discovery... §eDay 4+ variants unlocked in your codex.");
+            player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+            player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+        } else {
+            player.sendMessage("§7You feel your knowledge expanding...");
+            player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
+            player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
+        }
+        console.log(`[CODEX] ${player.name} unlocked ${logLabel} day 4+ variants`);
+    }
+}
+
 function checkVariantUnlock(player, codexParam = null) {
     try {
         const codex = codexParam || getCodex(player);
@@ -393,74 +431,11 @@ function checkVariantUnlock(player, codexParam = null) {
         const buffBearUnlock = (codex.mobs.buffBearKills || 0) >= 3 && !codex.mobs.day4VariantsUnlockedBuff;
         const otherMobUnlock = ((codex.mobs.infectedPigKills || 0) >= 3 || (codex.mobs.infectedCowKills || 0) >= 3) && !codex.mobs.day4VariantsUnlockedOther;
         
-        // Check each bear type individually
-        if (dayUnlock || tinyBearUnlock) {
-            codex.mobs.day4VariantsUnlocked = true; // Global flag for codex display
-            codex.mobs.day4VariantsUnlockedTiny = true; // Individual flag
-            
-            // Show unlock message
-            if (codex.items.snowBookCrafted) {
-                player.sendMessage("§6§lNew Discovery... §eDay 4+ variants unlocked in your codex.");
-                player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
-                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-            } else {
-                player.sendMessage("§7You feel your knowledge expanding...");
-                player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
-                player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
-            }
-            console.log(`[CODEX] ${player.name} unlocked Tiny Bear day 4+ variants`);
-        }
-        
-        if (dayUnlock || infectedBearUnlock) {
-            codex.mobs.day4VariantsUnlocked = true; // Global flag for codex display
-            codex.mobs.day4VariantsUnlockedInfected = true; // Individual flag
-            
-            // Show unlock message
-            if (codex.items.snowBookCrafted) {
-                player.sendMessage("§6§lNew Discovery... §eDay 4+ variants unlocked in your codex.");
-                player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
-                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-            } else {
-                player.sendMessage("§7You feel your knowledge expanding...");
-                player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
-                player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
-            }
-            console.log(`[CODEX] ${player.name} unlocked Infected Bear day 4+ variants`);
-        }
-        
-        if (dayUnlock || buffBearUnlock) {
-            codex.mobs.day4VariantsUnlocked = true; // Global flag for codex display
-            codex.mobs.day4VariantsUnlockedBuff = true; // Individual flag
-            
-            // Show unlock message
-            if (codex.items.snowBookCrafted) {
-                player.sendMessage("§6§lNew Discovery... §eDay 4+ variants unlocked in your codex.");
-                player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
-                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-            } else {
-                player.sendMessage("§7You feel your knowledge expanding...");
-                player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
-                player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
-            }
-            console.log(`[CODEX] ${player.name} unlocked Buff Bear day 4+ variants`);
-        }
-        
-        if (dayUnlock || otherMobUnlock) {
-            codex.mobs.day4VariantsUnlocked = true; // Global flag for codex display
-            codex.mobs.day4VariantsUnlockedOther = true; // Individual flag
-            
-            // Show unlock message
-            if (codex.items.snowBookCrafted) {
-                player.sendMessage("§6§lNew Discovery... §eDay 4+ variants unlocked in your codex.");
-                player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
-                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-            } else {
-                player.sendMessage("§7You feel your knowledge expanding...");
-                player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
-                player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
-            }
-            console.log(`[CODEX] ${player.name} unlocked Other Mob day 4+ variants`);
-        }
+        // Check each bear type individually using helper function
+        unlockDay4Variant(player, codex, dayUnlock || tinyBearUnlock, "day4VariantsUnlockedTiny", "Tiny Bear");
+        unlockDay4Variant(player, codex, dayUnlock || infectedBearUnlock, "day4VariantsUnlockedInfected", "Infected Bear");
+        unlockDay4Variant(player, codex, dayUnlock || buffBearUnlock, "day4VariantsUnlockedBuff", "Buff Bear");
+        unlockDay4Variant(player, codex, dayUnlock || otherMobUnlock, "day4VariantsUnlockedOther", "Other Mob");
         
         // Check for day 8+ variant unlock (either by day OR by 3 kills of day 4+ variants)
         if (!codex.mobs.day8VariantsUnlocked) {
@@ -528,6 +503,15 @@ function checkVariantUnlock(player, codexParam = null) {
                 }
                 console.log(`[CODEX] ${player.name} unlocked day 13+ variants`);
             }
+        }
+        
+        // Update knowledge progression after variant unlock check
+        try {
+            if (typeof checkKnowledgeProgression === 'function') {
+                checkKnowledgeProgression(player);
+            }
+        } catch (error) {
+            console.warn(`[ERROR] Failed to update knowledge progression after variant unlock:`, error);
         }
     } catch (error) {
         console.warn(`[VARIANT] Error checking variant unlock for ${player.name}:`, error);
@@ -737,6 +721,15 @@ function trackInfectionHistory(player, event) {
         
         // Save updated codex
         player.setDynamicProperty("mb_codex", JSON.stringify(codex));
+        
+        // Update knowledge progression after infection history change
+        try {
+            if (typeof checkKnowledgeProgression === 'function') {
+                checkKnowledgeProgression(player);
+            }
+        } catch (error) {
+            console.warn(`[ERROR] Failed to update knowledge progression after infection history:`, error);
+        }
     } catch (error) {
         console.warn(`[HISTORY] Error tracking infection history for ${player.name}:`, error);
     }
@@ -771,6 +764,15 @@ function trackInfectionExperience(player, source, severity = 0) {
         
         infectionExperience.set(player.id, experience);
         console.log(`[EXPERIENCE] ${player.name} infection experience updated: ${JSON.stringify(experience)}`);
+        
+        // Update knowledge progression after infection experience change
+        try {
+            if (typeof checkKnowledgeProgression === 'function') {
+                checkKnowledgeProgression(player);
+            }
+        } catch (error) {
+            console.warn(`[ERROR] Failed to update knowledge progression after infection experience:`, error);
+        }
     } catch (error) {
         console.warn(`[EXPERIENCE] Error tracking infection experience for ${player.name}:`, error);
     }
@@ -3226,7 +3228,12 @@ world.beforeEvents.itemUse.subscribe((event) => {
             if (nearbyPlayers.length > 0) {
                 // Share knowledge with all nearby players (silently if on cooldown)
                 for (const targetPlayer of nearbyPlayers) {
-                    shareKnowledge(player, targetPlayer);
+                    try {
+                        shareKnowledge(player, targetPlayer);
+                    } catch (error) {
+                        console.error(`[ERROR] Failed to share knowledge from player ${player.id} to target ${targetPlayer.id}:`, error);
+                        // Continue to next player - don't let one failure stop the loop
+                    }
                 }
                 
                 // Continue to open codex after sharing (no messages about cooldowns)

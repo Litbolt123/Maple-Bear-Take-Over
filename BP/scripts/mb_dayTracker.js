@@ -73,6 +73,15 @@ export function getDayDisplayInfo(day) {
  * @returns {object} Object with message, title, and actionbar text
  */
 function getReturningPlayerWelcome(day, player) {
+    // Validate player before calling getKnowledgeLevel
+    if (!player) {
+        return {
+            message: "§aWelcome back to your world...",
+            title: "§aWelcome Back!",
+            actionbar: "Everything seems peaceful here..."
+        };
+    }
+    
     const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
     const bearKnowledge = getKnowledgeLevel(player, 'bearLevel');
     
