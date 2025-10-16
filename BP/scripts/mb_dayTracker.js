@@ -1,5 +1,5 @@
 import { world, system } from "@minecraft/server";
-import { getCodex, saveCodex } from "./mb_codex.js";
+import { getCodex, saveCodex, getKnowledgeLevel, hasKnowledge, checkKnowledgeProgression } from "./mb_codex.js";
 
 // Minimal dynamic property test (must be delayed until after startup)
 // system.run(() => {
@@ -67,39 +67,79 @@ export function getDayDisplayInfo(day) {
 }
 
 /**
- * Get custom welcome message for returning players based on current day
+ * Get custom welcome message for returning players based on current day and knowledge
  * @param {number} day The current day
+ * @param {Player} player The player to get knowledge from
  * @returns {object} Object with message, title, and actionbar text
  */
-function getReturningPlayerWelcome(day) {
+function getReturningPlayerWelcome(day, player) {
+    const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
+    const bearKnowledge = getKnowledgeLevel(player, 'bearLevel');
+    
     if (day < 2) {
         // Days 0-1: Before Maple Bears spawn
         return {
-            message: "§aWelcome back to your normal world...",
+            message: "§aWelcome back to your world...",
             title: "§aWelcome Back!",
-            actionbar: "Everything is still peaceful here..."
+            actionbar: "Everything seems peaceful here..."
         };
     } else if (day < 4) {
         // Days 2-3: Tiny Maple Bears have started spawning
-        return {
-            message: "§eWelcome back! The tiny ones have emerged...",
-            title: "§e! Day " + day,
-            actionbar: "Small Maple Bears roam the land..."
-        };
+        if (bearKnowledge >= 1) {
+            return {
+                message: "§eWelcome back! The tiny ones have emerged...",
+                title: "§e! Day " + day,
+                actionbar: "Small white bears roam the land..."
+            };
+        } else {
+            return {
+                message: "§eWelcome back... something feels different.",
+                title: "§e! Day " + day,
+                actionbar: "You sense something has changed..."
+            };
+        }
     } else if (day < 8) {
         // Days 4-7: Normal infected Maple Bears have started spawning
-        return {
-            message: "§6Welcome back! The infection spreads...",
-            title: "§6!! Day " + day,
-            actionbar: "Infected Maple Bears are growing in number..."
-        };
+        if (infectionKnowledge >= 1) {
+            return {
+                message: "§6Welcome back! The infection spreads...",
+                title: "§6!! Day " + day,
+                actionbar: "Infected Maple Bears are growing in number..."
+            };
+        } else if (bearKnowledge >= 1) {
+            return {
+                message: "§6Welcome back! More dangerous creatures appear...",
+                title: "§6!! Day " + day,
+                actionbar: "Larger Maple Bears have emerged..."
+            };
+        } else {
+            return {
+                message: "§6Welcome back... the world grows more dangerous.",
+                title: "§6!! Day " + day,
+                actionbar: "Something ominous lurks nearby..."
+            };
+        }
     } else {
         // Day 8+: Buff Maple Bears have started spawning
-        return {
-            message: "§cWelcome back! The end draws near...",
-            title: "§c!!! Day " + day,
-            actionbar: "The most dangerous Maple Bears have arrived..."
-        };
+        if (infectionKnowledge >= 2) {
+            return {
+                message: "§cWelcome back! The end draws near...",
+                title: "§c!!! Day " + day,
+                actionbar: "The most dangerous Maple Bears have arrived..."
+            };
+        } else if (infectionKnowledge >= 1) {
+            return {
+                message: "§cWelcome back! The situation has become critical...",
+                title: "§c!!! Day " + day,
+                actionbar: "Massive threats have emerged..."
+            };
+        } else {
+            return {
+                message: "§cWelcome back... darkness approaches.",
+                title: "§c!!! Day " + day,
+                actionbar: "You feel an overwhelming sense of dread..."
+            };
+        }
     }
 }
 

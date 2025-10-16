@@ -1,6 +1,6 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
-import { getCodex, markCodex, showCodexBook, saveCodex } from "./mb_codex.js";
+import { getCodex, markCodex, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo } from "./mb_dayTracker.js";
 
 // NOTE: Debug and testing features have been commented out for playability
@@ -257,26 +257,60 @@ function trackBearKill(player, bearType) {
     try {
         const codex = getCodex(player);
         
-        // Track kills based on bear type and unlock discovery
-        if (bearType === MAPLE_BEAR_ID || bearType === MAPLE_BEAR_DAY4_ID || bearType === MAPLE_BEAR_DAY8_ID || bearType === MAPLE_BEAR_DAY13_ID) {
-            codex.mobs.tinyBearKills = (codex.mobs.tinyBearKills || 0) + 1; // Player kills this mob
+        // Initialize variant tracking if needed
+        if (!codex.mobs.variantKills) {
+            codex.mobs.variantKills = {
+                tinyBear: { original: 0, day4: 0, day8: 0, day13: 0 },
+                infectedBear: { original: 0, day8: 0, day13: 0 },
+                buffBear: { original: 0, day13: 0 },
+                infectedPig: { original: 0 },
+                infectedCow: { original: 0 }
+            };
+        }
+        
+        // Track kills based on bear type and variant
+        if (bearType === MAPLE_BEAR_ID) {
+            codex.mobs.tinyBearKills = (codex.mobs.tinyBearKills || 0) + 1;
+            codex.mobs.variantKills.tinyBear.original = (codex.mobs.variantKills.tinyBear.original || 0) + 1;
             checkAndUnlockMobDiscovery(codex, player, "tinyBearKills", "tinyBearMobKills", "tinyBearHits", "mapleBearSeen", 3, "mysterious", "tiny_bear");
-        } else if (bearType === INFECTED_BEAR_ID || bearType === INFECTED_BEAR_DAY8_ID || bearType === INFECTED_BEAR_DAY13_ID) {
+        } else if (bearType === MAPLE_BEAR_DAY4_ID) {
+            codex.mobs.tinyBearKills = (codex.mobs.tinyBearKills || 0) + 1;
+            codex.mobs.variantKills.tinyBear.day4 = (codex.mobs.variantKills.tinyBear.day4 || 0) + 1;
+        } else if (bearType === MAPLE_BEAR_DAY8_ID) {
+            codex.mobs.tinyBearKills = (codex.mobs.tinyBearKills || 0) + 1;
+            codex.mobs.variantKills.tinyBear.day8 = (codex.mobs.variantKills.tinyBear.day8 || 0) + 1;
+        } else if (bearType === MAPLE_BEAR_DAY13_ID) {
+            codex.mobs.tinyBearKills = (codex.mobs.tinyBearKills || 0) + 1;
+            codex.mobs.variantKills.tinyBear.day13 = (codex.mobs.variantKills.tinyBear.day13 || 0) + 1;
+        } else if (bearType === INFECTED_BEAR_ID) {
             codex.mobs.infectedBearKills = (codex.mobs.infectedBearKills || 0) + 1;
+            codex.mobs.variantKills.infectedBear.original = (codex.mobs.variantKills.infectedBear.original || 0) + 1;
             checkAndUnlockMobDiscovery(codex, player, "infectedBearKills", "infectedBearMobKills", "infectedBearHits", "infectedBearSeen", 3, "dangerous", "infected_bear");
-        } else if (bearType === BUFF_BEAR_ID || bearType === BUFF_BEAR_DAY13_ID) {
+        } else if (bearType === INFECTED_BEAR_DAY8_ID) {
+            codex.mobs.infectedBearKills = (codex.mobs.infectedBearKills || 0) + 1;
+            codex.mobs.variantKills.infectedBear.day8 = (codex.mobs.variantKills.infectedBear.day8 || 0) + 1;
+        } else if (bearType === INFECTED_BEAR_DAY13_ID) {
+            codex.mobs.infectedBearKills = (codex.mobs.infectedBearKills || 0) + 1;
+            codex.mobs.variantKills.infectedBear.day13 = (codex.mobs.variantKills.infectedBear.day13 || 0) + 1;
+        } else if (bearType === BUFF_BEAR_ID) {
             codex.mobs.buffBearKills = (codex.mobs.buffBearKills || 0) + 1;
+            codex.mobs.variantKills.buffBear.original = (codex.mobs.variantKills.buffBear.original || 0) + 1;
             checkAndUnlockMobDiscovery(codex, player, "buffBearKills", "buffBearMobKills", "buffBearHits", "buffBearSeen", 1, "threatening", "buff_bear");
+        } else if (bearType === BUFF_BEAR_DAY13_ID) {
+            codex.mobs.buffBearKills = (codex.mobs.buffBearKills || 0) + 1;
+            codex.mobs.variantKills.buffBear.day13 = (codex.mobs.variantKills.buffBear.day13 || 0) + 1;
         } else if (bearType === INFECTED_PIG_ID) {
             codex.mobs.infectedPigKills = (codex.mobs.infectedPigKills || 0) + 1;
+            codex.mobs.variantKills.infectedPig.original = (codex.mobs.variantKills.infectedPig.original || 0) + 1;
             checkAndUnlockMobDiscovery(codex, player, "infectedPigKills", "infectedPigMobKills", "infectedPigHits", "infectedPigSeen", 3, "dangerous", "infected_pig");
         } else if (bearType === INFECTED_COW_ID) {
             codex.mobs.infectedCowKills = (codex.mobs.infectedCowKills || 0) + 1;
+            codex.mobs.variantKills.infectedCow.original = (codex.mobs.variantKills.infectedCow.original || 0) + 1;
             checkAndUnlockMobDiscovery(codex, player, "infectedCowKills", "infectedCowMobKills", "infectedCowHits", "infectedCowSeen", 3, "dangerous", "infected_cow");
         }
         
-        // Check for day variant unlocks
-        checkVariantUnlock(player);
+        // Check for day variant unlocks based on specific variant kills
+        checkVariantUnlock(player, codex);
         
         saveCodex(player, codex);
     } catch (error) {
@@ -325,7 +359,7 @@ function trackMobKill(killer, victim) {
                 }
                 
                 // Check for day variant unlocks
-                checkVariantUnlock(player);
+                checkVariantUnlock(player, codex);
                 
                 saveCodex(player, codex);
             }
@@ -334,69 +368,165 @@ function trackMobKill(killer, victim) {
         console.warn(`[MOB KILL] Error tracking mob kill by ${killer.typeId}:`, error);
     }
 }
-function checkVariantUnlock(player) {
+function checkVariantUnlock(player, codexParam = null) {
     try {
-        const codex = getCodex(player);
+        const codex = codexParam || getCodex(player);
         const currentDay = getCurrentDay();
         
-        // Calculate total kills for each mob type
-        const totalTinyBearKills = (codex.mobs.tinyBearKills || 0) + (codex.mobs.tinyBearMobKills || 0) + (codex.mobs.tinyBearHits || 0);
-        const totalInfectedBearKills = (codex.mobs.infectedBearKills || 0) + (codex.mobs.infectedBearMobKills || 0) + (codex.mobs.infectedBearHits || 0);
-        const totalInfectedPigKills = (codex.mobs.infectedPigKills || 0) + (codex.mobs.infectedPigMobKills || 0) + (codex.mobs.infectedPigHits || 0);
-        const totalInfectedCowKills = (codex.mobs.infectedCowKills || 0) + (codex.mobs.infectedCowMobKills || 0) + (codex.mobs.infectedCowHits || 0);
-        const totalBuffBearKills = (codex.mobs.buffBearKills || 0) + (codex.mobs.buffBearMobKills || 0) + (codex.mobs.buffBearHits || 0);
-        
-        // Check for day 4+ variant unlock (either by day OR by 100 kills of any specific mob type)
-        if (!codex.mobs.day4VariantsUnlocked) {
-            const dayUnlock = currentDay >= 5 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen);
-            const killUnlock = totalTinyBearKills >= 100 || totalInfectedBearKills >= 100 || totalInfectedPigKills >= 100 || totalInfectedCowKills >= 100 || totalBuffBearKills >= 100;
-            
-            if (dayUnlock || killUnlock) {
-                codex.mobs.day4VariantsUnlocked = true;
-                markCodex(player, "mobs.day4VariantsUnlocked");
-                if (killUnlock) {
-                    player.sendMessage("§6§lNew Discovery! §eDay 4+ variants unlocked in your codex!");
-                    player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
-                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-                    console.log(`[CODEX] ${player.name} unlocked day 4+ variants at 100+ kills`);
-                }
-                saveCodex(player, codex);
-            }
+        // Initialize variant tracking if needed
+        if (!codex.mobs.variantKills) {
+            codex.mobs.variantKills = {
+                tinyBear: { original: 0, day4: 0, day8: 0, day13: 0 },
+                infectedBear: { original: 0, day8: 0, day13: 0 },
+                buffBear: { original: 0, day13: 0 },
+                infectedPig: { original: 0 },
+                infectedCow: { original: 0 }
+            };
         }
         
-        // Check for day 8+ variant unlock (either by day OR by 100 kills of any specific mob type)
+        // Check for day 4+ variant unlock - separate checks for each bear type
+        const dayUnlock = currentDay >= 5 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen);
+        
+        // Separate kill checks for each bear type
+        const tinyBearUnlock = (codex.mobs.tinyBearKills || 0) >= 3 && !codex.mobs.day4VariantsUnlockedTiny;
+        const infectedBearUnlock = (codex.mobs.infectedBearKills || 0) >= 3 && !codex.mobs.day4VariantsUnlockedInfected;
+        const buffBearUnlock = (codex.mobs.buffBearKills || 0) >= 3 && !codex.mobs.day4VariantsUnlockedBuff;
+        const otherMobUnlock = ((codex.mobs.infectedPigKills || 0) >= 3 || (codex.mobs.infectedCowKills || 0) >= 3) && !codex.mobs.day4VariantsUnlockedOther;
+        
+        // Check each bear type individually
+        if (dayUnlock || tinyBearUnlock) {
+            codex.mobs.day4VariantsUnlocked = true; // Global flag for codex display
+            codex.mobs.day4VariantsUnlockedTiny = true; // Individual flag
+            
+            // Show unlock message
+            if (codex.items.snowBookCrafted) {
+                player.sendMessage("§6§lNew Discovery... §eDay 4+ variants unlocked in your codex.");
+                player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+            } else {
+                player.sendMessage("§7You feel your knowledge expanding...");
+                player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
+                player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
+            }
+            console.log(`[CODEX] ${player.name} unlocked Tiny Bear day 4+ variants`);
+        }
+        
+        if (dayUnlock || infectedBearUnlock) {
+            codex.mobs.day4VariantsUnlocked = true; // Global flag for codex display
+            codex.mobs.day4VariantsUnlockedInfected = true; // Individual flag
+            
+            // Show unlock message
+            if (codex.items.snowBookCrafted) {
+                player.sendMessage("§6§lNew Discovery... §eDay 4+ variants unlocked in your codex.");
+                player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+            } else {
+                player.sendMessage("§7You feel your knowledge expanding...");
+                player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
+                player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
+            }
+            console.log(`[CODEX] ${player.name} unlocked Infected Bear day 4+ variants`);
+        }
+        
+        if (dayUnlock || buffBearUnlock) {
+            codex.mobs.day4VariantsUnlocked = true; // Global flag for codex display
+            codex.mobs.day4VariantsUnlockedBuff = true; // Individual flag
+            
+            // Show unlock message
+            if (codex.items.snowBookCrafted) {
+                player.sendMessage("§6§lNew Discovery... §eDay 4+ variants unlocked in your codex.");
+                player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+            } else {
+                player.sendMessage("§7You feel your knowledge expanding...");
+                player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
+                player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
+            }
+            console.log(`[CODEX] ${player.name} unlocked Buff Bear day 4+ variants`);
+        }
+        
+        if (dayUnlock || otherMobUnlock) {
+            codex.mobs.day4VariantsUnlocked = true; // Global flag for codex display
+            codex.mobs.day4VariantsUnlockedOther = true; // Individual flag
+            
+            // Show unlock message
+            if (codex.items.snowBookCrafted) {
+                player.sendMessage("§6§lNew Discovery... §eDay 4+ variants unlocked in your codex.");
+                player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+            } else {
+                player.sendMessage("§7You feel your knowledge expanding...");
+                player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
+                player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
+            }
+            console.log(`[CODEX] ${player.name} unlocked Other Mob day 4+ variants`);
+        }
+        
+        // Check for day 8+ variant unlock (either by day OR by 3 kills of day 4+ variants)
         if (!codex.mobs.day8VariantsUnlocked) {
             const dayUnlock = currentDay >= 9 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen || codex.mobs.buffBearSeen);
-            const killUnlock = totalTinyBearKills >= 100 || totalInfectedBearKills >= 100 || totalInfectedPigKills >= 100 || totalInfectedCowKills >= 100 || totalBuffBearKills >= 100;
+            
+            // Separate kill checks for each bear type's day 4+ variants
+            const tinyBearDay4Unlock = (codex.mobs.variantKills.tinyBear.day4 || 0) >= 3;
+            const infectedBearDay4Unlock = (codex.mobs.variantKills.infectedBear.day4 || 0) >= 3;
+            const buffBearDay4Unlock = (codex.mobs.variantKills.buffBear.day4 || 0) >= 3;
+            const otherMobDay4Unlock = (codex.mobs.variantKills.infectedPig.day4 || 0) >= 3 || (codex.mobs.variantKills.infectedCow.day4 || 0) >= 3;
+            
+            const killUnlock = tinyBearDay4Unlock || infectedBearDay4Unlock || buffBearDay4Unlock || otherMobDay4Unlock;
             
             if (dayUnlock || killUnlock) {
                 codex.mobs.day8VariantsUnlocked = true;
-                markCodex(player, "mobs.day8VariantsUnlocked");
-                if (killUnlock) {
-                    player.sendMessage("§6§lNew Discovery! §eDay 8+ variants unlocked in your codex!");
-                    player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
-                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-                    console.log(`[CODEX] ${player.name} unlocked day 8+ variants at 100+ kills`);
+                
+                // Only show unlock message if player has a codex (snow book crafted)
+                if (codex.items.snowBookCrafted) {
+                    if (killUnlock) {
+                        player.sendMessage("§6§lNew Discovery... §eDay 8+ variants unlocked in your codex.");
+                        player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+                        player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                    }
+                } else {
+                    // Player doesn't have codex yet - show different message (only once)
+                    if (killUnlock) {
+                        player.sendMessage("§7You feel your knowledge expanding...");
+                        player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
+                        player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
+                    }
                 }
-                saveCodex(player, codex);
+                console.log(`[CODEX] ${player.name} unlocked day 8+ variants`);
             }
         }
         
-        // Check for day 13+ variant unlock (either by day OR by 100 kills of any specific mob type)
+        // Check for day 13+ variant unlock (either by day OR by 3 kills of day 8+ variants)
         if (!codex.mobs.day13VariantsUnlocked) {
             const dayUnlock = currentDay >= 14 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen || codex.mobs.buffBearSeen);
-            const killUnlock = totalTinyBearKills >= 100 || totalInfectedBearKills >= 100 || totalInfectedPigKills >= 100 || totalInfectedCowKills >= 100 || totalBuffBearKills >= 100;
+            
+            // Separate kill checks for each bear type's day 8+ variants
+            const tinyBearDay8Unlock = (codex.mobs.variantKills.tinyBear.day8 || 0) >= 3;
+            const infectedBearDay8Unlock = (codex.mobs.variantKills.infectedBear.day8 || 0) >= 3;
+            const buffBearDay8Unlock = (codex.mobs.variantKills.buffBear.day8 || 0) >= 3;
+            const otherMobDay8Unlock = (codex.mobs.variantKills.infectedPig.day8 || 0) >= 3 || (codex.mobs.variantKills.infectedCow.day8 || 0) >= 3;
+            
+            const killUnlock = tinyBearDay8Unlock || infectedBearDay8Unlock || buffBearDay8Unlock || otherMobDay8Unlock;
             
             if (dayUnlock || killUnlock) {
                 codex.mobs.day13VariantsUnlocked = true;
-                markCodex(player, "mobs.day13VariantsUnlocked");
-                if (killUnlock) {
-                    player.sendMessage("§6§lNew Discovery! §eDay 13+ variants unlocked in your codex!");
-                    player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
-                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-                    console.log(`[CODEX] ${player.name} unlocked day 13+ variants at 100+ kills`);
+                
+                // Only show unlock message if player has a codex (snow book crafted)
+                if (codex.items.snowBookCrafted) {
+                    if (killUnlock) {
+                        player.sendMessage("§6§lNew Discovery... §eDay 13+ variants unlocked in your codex.");
+                        player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+                        player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                    }
+                } else {
+                    // Player doesn't have codex yet - show different message (only once)
+                    if (killUnlock) {
+                        player.sendMessage("§7You feel your knowledge expanding...");
+                        player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
+                        player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
+                    }
                 }
-                saveCodex(player, codex);
+                console.log(`[CODEX] ${player.name} unlocked day 13+ variants`);
             }
         }
     } catch (error) {
@@ -1982,9 +2112,8 @@ world.afterEvents.entityHurt.subscribe((event) => {
             if (!firstTime.hasBeenInfected) {
                 player.sendMessage(getInfectionMessage("bear", "infected"));
                 firstTime.hasBeenInfected = true;
-            } else {
-                player.sendMessage(getInfectionMessage("bear", "infected"));
             }
+            // No message for subsequent infections - they already know they're infected
             
             firstTimeMessages.set(player.id, firstTime);
 
@@ -2290,6 +2419,10 @@ system.runInterval(() => {
                         p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
                         saveCodex(p, codex);
                     }
+                    
+                    // Record biome visit with infection level
+                    const infectionLevel = onDusted ? 8 : 5; // Higher infection level if on dusted dirt
+                    recordBiomeVisit(p, "mb:infected_biome", infectionLevel);
                 }
                 
                 // Update cooldown cache
@@ -3071,6 +3204,35 @@ world.beforeEvents.itemUse.subscribe((event) => {
         }
         event.cancel = true;
         system.run(() => {
+            // Check for nearby players first (knowledge sharing)
+            const nearbyPlayers = [];
+            
+            for (const otherPlayer of world.getAllPlayers()) {
+                if (otherPlayer.id === player.id) continue; // Skip self
+                
+                const distance = Math.sqrt(
+                    Math.pow(otherPlayer.location.x - player.location.x, 2) +
+                    Math.pow(otherPlayer.location.y - player.location.y, 2) +
+                    Math.pow(otherPlayer.location.z - player.location.z, 2)
+                );
+                
+                // If player is within 3 blocks, they're close enough to share knowledge
+                if (distance <= 3) {
+                    nearbyPlayers.push(otherPlayer);
+                }
+            }
+            
+            // If there are nearby players, share knowledge first, then open codex
+            if (nearbyPlayers.length > 0) {
+                // Share knowledge with all nearby players (silently if on cooldown)
+                for (const targetPlayer of nearbyPlayers) {
+                    shareKnowledge(player, targetPlayer);
+                }
+                
+                // Continue to open codex after sharing (no messages about cooldowns)
+            }
+            
+            // No nearby players - normal codex behavior
             try { 
                 const codex = getCodex(player);
                 if (!codex.items.snowBookCrafted) {

@@ -37,8 +37,6 @@
 					"max": 128
 				},
 				"minecraft:spawns_on_block_filter": [
-					"stone",
-					"deepslate",
 					"mb:dusted_dirt"
 				],
 				"minecraft:biome_filter": {

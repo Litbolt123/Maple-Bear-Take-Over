@@ -59,9 +59,33 @@ export function getDefaultCodex() {
             // Day variant unlock tracking
             day4VariantsUnlocked: false,
             day8VariantsUnlocked: false,
-            day13VariantsUnlocked: false
+            day13VariantsUnlocked: false,
+            // Individual bear type unlock flags for Day 4+
+            day4VariantsUnlockedTiny: false,
+            day4VariantsUnlockedInfected: false,
+            day4VariantsUnlockedBuff: false,
+            day4VariantsUnlockedOther: false,
+            // Individual bear type unlock flags for Day 8+
+            day8VariantsUnlockedTiny: false,
+            day8VariantsUnlockedInfected: false,
+            day8VariantsUnlockedBuff: false,
+            day8VariantsUnlockedOther: false,
+            // Individual bear type unlock flags for Day 13+
+            day13VariantsUnlockedTiny: false,
+            day13VariantsUnlockedInfected: false,
+            day13VariantsUnlockedBuff: false,
+            day13VariantsUnlockedOther: false
         },
-        biomes: { infectedBiomeSeen: false }
+        biomes: { infectedBiomeSeen: false },
+        knowledge: {
+            // Knowledge levels: 0 = no knowledge, 1 = basic awareness, 2 = understanding, 3 = expert
+            infectionLevel: 0,        // Knowledge about the infection itself
+            bearLevel: 0,            // Knowledge about Maple Bears
+            biomeLevel: 0,           // Knowledge about biomes and infection spread
+            cureLevel: 0,            // Knowledge about cures
+            snowLevel: 0             // Knowledge about snow and its effects
+        },
+        biomeData: {} // Will store biome-specific infection data as discovered
     };
 }
 
@@ -100,6 +124,288 @@ export function markCodex(player, path, timestamp = false) {
         ref[leaf] = true;
     }
     saveCodex(player, codex);
+}
+
+// Knowledge progression system
+export function updateKnowledgeLevel(player, knowledgeType, level) {
+    const codex = getCodex(player);
+    if (!codex.knowledge) codex.knowledge = {};
+    codex.knowledge[knowledgeType] = Math.max(codex.knowledge[knowledgeType] || 0, level);
+    saveCodex(player, codex);
+}
+
+export function getKnowledgeLevel(player, knowledgeType) {
+    const codex = getCodex(player);
+    return codex.knowledge?.[knowledgeType] || 0;
+}
+
+// Check if player has sufficient knowledge for certain information
+export function hasKnowledge(player, knowledgeType, requiredLevel) {
+    return getKnowledgeLevel(player, knowledgeType) >= requiredLevel;
+}
+
+// Update knowledge based on experiences
+export function checkKnowledgeProgression(player) {
+    const codex = getCodex(player);
+    if (!codex.knowledge) codex.knowledge = {};
+    
+    // Infection knowledge progression
+    if (codex.history.totalInfections > 0) {
+        updateKnowledgeLevel(player, 'infectionLevel', 1); // Basic awareness
+        if (codex.history.totalInfections >= 2) {
+            updateKnowledgeLevel(player, 'infectionLevel', 2); // Understanding
+        }
+        if (codex.history.totalInfections >= 5) {
+            updateKnowledgeLevel(player, 'infectionLevel', 3); // Expert
+        }
+    }
+    
+    // Bear knowledge progression
+    const totalBearKills = (codex.mobs.tinyBearKills || 0) + (codex.mobs.infectedBearKills || 0) + (codex.mobs.buffBearKills || 0);
+    if (totalBearKills > 0) {
+        updateKnowledgeLevel(player, 'bearLevel', 1); // Basic awareness
+        if (totalBearKills >= 10) {
+            updateKnowledgeLevel(player, 'bearLevel', 2); // Understanding
+        }
+        if (totalBearKills >= 50) {
+            updateKnowledgeLevel(player, 'bearLevel', 3); // Expert
+        }
+    }
+    
+    // Snow knowledge progression
+    if (codex.items.snowFound || codex.items.snowIdentified) {
+        updateKnowledgeLevel(player, 'snowLevel', 1); // Basic awareness
+    }
+    if (codex.snowEffects && Object.values(codex.snowEffects).some(seen => seen)) {
+        updateKnowledgeLevel(player, 'snowLevel', 2); // Understanding
+    }
+    
+    // Cure knowledge progression
+    if (codex.cures.bearCureKnown) {
+        updateKnowledgeLevel(player, 'cureLevel', 2); // Understanding
+    }
+    if (codex.history.totalCures > 0) {
+        updateKnowledgeLevel(player, 'cureLevel', 3); // Expert
+    }
+    
+    // Biome knowledge progression
+    if (codex.biomes.infectedBiomeSeen) {
+        updateKnowledgeLevel(player, 'biomeLevel', 1); // Basic awareness
+    }
+}
+
+// Biome infection tracking system
+export function recordBiomeVisit(player, biomeId, infectionLevel = 0) {
+    const codex = getCodex(player);
+    if (!codex.biomeData) codex.biomeData = {};
+    
+    const biomeKey = biomeId.replace(':', '_');
+    if (!codex.biomeData[biomeKey]) {
+        codex.biomeData[biomeKey] = {
+            name: biomeId,
+            visitCount: 0,
+            totalInfectionSeen: 0,
+            maxInfectionLevel: 0,
+            lastVisit: Date.now()
+        };
+    }
+    
+    codex.biomeData[biomeKey].visitCount++;
+    codex.biomeData[biomeKey].totalInfectionSeen += infectionLevel;
+    codex.biomeData[biomeKey].maxInfectionLevel = Math.max(codex.biomeData[biomeKey].maxInfectionLevel, infectionLevel);
+    codex.biomeData[biomeKey].lastVisit = Date.now();
+    
+    saveCodex(player, codex);
+}
+
+export function getBiomeInfectionLevel(player, biomeId) {
+    const codex = getCodex(player);
+    if (!codex.biomeData) return null;
+    
+    const biomeKey = biomeId.replace(':', '_');
+    const biomeData = codex.biomeData[biomeKey];
+    if (!biomeData) return null;
+    
+    // Calculate average infection level based on visits
+    return biomeData.visitCount > 0 ? Math.round(biomeData.totalInfectionSeen / biomeData.visitCount) : 0;
+}
+
+// Knowledge sharing cooldown tracking
+const knowledgeShareCooldowns = new Map(); // playerId -> { lastShareTime, hasSharedBefore }
+
+// Knowledge sharing system
+export function shareKnowledge(fromPlayer, toPlayer) {
+    const now = Date.now();
+    const cooldownKey = `${fromPlayer.id}-${toPlayer.id}`;
+    const lastShare = knowledgeShareCooldowns.get(cooldownKey);
+    
+    // Check if we've shared recently (within 30 seconds) - if so, silently skip
+    if (lastShare && (now - lastShare.lastShareTime) < 30000) {
+        return 'silent'; // Silent cooldown - no messages
+    }
+    
+    const fromCodex = getCodex(fromPlayer);
+    const toCodex = getCodex(toPlayer);
+    let hasNewKnowledge = false;
+    let sharedItems = [];
+    
+    // Share knowledge levels (merge, keeping highest level)
+    if (!toCodex.knowledge) toCodex.knowledge = {};
+    if (!fromCodex.knowledge) fromCodex.knowledge = {};
+    
+    for (const [knowledgeType, level] of Object.entries(fromCodex.knowledge)) {
+        const currentLevel = toCodex.knowledge[knowledgeType] || 0;
+        if (level > currentLevel) {
+            toCodex.knowledge[knowledgeType] = level;
+            hasNewKnowledge = true;
+            
+            // Convert knowledge type to friendly name
+            let friendlyName;
+            switch (knowledgeType) {
+                case 'infectionLevel': friendlyName = 'Infection Knowledge'; break;
+                case 'bearLevel': friendlyName = 'Bear Knowledge'; break;
+                case 'biomeLevel': friendlyName = 'Biome Knowledge'; break;
+                case 'cureLevel': friendlyName = 'Cure Knowledge'; break;
+                case 'snowLevel': friendlyName = 'Snow Knowledge'; break;
+                default: friendlyName = knowledgeType.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+            }
+            
+            sharedItems.push(`${friendlyName} (level ${level})`);
+        }
+    }
+    
+    // Share mob discoveries
+    if (!toCodex.mobs) toCodex.mobs = {};
+    for (const [mobKey, discovered] of Object.entries(fromCodex.mobs)) {
+        if (discovered && !toCodex.mobs[mobKey]) {
+            toCodex.mobs[mobKey] = discovered;
+            hasNewKnowledge = true;
+            
+            // Convert mob key to friendly name
+            let friendlyName;
+            switch (mobKey) {
+                case 'mapleBearSeen': friendlyName = 'Tiny Maple Bear'; break;
+                case 'infectedBearSeen': friendlyName = 'Infected Maple Bear'; break;
+                case 'buffBearSeen': friendlyName = 'Buff Maple Bear'; break;
+                case 'infectedPigSeen': friendlyName = 'Infected Pig'; break;
+                case 'infectedCowSeen': friendlyName = 'Infected Cow'; break;
+                default: friendlyName = mobKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+            }
+            
+            sharedItems.push(`${friendlyName} Discovery`);
+        }
+    }
+    
+    // Share item discoveries
+    if (!toCodex.items) toCodex.items = {};
+    for (const [itemKey, discovered] of Object.entries(fromCodex.items)) {
+        if (discovered && !toCodex.items[itemKey]) {
+            toCodex.items[itemKey] = discovered;
+            hasNewKnowledge = true;
+            
+            // Convert item key to friendly name
+            let friendlyName;
+            switch (itemKey) {
+                case 'snowFound': friendlyName = 'Snow Discovery'; break;
+                case 'snowBookCrafted': friendlyName = 'Knowledge Book'; break;
+                case 'snowIdentified': friendlyName = 'Snow Identification'; break;
+                default: friendlyName = itemKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+            }
+            
+            sharedItems.push(`${friendlyName}`);
+        }
+    }
+    
+    // Share biome discoveries
+    if (!toCodex.biomes) toCodex.biomes = {};
+    for (const [biomeKey, discovered] of Object.entries(fromCodex.biomes)) {
+        if (discovered && !toCodex.biomes[biomeKey]) {
+            toCodex.biomes[biomeKey] = discovered;
+            hasNewKnowledge = true;
+            
+            // Convert biome key to friendly name
+            let friendlyName;
+            switch (biomeKey) {
+                case 'infectedBiomeSeen': friendlyName = 'Infected Biome'; break;
+                default: friendlyName = 'Unknown Biome';
+            }
+            
+            sharedItems.push(`${friendlyName} Discovery`);
+        }
+    }
+    
+    // Share effects discoveries
+    if (!toCodex.effects) toCodex.effects = {};
+    for (const [effectKey, discovered] of Object.entries(fromCodex.effects)) {
+        if (discovered && !toCodex.effects[effectKey]) {
+            toCodex.effects[effectKey] = discovered;
+            hasNewKnowledge = true;
+            sharedItems.push(`Effect Discovery`);
+        }
+    }
+    
+    // Share snow effects discoveries
+    if (!toCodex.snowEffects) toCodex.snowEffects = {};
+    for (const [effectKey, discovered] of Object.entries(fromCodex.snowEffects)) {
+        if (discovered && !toCodex.snowEffects[effectKey]) {
+            toCodex.snowEffects[effectKey] = discovered;
+            hasNewKnowledge = true;
+            sharedItems.push(`Snow Effect Discovery`);
+        }
+    }
+    
+    // Share cure knowledge
+    if (!toCodex.cures) toCodex.cures = {};
+    for (const [cureKey, discovered] of Object.entries(fromCodex.cures)) {
+        if (discovered && !toCodex.cures[cureKey]) {
+            toCodex.cures[cureKey] = discovered;
+            hasNewKnowledge = true;
+            
+            // Convert cure key to friendly name
+            let friendlyName;
+            switch (cureKey) {
+                case 'bearCureKnown': friendlyName = 'Bear Cure Method'; break;
+                default: friendlyName = 'Cure Knowledge';
+            }
+            
+            sharedItems.push(`${friendlyName}`);
+        }
+    }
+    
+    // Share variant unlocks
+    if (fromCodex.mobs.day4VariantsUnlocked && !toCodex.mobs.day4VariantsUnlocked) {
+        toCodex.mobs.day4VariantsUnlocked = true;
+        hasNewKnowledge = true;
+        sharedItems.push(`Day 4+ Variants`);
+    }
+    if (fromCodex.mobs.day8VariantsUnlocked && !toCodex.mobs.day8VariantsUnlocked) {
+        toCodex.mobs.day8VariantsUnlocked = true;
+        hasNewKnowledge = true;
+        sharedItems.push(`Day 8+ Variants`);
+    }
+    if (fromCodex.mobs.day13VariantsUnlocked && !toCodex.mobs.day13VariantsUnlocked) {
+        toCodex.mobs.day13VariantsUnlocked = true;
+        hasNewKnowledge = true;
+        sharedItems.push(`Day 13+ Variants`);
+    }
+    
+    // Update cooldown tracking
+    knowledgeShareCooldowns.set(cooldownKey, { lastShareTime: now, hasSharedBefore: true });
+    
+    if (hasNewKnowledge) {
+        saveCodex(toPlayer, toCodex);
+        checkKnowledgeProgression(toPlayer);
+        
+        // Send special feedback to both players
+        fromPlayer.sendMessage(`§7You shared knowledge with §f${toPlayer.name}§7: §a${sharedItems.join(', ')}`);
+        toPlayer.sendMessage(`§b${fromPlayer.name} §7shared their knowledge with you: §a${sharedItems.join(', ')}`);
+        toPlayer.playSound("random.orb", { pitch: 1.2, volume: 0.8 });
+        toPlayer.playSound("mob.experience_orb.pickup", { pitch: 1.0, volume: 0.6 });
+        
+        return true;
+    }
+    
+    return false;
 }
 
 // Track cure attempts for progression
@@ -159,29 +465,39 @@ export function showCodexBook(player, context) {
         })();
         const summary = [];
         
+        // Check knowledge progression first
+        checkKnowledgeProgression(player);
+        
         // Add current day
         const currentDay = getCurrentDay ? getCurrentDay() : 0;
         const display = typeof getDayDisplayInfo === 'function' ? getDayDisplayInfo(currentDay) : { color: '§f', symbols: '' };
         summary.push(`${display.color}${display.symbols} Current Day: ${currentDay}`);
         
-        // Health status logic
+        // Health status logic - progressive based on knowledge
+        const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
         if (hasInfection) {
+            if (infectionKnowledge >= 1) {
             summary.push(`§eStatus: §cINFECTED`);
             const ticks = infectionState.ticksLeft || 0;
             const days = Math.ceil(ticks / 24000);
             const snowCount = infectionState.snowCount || 0;
             summary.push(`§eTime: §c${formatTicksDuration(ticks)} (§f~${days} day${days !== 1 ? 's' : ''}§c)`);
             summary.push(`§eSnow consumed: §c${snowCount}`);
-            if (getCodex(player).cures.bearCureKnown) summary.push("§7Cure: §fWeakness + Enchanted Golden Apple");
+                if (codex.cures.bearCureKnown) summary.push("§7Cure: §fWeakness + Enchanted Golden Apple");
+            } else {
+                summary.push(`§eStatus: §cSomething is wrong with you...`);
+                summary.push(`§7You feel unwell but don't understand why.`);
+            }
         } else {
             // Check if player has ever been infected
             const hasBeenInfected = codex.history.totalInfections > 0;
-            if (hasBeenInfected) {
+            if (hasBeenInfected && infectionKnowledge >= 1) {
                 summary.push(`§eStatus: §aHealthy (Previously Infected)`);
             } else {
                 summary.push(`§eStatus: §aHealthy`);
             }
         }
+        
         // Only show immunity if player has been cured and knows about it
         if (immune && codex.status.immuneKnown) {
             const end = curedPlayers.get(player.id);
@@ -190,8 +506,14 @@ export function showCodexBook(player, context) {
         } else {
             summary.push("§bImmunity: §7None");
         }
+        
+        // Bear hits - only show if player has bear knowledge
+        const bearKnowledge = getKnowledgeLevel(player, 'bearLevel');
         const hitCount = bearHitCount.get(player.id) || 0;
-        if (hitCount > 0 && !hasInfection) summary.push(`§eBear Hits: §f${hitCount}/${HITS_TO_INFECT}`);
+        if (hitCount > 0 && !hasInfection && bearKnowledge >= 1) {
+            summary.push(`§eBear Hits: §f${hitCount}/${HITS_TO_INFECT}`);
+        }
+        
         try { if (hasInfection) markCodex(player, "status.bearTimerSeen"); if (immune) markCodex(player, "status.immuneKnown"); } catch {}
         return summary.join("\n");
     }
@@ -583,45 +905,12 @@ export function showCodexBook(player, context) {
     function openMobs() {
         const codex = getCodex(player);
         const entries = [
-            { key: "mapleBearSeen", title: "Tiny Maple Bear", icon: "textures/items/mb", variant: "original" },
-            { key: "infectedBearSeen", title: "Infected Maple Bear", icon: "textures/items/Infected_human_mb_egg", variant: "original" },
-            { key: "buffBearSeen", title: "Buff Maple Bear", icon: "textures/items/buff_mb_egg", variant: "original" },
-            { key: "infectedPigSeen", title: "Infected Pig", icon: "textures/items/infected_pig_spawn_egg", variant: "original" },
-            { key: "infectedCowSeen", title: "Infected Cow", icon: "textures/items/infected_cow_egg", variant: "original" }
+            { key: "mapleBearSeen", title: "Tiny Maple Bear", icon: "textures/items/mb" },
+            { key: "infectedBearSeen", title: "Infected Maple Bear", icon: "textures/items/Infected_human_mb_egg" },
+            { key: "buffBearSeen", title: "Buff Maple Bear", icon: "textures/items/buff_mb_egg" },
+            { key: "infectedPigSeen", title: "Infected Pig", icon: "textures/items/infected_pig_spawn_egg" },
+            { key: "infectedCowSeen", title: "Infected Cow", icon: "textures/items/infected_cow_egg" }
         ];
-        
-        // Add day 4+ variants if unlocked
-        if (codex.mobs.day4VariantsUnlocked) {
-            entries.push(
-                { key: "mapleBearSeen", title: "Tiny Maple Bear (Day 4+)", icon: "textures/items/mb", variant: "day4" },
-                { key: "infectedBearSeen", title: "Infected Maple Bear (Day 4+)", icon: "textures/items/Infected_human_mb_egg", variant: "day4" },
-                { key: "infectedPigSeen", title: "Infected Pig (Day 4+)", icon: "textures/items/infected_pig_spawn_egg", variant: "day4" },
-                { key: "infectedCowSeen", title: "Infected Cow (Day 4+)", icon: "textures/items/infected_cow_egg", variant: "day4" },
-                { key: "buffBearSeen", title: "Buff Maple Bear (Day 4+)", icon: "textures/items/buff_mb_egg", variant: "day4" }
-            );
-        }
-        
-        // Add day 8+ variants if unlocked
-        if (codex.mobs.day8VariantsUnlocked) {
-            entries.push(
-                { key: "mapleBearSeen", title: "Tiny Maple Bear (Day 8+)", icon: "textures/items/mb", variant: "day8" },
-                { key: "infectedBearSeen", title: "Infected Maple Bear (Day 8+)", icon: "textures/items/Infected_human_mb_egg", variant: "day8" },
-                { key: "infectedPigSeen", title: "Infected Pig (Day 8+)", icon: "textures/items/infected_pig_spawn_egg", variant: "day8" },
-                { key: "infectedCowSeen", title: "Infected Cow (Day 8+)", icon: "textures/items/infected_cow_egg", variant: "day8" },
-                { key: "buffBearSeen", title: "Buff Maple Bear (Day 8+)", icon: "textures/items/buff_mb_egg", variant: "day8" }
-            );
-        }
-        
-        // Add day 13+ variants if unlocked
-        if (codex.mobs.day13VariantsUnlocked) {
-            entries.push(
-                { key: "mapleBearSeen", title: "Tiny Maple Bear (Day 13+)", icon: "textures/items/mb", variant: "day13" },
-                { key: "infectedBearSeen", title: "Infected Maple Bear (Day 13+)", icon: "textures/items/Infected_human_mb_egg", variant: "day13" },
-                { key: "infectedPigSeen", title: "Infected Pig (Day 13+)", icon: "textures/items/infected_pig_spawn_egg", variant: "day13" },
-                { key: "infectedCowSeen", title: "Infected Cow (Day 13+)", icon: "textures/items/infected_cow_egg", variant: "day13" },
-                { key: "buffBearSeen", title: "Buff Maple Bear (Day 13+)", icon: "textures/items/buff_mb_egg", variant: "day13" }
-            );
-        }
         
         const form = new ActionFormData().title("§6Mobs");
         form.body("§7Entries:");
@@ -661,68 +950,124 @@ export function showCodexBook(player, context) {
                 let body = "§e???";
                 
                 if (known) {
-                    // Get kill count
+                    // Get kill count (total kills including all variants)
                     let killCount = 0;
                     if (e.key === "mapleBearSeen") {
-                        killCount = codex.mobs.tinyBearKills || 0;
+                        killCount = codex.mobs.tinyBearKills || 0; // This already includes all variants
                     } else if (e.key === "infectedBearSeen") {
-                        killCount = codex.mobs.infectedBearKills || 0;
+                        killCount = codex.mobs.infectedBearKills || 0; // This already includes all variants
                     } else if (e.key === "infectedPigSeen") {
                         killCount = codex.mobs.infectedPigKills || 0;
                     } else if (e.key === "infectedCowSeen") {
                         killCount = codex.mobs.infectedCowKills || 0;
                     } else if (e.key === "buffBearSeen") {
-                        killCount = codex.mobs.buffBearKills || 0;
+                        killCount = codex.mobs.buffBearKills || 0; // This already includes all variants
                     }
                     
+                    const bearKnowledge = getKnowledgeLevel(player, 'bearLevel');
+                    
+                    // Determine if this is a Buff Bear for threshold adjustments
+                    const isBuffBear = e.key === "buffBearSeen";
+                    
+                    // Progressive information based on knowledge level and kills
+                    if (bearKnowledge >= 1) {
                     body = `§e${e.title}\n§7Hostile entity involved in the outbreak.\n\n§6Kills: §f${killCount}`;
                     
-                    // Add detailed info based on kill count thresholds
-                    if (e.variant === "original") {
-                        if (e.key === "mapleBearSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 60% chance\n§7Loot: 1 snow item\n§7Health: 1 HP\n§7Damage: 1`;
-                        } else if (e.key === "infectedBearSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 80% chance\n§7Loot: 1-5 snow items\n§7Health: 20 HP\n§7Damage: 2.5`;
-                        } else if (e.key === "infectedPigSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 75% chance\n§7Loot: 1-4 snow items\n§7Health: 10 HP\n§7Damage: 2\n§7Special: Can infect other mobs`;
-                        } else if (e.key === "buffBearSeen" && killCount >= 10) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 80% chance\n§7Loot: 3-15 snow items\n§7Health: 100 HP\n§7Damage: 8`;
+                        // Basic stats (available at knowledge level 1)
+                        if (killCount >= 5) {
+                            body += `\n\n§6Basic Analysis:\n§7This creature appears to be dangerous and unpredictable.`;
                         }
-                    } else if (e.variant === "day4") {
-                        if (e.key === "mapleBearSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 65% chance\n§7Loot: 1-2 snow items\n§7Health: 1.5 HP\n§7Damage: 1.5`;
-                        } else if (e.key === "infectedBearSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 80% chance\n§7Loot: 1-5 snow items\n§7Health: 20 HP\n§7Damage: 2.5`;
-                        } else if (e.key === "infectedPigSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 80% chance\n§7Loot: 1-5 snow items\n§7Health: 12 HP\n§7Damage: 2.5\n§7Special: Enhanced infection spread`;
-                        } else if (e.key === "infectedCowSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 85% chance\n§7Loot: 2-6 snow items\n§7Health: 15 HP\n§7Damage: 3\n§7Special: Improved conversion rate`;
-                        } else if (e.key === "buffBearSeen" && killCount >= 10) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 85% chance\n§7Loot: 4-18 snow items\n§7Health: 120 HP\n§7Damage: 10\n§7Special: Enhanced combat abilities`;
+                        
+                        // Detailed stats (available at knowledge level 2)
+                        if (bearKnowledge >= 2 && killCount >= 25) {
+                            body += `\n\n§6Combat Analysis:`;
+                            if (e.key === "mapleBearSeen") {
+                                body += `\n§7Drop Rate: 60% chance\n§7Loot: 1 snow item\n§7Health: 1 HP\n§7Damage: 1`;
+                            } else if (e.key === "infectedBearSeen") {
+                                body += `\n§7Drop Rate: 80% chance\n§7Loot: 1-5 snow items\n§7Health: 20 HP\n§7Damage: 2.5`;
+                            } else if (e.key === "infectedPigSeen") {
+                                body += `\n§7Drop Rate: 75% chance\n§7Loot: 1-4 snow items\n§7Health: 10 HP\n§7Damage: 2\n§7Special: Can infect other mobs`;
+                            } else if (e.key === "infectedCowSeen") {
+                                body += `\n§7Drop Rate: 75% chance\n§7Loot: 1-4 snow items\n§7Health: 10 HP\n§7Damage: 2`;
+                            } else if (e.key === "buffBearSeen") {
+                                body += `\n§7Drop Rate: 80% chance\n§7Loot: 3-15 snow items\n§7Health: 100 HP\n§7Damage: 8`;
+                            }
                         }
-                    } else if (e.variant === "day8") {
-                        if (e.key === "mapleBearSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 70% chance\n§7Loot: 1-3 snow items\n§7Health: 2 HP\n§7Damage: 2`;
-                        } else if (e.key === "infectedBearSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 90% chance\n§7Loot: 2-8 snow items\n§7Health: 25 HP\n§7Damage: 4`;
-                        } else if (e.key === "infectedPigSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 90% chance\n§7Loot: 2-8 snow items\n§7Health: 15 HP\n§7Damage: 3.5\n§7Special: Maximum infection spread`;
-                        } else if (e.key === "infectedCowSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 95% chance\n§7Loot: 3-10 snow items\n§7Health: 20 HP\n§7Damage: 4\n§7Special: Maximum conversion rate`;
-                        } else if (e.key === "buffBearSeen" && killCount >= 10) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 95% chance\n§7Loot: 6-25 snow items\n§7Health: 150 HP\n§7Damage: 12\n§7Special: Ultimate combat abilities`;
+                        
+                        // Variant information (available at knowledge level 2+ with variant unlocks)
+                        if (bearKnowledge >= 2 && killCount >= 10) {
+                            let variantInfo = `\n\n§6Variant Analysis:`;
+                            let hasVariants = false;
+                            
+                            // Adjust kill thresholds for Buff Bears (mini-boss level)
+                            const day4Threshold = isBuffBear ? 1 : 25; // Buff Bears only have original and day13 variants
+                            const day8Threshold = isBuffBear ? 3 : 50; // Buff Bears only have original and day13 variants
+                            const day13Threshold = isBuffBear ? 5 : 100; // Max info at 5 kills for Buff Bears
+                            
+                            if (codex.mobs.day4VariantsUnlocked && killCount >= day4Threshold && !isBuffBear) {
+                                variantInfo += `\n\n§eDay 4+ Variants:`;
+                                hasVariants = true;
+                                if (e.key === "mapleBearSeen") {
+                                    variantInfo += `\n§7Enhanced: 1.5 HP, 1.5 Damage, 65% drop rate, 1-2 snow items`;
+                                } else if (e.key === "infectedBearSeen") {
+                                    variantInfo += `\n§7Enhanced: 20 HP, 2.5 Damage, 80% drop rate, 1-5 snow items`;
+                                } else if (e.key === "infectedPigSeen") {
+                                    variantInfo += `\n§7Enhanced: 12 HP, 2.5 Damage, 80% drop rate, 1-5 snow items\n§7Special: Enhanced infection spread`;
+                                } else if (e.key === "infectedCowSeen") {
+                                    variantInfo += `\n§7Enhanced: 15 HP, 3 Damage, 85% drop rate, 2-6 snow items\n§7Special: Improved conversion rate`;
+                                }
+                            }
+                            
+                            if (codex.mobs.day8VariantsUnlocked && killCount >= day8Threshold && !isBuffBear) {
+                                variantInfo += `\n\n§eDay 8+ Variants:`;
+                                hasVariants = true;
+                                if (e.key === "mapleBearSeen") {
+                                    variantInfo += `\n§7Advanced: 2 HP, 2 Damage, 70% drop rate, 1-3 snow items`;
+                                } else if (e.key === "infectedBearSeen") {
+                                    variantInfo += `\n§7Advanced: 25 HP, 4 Damage, 90% drop rate, 2-8 snow items`;
+                                } else if (e.key === "infectedPigSeen") {
+                                    variantInfo += `\n§7Advanced: 15 HP, 3.5 Damage, 90% drop rate, 2-8 snow items\n§7Special: Maximum infection spread`;
+                                } else if (e.key === "infectedCowSeen") {
+                                    variantInfo += `\n§7Advanced: 20 HP, 4 Damage, 95% drop rate, 3-10 snow items\n§7Special: Maximum conversion rate`;
+                                }
+                            }
+                            
+                            if (codex.mobs.day13VariantsUnlocked && killCount >= day13Threshold) {
+                                variantInfo += `\n\n§eDay 13+ Variants:`;
+                                hasVariants = true;
+                                if (e.key === "mapleBearSeen") {
+                                    variantInfo += `\n§7Ultimate: 3 HP, 3 Damage, 75% drop rate, 1-4 snow items\n§7Special: Enhanced speed and reach`;
+                                } else if (e.key === "infectedBearSeen") {
+                                    variantInfo += `\n§7Ultimate: 35 HP, 6 Damage, 95% drop rate, 3-12 snow items\n§7Special: Maximum threat level`;
+                                } else if (e.key === "infectedPigSeen") {
+                                    variantInfo += `\n§7Ultimate: 18 HP, 4.5 Damage, 95% drop rate, 3-12 snow items\n§7Special: Ultimate infection spread`;
+                                } else if (e.key === "infectedCowSeen") {
+                                    variantInfo += `\n§7Ultimate: 25 HP, 5 Damage, 98% drop rate, 4-15 snow items\n§7Special: Ultimate conversion rate`;
+                                } else if (e.key === "buffBearSeen") {
+                                    variantInfo += `\n§7Ultimate: 150 HP, 12 Damage, 98% drop rate, 8-30 snow items\n§7Special: Ultimate combat mastery`;
+                                }
+                            }
+                            
+                            if (hasVariants) {
+                                body += variantInfo;
+                            } else {
+                                body += `\n\n§6Variant Analysis:\n§7No advanced variants discovered yet.`;
+                            }
                         }
-                    } else if (e.variant === "day13") {
-                        if (e.key === "mapleBearSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 75% chance\n§7Loot: 1-4 snow items\n§7Health: 3 HP\n§7Damage: 3\n§7Special: Enhanced speed and reach`;
-                        } else if (e.key === "infectedBearSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 95% chance\n§7Loot: 3-12 snow items\n§7Health: 35 HP\n§7Damage: 6\n§7Special: Maximum threat level`;
-                        } else if (e.key === "infectedPigSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 95% chance\n§7Loot: 3-12 snow items\n§7Health: 18 HP\n§7Damage: 4.5\n§7Special: Ultimate infection spread`;
-                        } else if (e.key === "infectedCowSeen" && killCount >= 100) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 98% chance\n§7Loot: 4-15 snow items\n§7Health: 25 HP\n§7Damage: 5\n§7Special: Ultimate conversion rate`;
-                        } else if (e.key === "buffBearSeen" && killCount >= 10) {
-                            body += `\n\n§6Detailed Analysis:\n§7Drop Rate: 98% chance\n§7Loot: 8-30 snow items\n§7Health: 150 HP\n§7Damage: 12\n§7Special: Ultimate combat mastery`;
+                        
+                        // Expert analysis (available at knowledge level 3)
+                        const expertThreshold = isBuffBear ? 5 : 100; // Max expert info at 5 kills for Buff Bears
+                        if (bearKnowledge >= 3 && killCount >= expertThreshold) {
+                            body += `\n\n§6Expert Analysis:\n§7Detailed behavioral patterns and combat strategies documented.`;
+                            if (codex.mobs.day4VariantsUnlocked || codex.mobs.day8VariantsUnlocked || codex.mobs.day13VariantsUnlocked) {
+                                body += `\n§7Advanced variants show enhanced capabilities compared to earlier forms.`;
+                            }
+                        }
+                    } else {
+                        // No knowledge - very basic info
+                        body = `§e${e.title}\n§7A mysterious creature you've encountered.\n\n§7You don't know much about this entity yet.`;
+                        if (killCount > 0) {
+                            body += `\n§7You have encountered ${killCount} of these creatures.`;
                         }
                     }
                 }
@@ -809,13 +1154,17 @@ export function showCodexBook(player, context) {
                     if (e.key === "snowFound") {
                         const hasBeenInfected = hasInfection;
                         const hasFoundSnow = codex.items.snowFound;
+                        const snowKnowledge = getKnowledgeLevel(player, 'snowLevel');
+                        const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
                         
-                        if (hasBeenInfected && hasFoundSnow) {
+                        if (hasBeenInfected && hasFoundSnow && infectionKnowledge >= 1) {
                             body = "§eSnow (Powder)\n§7Risky substance. Leads to symptoms and doom.";
-                        } else if (codex.items.snowIdentified) {
+                        } else if (codex.items.snowIdentified && infectionKnowledge >= 1) {
                             body = "§eSnow (Powder)\n§7Risky substance. Leads to symptoms and doom.";
+                        } else if (snowKnowledge >= 1) {
+                            body = "§eSnow (Powder)\n§7A mysterious white powder. You sense it has properties beyond what you currently understand.";
                         } else {
-                            body = "§eUnknown White Substance\n§7A powdery white substance. Effects unknown.";
+                            body = "§eUnknown White Substance\n§7A powdery white substance. You have no idea what this could be.";
                         }
                     } else if (e.key === "snowBookCrafted") {
                         // Progressive journal information based on usage
@@ -946,8 +1295,34 @@ export function showCodexBook(player, context) {
         
         let body = "§7Biomes discovered:\n\n";
         
+        const biomeKnowledge = getKnowledgeLevel(player, 'biomeLevel');
+        
         if (codex.biomes.infectedBiomeSeen) {
-            body += "§fInfected Biome\n§7A corrupted landscape where the Maple Bear infection thrives. The ground is covered in a layer of white dust, and the very air feels heavy with an unsettling presence.";
+            if (biomeKnowledge >= 2) {
+                // Advanced knowledge - show detailed biome data
+                body += "§fInfected Biome\n§7A corrupted landscape where the Maple Bear infection thrives. The ground is covered in a layer of white dust, and the very air feels heavy with an unsettling presence.\n\n";
+                
+                // Show biome infection data if available
+                if (codex.biomeData && codex.biomeData.mb_infected_biome) {
+                    const biomeData = codex.biomeData.mb_infected_biome;
+                    const avgInfection = biomeData.visitCount > 0 ? Math.round(biomeData.totalInfectionSeen / biomeData.visitCount) : 0;
+                    
+                    body += `§6Infection Analysis:\n`;
+                    body += `§7Visits: §f${biomeData.visitCount}\n`;
+                    body += `§7Average Infection Level: §f${avgInfection}/10\n`;
+                    body += `§7Peak Infection Observed: §f${biomeData.maxInfectionLevel}/10\n`;
+                    
+                    if (biomeKnowledge >= 3) {
+                        body += `\n§6Expert Notes:\n§7This biome appears to be the epicenter of the infection. The white dust seems to be both a symptom and a vector of the corruption.`;
+                    }
+                }
+            } else if (biomeKnowledge >= 1) {
+                // Basic knowledge
+                body += "§fInfected Biome\n§7A corrupted landscape where strange creatures thrive. The ground is covered in a layer of white dust, and the very air feels heavy with an unsettling presence.";
+            } else {
+                // Minimal knowledge
+                body += "§fCorrupted Biome\n§7You've discovered a strange area where the land itself seems wrong. White dust covers the ground, and you feel uneasy here.";
+            }
         } else {
             body += "§8No biomes discovered yet.";
         }

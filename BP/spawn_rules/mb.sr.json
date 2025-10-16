@@ -37,15 +37,7 @@
 					"max": 128
 				},
 				"minecraft:spawns_on_block_filter": [
-					"dirt",
-					"stone",
-					"grass_block",
-					"sand",
-					"deepslate",
-					"gravel",
-					"podzol",
-					"coarse_dirt",
-					"mycelium"
+					"mb:dusted_dirt"
 				],
 				"minecraft:biome_filter": {
 					"test": "has_biome_tag",
