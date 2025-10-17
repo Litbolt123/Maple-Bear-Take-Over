@@ -13,7 +13,13 @@
 			"minecraft:use_animation": "none",
 			"minecraft:display_name": {
 				"value": "Powdery Journal"
-			}
+			},
+			"minecraft:lore": [
+				"§7A mysterious journal that seems to",
+				"§7document your experiences...",
+				"§7Also, whats this white stuff?",
+				"§eRight-click to open your journal"
+			]
 		}
 	}
 }
