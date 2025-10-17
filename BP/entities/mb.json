@@ -231,6 +231,9 @@
 				"family": [
 					"infected"
 				]
+			},
+			"minecraft:underwater_movement": {
+				"value": 0.15
 			}
 		},
 		"events": {}

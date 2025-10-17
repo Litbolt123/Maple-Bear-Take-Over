@@ -166,21 +166,6 @@
 			"minecraft:behavior.equip_item": {
 				"priority": 2
 			},
-			"minecraft:navigation.generic": {
-				"can_float": true,
-				"can_walk": true,
-				"can_jump": true,
-				"can_swim": true,
-				"can_walk_in_lava": false,
-				"can_path_from_air": true,
-				"can_sink": true,
-				"can_path_over_water": true,
-				"can_open_iron_doors": false,
-				"can_pass_doors": true,
-				"can_open_doors": true,
-				"can_break_doors": true,
-				"avoid_portals": true
-			},
 			"minecraft:jump.static": {
 				"jump_power": 0.4
 			},
@@ -204,6 +189,23 @@
 			},
 			"minecraft:movement": {
 				"value": 0.4
+			},
+			"minecraft:navigation.generic": {
+				"can_float": true,
+				"can_walk": true,
+				"can_jump": true,
+				"can_swim": true,
+				"can_path_over_lava": true,
+				"can_path_from_air": true,
+				"can_sink": true,
+				"can_path_over_water": true,
+				"can_open_iron_doors": false,
+				"can_pass_doors": true,
+				"can_open_doors": true,
+				"can_break_doors": true,
+				"avoid_portals": true,
+				"is_amphibious": true,
+				"can_breach": true
 			},
 			"minecraft:behavior.melee_attack": {
 				"priority": 1,
@@ -588,6 +590,9 @@
 				"family": [
 					"infected"
 				]
+			},
+			"minecraft:underwater_movement": {
+				"value": 0.15
 			}
 		},
 		"events": {

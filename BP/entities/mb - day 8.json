@@ -214,7 +214,8 @@
 				"can_path_over_lava": true,
 				"can_break_doors": true,
 				"can_open_doors": false,
-				"can_pass_doors": true
+				"can_pass_doors": true,
+				"can_breach": true
 			},
 			"minecraft:movement.generic": {},
 			"minecraft:despawn": {
@@ -231,6 +232,9 @@
 				"family": [
 					"infected"
 				]
+			},
+			"minecraft:underwater_movement": {
+				"value": 0.15
 			}
 		},
 		"events": {}

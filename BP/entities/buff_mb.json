@@ -95,11 +95,11 @@
 				"knockback_vertical_strength": 7
 			},
 			"minecraft:behavior.random_stroll": {
-				"priority": 3,
+				"priority": 4,
 				"speed_multiplier": 1
 			},
 			"minecraft:behavior.look_at_player": {
-				"priority": 4,
+				"priority": 5,
 				"look_distance": 5
 			},
 			"minecraft:pushable": {
@@ -180,9 +180,7 @@
 				"set_persistent": true,
 				"target_dist": 15,
 				"must_be_on_ground": true,
-				"yd": 1.5,
-				"y_max_head_rotation": 360,
-				"max_velocity": 2
+				"yd": 1.5
 			},
 			"minecraft:environment_sensor": {
 				"triggers": [
@@ -211,7 +209,7 @@
 				"scale_factor": 0.8,
 				"cooldown_range": [
 					0.5,
-					5
+					3
 				],
 				"max_velocity": 1.5
 			},
@@ -282,7 +280,7 @@
 				"jump_prevented_value": 0.5625
 			},
 			"minecraft:behavior.float": {
-				"priority": 1
+				"priority": 6
 			},
 			"minecraft:despawn": {
 				"despawn_from_distance": {
@@ -298,6 +296,9 @@
 				"family": [
 					"infected"
 				]
+			},
+			"minecraft:underwater_movement": {
+				"value": 0.5
 			}
 		},
 		"events": {}
