@@ -1854,6 +1854,151 @@ function handleMapleBearKillTracking(entity, killer) {
     }
 }
 
+// Spread dusted dirt like sculk when Maple Bears kill things
+function spreadDustedDirt(location, dimension, killerType, victimType) {
+    try {
+        const x = Math.floor(location.x);
+        const y = Math.floor(location.y);
+        const z = Math.floor(location.z);
+        
+        // Determine victim size multiplier (toned down)
+        let victimSizeMultiplier = 1.0;
+        if (victimType) {
+            // Large mobs (bosses, large animals)
+            if (victimType.includes('wither') || victimType.includes('ender_dragon') || victimType.includes('ravager') || 
+                victimType.includes('iron_golem') || victimType.includes('warden') || victimType.includes('giant')) {
+                victimSizeMultiplier = 1.4;
+            }
+            // Medium-large mobs
+            else if (victimType.includes('cow') || victimType.includes('horse') || victimType.includes('llama') || 
+                     victimType.includes('pig') || victimType.includes('sheep') || victimType.includes('mooshroom') ||
+                     victimType.includes('polar_bear') || victimType.includes('panda') || victimType.includes('strider')) {
+                victimSizeMultiplier = 1.2;
+            }
+            // Medium mobs
+            else if (victimType.includes('zombie') || victimType.includes('skeleton') || victimType.includes('creeper') ||
+                     victimType.includes('spider') || victimType.includes('enderman') || victimType.includes('villager') ||
+                     victimType.includes('witch') || victimType.includes('pillager') || victimType.includes('vindicator')) {
+                victimSizeMultiplier = 1.1;
+            }
+            // Small mobs
+            else if (victimType.includes('chicken') || victimType.includes('rabbit') || victimType.includes('bat') ||
+                     victimType.includes('silverfish') || victimType.includes('endermite') || victimType.includes('bee')) {
+                victimSizeMultiplier = 0.8;
+            }
+            // Tiny mobs
+            else if (victimType.includes('cod') || victimType.includes('salmon') || victimType.includes('tropical_fish') ||
+                     victimType.includes('pufferfish') || victimType.includes('squid') || victimType.includes('glow_squid')) {
+                victimSizeMultiplier = 0.6;
+            }
+        }
+        
+        // Determine killer size multiplier (toned down)
+        let killerSizeMultiplier = 1.0;
+        // Buff Bears are largest
+        if (killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY13_ID) {
+            killerSizeMultiplier = 1.3;
+        }
+        // Normal Maple Bears are medium-large
+        else if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID ||
+                 killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === INFECTED_BEAR_DAY13_ID) {
+            killerSizeMultiplier = 1.1;
+        }
+        // Tiny Maple Bears are small
+        else if (killerType === MAPLE_BEAR_DAY4_ID) {
+            killerSizeMultiplier = 0.9;
+        }
+        // Infected animals are medium
+        else if (killerType === INFECTED_PIG_ID || killerType === INFECTED_COW_ID) {
+            killerSizeMultiplier = 1.05;
+        }
+        
+        // Calculate base spread values (reduced)
+        let baseRadius = 1;
+        let baseChance = 0.2;
+        let baseMaxBlocks = 4;
+        
+        // Determine world infection multiplier based on current day
+        let worldInfectionMultiplier = 0.0; // No spreading before day 4
+        const currentDay = getCurrentDay();
+        
+        if (currentDay >= 4) {
+            worldInfectionMultiplier = 0.3; // Day 4: basic spreading starts
+        }
+        if (currentDay >= 8) {
+            worldInfectionMultiplier = 0.6; // Day 8: moderate boost
+        }
+        if (currentDay >= 13) {
+            worldInfectionMultiplier = 1.0; // Day 13: full power
+        }
+        if (currentDay >= 20) {
+            worldInfectionMultiplier = 1.3; // Day 20: enhanced spreading
+        }
+        if (currentDay >= 30) {
+            worldInfectionMultiplier = 1.6; // Day 30: maximum infection
+        }
+        
+        // Apply all multipliers
+        const totalMultiplier = victimSizeMultiplier * killerSizeMultiplier * worldInfectionMultiplier;
+        const spreadRadius = Math.max(1, Math.min(6, Math.floor(baseRadius * totalMultiplier)));
+        const spreadChance = Math.min(0.7, baseChance * totalMultiplier);
+        const maxBlocks = Math.max(2, Math.min(25, Math.floor(baseMaxBlocks * totalMultiplier)));
+        
+        let blocksConverted = 0;
+        
+        // Spread in a radius around the kill location
+        for (let dx = -spreadRadius; dx <= spreadRadius && blocksConverted < maxBlocks; dx++) {
+            for (let dz = -spreadRadius; dz <= spreadRadius && blocksConverted < maxBlocks; dz++) {
+                for (let dy = -1; dy <= 1 && blocksConverted < maxBlocks; dy++) {
+                    // Skip center block (where the kill happened)
+                    if (dx === 0 && dz === 0 && dy === 0) continue;
+                    
+                    // Random chance to spread
+                    if (Math.random() > spreadChance) continue;
+                    
+                    const targetX = x + dx;
+                    const targetY = y + dy;
+                    const targetZ = z + dz;
+                    
+                    try {
+                        const block = dimension.getBlock({ x: targetX, y: targetY, z: targetZ });
+                        
+                        // Only convert certain blocks to dusted dirt
+                        const convertibleBlocks = [
+                            'minecraft:grass_block',
+                            'minecraft:dirt',
+                            'minecraft:coarse_dirt',
+                            'minecraft:podzol',
+                            'minecraft:mycelium',
+                            'minecraft:stone',
+                            'minecraft:cobblestone',
+                            'minecraft:mossy_cobblestone'
+                        ];
+                        
+                        if (block && convertibleBlocks.includes(block.typeId)) {
+                            block.setType('mb:dusted_dirt');
+                            blocksConverted++;
+                            
+                            // Add particle effect for each conversion
+                            dimension.runCommand(`particle minecraft:snowflake ${targetX} ${targetY + 1} ${targetZ}`);
+                        }
+                    } catch (e) {
+                        // Ignore errors for individual blocks
+                    }
+                }
+            }
+        }
+        
+        
+        if (blocksConverted > 0) {
+            console.log(`[DUSTED DIRT] ${killerType} killed ${victimType || 'unknown'} on day ${currentDay} - spread dusted dirt to ${blocksConverted} blocks (radius: ${spreadRadius}, chance: ${(spreadChance * 100).toFixed(1)}%, world multiplier: ${worldInfectionMultiplier.toFixed(1)}x) at ${x}, ${y}, ${z}`);
+        }
+        
+    } catch (error) {
+        console.warn('[DUSTED DIRT] Error spreading dusted dirt:', error);
+    }
+}
+
 // Handle infected player death
 function handleInfectedPlayerDeath(player) {
     // Note: Infected player death handling removed - using unified infection system
@@ -1881,6 +2026,21 @@ world.afterEvents.entityDie.subscribe((event) => {
     // Handle Maple Bear kill tracking
     if (source && source.damagingEntity) {
         handleMapleBearKillTracking(entity, source.damagingEntity);
+    }
+    
+    // Handle dusted dirt spreading when Maple Bears kill things
+    if (source && source.damagingEntity && !(entity instanceof Player)) {
+        const killer = source.damagingEntity;
+        const killerType = killer.typeId;
+        
+        // Check if killer is a Maple Bear type
+        const mapleBearTypes = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, 
+                               INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, 
+                               BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, INFECTED_PIG_ID, INFECTED_COW_ID];
+        
+        if (mapleBearTypes.includes(killerType)) {
+            spreadDustedDirt(entity.location, entity.dimension, killerType, entity.typeId);
+        }
     }
     // Note: Bear death corruption logic removed - no bears should spawn on death
     
