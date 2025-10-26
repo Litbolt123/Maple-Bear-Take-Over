@@ -202,8 +202,8 @@
 			},
 			"minecraft:behavior.jump_to_block": {
 				"priority": 3,
-				"search_width": 30,
-				"search_height": 40,
+				"search_width": 15,
+				"search_height": 15,
 				"minimum_path_length": 12,
 				"minimum_distance": 0,
 				"scale_factor": 1.2,
