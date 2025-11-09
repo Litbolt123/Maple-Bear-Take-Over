@@ -20,7 +20,7 @@
 				},
 				"minecraft:weight": {
 					"default": 12,
-					"infected_biome": 30
+					"infected_biome": 40
 				},
 				"minecraft:herd": {
 					"min_size": 2,

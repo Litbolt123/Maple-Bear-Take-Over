@@ -5,9 +5,15 @@
 	"authors": [
 		"MapleBear industries"
 	],
-	"targetVersion": "1.21.90",
+	"targetVersion": "1.21.120",
 	"description": "Don't do drugs kids...",
-	"experimentalGameplay": {},
+	"experimentalGameplay": {
+		"creationOfCustomBiomes": true,
+		"upcomingCreatorFeatures": true,
+		"enableGameTestFramework": true,
+		"dataDrivenJigsawStructures": true,
+		"renderDragonFeatures": true
+	},
 	"bdsProject": false,
 	"packs": {
 		"behaviorPack": "./BP",

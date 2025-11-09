@@ -76,15 +76,15 @@ function getReturningPlayerWelcome(day, player) {
     // Validate player before calling getKnowledgeLevel
     if (!player) {
         return {
-            message: "§aWelcome back to your world...",
-            title: "§aWelcome Back!",
-            actionbar: "Everything seems peaceful here..."
+            message: "§7Welcome back to your world.",
+            title: "§7Welcome Back",
+            actionbar: "Everything seems peaceful here."
         };
     }
-    
+
     const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
     const bearKnowledge = getKnowledgeLevel(player, 'bearLevel');
-    
+
     if (day < 2) {
         // Days 0-1: Before Maple Bears spawn
         return {
@@ -198,16 +198,26 @@ function getInfectionSound(day) {
  * @param {string} level The message level ("hit", "infected", "severe")
  * @returns {string} The color-coded message
  */
-export function recordDailyEvent(player, day, event) {
+export function recordDailyEvent(player, day, event, category = "general") {
     try {
         const codex = getCodex(player);
         if (!codex.dailyEvents) {
             codex.dailyEvents = {};
         }
         if (!codex.dailyEvents[day]) {
-            codex.dailyEvents[day] = [];
+            codex.dailyEvents[day] = {};
         }
-        codex.dailyEvents[day].push(event);
+
+        // Initialize category array if it doesn't exist
+        if (!codex.dailyEvents[day][category]) {
+            codex.dailyEvents[day][category] = [];
+        }
+
+        // Avoid duplicate events
+        if (!codex.dailyEvents[day][category].includes(event)) {
+            codex.dailyEvents[day][category].push(event);
+        }
+
         saveCodex(player, codex);
     } catch (error) {
         console.warn("Error recording daily event:", error);
@@ -217,37 +227,24 @@ export function recordDailyEvent(player, day, event) {
 export function checkDailyEventsForAllPlayers() {
     try {
         const currentDay = getCurrentDay();
-        
+
         // Record events one day after they occur (reflection on previous day)
         const dayToRecord = currentDay - 1;
-        
+
         console.log(`[DAILY EVENTS] Current Day: ${currentDay}, Recording events for Day: ${dayToRecord}`);
-        
+
         if (dayToRecord <= 0) return; // No events to record for day 0 or negative days
-        
+
         const events = [];
-        
+
         // Use the centralized milestone message function
         const milestoneMessage = getMilestoneMessage(dayToRecord);
         if (milestoneMessage) {
             events.push(milestoneMessage);
         }
-        
-        // Day 5: Day 4+ variants unlock (reflection on day 4)
-        if (dayToRecord === 5) {
-            events.push("New variants of the Maple Bears have been observed. They appear stronger and more aggressive than before.");
-        }
-        
-        // Day 9: Day 8+ variants unlock (reflection on day 8)
-        if (dayToRecord === 9) {
-            events.push("The most dangerous Maple Bear variants yet have been documented. The infection continues to evolve.");
-        }
-        
-        // Day 14: Day 13+ variants unlock (reflection on day 13)
-        if (dayToRecord === 14) {
-            events.push("The most advanced Maple Bear variants have been observed. The infection has reached unprecedented levels.");
-        }
-        
+
+        // Variant unlock events are now recorded dynamically when players actually unlock them
+
         // Record events for all players if any events occurred
         if (events.length > 0) {
             for (const player of world.getAllPlayers()) {
@@ -259,7 +256,7 @@ export function checkDailyEventsForAllPlayers() {
                     if (!codex.dailyEvents[dayToRecord]) {
                         codex.dailyEvents[dayToRecord] = [];
                     }
-                    
+
                     // Record each event individually, checking for duplicates
                     let hasNewEvents = false;
                     for (const event of events) {
@@ -268,31 +265,31 @@ export function checkDailyEventsForAllPlayers() {
                             hasNewEvents = true;
                         }
                     }
-                    
+
                     // Only save and play sounds if we actually added new events
                     if (hasNewEvents) {
                         saveCodex(player, codex);
-                        
+
                         // Play sound and send message for milestone days (like item discovery)
                         if (dayToRecord === 2 || dayToRecord === 4 || dayToRecord === 8 || dayToRecord === 13) {
                             try {
                                 // Play discovery sound
                                 player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
                                 player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
-                                
+
                                 // Send discovery message
                                 player.sendMessage("§7You feel your thoughts organizing... New insights about yesterday's events have been recorded in your mind.");
                             } catch (err) {
                                 console.warn("[ERROR] in milestone discovery sound/message:", err);
                             }
                         }
-                        
+
                         console.log(`[DAILY EVENTS] Recorded Day ${dayToRecord} events for ${player.name}`);
                     }
                 }
             }
         }
-        
+
     } catch (error) {
         console.warn("Error checking daily events for all players:", error);
     }
@@ -301,7 +298,7 @@ export function checkDailyEventsForAllPlayers() {
 
 export function getInfectionMessage(type, level = "normal") {
     const currentDay = getCurrentDay();
-    
+
     // Early days (0-3): Calm, mysterious
     if (currentDay < 4) {
         const earlyMessages = {
@@ -318,7 +315,7 @@ export function getInfectionMessage(type, level = "normal") {
         };
         return earlyMessages[type]?.[level] || earlyMessages[type]?.infected || "§7Something feels different...";
     }
-    
+
     // Mid days (4-7): More direct, concerning
     else if (currentDay < 8) {
         const midMessages = {
@@ -335,7 +332,7 @@ export function getInfectionMessage(type, level = "normal") {
         };
         return midMessages[type]?.[level] || midMessages[type]?.infected || "§6Something is wrong...";
     }
-    
+
     // Late days (8+): Urgent, dangerous
     else {
         const lateMessages = {
@@ -394,7 +391,7 @@ function showPlayerTitle(player, text, subtitle = undefined, options = {}, day =
                 titleOptions.subtitle = subtitle;
             }
             player.onScreenDisplay.setTitle(text, titleOptions);
-            
+
             // Use infection-based sound if day is provided
             if (day !== null) {
                 const soundConfig = getInfectionSound(day);
@@ -414,7 +411,7 @@ function showPlayerTitle(player, text, subtitle = undefined, options = {}, day =
  * @param {Player} player The player to show the message to
  * @param {string|RawMessage} text The text to display
  */
-function showPlayerActionbar(player, text) {
+export function showPlayerActionbar(player, text) {
     try {
         if (player && player.isValid) {
             player.onScreenDisplay.setActionBar(text);
@@ -531,13 +528,13 @@ function startDayCycleLoop() {
                 let newDay = getCurrentDay() + 1;
                 setCurrentDay(newDay);
                 console.log(`🌅 New day detected: Day ${newDay}`);
-                
+
                 // Check for daily events to record (reflection on previous day)
                 checkDailyEventsForAllPlayers();
 
                 // Get display info for the new day
                 const displayInfo = getDayDisplayInfo(newDay);
-                
+
                 // Notify players
                 for (const player of world.getAllPlayers()) {
                     if (player && player.isValid) {
@@ -597,7 +594,7 @@ export function mbiHandleMilestoneDay(day) {
                         } catch (err) {
                             console.warn("[ERROR] in showPlayerTitle:", err);
                         }
-                        
+
                     }
                 } catch (err) {
                     console.warn("[ERROR] in player milestone for-loop:", err);
@@ -615,12 +612,11 @@ export function mbiHandleMilestoneDay(day) {
                     world.sendMessage(`§8[MBI] §cIf you see one, run.`);
                     break;
                 case 13:
-                    world.sendMessage(`§8[MBI] §4The infection has increased to new heights...`);
+                    world.sendMessage(`§8[MBI] §7The infection has increased to new heights.`);
                     break;
             }
 
-            // Spawn pulse to guarantee milestone visibility even if world age lags due to sleeping
-            runMilestoneSpawnPulse(day);
+            // Milestone spawn pulse removed - no forced spawning near players
         } catch (error) {
             console.warn("[ERROR] in mbiHandleMilestoneDay:", error);
             if (error && error.stack) {
@@ -636,14 +632,14 @@ const MILESTONE_PULSE_FLAG_PREFIX = "mbi_milestone_pulse_"; // e.g. mbi_mileston
 function hasMilestonePulseRun(day) {
     try {
         return !!world.getDynamicProperty(MILESTONE_PULSE_FLAG_PREFIX + String(day));
-    } catch {}
+    } catch { }
     return false;
 }
 
 function setMilestonePulseRun(day) {
     try {
         world.setDynamicProperty(MILESTONE_PULSE_FLAG_PREFIX + String(day), true);
-    } catch {}
+    } catch { }
 }
 
 function pickSpawnTypeForDay(day) {
@@ -706,9 +702,9 @@ function runMilestoneSpawnPulse(day) {
 
                 try {
                     dim.spawnEntity(typeId, spawnLoc);
-                } catch {}
+                } catch { }
             }
-        } catch {}
+        } catch { }
     }
 
     setMilestonePulseRun(day);
@@ -733,7 +729,7 @@ function findSurfaceLocation(dimension, x, baseY, z) {
                 return { x, y, z };
             }
         }
-    } catch {}
+    } catch { }
     return null;
 }
 
@@ -769,7 +765,7 @@ export function initializeDayTracking() {
 
         // Get display info for the current day
         const displayInfo = getDayDisplayInfo(currentDay);
-        
+
         // Play welcome sound and show title for all players
         for (const player of world.getAllPlayers()) {
             if (player && player.isValid) {
@@ -871,63 +867,63 @@ world.afterEvents.playerJoin.subscribe((event) => {
 
                 const currentDay = getCurrentDay();
 
-                                        // Check if this is the first time the world is being initialized
-                        const isFirstTimeInit = !world.getDynamicProperty(INITIALIZED_FLAG);
-                        const isFirstTimePlayer = !returningPlayers.has(playerName);
+                // Check if this is the first time the world is being initialized
+                const isFirstTimeInit = !world.getDynamicProperty(INITIALIZED_FLAG);
+                const isFirstTimePlayer = !returningPlayers.has(playerName);
 
-                        // Add an additional delay before showing messages
-                        system.runTimeout(() => {
-                            try {
-                                if (isFirstTimeInit) {
-                                    console.log("First time world initialization");
-                                    initializeDayTracking();
-                                    // initializeDayTracking already shows the welcome message
+                // Add an additional delay before showing messages
+                system.runTimeout(() => {
+                    try {
+                        if (isFirstTimeInit) {
+                            console.log("First time world initialization");
+                            initializeDayTracking();
+                            // initializeDayTracking already shows the welcome message
+                        } else {
+                            // Show join message for subsequent joins
+                            const soundConfig = getInfectionSound(currentDay);
+                            player.playSound(soundConfig.sound, {
+                                pitch: soundConfig.pitch,
+                                volume: soundConfig.volume
+                            });
+
+                            if (isFirstTimePlayer) {
+                                // First-time player - show welcome message based on current day
+                                const displayInfo = getDayDisplayInfo(currentDay);
+                                if (currentDay < 2) {
+                                    sendPlayerMessage(player, "§aWelcome to a completely normal world...");
+                                    showPlayerTitle(player, "§aWelcome...", undefined, { stayDuration: 40 }, currentDay);
+                                    showPlayerActionbar(player, "Everything seems peaceful here...");
                                 } else {
-                                    // Show join message for subsequent joins
-                                    const soundConfig = getInfectionSound(currentDay);
-                                    player.playSound(soundConfig.sound, {
-                                        pitch: soundConfig.pitch,
-                                        volume: soundConfig.volume
-                                    });
-                                    
-                                    if (isFirstTimePlayer) {
-                                        // First-time player - show welcome message based on current day
-                                        const displayInfo = getDayDisplayInfo(currentDay);
-                                        if (currentDay < 2) {
-                                            sendPlayerMessage(player, "§aWelcome to a completely normal world...");
-                                            showPlayerTitle(player, "§aWelcome...", undefined, { stayDuration: 40 }, currentDay);
-                                            showPlayerActionbar(player, "Everything seems peaceful here...");
-                                        } else {
-                                            sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Welcome to Day ${currentDay}...`);
-                                            showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Welcome...`, undefined, { stayDuration: 40 }, currentDay);
-                                            showPlayerActionbar(player, "The Maple Bear infection continues...");
-                                        }
-                                        
-                                        // Mark as returning player for future joins
-                                        returningPlayers.add(playerName);
-                                        
-                                        // Show day info after a delay
-                                        system.runTimeout(() => {
-                                            const displayInfo = getDayDisplayInfo(currentDay);
-                                            sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} It is currently Day ${currentDay}`);
-                                            showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay);
-                                            showPlayerActionbar(player, "The Maple Bear infection continues...");
-                                        }, 3000); // 3 second delay
-                                    } else {
-                                        // Returning player - just show the day
-                                        const displayInfo = getDayDisplayInfo(currentDay);
-                                        sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`);
-                                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay);
-                                        showPlayerActionbar(player, "The Maple Bear infection continues...");
-                                    }
+                                    sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Welcome to Day ${currentDay}...`);
+                                    showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Welcome...`, undefined, { stayDuration: 40 }, currentDay);
+                                    showPlayerActionbar(player, "The Maple Bear infection continues...");
                                 }
 
-                                // Mark player as welcomed
-                                welcomedPlayers.add(playerName);
-                            } catch (error) {
-                                console.warn("Error in delayed welcome handler:", error);
+                                // Mark as returning player for future joins
+                                returningPlayers.add(playerName);
+
+                                // Show day info after a delay
+                                system.runTimeout(() => {
+                                    const displayInfo = getDayDisplayInfo(currentDay);
+                                    sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} It is currently Day ${currentDay}`);
+                                    showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay);
+                                    showPlayerActionbar(player, "The Maple Bear infection continues...");
+                                }, 3000); // 3 second delay
+                            } else {
+                                // Returning player - just show the day
+                                const displayInfo = getDayDisplayInfo(currentDay);
+                                sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`);
+                                showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay);
+                                showPlayerActionbar(player, "The Maple Bear infection continues...");
                             }
-                        }, 200); // 10 second delay for welcome messages
+                        }
+
+                        // Mark player as welcomed
+                        welcomedPlayers.add(playerName);
+                    } catch (error) {
+                        console.warn("Error in delayed welcome handler:", error);
+                    }
+                }, 200); // 10 second delay for welcome messages
             } catch (error) {
                 console.warn("Error in delayed player join handler:", error);
             }

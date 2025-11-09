@@ -1,5 +1,6 @@
 import { system } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
+import { recordDailyEvent, getCurrentDay } from "./mb_dayTracker.js";
 
 export function getDefaultCodex() {
     return {
@@ -34,7 +35,7 @@ export function getDefaultCodex() {
         },
         // Aggregated metadata by effect id
         symptomsMeta: {},
-        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, dustedDirtSeen: false },
+        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, dustedDirtSeen: false, bookCraftMessageShown: false },
         mobs: {
             mapleBearSeen: false,
             infectedBearSeen: false,
@@ -65,16 +66,25 @@ export function getDefaultCodex() {
             day4VariantsUnlockedInfected: false,
             day4VariantsUnlockedBuff: false,
             day4VariantsUnlockedOther: false,
+            // Message tracking flags to prevent repeated messages
+            day4MessageShownTiny: false,
+            day4MessageShownInfected: false,
+            day4MessageShownBuff: false,
+            day4MessageShownOther: false,
             // Individual bear type unlock flags for Day 8+
             day8VariantsUnlockedTiny: false,
             day8VariantsUnlockedInfected: false,
             day8VariantsUnlockedBuff: false,
             day8VariantsUnlockedOther: false,
+            // Message tracking flags for Day 8+
+            day8MessageShown: false,
             // Individual bear type unlock flags for Day 13+
             day13VariantsUnlockedTiny: false,
             day13VariantsUnlockedInfected: false,
             day13VariantsUnlockedBuff: false,
-            day13VariantsUnlockedOther: false
+            day13VariantsUnlockedOther: false,
+            // Message tracking flags for Day 13+
+            day13MessageShown: false
         },
         biomes: { infectedBiomeSeen: false },
         knowledge: {
@@ -396,6 +406,11 @@ export function shareKnowledge(fromPlayer, toPlayer) {
         saveCodex(toPlayer, toCodex);
         checkKnowledgeProgression(toPlayer);
 
+        // Record this knowledge sharing event in the daily log for tomorrow
+        const tomorrowDay = getCurrentDay() + 1;
+        const eventMessage = `${fromPlayer.name} shared valuable knowledge with you: ${sharedItems.join(', ')}. This expanded understanding of the infection will prove useful.`;
+        recordDailyEvent(toPlayer, tomorrowDay, eventMessage, "knowledge");
+
         // Send special feedback to both players
         fromPlayer.sendMessage(`§7You shared knowledge with §f${toPlayer.name}§7: §a${sharedItems.join(', ')}`);
         toPlayer.sendMessage(`§b${fromPlayer.name} §7shared their knowledge with you: §a${sharedItems.join(', ')}`);
@@ -446,12 +461,17 @@ export function updateSymptomMeta(player, effectId, durationTicks, amp, source, 
 }
 
 export function showCodexBook(player, context) {
-    const { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, checkVariantUnlock, getCurrentDay, getDayDisplayInfo } = context;
+    const { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, getCurrentDay, getDayDisplayInfo } = context;
 
-    // Check for variant unlocks when opening the codex
-    if (checkVariantUnlock) {
-        checkVariantUnlock(player);
-    }
+    // Play journal open sound
+    player.playSound("mb.codex_open", { pitch: 1.0, volume: 1.0 });
+
+    // Ensure knowledge progression is up to date before presenting information
+    try {
+        checkKnowledgeProgression(player);
+    } catch { }
+
+    // Variant unlock checks are handled when mobs are killed, not when opening codex
     function maskTitle(title, known) {
         return known ? title : "?".repeat(title.length);
     }
@@ -471,7 +491,11 @@ export function showCodexBook(player, context) {
         summary.push(`${display.color}${display.symbols} Current Day: ${currentDay}`);
 
         // Health status logic - progressive based on knowledge
-        const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
+        let infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
+        if ((hasInfection || codex.history.totalInfections > 0) && infectionKnowledge < 1) {
+            updateKnowledgeLevel(player, 'infectionLevel', 1);
+            infectionKnowledge = 1;
+        }
         if (hasInfection) {
             if (infectionKnowledge >= 1) {
                 summary.push(`§eStatus: §cINFECTED`);
@@ -571,9 +595,15 @@ export function showCodexBook(player, context) {
         }
 
         form.show(player).then((res) => {
-            if (!res || res.canceled) return;
+            if (!res || res.canceled) {
+                // Play journal close sound when canceling/closing
+                player.playSound("mb.codex_close", { pitch: 1.0, volume: 1.0 });
+                return;
+            }
             const sel = res.selection;
             if (sel >= 0 && sel < buttonActions.length) {
+                // Play page turn sound for navigation
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
                 buttonActions[sel]();
             }
         }).catch(() => { });
@@ -617,7 +647,10 @@ export function showCodexBook(player, context) {
             lines.push("§e???");
         }
 
-        new ActionFormData().title("§6Infection").body(lines.join("\n")).button("§8Back").show(player).then(() => openMain());
+        new ActionFormData().title("§6Infection").body(lines.join("\n")).button("§8Back").show(player).then(() => {
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+            openMain();
+        });
     }
 
     function openSymptoms() {
@@ -671,6 +704,9 @@ export function showCodexBook(player, context) {
         }
         form.show(player).then((res) => {
             if (!res || res.canceled) return;
+
+            // Play page turn sound
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
 
             // If no content available, just go back
             if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects) {
@@ -731,6 +767,12 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled) return openSymptoms();
 
+            // Play page turn sound
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+
+            // Play page turn sound
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+
             // If no symptoms available, just go back
             if (entries.length === 0) {
                 openSymptoms();
@@ -754,7 +796,10 @@ export function showCodexBook(player, context) {
                     const snowStr = [sc.low ? `1-5(${sc.low})` : null, sc.mid ? `6-10(${sc.mid})` : null, sc.high ? `11+(${sc.high})` : null].filter(Boolean).join(", ") || "-";
                     body = `§e${e.title}\n§7Sources: §f${srcs}\n§7Duration: §f${minDur}s - ${maxDur}s\n§7Amplifier: §f${minAmp} - ${maxAmp}\n§7Timing: §f${timingStr}\n§7Snow Count: §f${snowStr}`;
                 }
-                new ActionFormData().title(`§6Infection Symptoms: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => openInfectionSymptoms());
+                new ActionFormData().title(`§6Infection Symptoms: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                    openInfectionSymptoms();
+                });
             } else {
                 openSymptoms();
             }
@@ -798,6 +843,12 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled) return openSymptoms();
 
+            // Play page turn sound
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+
+            // Play page turn sound
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+
             // If no effects available, just go back
             if (entries.length === 0) {
                 openSymptoms();
@@ -813,7 +864,10 @@ export function showCodexBook(player, context) {
                     const description = e.type === "positive" ? "This effect provides benefits when consumed with snow." : "This effect causes negative effects when consumed with snow.";
                     body = `§e${e.title}\n§7Type: ${effectType}\n§7Description: §f${description}\n\n§7This effect can be obtained by consuming snow while infected. The chance and intensity depend on your infection level.`;
                 }
-                new ActionFormData().title(`§6Snow Effects: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => openSnowEffects());
+                new ActionFormData().title(`§6Snow Effects: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                    openSnowEffects();
+                });
             } else {
                 openSymptoms();
             }
@@ -941,6 +995,9 @@ export function showCodexBook(player, context) {
         form.button("§8Back");
         form.show(player).then((res) => {
             if (!res || res.canceled) return openMain();
+
+            // Play page turn sound
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
             if (res.selection >= 0 && res.selection < entries.length) {
                 const e = entries[res.selection];
                 const known = codex.mobs[e.key];
@@ -1069,7 +1126,10 @@ export function showCodexBook(player, context) {
                     }
                 }
 
-                new ActionFormData().title(`§6Mobs: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => openMobs());
+                new ActionFormData().title(`§6Mobs: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                    openMobs();
+                });
             } else {
                 openMain();
             }
@@ -1143,6 +1203,9 @@ export function showCodexBook(player, context) {
         form.button("§8Back");
         form.show(player).then((res) => {
             if (!res || res.canceled) return openMain();
+
+            // Play page turn sound
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
             if (res.selection >= 0 && res.selection < entries.length) {
                 const e = entries[res.selection];
                 const known = codex.items[e.key];
@@ -1226,7 +1289,10 @@ export function showCodexBook(player, context) {
                         body = "§eDusted Dirt\n§7A mysterious substance that appears to be contaminated with unknown particles.\n\n§7Properties:\n§7• Contains foreign particulate matter\n§7• Appears to be contaminated soil\n§7• May be related to the infection\n\n§7Research Notes:\n§7• Origin unknown\n§7• May be a byproduct of infection\n§7• Requires further investigation\n\n§eThis contaminated material may hold clues about the infection's nature.";
                     }
                 }
-                new ActionFormData().title(`§6Items: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => openItems());
+                new ActionFormData().title(`§6Items: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                    openItems();
+                });
             } else {
                 openMain();
             }
@@ -1249,6 +1315,10 @@ export function showCodexBook(player, context) {
             form.button("§8Back");
             form.show(player).then((res) => {
                 if (!res || res.canceled) return openMain();
+
+                // Play page turn sound
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+
                 openMain();
             });
             return;
@@ -1259,8 +1329,17 @@ export function showCodexBook(player, context) {
 
         // Add buttons for each day with events
         for (const day of daysWithEvents) {
-            const events = codex.dailyEvents[day];
-            if (events && events.length > 0) {
+            const dayEvents = codex.dailyEvents[day];
+            let hasEvents = false;
+
+            // Handle both old format (array) and new format (object with categories)
+            if (Array.isArray(dayEvents)) {
+                hasEvents = dayEvents.length > 0;
+            } else if (dayEvents && typeof dayEvents === 'object') {
+                hasEvents = Object.values(dayEvents).some(category => category && category.length > 0);
+            }
+
+            if (hasEvents) {
                 form.button(`§fDay ${day}`);
             }
         }
@@ -1268,18 +1347,57 @@ export function showCodexBook(player, context) {
         form.button("§8Back");
         form.show(player).then((res) => {
             if (!res || res.canceled) return openMain();
+
+            // Play page turn sound
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
             if (res.selection >= 0 && res.selection < daysWithEvents.length) {
                 const selectedDay = daysWithEvents[res.selection];
-                const events = codex.dailyEvents[selectedDay];
+                const dayEvents = codex.dailyEvents[selectedDay];
 
                 let body = `§6Day ${selectedDay}\n\n`;
-                if (events && events.length > 0) {
-                    body += events.join("\n\n");
+
+                // Handle both old format (array) and new format (object with categories)
+                if (Array.isArray(dayEvents)) {
+                    // Old format: simple array of events
+                    if (dayEvents.length > 0) {
+                        body += "§7Other Events\n";
+                        body += dayEvents.join("\n\n");
+                    } else {
+                        body += "§7No significant events recorded for this day.";
+                    }
+                } else if (dayEvents && typeof dayEvents === 'object') {
+                    // New format: categorized events
+                    const categoryOrder = ["variants", "knowledge", "items", "effects", "mobs", "general"];
+                    const categoryNames = {
+                        variants: "§eVariant Discoveries",
+                        knowledge: "§bKnowledge Gained",
+                        items: "§aItems Discovered",
+                        effects: "§cEffects Experienced",
+                        mobs: "§dCreatures Encountered",
+                        general: "§7Other Events"
+                    };
+
+                    let hasEvents = false;
+                    for (const category of categoryOrder) {
+                        if (dayEvents[category] && dayEvents[category].length > 0) {
+                            hasEvents = true;
+                            body += `§l${categoryNames[category]}§r\n`;
+                            body += dayEvents[category].join("\n");
+                            body += "\n\n";
+                        }
+                    }
+
+                    if (!hasEvents) {
+                        body += "§7No significant events recorded for this day.";
+                    }
                 } else {
                     body += "§7No significant events recorded for this day.";
                 }
 
-                new ActionFormData().title(`§6Daily Log: Day ${selectedDay}`).body(body).button("§8Back").show(player).then(() => openDailyLog());
+                new ActionFormData().title(`§6Daily Log: Day ${selectedDay}`).body(body).button("§8Back").show(player).then(() => {
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                    openDailyLog();
+                });
             } else {
                 openMain();
             }

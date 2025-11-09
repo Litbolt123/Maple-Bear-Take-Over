@@ -43,6 +43,9 @@
 		},
 		"mb_buff_mb_day13_egg": {
 			"textures": "textures/items/buff_mb_day13_egg"
+		},
+		"flying_mb_egg": {
+			"textures": "textures/items/flying_mb_egg"
 		}
 	}
 }

@@ -222,6 +222,42 @@
 					"volume": 1
 				}
 			]
+		},
+		"mb.codex_open": {
+			"category": "ui",
+			"min_distance": 0,
+			"max_distance": 8,
+			"subtitle": "Journal opens",
+			"sounds": [
+				{
+					"name": "sounds/Dusted Journal/dusted_journal_open",
+					"volume": 1
+				}
+			]
+		},
+		"mb.codex_close": {
+			"category": "ui",
+			"min_distance": 0,
+			"max_distance": 8,
+			"subtitle": "Journal closes",
+			"sounds": [
+				{
+					"name": "sounds/Dusted Journal/dusted_journal_close",
+					"volume": 1
+				}
+			]
+		},
+		"mb.codex_turn_page": {
+			"category": "ui",
+			"min_distance": 0,
+			"max_distance": 8,
+			"subtitle": "Page turns",
+			"sounds": [
+				{
+					"name": "sounds/Dusted Journal/dusted_journal_turn_page",
+					"volume": 1
+				}
+			]
 		}
 	}
 }

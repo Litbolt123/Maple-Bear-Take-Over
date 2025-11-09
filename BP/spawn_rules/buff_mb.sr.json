@@ -19,7 +19,8 @@
 					"max": "hard"
 				},
 				"minecraft:weight": {
-					"default": 3
+					"default": 20,
+					"infected_biome": 50
 				},
 				"minecraft:herd": {
 					"min_size": 1,
@@ -29,15 +30,16 @@
 					"surface": 10
 				},
 				"minecraft:distance_filter": {
-					"min": 24,
-					"max": 128
+					"min": 2,
+					"max": 86
 				},
 				"minecraft:height_filter": {
-					"min": 0,
-					"max": 128
+					"min": -64,
+					"max": 320
 				},
 				"minecraft:spawns_on_block_filter": [
-					"mb:dusted_dirt"
+					"mb:dusted_dirt",
+					"mb:snow_layer"
 				],
 				"minecraft:biome_filter": {
 					"test": "has_biome_tag",

@@ -1,0 +1,309 @@
+$formatVersion: 1
+#manifest
+projects/MapleBear TakeOver/BP/manifest.json|1762386447
+#unknown
+projects/MapleBear TakeOver/BP/pack_icon.png|1747745028
+projects/MapleBear TakeOver/BP/_archived/biomes/dusted_plain.json|1755778585
+projects/MapleBear TakeOver/BP/_archived/spawnrules/armadillo.sr.json|1751747491
+projects/MapleBear TakeOver/BP/_archived/spawnrules/axolotl.sr.json|1751747495
+projects/MapleBear TakeOver/BP/_archived/spawnrules/bee.sr.json|1751747499
+projects/MapleBear TakeOver/BP/_archived/spawnrules/chicken.sr.json|1751747507
+projects/MapleBear TakeOver/BP/_archived/spawnrules/cat.sr.json|1751747503
+projects/MapleBear TakeOver/BP/_archived/spawnrules/cow.sr.json|1751747512
+projects/MapleBear TakeOver/BP/_archived/spawnrules/donkey.sr.json|1751747524
+projects/MapleBear TakeOver/BP/_archived/spawnrules/dolphin.sr.json|1751747520
+projects/MapleBear TakeOver/BP/_archived/spawnrules/drowned.sr.json|1751747529
+projects/MapleBear TakeOver/BP/_archived/spawnrules/enderman.sr.json|1751747533
+projects/MapleBear TakeOver/BP/_archived/spawnrules/frog.sr.json|1751747601
+projects/MapleBear TakeOver/BP/_archived/spawnrules/fox.sr.json|1751747599
+projects/MapleBear TakeOver/BP/_archived/spawnrules/creeper.sr.json|1757687869
+projects/MapleBear TakeOver/BP/_archived/spawnrules/glow_squid.sr.json|1751747633
+projects/MapleBear TakeOver/BP/_archived/spawnrules/goat.sr.json|1751747604
+projects/MapleBear TakeOver/BP/_archived/spawnrules/guardian.sr.json|1751747640
+projects/MapleBear TakeOver/BP/_archived/spawnrules/horse.sr.json|1751747609
+projects/MapleBear TakeOver/BP/_archived/spawnrules/husk.sr.json|1757687868
+projects/MapleBear TakeOver/BP/_archived/spawnrules/llama.sr.json|1751747611
+projects/MapleBear TakeOver/BP/_archived/spawnrules/mooshroom.sr.json|1751747614
+projects/MapleBear TakeOver/BP/_archived/spawnrules/mule.sr.json|1751747619
+projects/MapleBear TakeOver/BP/_archived/spawnrules/ocelot.sr.json|1751747621
+projects/MapleBear TakeOver/BP/_archived/spawnrules/panda.sr.json|1751747624
+projects/MapleBear TakeOver/BP/_archived/spawnrules/parrot.sr.json|1751747632
+projects/MapleBear TakeOver/BP/_archived/spawnrules/phantom.sr.json|1751747652
+projects/MapleBear TakeOver/BP/_archived/spawnrules/rabbit.sr.json|1751747643
+projects/MapleBear TakeOver/BP/_archived/spawnrules/salmon.sr.json|1751747678
+projects/MapleBear TakeOver/BP/_archived/spawnrules/pufferfish.sr.json|1751747675
+projects/MapleBear TakeOver/BP/_archived/spawnrules/skeleton.sr.json|1755782441
+projects/MapleBear TakeOver/BP/_archived/spawnrules/slime.sr.json|1751747688
+projects/MapleBear TakeOver/BP/_archived/spawnrules/pig.sr.json|1755782441
+projects/MapleBear TakeOver/BP/_archived/spawnrules/sheep.sr.json|1751747647
+projects/MapleBear TakeOver/BP/_archived/spawnrules/polar_bear.sr.json|1751747638
+projects/MapleBear TakeOver/BP/_archived/spawnrules/spider.sr.json|1755782441
+projects/MapleBear TakeOver/BP/_archived/spawnrules/squid.sr.json|1751747696
+projects/MapleBear TakeOver/BP/_archived/spawnrules/strider.sr.json|1751747650
+projects/MapleBear TakeOver/BP/_archived/spawnrules/stray.sr.json|1751747686
+projects/MapleBear TakeOver/BP/_archived/spawnrules/tadpole.sr.json|1751747683
+projects/MapleBear TakeOver/BP/_archived/spawnrules/tropicalfish.sr.json|1751747676
+projects/MapleBear TakeOver/BP/_archived/spawnrules/turtle.sr.json|1751747657
+projects/MapleBear TakeOver/BP/_archived/spawnrules/witch.sr.json|1755782441
+projects/MapleBear TakeOver/BP/_archived/spawnrules/zombie.sr.json|1757687585
+projects/MapleBear TakeOver/BP/_archived/spawnrules/wolf.sr.json|1751747661
+projects/MapleBear TakeOver/BP/_archived/spawnrules/zombie_villager.sr.json|1751747662
+projects/MapleBear TakeOver/RP/pack_icon.png|1747745028
+projects/MapleBear TakeOver/RP/sounds/buff_mb_step.wav|1757076600
+projects/MapleBear TakeOver/RP/sounds/tiny_mb_step.wav|1755779175
+projects/MapleBear TakeOver/RP/sounds/infected_mb/Dust_choked_roar2.wav|1758373571
+projects/MapleBear TakeOver/RP/sounds/infected_mb/Dust_choked_roar3.wav|1758373571
+projects/MapleBear TakeOver/RP/sounds/infected_mb/Dust_choked_roar1.wav|1758373571
+projects/MapleBear TakeOver/RP/_archived/biomes/biomes_client.json|1755778740
+projects/MapleBear TakeOver/RP/_archived/biomes/fogs/mb_snow.json|1755043440
+projects/MapleBear TakeOver/RP/_archived/biomes/fogs/dusted_plain.json|1759348213
+projects/MapleBear TakeOver/RP/sounds/Block Sounds/'snow'_powder_place.wav|1760559745
+projects/MapleBear TakeOver/RP/sounds/Block Sounds/'snow'_layer_break.wav|1760560892
+projects/MapleBear TakeOver/RP/sounds/Block Sounds/'snow'_layer_fall.wav|1760561733
+projects/MapleBear TakeOver/RP/sounds/Block Sounds/'snow'_layer_jump.wav|1760561954
+projects/MapleBear TakeOver/RP/sounds/Block Sounds/'snow'_layer_hit.wav|1760562440
+projects/MapleBear TakeOver/RP/sounds/Block Sounds/'snow'_layer_land.wav|1760562291
+projects/MapleBear TakeOver/RP/sounds/Block Sounds/'snow'_layer_step.wav|1760562069
+#functionTick
+projects/MapleBear TakeOver/BP/functions/tick.json|1747745028
+#gameTest
+projects/MapleBear TakeOver/BP/scripts/main.js|1760796177
+projects/MapleBear TakeOver/BP/scripts/mb_codex.js|1760731777
+projects/MapleBear TakeOver/BP/scripts/mb_dayTracker.js|1760795679
+#entity
+projects/MapleBear TakeOver/BP/entities/player.json|1750270869|{"identifier":["minecraft:player"],"event":["minecraft:gain_raid_omen","minecraft:clear_add_raid_omen","minecraft:trigger_raid","minecraft:remove_raid_trigger"],"eventReference":["minecraft:gain_raid_omen","minecraft:remove_raid_trigger","minecraft:clear_add_raid_omen"],"componentGroup":["minecraft:add_raid_omen","minecraft:clear_raid_omen_spell_effect","minecraft:raid_trigger"],"family":["player"],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/empty.json"]}
+projects/MapleBear TakeOver/BP/entities/mb - day 8.json|1760734447|{"identifier":["mb:mb_day8"],"event":[],"componentGroup":["bridge:"],"family":["infected"],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/tiny_bear_day8_loot_table.json"]}
+projects/MapleBear TakeOver/BP/entities/infected_pig.json|1758738142|{"identifier":["mb:infected_pig"],"event":[],"componentGroup":[],"family":["infected"],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/infected_pig_loot_table.json"]}
+projects/MapleBear TakeOver/BP/entities/buff_mb.json|1760735663|{"identifier":["mb:buff_mb"],"event":[],"componentGroup":["bridge:","mb_step_sound"],"family":["infected"],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/buff_bear_loot_table.json"]}
+projects/MapleBear TakeOver/BP/entities/mb.json|1760732127|{"identifier":["mb:mb"],"event":[],"componentGroup":["bridge:"],"family":["infected"],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/tiny_bear_loot_table.json"]}
+projects/MapleBear TakeOver/BP/entities/mb - day 4.json|1760734457|{"identifier":["mb:mb_day4"],"event":[],"componentGroup":["bridge:"],"family":["infected"],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/tiny_bear_day4_loot_table.json"]}
+projects/MapleBear TakeOver/BP/entities/infected - day 8.json|1760734405|{"identifier":["mb:infected_day8"],"event":["become_buffed","equip_armor","equip_weapon","spawn"],"eventReference":["equip_armor","equip_weapon"],"componentGroup":["bridge:","buffed","variant_0","variant_1","variant_2","variant_3","variant_4"],"family":["infected"],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/infected_day8_loot_table.json"]}
+projects/MapleBear TakeOver/BP/entities/infected.json|1760734374|{"identifier":["mb:infected"],"event":["become_buffed","equip_armor","equip_weapon","spawn"],"eventReference":["equip_armor","equip_weapon"],"componentGroup":["bridge:","buffed","variant_0","variant_1","variant_2","variant_3","variant_4"],"family":["infected"],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/infected_loot_table.json"]}
+projects/MapleBear TakeOver/BP/entities/infected_cow.json|1758808395|{"identifier":["mb:infected_cow"],"event":["minecraft:entity_transformed","minecraft:spawn_adult"],"componentGroup":["minecraft:cow_adult"],"family":["infected"],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/infected_cow_loot_table.json","projects/MapleBear TakeOver/BP/loot_tables/entities/cow.json"]}
+projects/MapleBear TakeOver/BP/entities/buff_mb - day 13.json|1760735670|{"identifier":["mb:buff_mb_day13"],"event":[],"componentGroup":["bridge:","mb_step_sound"],"family":["infected"],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/buff_bear_day13_loot_table.json"]}
+projects/MapleBear TakeOver/BP/entities/mb - day 13.json|1760734469|{"identifier":["mb:mb_day13"],"event":[],"componentGroup":["bridge:"],"family":["infected"],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/tiny_bear_day13_loot_table.json"]}
+projects/MapleBear TakeOver/BP/entities/infected - day 13.json|1760734423|{"identifier":["mb:infected_day13"],"event":["become_buffed","equip_armor","equip_weapon","spawn"],"eventReference":["equip_armor","equip_weapon"],"componentGroup":["bridge:","buffed","variant_0","variant_1","variant_2","variant_3","variant_4"],"family":["infected"],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/infected_day13_loot_table.json"]}
+projects/MapleBear TakeOver/BP/entities/flying_mb.json|1760915418|{"identifier":["mb:flying_mb"],"event":["become_buffed","equip_armor","equip_weapon","spawn"],"eventReference":["equip_armor","equip_weapon"],"componentGroup":["bridge:","buffed","variant_0","variant_1","variant_2","variant_3","variant_4"],"family":["infected"],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/infected_loot_table.json"]}
+projects/MapleBear TakeOver/BP/entities/infected copy.json|1760915376|{"identifier":["mb:infected"],"event":["become_buffed","equip_armor","equip_weapon","spawn"],"eventReference":["equip_armor","equip_weapon"],"componentGroup":["bridge:","buffed","variant_0","variant_1","variant_2","variant_3","variant_4"],"family":["infected"],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/infected_loot_table.json"]}
+#lootTable
+projects/MapleBear TakeOver/BP/loot_tables/empty.json|1747745028
+projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/infected_bear_equipment.json|1750266643|{"lootTablePath":[]}
+projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/infected_day8_loot_table.json|1757972448|{"lootTablePath":[]}
+projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/buff_bear_loot_table.json|1757075857|{"lootTablePath":[]}
+projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/infected_loot_table.json|1757075595|{"lootTablePath":[]}
+projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/tiny_bear_loot_table.json|1757075555|{"lootTablePath":[]}
+projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/tiny_bear_day4_loot_table.json|1757972448|{"lootTablePath":[]}
+projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/infected_pig_loot_table.json|1758496683|{"lootTablePath":[]}
+projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/infected_cow_loot_table.json|1758808395|{"lootTablePath":[]}
+projects/MapleBear TakeOver/BP/loot_tables/blocks/dusted_dirt.json|1760477304|{"lootTablePath":[]}
+projects/MapleBear TakeOver/BP/loot_tables/blocks/snow_layer.json|1760634513|{"lootTablePath":[]}
+projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/infected_day13_loot_table.json|1760731237|{"lootTablePath":[]}
+projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/tiny_bear_day13_loot_table.json|1760731272|{"lootTablePath":[]}
+projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/tiny_bear_day8_loot_table.json|1760731278|{"lootTablePath":[]}
+projects/MapleBear TakeOver/BP/loot_tables/mb_loot_tables/buff_bear_day13_loot_table.json|1760731303|{"lootTablePath":[]}
+#item
+projects/MapleBear TakeOver/BP/items/snow book.json|1760735118|{"identifier":["mb:snow_book"],"tag":[]}
+projects/MapleBear TakeOver/BP/items/snow.json|1760568852|{"identifier":["mb:snow"],"tag":[]}
+#spawnRule
+projects/MapleBear TakeOver/BP/spawn_rules/infected - day 8.sr.json|1760643636|{"identifier":["mb:infected_day8"]}
+projects/MapleBear TakeOver/BP/spawn_rules/infected.sr.json|1760643661|{"identifier":["mb:infected"]}
+projects/MapleBear TakeOver/BP/spawn_rules/buff_mb.sr.json|1760643618|{"identifier":["mb:buff_mb"]}
+projects/MapleBear TakeOver/BP/spawn_rules/mb - day 8.sr.json|1760463634|{"identifier":["mb:mb_day8"]}
+projects/MapleBear TakeOver/BP/spawn_rules/mb.sr.json|1760643687|{"identifier":["mb:mb"]}
+projects/MapleBear TakeOver/BP/spawn_rules/mb - day 4.sr.json|1760462528|{"identifier":["mb:mb_day4"]}
+projects/MapleBear TakeOver/BP/spawn_rules/cow.sr.json|1758816834|{"identifier":["minecraft:cow"]}
+projects/MapleBear TakeOver/BP/spawn_rules/infected_cow.sr.json|1760464556|{"identifier":["mb:infected_cow"]}
+projects/MapleBear TakeOver/BP/spawn_rules/infected_pig.sr.json|1760464556|{"identifier":["mb:infected_pig"]}
+projects/MapleBear TakeOver/BP/spawn_rules/infected - day 13.sr.json|1760643648|{"identifier":["mb:infected_day13"]}
+projects/MapleBear TakeOver/BP/spawn_rules/buff_mb - day 13.sr.json|1760643621|{"identifier":["mb:buff_mb_day13"]}
+projects/MapleBear TakeOver/BP/spawn_rules/pig.sr.json|1758816842|{"identifier":["minecraft:pig"]}
+projects/MapleBear TakeOver/BP/spawn_rules/mb - day 13.sr.json|1760464556|{"identifier":["mb:mb_day13"]}
+#mcstructure
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_5.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_1.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_2.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_3.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_0.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_6.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_a.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_4.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_bracket_close.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_8.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_bracket_open.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_c.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_asterisk.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_b.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_comma.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_d.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_caret.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_dash.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_colon.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_e.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_dot.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_equals.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_9.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_doublequote.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_f.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_exclamation.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_7.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_divide.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_h.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_hashtag.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_i.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_g.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_j.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_l.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_percent.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_n.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_m.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_k.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_o.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_period.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_p.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_plus.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_question.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_q.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_quote.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_r.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_s.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_semicolon.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_t.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_slash.mcstructure|1747745028
+projects/MapleBear TakeOver/BP/structures/bridge/buildtext_tilde.mcstructure|1747745028
+#splashes
+projects/MapleBear TakeOver/RP/splashes.json|1747745028
+#biomesClient
+projects/MapleBear TakeOver/RP/biomes_client.json|1759347759|{"fogIdentifier":["mb:dusted_plain","mb:infected_biome"]}
+#clientBlock
+projects/MapleBear TakeOver/RP/blocks.json|1760569409|{"identifier":["mb:dusted_dirt","mb:snow_layer"]}
+#clientManifest
+projects/MapleBear TakeOver/RP/manifest.json|1762386447|{"uuid":["2a4d2f59-f46d-47fc-a3c1-7a26d46d2157"]}
+#langDef
+projects/MapleBear TakeOver/RP/texts/languages.json|1758378967
+#ui
+projects/MapleBear TakeOver/RP/ui/how_to_play_common.json|1747745028
+#texture
+projects/MapleBear TakeOver/RP/textures/bridge.png|1747745028
+projects/MapleBear TakeOver/RP/textures/blocks/dusted_dirt.png|1760293916
+projects/MapleBear TakeOver/RP/textures/entity/buff_maplebear.png|1747745028
+projects/MapleBear TakeOver/RP/textures/entity/infected_day8.png|1747745028
+projects/MapleBear TakeOver/RP/textures/entity/Infected_human_mb1.png|1747745028
+projects/MapleBear TakeOver/RP/textures/entity/mb_day4.png|1747745028
+projects/MapleBear TakeOver/RP/textures/entity/infected_pig.png|1758373571
+projects/MapleBear TakeOver/RP/textures/items/buff_mb_egg.png|1747745028
+projects/MapleBear TakeOver/RP/textures/items/Infected_human_mb_egg.png|1747745028
+projects/MapleBear TakeOver/RP/textures/items/mb.png|1747745028
+projects/MapleBear TakeOver/RP/textures/items/mb_day8.png|1747745028
+projects/MapleBear TakeOver/RP/textures/items/mb_snow.png|1747745028
+projects/MapleBear TakeOver/RP/textures/items/infected_day8_egg.png|1747745028
+projects/MapleBear TakeOver/RP/textures/entity/mb_day8.png|1747745028
+projects/MapleBear TakeOver/RP/textures/items/snow_book.png|1754934057
+projects/MapleBear TakeOver/RP/textures/entity/mptext.png|1747745028
+projects/MapleBear TakeOver/RP/textures/items/mb_day4.png|1747745028
+projects/MapleBear TakeOver/RP/textures/particle/white_dust_particle.png|1747745028
+projects/MapleBear TakeOver/RP/textures/items/infected_pig_spawn_egg.png|1758377902
+projects/MapleBear TakeOver/RP/textures/entity/infected_cow.png|1758718826
+projects/MapleBear TakeOver/RP/textures/items/infected_cow_egg.png|1758718826
+projects/MapleBear TakeOver/RP/textures/entity/buff_maplebear_day13.png|1747745028
+projects/MapleBear TakeOver/RP/textures/entity/infected_day13.png|1747745028
+projects/MapleBear TakeOver/RP/textures/entity/mb_day13.png|1747745028
+projects/MapleBear TakeOver/RP/textures/items/buff_mb_day13_egg.png|1747745028
+projects/MapleBear TakeOver/RP/textures/items/infected_day13_egg.png|1747745028
+projects/MapleBear TakeOver/RP/textures/items/mb_day13_egg.png|1747745028
+projects/MapleBear TakeOver/RP/textures/blocks/'snow'_layer.png|1760559098
+projects/MapleBear TakeOver/RP/textures/entity/flying_mb.png|1760915492
+projects/MapleBear TakeOver/RP/textures/items/flying_mb_egg.png|1760915568
+#clientSound
+projects/MapleBear TakeOver/RP/sounds.json|1760569353|{"soundEvent":["break","hit","place","step","ambient","boost","death","hurt","fall","jump","land"]}
+#clientAnimationController
+projects/MapleBear TakeOver/RP/animation_controllers/buff_mb_animation_controllers.json|1751398665|{"identifier":["controller.animation.buff_mb"],"state":["default","walk","climb","falling"],"animationReference":["idle","walk","climb"]}
+projects/MapleBear TakeOver/RP/animation_controllers/tiny_mb_animation_controller.json|1751398665|{"identifier":["controller.animation.tiny_mb"],"state":["default","walk","climb","attack"],"animationReference":["idle","idle2","walk","walk2","climb","attack"]}
+projects/MapleBear TakeOver/RP/animation_controllers/infected_animation_controller.json|1751830596|{"identifier":["controller.animation.infected_mb_variant_0","controller.animation.infected_mb_variant_1","controller.animation.infected_mb_variant_2","controller.animation.infected_mb_variant_3","controller.animation.infected_mb_variant_4","controller.animation.infected_mb_attack"],"state":["idle","walk","falling","default","attacking"],"animationReference":["idle","idle2","idle3","idle4","idle5","walk","walk2","walk3","walk4","walk5","falling","falling2","falling3","falling4","falling5","attack","attack2","attack3"]}
+#clientAnimation
+projects/MapleBear TakeOver/RP/animations/animation.mb.death_particles.json|1747859532|{"identifier":["animation.mb.death_particles"],"particleEffect":["death_dust"]}
+projects/MapleBear TakeOver/RP/animations/infected_pig.animation.json|1758373571|{"identifier":["animation.pig.baby_transform","animation.pig.setup","animation.pig.setup.v1.0"]}
+projects/MapleBear TakeOver/RP/animations/buff_maplebear.animation.json|1751398665|{"identifier":["animation.buff_maple.idle","animation.buff_mb.walk","animation.buff_mb.climb","animation.buff_mb.attack"]}
+projects/MapleBear TakeOver/RP/animations/Infected_human_mb1.animation.json|1751398665|{"identifier":["animation.infected.idle","animation.infected.idle5","animation.infected.idle2","animation.infected.idle3","animation.infected.idle4","animation.infected.walk","animation.infected.walk5","animation.infected.walk4","animation.infected.walk3","animation.infected.walk2","animation.infected.falling","animation.infected.falling3","animation.infected.falling2","animation.infected.falling4","animation.infected.falling5","animation.infected.attack","animation.infected.attack3","animation.infected.attack2"]}
+projects/MapleBear TakeOver/RP/animations/mb.animations.json|1751398665|{"identifier":["animation.mb.idle","animation.mb.idle2","animation.mb.attack","animation.mb.walk","animation.mb.walk2","animation.mb.climb"]}
+projects/MapleBear TakeOver/RP/animations/infected_cow.animation.json|1758718826|{"identifier":["animation.cow.baby_transform","animation.cow.setup","animation.cow.setup.v1.0"]}
+#soundDefinition
+projects/MapleBear TakeOver/RP/sounds/sound_definitions.json|1760569113|{"identifier":["tiny_mb_step","buff_mb_step","ambient.infected","mob.infected_pig.boost","mob.infected_pig.death","mob.infected_pig.say","mob.infected_pig.step","mob.infected_cow.hurt","mob.infected_cow.milk","mob.infected_cow.say","mob.infected_cow.step","mb.snow_powder_place","mb.snow_layer_hit","mb.snow_layer_step","mb.snow_layer_jump","mb.snow_layer_fall","mb.snow_layer_land","mb.snow_layer_break"]}
+#renderController
+projects/MapleBear TakeOver/RP/render_controllers/infected_pig.render_controllers.json|1758373571|{"identifier":["controller.render.pig"]}
+projects/MapleBear TakeOver/RP/render_controllers/infected.json|1747745028|{"identifier":["controller.render.infected"]}
+projects/MapleBear TakeOver/RP/render_controllers/buff_mb.json|1747745028|{"identifier":["controller.render.buff_mb"]}
+projects/MapleBear TakeOver/RP/render_controllers/mb.json|1747745028|{"identifier":["controller.render.mb"]}
+projects/MapleBear TakeOver/RP/render_controllers/infected_cow.json|1758718826|{"identifier":["controller.render.infected_cow"]}
+#flipbookTexture
+projects/MapleBear TakeOver/RP/textures/flipbook_textures.json|1747745028
+#clientLang
+projects/MapleBear TakeOver/RP/texts/en_US.lang|1758815893|{"actionText":[]}
+#terrainTexture
+projects/MapleBear TakeOver/RP/textures/terrain_texture.json|1760559409|{"texture":["bridge_dusted_dirt","'snow'_layer"],"texturePath":["projects/MapleBear TakeOver/RP/textures/blocks/dusted_dirt.png","projects/MapleBear TakeOver/RP/textures/blocks/'snow'_layer.png"]}
+#geometry
+projects/MapleBear TakeOver/RP/models/blocks/Dusted dirt.geo.json|1754941451|{"identifier":["geometry.dusted_dirt"],"bone":["root"]}
+projects/MapleBear TakeOver/RP/models/entity/Infected_human_mb1.geo.json|1747745028|{"identifier":["geometry.infected"],"bone":["infected_human_mb1","Head","Body","RightArm","LeftArm","RightLeg","LeftLeg"]}
+projects/MapleBear TakeOver/RP/models/entity/infected_pig.geo.json|1758373571|{"identifier":["geometry.infected_pig"],"locator":["lead"],"bone":["body","head","leg0","leg1","leg2","leg3"]}
+projects/MapleBear TakeOver/RP/models/entity/buff_maplebear.geo.json|1747745028|{"identifier":["geometry.buff_mb"],"bone":["root","head","body","shoulders","hip_thingy","left_arm","forharm","left_arm2","forharm2","lowerbody","left_leg","cafe_and_stuff","right_leg","cafe_and_stuff2"]}
+projects/MapleBear TakeOver/RP/models/entity/Maple bear.geo.json|1747745028|{"identifier":["geometry.mb"],"bone":["root","head","L_arm","R_arm","body","powder...","powder...4","powder...2","powder...3","L_leg","R_leg"]}
+projects/MapleBear TakeOver/RP/models/entity/infected_cow_model.json|1758718826|{"identifier":["geometry.infected_cow"],"locator":["lead","lead_hold"],"bone":["root","head","body","leg0","leg1","leg2","leg3"]}
+projects/MapleBear TakeOver/RP/models/blocks/'snow'_layer.geo.json|1760570324|{"identifier":["geometry.'snow'_layer"],"bone":["bb_main"]}
+#particle
+projects/MapleBear TakeOver/RP/particles/white_dust_particale.particle.json|1751398665|{"identifier":["mb:white_dust_particale"],"texturePath":["projects/MapleBear TakeOver/RP/textures/particle/white_dust_particle.png"]}
+#clientEntity
+projects/MapleBear TakeOver/RP/entity/infected_pig.json|1758378492|{"identifier":["mb:infected_pig"],"animationReference":["setup","walk","look_at_target","baby_transform"],"textureReference":["default","saddled"],"materialReference":["default"],"geometryReference":["default"],"animationIdentifier":["animation.pig.setup.v1.0","animation.quadruped.walk","animation.common.look_at_target","animation.pig.baby_transform"],"materialIdentifier":["pig"],"geometryIdentifier":["geometry.infected_pig"],"renderControllerIdentifier":["controller.render.pig"],"texturePath":["projects/MapleBear TakeOver/RP/textures/entity/infected_pig.png"]}
+projects/MapleBear TakeOver/RP/entity/infected.json|1751398665|{"identifier":["mb:infected"],"particleReference":["death_dust"],"animationReference":["look_at_target","idle","idle2","idle3","idle4","idle5","walk","walk2","walk3","walk4","walk5","falling","falling2","falling3","falling4","falling5","attack","attack2","attack3","infected_controller","attack_controller","death_particles"],"textureReference":["default"],"materialReference":["default"],"geometryReference":["default"],"particleIdentifier":["mb:white_dust_particale"],"animationIdentifier":["animation.humanoid.look_at_target.default","animation.infected.idle","animation.infected.idle2","animation.infected.idle3","animation.infected.idle4","animation.infected.idle5","animation.infected.walk","animation.infected.walk2","animation.infected.walk3","animation.infected.walk4","animation.infected.walk5","animation.infected.falling","animation.infected.falling2","animation.infected.falling3","animation.infected.falling4","animation.infected.falling5","animation.infected.attack","animation.infected.attack2","animation.infected.attack3","controller.animation.infected_mb_variant_0","controller.animation.infected_mb_attack","animation.mb.death_particles"],"materialIdentifier":["enderman"],"geometryIdentifier":["geometry.infected"],"renderControllerIdentifier":["controller.render.infected"],"texturePath":["projects/MapleBear TakeOver/RP/textures/entity/Infected_human_mb1.png"]}
+projects/MapleBear TakeOver/RP/entity/infected_day8.json|1757976856|{"identifier":["mb:infected_day8"],"particleReference":["death_dust"],"animationReference":["look_at_target","idle","idle2","idle3","idle4","idle5","walk","walk2","walk3","walk4","walk5","falling","falling2","falling3","falling4","falling5","attack","attack2","attack3","infected_controller","attack_controller","death_particles"],"textureReference":["default"],"materialReference":["default"],"geometryReference":["default"],"particleIdentifier":["mb:white_dust_particale"],"animationIdentifier":["animation.humanoid.look_at_target.default","animation.infected.idle","animation.infected.idle2","animation.infected.idle3","animation.infected.idle4","animation.infected.idle5","animation.infected.walk","animation.infected.walk2","animation.infected.walk3","animation.infected.walk4","animation.infected.walk5","animation.infected.falling","animation.infected.falling2","animation.infected.falling3","animation.infected.falling4","animation.infected.falling5","animation.infected.attack","animation.infected.attack2","animation.infected.attack3","controller.animation.infected_mb_variant_0","controller.animation.infected_mb_attack","animation.mb.death_particles"],"materialIdentifier":["enderman"],"geometryIdentifier":["geometry.infected"],"renderControllerIdentifier":["controller.render.infected"],"texturePath":["projects/MapleBear TakeOver/RP/textures/entity/infected_day8.png"]}
+projects/MapleBear TakeOver/RP/entity/mb.json|1751398665|{"identifier":["mb:mb"],"particleReference":["death_dust"],"animationReference":["idle","idle2","walk","walk2","climb","attack","death_particles","tiny_mb","look_at_target"],"textureReference":["default"],"materialReference":["default"],"geometryReference":["default"],"particleIdentifier":["mb:white_dust_particale"],"animationIdentifier":["animation.mb.idle","animation.mb.idle2","animation.mb.walk","animation.mb.walk2","animation.mb.climb","animation.mb.attack","animation.mb.death_particles","controller.animation.tiny_mb","animation.common.look_at_target"],"materialIdentifier":["enderman"],"geometryIdentifier":["geometry.mb"],"renderControllerIdentifier":["controller.render.mb"],"texturePath":["projects/MapleBear TakeOver/RP/textures/entity/mptext.png"]}
+projects/MapleBear TakeOver/RP/entity/mb_day8.json|1757975934|{"identifier":["mb:mb_day8"],"particleReference":["death_dust"],"animationReference":["idle","idle2","walk","walk2","climb","attack","death_particles","tiny_mb","look_at_target"],"textureReference":["default"],"materialReference":["default"],"geometryReference":["default"],"particleIdentifier":["mb:white_dust_particale"],"animationIdentifier":["animation.mb.idle","animation.mb.idle2","animation.mb.walk","animation.mb.walk2","animation.mb.climb","animation.mb.attack","animation.mb.death_particles","controller.animation.tiny_mb","animation.common.look_at_target"],"materialIdentifier":["enderman"],"geometryIdentifier":["geometry.mb"],"renderControllerIdentifier":["controller.render.mb"],"texturePath":["projects/MapleBear TakeOver/RP/textures/entity/mb_day8.png"]}
+projects/MapleBear TakeOver/RP/entity/mb_day4.json|1757975920|{"identifier":["mb:mb_day4"],"particleReference":["death_dust"],"animationReference":["idle","idle2","walk","walk2","climb","attack","death_particles","tiny_mb","look_at_target"],"textureReference":["default"],"materialReference":["default"],"geometryReference":["default"],"particleIdentifier":["mb:white_dust_particale"],"animationIdentifier":["animation.mb.idle","animation.mb.idle2","animation.mb.walk","animation.mb.walk2","animation.mb.climb","animation.mb.attack","animation.mb.death_particles","controller.animation.tiny_mb","animation.common.look_at_target"],"materialIdentifier":["enderman"],"geometryIdentifier":["geometry.mb"],"renderControllerIdentifier":["controller.render.mb"],"texturePath":["projects/MapleBear TakeOver/RP/textures/entity/mb_day4.png"]}
+projects/MapleBear TakeOver/RP/entity/buff_mb.json|1747858001|{"identifier":["mb:buff_mb"],"particleReference":["death_dust"],"animationReference":["look_at_target","idle","walk","attack","climb","buff_mb","death_particles"],"textureReference":["default"],"materialReference":["default"],"geometryReference":["default"],"particleIdentifier":["mb:white_dust_particale"],"animationIdentifier":["animation.humanoid.look_at_target.default","animation.buff_maple.idle","animation.buff_mb.walk","animation.buff_mb.attack","animation.buff_mb.climb","controller.animation.buff_mb","animation.mb.death_particles"],"materialIdentifier":["entity_alphatest"],"geometryIdentifier":["geometry.buff_mb"],"renderControllerIdentifier":["controller.render.buff_mb"],"texturePath":["projects/MapleBear TakeOver/RP/textures/entity/buff_maplebear.png"]}
+projects/MapleBear TakeOver/RP/entity/infected_cow.entity.json|1758738142|{"identifier":["mb:infected_cow"],"animationReference":["setup","walk","look_at_target","baby_transform"],"textureReference":["default","warm","cold"],"materialReference":["default","cold"],"geometryReference":["default","warm","cold"],"animationIdentifier":["animation.cow.setup","animation.quadruped.walk","animation.common.look_at_target","animation.cow.baby_transform"],"materialIdentifier":["cow","cow_cold"],"geometryIdentifier":["geometry.infected_cow","geometry.cow.warm","geometry.cow.cold"],"renderControllerIdentifier":["controller.render.infected_cow"],"texturePath":["projects/MapleBear TakeOver/RP/textures/entity/infected_cow.png"]}
+projects/MapleBear TakeOver/RP/entity/mb_day13.json|1758815364|{"identifier":["mb:mb_day13"],"particleReference":["death_dust"],"animationReference":["idle","idle2","walk","walk2","climb","attack","death_particles","tiny_mb","look_at_target"],"textureReference":["default"],"materialReference":["default"],"geometryReference":["default"],"particleIdentifier":["mb:white_dust_particale"],"animationIdentifier":["animation.mb.idle","animation.mb.idle2","animation.mb.walk","animation.mb.walk2","animation.mb.climb","animation.mb.attack","animation.mb.death_particles","controller.animation.tiny_mb","animation.common.look_at_target"],"materialIdentifier":["enderman"],"geometryIdentifier":["geometry.mb"],"renderControllerIdentifier":["controller.render.mb"],"texturePath":["projects/MapleBear TakeOver/RP/textures/entity/mb_day13.png"]}
+projects/MapleBear TakeOver/RP/entity/infected_day13.json|1758815618|{"identifier":["mb:infected_day13"],"particleReference":["death_dust"],"animationReference":["look_at_target","idle","idle2","idle3","idle4","idle5","walk","walk2","walk3","walk4","walk5","falling","falling2","falling3","falling4","falling5","attack","attack2","attack3","infected_controller","attack_controller","death_particles"],"textureReference":["default"],"materialReference":["default"],"geometryReference":["default"],"particleIdentifier":["mb:white_dust_particale"],"animationIdentifier":["animation.humanoid.look_at_target.default","animation.infected.idle","animation.infected.idle2","animation.infected.idle3","animation.infected.idle4","animation.infected.idle5","animation.infected.walk","animation.infected.walk2","animation.infected.walk3","animation.infected.walk4","animation.infected.walk5","animation.infected.falling","animation.infected.falling2","animation.infected.falling3","animation.infected.falling4","animation.infected.falling5","animation.infected.attack","animation.infected.attack2","animation.infected.attack3","controller.animation.infected_mb_variant_0","controller.animation.infected_mb_attack","animation.mb.death_particles"],"materialIdentifier":["enderman"],"geometryIdentifier":["geometry.infected"],"renderControllerIdentifier":["controller.render.infected"],"texturePath":["projects/MapleBear TakeOver/RP/textures/entity/infected_day13.png"]}
+projects/MapleBear TakeOver/RP/entity/buff_mb_day13.json|1758815382|{"identifier":["mb:buff_mb_day13"],"particleReference":["death_dust"],"animationReference":["look_at_target","idle","walk","attack","climb","buff_mb","death_particles"],"textureReference":["default"],"materialReference":["default"],"geometryReference":["default"],"particleIdentifier":["mb:white_dust_particale"],"animationIdentifier":["animation.humanoid.look_at_target.default","animation.buff_maple.idle","animation.buff_mb.walk","animation.buff_mb.attack","animation.buff_mb.climb","controller.animation.buff_mb","animation.mb.death_particles"],"materialIdentifier":["entity_alphatest"],"geometryIdentifier":["geometry.buff_mb"],"renderControllerIdentifier":["controller.render.buff_mb"],"texturePath":["projects/MapleBear TakeOver/RP/textures/entity/buff_maplebear_day13.png"]}
+projects/MapleBear TakeOver/RP/entity/flying_mb.json|1760915766|{"identifier":["mb:flying_mb"],"particleReference":["death_dust"],"animationReference":["look_at_target","idle","idle2","idle3","idle4","idle5","walk","walk2","walk3","walk4","walk5","falling","falling2","falling3","falling4","falling5","attack","attack2","attack3","infected_controller","attack_controller","death_particles"],"textureReference":["default"],"materialReference":["default"],"geometryReference":["default"],"particleIdentifier":["mb:white_dust_particale"],"animationIdentifier":["animation.humanoid.look_at_target.default","animation.infected.idle","animation.infected.idle2","animation.infected.idle3","animation.infected.idle4","animation.infected.idle5","animation.infected.walk","animation.infected.walk2","animation.infected.walk3","animation.infected.walk4","animation.infected.walk5","animation.infected.falling","animation.infected.falling2","animation.infected.falling3","animation.infected.falling4","animation.infected.falling5","animation.infected.attack","animation.infected.attack2","animation.infected.attack3","controller.animation.infected_mb_variant_0","controller.animation.infected_mb_attack","animation.mb.death_particles"],"materialIdentifier":["enderman"],"geometryIdentifier":["geometry.infected"],"renderControllerIdentifier":["controller.render.infected"],"texturePath":["projects/MapleBear TakeOver/RP/textures/entity/flying_mb.png"]}
+#itemTexture
+projects/MapleBear TakeOver/RP/textures/item_texture.json|1760915688|{"texture":["mb_buff_mb_egg","mb_mb_egg","mb_infected_mb_egg","mb_infected_egg","mb_snow","mb_snow_book","mb_mb_day4_egg","mb_mb_day8_egg","mb_infected_day8_egg","mb_infected_pig_egg","mb_infected_cow_egg","mb_mb_day13_egg","mb_infected_day13_egg","mb_buff_mb_day13_egg","flying_mb_egg"],"texturePath":["projects/MapleBear TakeOver/RP/textures/items/mb.png","projects/MapleBear TakeOver/RP/textures/items/Infected_human_mb_egg.png","projects/MapleBear TakeOver/RP/textures/items/buff_mb_egg.png","projects/MapleBear TakeOver/RP/textures/items/mb_snow.png","projects/MapleBear TakeOver/RP/textures/items/snow_book.png","projects/MapleBear TakeOver/RP/textures/items/mb_day4.png","projects/MapleBear TakeOver/RP/textures/items/infected_pig_spawn_egg.png","projects/MapleBear TakeOver/RP/textures/items/mb_day8.png","projects/MapleBear TakeOver/RP/textures/items/infected_day13_egg.png","projects/MapleBear TakeOver/RP/textures/items/infected_cow_egg.png","projects/MapleBear TakeOver/RP/textures/items/infected_day8_egg.png","projects/MapleBear TakeOver/RP/textures/items/flying_mb_egg.png","projects/MapleBear TakeOver/RP/textures/items/mb_day13_egg.png","projects/MapleBear TakeOver/RP/textures/items/buff_mb_day13_egg.png"]}
+#bridgeConfig
+projects/MapleBear TakeOver/config.json|1762387571287
+#recipe
+projects/MapleBear TakeOver/BP/recipes/snow_book.json|1754865689|{"identifier":["mb:snow_book_recipe"],"recipeTag":["crafting_table"],"itemIdentifier":["mb:snow_book","mb:snow","minecraft:book"]}
+#biome
+projects/MapleBear TakeOver/BP/biomes/mb_infected_biome.json|1761082244|{"identifier":["mb:infected_biome"],"tags":["infected_biome","minecraft:surface_builder"],"prefixedIdentifier":[]}
+#fog
+projects/MapleBear TakeOver/RP/fogs/mb_infected_biome.json|1759350763|{"identifier":["mb:infected_biome"]}
+#block
+projects/MapleBear TakeOver/BP/blocks/dusted_dirt.json|1760477213|{"identifier":["mb:dusted_dirt"],"geometryIdentifier":["geometry.dusted_dirt"],"texture":["bridge_dusted_dirt"],"materialInstance":[],"tag":[],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/blocks/dusted_dirt.json"]}
+projects/MapleBear TakeOver/BP/blocks/snow_layer.json|1760561249|{"identifier":["mb:snow_layer"],"geometryIdentifier":["geometry.'snow'_layer"],"texture":["'snow'_layer"],"materialInstance":[],"tag":[],"lootTablePath":["projects/MapleBear TakeOver/BP/loot_tables/blocks/snow_layer.json"]}
+#clientBiome
+projects/MapleBear TakeOver/RP/biomes/mb_infected_biome.client.json|1759350431|{"identifier":["mb:infected_biome"],"fogIdentifier":["mb:infected_biome"]}
+#sound
+projects/MapleBear TakeOver/RP/sounds/infected_pig/boost1.fsb|1758573563
+projects/MapleBear TakeOver/RP/sounds/infected_pig/boost2.fsb|1758573563
+projects/MapleBear TakeOver/RP/sounds/infected_pig/boost3.fsb|1758573563
+projects/MapleBear TakeOver/RP/sounds/infected_pig/say1.fsb|1758573563
+projects/MapleBear TakeOver/RP/sounds/infected_pig/boost5long.fsb|1758573563
+projects/MapleBear TakeOver/RP/sounds/infected_pig/say3.fsb|1758573563
+projects/MapleBear TakeOver/RP/sounds/infected_pig/say2.fsb|1758573563
+projects/MapleBear TakeOver/RP/sounds/infected_pig/boost4long.fsb|1758573563
+projects/MapleBear TakeOver/RP/sounds/infected_pig/death.fsb|1758573563
+projects/MapleBear TakeOver/RP/sounds/infected_pig/step1.fsb|1758573564
+projects/MapleBear TakeOver/RP/sounds/infected_pig/step2.fsb|1758573564
+projects/MapleBear TakeOver/RP/sounds/infected_pig/step3.fsb|1758573564
+projects/MapleBear TakeOver/RP/sounds/infected_pig/step5.fsb|1758573564
+projects/MapleBear TakeOver/RP/sounds/infected_pig/step4.fsb|1758573564
+projects/MapleBear TakeOver/RP/sounds/infected_cow/hurt2.fsb|1758738142
+projects/MapleBear TakeOver/RP/sounds/infected_cow/hurt1.fsb|1758738142
+projects/MapleBear TakeOver/RP/sounds/infected_cow/milk1.fsb|1758738142
+projects/MapleBear TakeOver/RP/sounds/infected_cow/say1.fsb|1758738142
+projects/MapleBear TakeOver/RP/sounds/infected_cow/milk2.fsb|1758738142
+projects/MapleBear TakeOver/RP/sounds/infected_cow/milk3.fsb|1758738142
+projects/MapleBear TakeOver/RP/sounds/infected_cow/hurt3.fsb|1758738142
+projects/MapleBear TakeOver/RP/sounds/infected_cow/say2.fsb|1758738142
+projects/MapleBear TakeOver/RP/sounds/infected_cow/say3.fsb|1758738142
+projects/MapleBear TakeOver/RP/sounds/infected_cow/say4.fsb|1758738142
+projects/MapleBear TakeOver/RP/sounds/infected_cow/step2.fsb|1758738142
+projects/MapleBear TakeOver/RP/sounds/infected_cow/step3.fsb|1758738142
+projects/MapleBear TakeOver/RP/sounds/infected_cow/step4.fsb|1758738142
+projects/MapleBear TakeOver/RP/sounds/infected_cow/step1.fsb|1758738142
