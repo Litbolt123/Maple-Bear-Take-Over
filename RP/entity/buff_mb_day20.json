@@ -1,0 +1,49 @@
+{
+	"format_version": "1.20.80",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "mb:buff_mb_day20",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/buff_maplebear_day20"
+			},
+			"geometry": {
+				"default": "geometry.buff_mb"
+			},
+			"particle_effects": {
+				"death_dust": "mb:white_dust_particale"
+			},
+			"render_controllers": [
+				"controller.render.buff_mb"
+			],
+			"spawn_egg": {
+				"texture": "mb_buff_mb_day20_egg",
+				"texture_index": 0
+			},
+			"animations": {
+				"look_at_target": "animation.humanoid.look_at_target.default",
+				"idle": "animation.buff_maple.idle",
+				"walk": "animation.buff_mb.walk",
+				"attack": "animation.buff_mb.attack",
+				"climb": "animation.buff_mb.climb",
+				"buff_mb": "controller.animation.buff_mb",
+				"death_particles": "animation.mb.death_particles"
+			},
+			"scripts": {
+				"animate": [
+					{
+						"look_at_target": true
+					},
+					{
+						"buff_mb": true
+					},
+					{
+						"death_particles": "!query.is_alive"
+					}
+				]
+			}
+		}
+	}
+}

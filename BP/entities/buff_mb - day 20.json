@@ -1,0 +1,291 @@
+{
+	"format_version": "1.21.80",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "mb:buff_mb_day20",
+			"is_spawnable": true,
+			"is_summonable": true,
+			"is_experimental": false,
+			"scripts": {}
+		},
+		"component_groups": {
+			"bridge:": {
+				"minecraft:on_target_acquired": {
+					"filters": [
+						{
+							"all_of": [
+								{
+									"any_of": [
+										{
+											"test": "is_family",
+											"value": "player"
+										}
+									]
+								}
+							]
+						}
+					],
+					"target": "player"
+				},
+				"minecraft:angry": {
+					"broadcast_anger": true,
+					"broadcast_range": 28,
+					"broadcast_anger_on_being_attacked": true,
+					"broadcast_anger_on_attack": true
+				}
+			},
+			"mb_step_sound": {
+				"minecraft:ambient_sound_interval": {
+					"event_name": "buff_mb_step",
+					"range": 20,
+					"value": 0.45
+				}
+			}
+		},
+		"components": {
+			"minecraft:navigation.climb": {
+				"can_walk": true,
+				"can_jump": true,
+				"can_swim": true
+			},
+			"minecraft:jump.static": {
+				"jump_power": 0.5
+			},
+			"minecraft:damage_sensor": {
+				"triggers": {
+					"cause": "fall",
+					"deals_damage": "no"
+				}
+			},
+			"minecraft:can_climb": {},
+			"minecraft:health": {
+				"value": 220,
+				"max": 220
+			},
+			"minecraft:collision_box": {
+				"width": 0.35,
+				"height": 0.75
+			},
+			"minecraft:attack": {
+				"damage": 14
+			},
+			"minecraft:movement": {
+				"value": 0.75
+			},
+			"minecraft:behavior.melee_attack": {
+				"priority": 1,
+				"speed_multiplier": 1.15,
+				"track_target": true,
+				"y_max_head_rotation": 360,
+				"reach_multiplier": 2.2
+			},
+			"minecraft:behavior.knockback_roar": {
+				"priority": 3,
+				"knockback_damage": 10,
+				"knockback_range": 12,
+				"knockback_filters": {
+					"test": "is_family",
+					"subject": "other",
+					"value": "player"
+				},
+				"duration": 24,
+				"attack_time": 12,
+				"cooldown_time": 100,
+				"knockback_horizontal_strength": 11,
+				"knockback_vertical_strength": 8
+			},
+			"minecraft:behavior.random_stroll": {
+				"priority": 4,
+				"speed_multiplier": 1.05
+			},
+			"minecraft:behavior.look_at_player": {
+				"priority": 5,
+				"look_distance": 7
+			},
+			"minecraft:pushable": {
+				"is_pushable": false,
+				"is_pushable_by_piston": true
+			},
+			"minecraft:breathable": {
+				"breathes_water": true,
+				"total_supply": 70,
+				"suffocate_time": -70
+			},
+			"minecraft:behavior.hurt_by_target": {
+				"priority": 1
+			},
+			"minecraft:behavior.nearest_attackable_target": {
+				"priority": 1,
+				"reselect_targets": true,
+				"entity_types": [
+					{
+						"filters": {
+							"test": "is_family",
+							"subject": "other",
+							"value": "player"
+						},
+						"max_dist": 72
+					},
+					{
+						"filters": {
+							"test": "is_family",
+							"subject": "other",
+							"value": "mob"
+						},
+						"max_dist": 72
+					}
+				],
+				"must_see": true,
+				"set_persistent": true,
+				"target_search_height": 24,
+				"target_invisible_multiplier": 2,
+				"must_see_forget_duration": 80,
+				"within_radius": 36,
+				"must_reach": false,
+				"target_sneak_visibility_multiplier": 1
+			},
+			"minecraft:physics": {
+				"has_collision": true,
+				"has_gravity": true
+			},
+			"minecraft:angry": {
+				"broadcast_anger": true,
+				"broadcast_range": 28,
+				"broadcast_anger_on_attack": true,
+				"broadcast_anger_on_being_attacked": true
+			},
+			"minecraft:follow_range": {
+				"value": 72,
+				"max": 72
+			},
+			"minecraft:walk_animation_speed": {
+				"value": 1.05
+			},
+			"minecraft:annotation.break_door": {
+				"break_time": 1,
+				"min_difficulty": "peaceful"
+			},
+			"minecraft:knockback_resistance": {
+				"value": 1,
+				"max": 1
+			},
+			"minecraft:scale": {
+				"value": 5.2
+			},
+			"minecraft:block_climber": {},
+			"minecraft:movement.generic": {},
+			"minecraft:behavior.leap_at_target": {
+				"priority": 2,
+				"set_persistent": true,
+				"target_dist": 44,
+				"must_be_on_ground": true,
+				"yd": 3.4,
+				"y_max_head_rotation": 360,
+				"max_velocity": 3.8
+			},
+			"minecraft:behavior.jump_to_block": {
+				"priority": 3,
+				"search_width": 18,
+				"search_height": 18,
+				"minimum_path_length": 14,
+				"minimum_distance": 0,
+				"scale_factor": 1.6,
+				"cooldown_range": [
+					0.15,
+					1.2
+				],
+				"max_velocity": 3.2
+			},
+			"minecraft:break_blocks": {
+				"breakable_blocks": [
+					"minecraft:glass_pane",
+					"minecraft:brown_stained_glass_pane",
+					"minecraft:gray_stained_glass_pane",
+					"minecraft:leaf_litter",
+					"minecraft:acacia_leaves",
+					"minecraft:azalea_leaves",
+					"minecraft:azalea_leaves_flowered",
+					"minecraft:birch_leaves",
+					"minecraft:cherry_leaves",
+					"minecraft:dark_oak_leaves",
+					"minecraft:jungle_leaves",
+					"minecraft:mangrove_leaves",
+					"minecraft:oak_leaves",
+					"minecraft:pale_oak_leaves",
+					"minecraft:spruce_leaves",
+					"minecraft:cave_vines",
+					"minecraft:twisting_vines",
+					"minecraft:cave_vines_body_with_berries",
+					"minecraft:cave_vines_head_with_berries",
+					"minecraft:acacia_fence",
+					"minecraft:acacia_fence_gate",
+					"minecraft:bamboo_fence",
+					"minecraft:bamboo_fence_gate",
+					"minecraft:birch_fence",
+					"minecraft:birch_fence_gate",
+					"minecraft:cherry_fence",
+					"minecraft:cherry_fence_gate",
+					"minecraft:crimson_fence",
+					"minecraft:crimson_fence_gate",
+					"minecraft:dark_oak_fence",
+					"minecraft:dark_oak_fence_gate",
+					"minecraft:fence_gate",
+					"minecraft:jungle_fence",
+					"minecraft:jungle_fence_gate",
+					"minecraft:mangrove_fence",
+					"minecraft:mangrove_fence_gate",
+					"minecraft:oak_fence",
+					"minecraft:pale_oak_fence",
+					"minecraft:pale_oak_fence_gate",
+					"minecraft:spruce_fence",
+					"minecraft:spruce_fence_gate",
+					"minecraft:warped_fence",
+					"minecraft:warped_fence_gate"
+				]
+			},
+			"minecraft:behavior.float": {
+				"priority": 6
+			},
+			"minecraft:conditional_bandwidth_optimization": {},
+			"minecraft:loot": {
+				"table": "loot_tables/mb_loot_tables/buff_bear_day20_loot_table.json"
+			},
+			"minecraft:push_through": {
+				"value": 5
+			},
+			"minecraft:variable_max_auto_step": {
+				"base_value": 1.25,
+				"jump_prevented_value": 0.7
+			},
+			"minecraft:behavior.move_to_land": {
+				"priority": 5,
+				"goal_radius": 1,
+				"search_count": 10,
+				"search_height": 9,
+				"search_range": 34,
+				"speed_multiplier": 1.45
+			},
+			"minecraft:movement.generic": {},
+			"minecraft:despawn": {
+				"despawn_from_distance": {
+					"max_distance": 128,
+					"min_distance": 64
+				},
+				"despawn_from_inactivity": true,
+				"min_range_inactivity_timer": 60,
+				"despawn_from_chance": true,
+				"min_range_random_chance": 800
+			},
+			"minecraft:type_family": {
+				"family": [
+					"infected"
+				]
+			},
+			"minecraft:underwater_movement": {
+				"value": 0.55
+			}
+		},
+		"events": {}
+	}
+}
+

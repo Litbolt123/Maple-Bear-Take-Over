@@ -13,11 +13,17 @@
 			"minecraft:material_instances": {
 				"*": {
 					"texture": "bridge_dusted_dirt",
-					"render_method": "alpha_test"
+					"render_method": "opaque"
 				}
 			},
 			"minecraft:display_name": "Dusted Dirt",
-			"minecraft:destructible_by_explosion": true,
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 0.5,
+				"use_efficiency": true
+			},
+			"minecraft:destructible_by_explosion": {
+				"explosion_resistance": 0.5
+			},
 			"minecraft:light_dampening": 15,
 			"minecraft:collision_box": true,
 			"minecraft:loot": "loot_tables/blocks/dusted_dirt.json"

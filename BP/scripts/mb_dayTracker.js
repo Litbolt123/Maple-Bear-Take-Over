@@ -26,7 +26,7 @@ const INITIALIZED_FLAG = "mb_day_tracker_initialized";
 const DAY_COUNT_KEY = "mb_day_count";
 const SCOREBOARD_NAME = "mb_day_tracker";
 const DAY_SCORE_ID = "current_day";
-const MILESTONE_DAYS = [2, 4, 8, 13]; // Tiny Maple Bears, Infected Maple Bears, Buff Maple Bears, Day 13 variants
+const MILESTONE_DAYS = [2, 4, 8, 13, 20]; // Tiny Maple Bears, Infected Maple Bears, Buff Maple Bears, Day 13 variants, Day 20 escalation
 
 // Scoreboard
 const SCOREBOARD_OBJECTIVE = "mb_days";
@@ -51,19 +51,36 @@ let dayCycleLoopId = null;
  * @returns {object} Object with color and symbols
  */
 export function getDayDisplayInfo(day) {
-    if (day < 2) {
-        // Days 0-1: Green, no hazard symbols
-        return { color: "§a", symbols: "" };
-    } else if (day < 4) {
-        // Days 2-3: Yellow, 1 warning symbol (tiny Maple Bears start)
-        return { color: "§e", symbols: "!" };
-    } else if (day < 8) {
-        // Days 4-7: Orange, 2 warning symbols (infected Maple Bears start)
-        return { color: "§6", symbols: "!!" };
+    let color = "§a"; // light green by default
+    let exclamations = 0;
+
+    if (day <= 2) {
+        color = "§a"; // light green
+        exclamations = 0;
+    } else if (day <= 5) {
+        color = "§2"; // dark green
+        exclamations = 1;
+    } else if (day <= 7) {
+        color = "§e"; // light yellow
+        exclamations = 2;
+    } else if (day <= 10) {
+        color = "§6"; // dark yellow / amber
+        exclamations = 3;
+    } else if (day <= 13) {
+        color = "§6"; // light orange tone
+        exclamations = 4;
+    } else if (day <= 15) {
+        color = "§6"; // dark orange (same palette, escalating tone)
+        exclamations = 5;
+    } else if (day <= 17) {
+        color = "§c"; // light red
+        exclamations = 5;
     } else {
-        // Day 8+: Red, 3 warning symbols (buff Maple Bears start)
-        return { color: "§c", symbols: "!!!" };
+        color = "§4"; // dark red
+        exclamations = 5;
     }
+
+    return { color, symbols: "!".repeat(exclamations) };
 }
 
 /**
@@ -177,19 +194,22 @@ world.afterEvents.playerJoin.subscribe(() => {
  * @returns {object} Sound configuration
  */
 function getInfectionSound(day) {
-    if (day < 2) {
-        // Days 0-1: Peaceful sounds
+    if (day <= 2) {
         return { sound: "random.levelup", pitch: 1.2, volume: 0.6 };
-    } else if (day < 4) {
-        // Days 2-3: Slightly ominous
-        return { sound: "mob.enderman.portal", pitch: 0.8, volume: 0.5 };
-    } else if (day < 8) {
-        // Days 4-7: More threatening
-        return { sound: "mob.wither.ambient", pitch: 0.7, volume: 0.6 };
-    } else {
-        // Day 8+: Full threat
-        return { sound: "mob.wither.spawn", pitch: 0.6, volume: 0.7 };
+    } else if (day <= 5) {
+        return { sound: "mob.enderman.portal", pitch: 1.0, volume: 0.5 };
+    } else if (day <= 7) {
+        return { sound: "mob.enderman.portal", pitch: 0.85, volume: 0.6 };
+    } else if (day <= 10) {
+        return { sound: "mob.wither.ambient", pitch: 0.8, volume: 0.6 };
+    } else if (day <= 13) {
+        return { sound: "mob.wither.spawn", pitch: 0.75, volume: 0.65 };
+    } else if (day <= 15) {
+        return { sound: "mob.wither.spawn", pitch: 0.7, volume: 0.7 };
+    } else if (day <= 17) {
+        return { sound: "mob.wither.death", pitch: 0.7, volume: 0.8 };
     }
+    return { sound: "ambient.weather.thunder", pitch: 0.6, volume: 0.9 };
 }
 
 /**
@@ -198,9 +218,9 @@ function getInfectionSound(day) {
  * @param {string} level The message level ("hit", "infected", "severe")
  * @returns {string} The color-coded message
  */
-export function recordDailyEvent(player, day, event, category = "general") {
+export function recordDailyEvent(player, day, event, category = "general", codexOverride = null) {
     try {
-        const codex = getCodex(player);
+        const codex = codexOverride ?? getCodex(player);
         if (!codex.dailyEvents) {
             codex.dailyEvents = {};
         }
@@ -218,7 +238,9 @@ export function recordDailyEvent(player, day, event, category = "general") {
             codex.dailyEvents[day][category].push(event);
         }
 
-        saveCodex(player, codex);
+        if (!codexOverride) {
+            saveCodex(player, codex);
+        }
     } catch (error) {
         console.warn("Error recording daily event:", error);
     }
@@ -366,6 +388,8 @@ function getMilestoneMessage(day) {
             return "A new threat has emerged - massive Buff Maple Bears that tower over their smaller counterparts. These behemoths are incredibly dangerous and seem to possess an intelligence that the smaller variants lack. They actively hunt larger creatures and have been observed coordinating attacks. The infection has reached a critical point, with these powerful variants capable of spreading the corruption at an alarming rate.";
         case 13:
             return "The infection has reached its most advanced stage. The most powerful Maple Bear variants have appeared, combining the intelligence of the Buff Bears with enhanced abilities. These creatures are no longer just spreading infection - they seem to be actively building something, creating structures from the white dust and corrupted materials. The very landscape is beginning to change under their influence, and the infection has become an unstoppable force of nature.";
+        case 20:
+            return "The world feels hushed, as if holding its breath. Day 20 bears walk like winter's final verdict, and the dust they shed clings to the air itself. Survivors whisper that the infection now remembers every step we've taken.";
         default:
             return `Day ${day} has passed, and the infection continues to evolve in ways you never imagined possible.`;
     }
@@ -614,6 +638,31 @@ export function mbiHandleMilestoneDay(day) {
                 case 13:
                     world.sendMessage(`§8[MBI] §7The infection has increased to new heights.`);
                     break;
+                case 20:
+                    world.sendMessage(`§8[MBI] §7The air feels thin. Day 20 has settled in.`);
+                    break;
+            }
+
+            if (day === 20) {
+                for (const player of world.getAllPlayers()) {
+                    try {
+                        const codex = getCodex(player);
+                        if (!codex.journal) {
+                            codex.journal = {};
+                        }
+                        if (!codex.journal.day20WorldLoreUnlocked) {
+                            codex.journal.day20WorldLoreUnlocked = true;
+                            const reflectionDay = getCurrentDay() + 1;
+                            const loreEntry = "Day 20 pressed down like a heavy frost. The journal insists the world remembers our missteps.";
+                            recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
+                            saveCodex(player, codex);
+                        } else {
+                            saveCodex(player, codex);
+                        }
+                    } catch (error) {
+                        console.warn("[MBI] Failed to mark Day 20 lore for player", error);
+                    }
+                }
             }
 
             // Milestone spawn pulse removed - no forced spawning near players
@@ -644,6 +693,9 @@ function setMilestonePulseRun(day) {
 
 function pickSpawnTypeForDay(day) {
     // Use base identifiers to avoid cross-module constants
+    if (day >= 20) {
+        return ["mb:mb_day20", "mb:infected_day20", "mb:buff_mb_day20"];
+    }
     if (day >= 13) {
         // Prefer day 13 variants where available
         return ["mb:mb_day13", "mb:infected_day13", "mb:buff_mb_day13"];

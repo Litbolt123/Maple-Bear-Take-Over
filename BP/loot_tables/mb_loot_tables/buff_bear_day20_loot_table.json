@@ -1,0 +1,35 @@
+{
+	"pools": [
+		{
+			"rolls": 1,
+			"entries": [
+				{
+					"type": "empty",
+					"weight": 2
+				},
+				{
+					"type": "item",
+					"weight": 8,
+					"name": "mb:snow",
+					"functions": [
+						{
+							"function": "set_count",
+							"count": {
+								"min": 5,
+								"max": 18
+							}
+						},
+						{
+							"function": "looting_enchant",
+							"count": {
+								"min": 4,
+								"max": 14
+							}
+						}
+					]
+				}
+			]
+		}
+	]
+}
+

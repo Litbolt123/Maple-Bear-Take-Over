@@ -1,6 +1,7 @@
-import { system } from "@minecraft/server";
+import { system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 import { recordDailyEvent, getCurrentDay } from "./mb_dayTracker.js";
+import { ModalFormData } from "@minecraft/server-ui";
 
 export function getDefaultCodex() {
     return {
@@ -61,6 +62,7 @@ export function getDefaultCodex() {
             day4VariantsUnlocked: false,
             day8VariantsUnlocked: false,
             day13VariantsUnlocked: false,
+            day20VariantsUnlocked: false,
             // Individual bear type unlock flags for Day 4+
             day4VariantsUnlockedTiny: false,
             day4VariantsUnlockedInfected: false,
@@ -84,7 +86,14 @@ export function getDefaultCodex() {
             day13VariantsUnlockedBuff: false,
             day13VariantsUnlockedOther: false,
             // Message tracking flags for Day 13+
-            day13MessageShown: false
+            day13MessageShown: false,
+            // Individual bear type unlock flags for Day 20+
+            day20VariantsUnlockedTiny: false,
+            day20VariantsUnlockedInfected: false,
+            day20VariantsUnlockedBuff: false,
+            day20VariantsUnlockedOther: false,
+            // Message tracking flags for Day 20+
+            day20MessageShown: false
         },
         biomes: { infectedBiomeSeen: false },
         knowledge: {
@@ -94,6 +103,12 @@ export function getDefaultCodex() {
             biomeLevel: 0,           // Knowledge about biomes and infection spread
             cureLevel: 0,            // Knowledge about cures
             snowLevel: 0             // Knowledge about snow and its effects
+        },
+        journal: {
+            day20TinyLoreUnlocked: false,
+            day20InfectedLoreUnlocked: false,
+            day20BuffLoreUnlocked: false,
+            day20WorldLoreUnlocked: false
         },
         biomeData: {} // Will store biome-specific infection data as discovered
     };
@@ -165,7 +180,7 @@ export function checkKnowledgeProgression(player) {
         if (codex.history.totalInfections >= 2) {
             updateKnowledgeLevel(player, 'infectionLevel', 2); // Understanding
         }
-        if (codex.history.totalInfections >= 5) {
+        if (codex.history.totalInfections >= 5 || codex.journal?.day20WorldLoreUnlocked) {
             updateKnowledgeLevel(player, 'infectionLevel', 3); // Expert
         }
     }
@@ -177,7 +192,7 @@ export function checkKnowledgeProgression(player) {
         if (totalBearKills >= 10) {
             updateKnowledgeLevel(player, 'bearLevel', 2); // Understanding
         }
-        if (totalBearKills >= 50) {
+        if (totalBearKills >= 50 || codex.mobs?.day20VariantsUnlocked) {
             updateKnowledgeLevel(player, 'bearLevel', 3); // Expert
         }
     }
@@ -398,6 +413,44 @@ export function shareKnowledge(fromPlayer, toPlayer) {
         hasNewKnowledge = true;
         sharedItems.push(`Day 13+ Variants`);
     }
+    if (fromCodex.mobs.day20VariantsUnlocked && !toCodex.mobs.day20VariantsUnlocked) {
+        toCodex.mobs.day20VariantsUnlocked = true;
+        toCodex.mobs.day20VariantsUnlockedTiny = toCodex.mobs.day20VariantsUnlockedTiny || fromCodex.mobs.day20VariantsUnlockedTiny;
+        toCodex.mobs.day20VariantsUnlockedInfected = toCodex.mobs.day20VariantsUnlockedInfected || fromCodex.mobs.day20VariantsUnlockedInfected;
+        toCodex.mobs.day20VariantsUnlockedBuff = toCodex.mobs.day20VariantsUnlockedBuff || fromCodex.mobs.day20VariantsUnlockedBuff;
+        toCodex.mobs.day20VariantsUnlockedOther = toCodex.mobs.day20VariantsUnlockedOther || fromCodex.mobs.day20VariantsUnlockedOther;
+        hasNewKnowledge = true;
+        sharedItems.push(`Day 20+ Variants`);
+    }
+
+    const loreShared = [];
+    if (fromCodex.journal?.day20TinyLoreUnlocked && !toCodex.journal?.day20TinyLoreUnlocked) {
+        if (!toCodex.journal) toCodex.journal = {};
+        toCodex.journal.day20TinyLoreUnlocked = true;
+        hasNewKnowledge = true;
+        loreShared.push("tiny vanguard");
+    }
+    if (fromCodex.journal?.day20InfectedLoreUnlocked && !toCodex.journal?.day20InfectedLoreUnlocked) {
+        if (!toCodex.journal) toCodex.journal = {};
+        toCodex.journal.day20InfectedLoreUnlocked = true;
+        hasNewKnowledge = true;
+        loreShared.push("hollow procession");
+    }
+    if (fromCodex.journal?.day20BuffLoreUnlocked && !toCodex.journal?.day20BuffLoreUnlocked) {
+        if (!toCodex.journal) toCodex.journal = {};
+        toCodex.journal.day20BuffLoreUnlocked = true;
+        hasNewKnowledge = true;
+        loreShared.push("skybreaker notes");
+    }
+    if (fromCodex.journal?.day20WorldLoreUnlocked && !toCodex.journal?.day20WorldLoreUnlocked) {
+        if (!toCodex.journal) toCodex.journal = {};
+        toCodex.journal.day20WorldLoreUnlocked = true;
+        hasNewKnowledge = true;
+        loreShared.push("world memory");
+    }
+    if (loreShared.length > 0) {
+        sharedItems.push(`Late Lore (${loreShared.join(', ')})`);
+    }
 
     // Update cooldown tracking
     knowledgeShareCooldowns.set(cooldownKey, { lastShareTime: now, hasSharedBefore: true });
@@ -578,16 +631,29 @@ export function showCodexBook(player, context) {
             buttonActions.push(() => openItems());
         }
 
-        // Biomes section - only if infected biome discovered
         const hasAnyBiomes = codex.biomes.infectedBiomeSeen;
         if (hasAnyBiomes) {
             buttons.push("§fBiomes");
             buttonActions.push(() => openBiomes());
         }
 
+        const hasEndgameLore = !!(codex.journal?.day20TinyLoreUnlocked || codex.journal?.day20InfectedLoreUnlocked || codex.journal?.day20BuffLoreUnlocked || codex.journal?.day20WorldLoreUnlocked);
+        if (hasEndgameLore) {
+            buttons.push("§fLate Lore");
+            buttonActions.push(() => openLateLore());
+        }
+
+        const hasDebugOptions = (player.hasTag && player.hasTag("mb_cheats")) || Boolean(system?.isEnableCheats?.());
+        const debugActions = [];
+
         // Daily Log section - always available
         buttons.push("§fDaily Log");
         buttonActions.push(() => openDailyLog());
+
+        if (hasDebugOptions) {
+            buttons.push("§cDeveloper Tools");
+            buttonActions.push(() => openDeveloperTools());
+        }
 
         // Add buttons to form
         for (const button of buttons) {
@@ -1057,6 +1123,7 @@ export function showCodexBook(player, context) {
                             const day4Threshold = isBuffBear ? 1 : 25; // Buff Bears only have original and day13 variants
                             const day8Threshold = isBuffBear ? 3 : 50; // Buff Bears only have original and day13 variants
                             const day13Threshold = isBuffBear ? 5 : 100; // Max info at 5 kills for Buff Bears
+                            const day20Threshold = isBuffBear ? 8 : 150;
 
                             if (codex.mobs.day4VariantsUnlocked && killCount >= day4Threshold && !isBuffBear) {
                                 variantInfo += `\n\n§eDay 4+ Variants:`;
@@ -1099,6 +1166,22 @@ export function showCodexBook(player, context) {
                                     variantInfo += `\n§7Ultimate: 10 HP, 1.5 Damage, 98% drop rate, 4-15 snow items\n§7Special: Ultimate conversion rate`;
                                 } else if (e.key === "buffBearSeen") {
                                     variantInfo += `\n§7Ultimate: 150 HP, 10 Damage, 98% drop rate, 8-30 snow items\n§7Special: Ultimate combat mastery`;
+                                }
+                            }
+
+                            const day20Unlocked = Boolean(e.key === "mapleBearSeen" ? codex.mobs?.day20VariantsUnlockedTiny :
+                                e.key === "infectedBearSeen" ? codex.mobs?.day20VariantsUnlockedInfected :
+                                e.key === "buffBearSeen" ? codex.mobs?.day20VariantsUnlockedBuff : false);
+
+                            if (day20Unlocked && killCount >= day20Threshold) {
+                                variantInfo += `\n\n§eDay 20+ Variants:`;
+                                hasVariants = true;
+                                if (e.key === "mapleBearSeen") {
+                                    variantInfo += `\n§7Ascended: 5 HP, 4 Damage, 80% drop rate, 3-15 snow items\n§7Special: Swift flanking and synchronized strikes`;
+                                } else if (e.key === "infectedBearSeen") {
+                                    variantInfo += `\n§7Ascended: 40 HP, 8 Damage, 95% drop rate, 3-15 snow items\n§7Special: Dust saturation expands infection radius`;
+                                } else if (e.key === "buffBearSeen") {
+                                    variantInfo += `\n§7Ascended: 200 HP, 12 Damage, 98% drop rate, 5-18 snow items\n§7Special: Long-range leaps and crushing roar`;
                                 }
                             }
 
@@ -1367,13 +1450,14 @@ export function showCodexBook(player, context) {
                     }
                 } else if (dayEvents && typeof dayEvents === 'object') {
                     // New format: categorized events
-                    const categoryOrder = ["variants", "knowledge", "items", "effects", "mobs", "general"];
+                    const categoryOrder = ["variants", "knowledge", "items", "effects", "mobs", "lore", "general"];
                     const categoryNames = {
                         variants: "§eVariant Discoveries",
                         knowledge: "§bKnowledge Gained",
                         items: "§aItems Discovered",
                         effects: "§cEffects Experienced",
                         mobs: "§dCreatures Encountered",
+                        lore: "§5Endgame Lore",
                         general: "§7Other Events"
                     };
 
@@ -1446,6 +1530,173 @@ export function showCodexBook(player, context) {
         form.button("§8Back");
         form.show(player).then((res) => {
             openMain();
+        });
+    }
+
+    function openLateLore() {
+        const codex = getCodex(player);
+        const entries = [];
+
+        if (codex.journal?.day20WorldLoreUnlocked) {
+            entries.push({
+                id: "world",
+                title: "Day 20: World Memory",
+                summary: "How the land feels beneath the dust.",
+                body: "§eWorld Memory (Day 20)\n§7The air clings with powdered frost, and every echo feels rehearsed. Survivors whisper that the dust remembers our footsteps, retracing mistakes no one recalls making. The journal insists the world is keeping score."
+            });
+        }
+        if (codex.journal?.day20TinyLoreUnlocked) {
+            entries.push({
+                id: "tiny",
+                title: "Tiny Vanguard",
+                summary: "The small bears with sharpened intent.",
+                body: "§eTiny Vanguard\n§7The smallest Maple Bears no longer scatter at lanternlight. Their paws carve thin white lines through the snow, and packs of them move with a choreographed urgency. Whatever guides them now is patient, and it keeps count."
+            });
+        }
+        if (codex.journal?.day20InfectedLoreUnlocked) {
+            entries.push({
+                id: "infected",
+                title: "Hollow Procession",
+                summary: "What the infected leave behind.",
+                body: "§eHollow Procession\n§7Infected Maple Bears move like pallbearers. Dust rolls off their shoulders in slow curtains, blanketing ground that never thaws. They hum without voices, and livestock fall silent long before they arrive."
+            });
+        }
+        if (codex.journal?.day20BuffLoreUnlocked) {
+            entries.push({
+                id: "buff",
+                title: "Skybreaker",
+                summary: "Notes on the heaviest footsteps.",
+                body: "§eSkybreaker\n§7Buff Maple Bears clear the treeline in a single bound now. When they land, snow shivers off nearby hills, and the dust swarms back into place as if the wind itself obeys them. Standing your ground only teaches them where to land next."
+            });
+        }
+
+        const form = new ActionFormData().title("§6Late Lore");
+        form.body(entries.length > 0 ? "§7Recovered observations:" : "§7No late entries recorded yet.");
+
+        for (const entry of entries) {
+            form.button(`§f${entry.title}\n§8${entry.summary}`);
+        }
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === entries.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openMain();
+            }
+
+            const entry = entries[res.selection];
+            player.playSound("mb.codex_turn_page", { pitch: 0.9, volume: 0.7 });
+            new ActionFormData()
+                .title(`§6Late Lore: ${entry.title}`)
+                .body(`${entry.body}\n\n§8The journal records what we would rather forget.`)
+                .button("§8Back")
+                .show(player)
+                .then(() => {
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                    openLateLore();
+                });
+        }).catch(() => { openMain(); });
+    }
+
+    function openDeveloperTools() {
+        const options = [
+            { label: "§fReset My Codex", action: () => triggerDebugCommand("reset_codex") },
+            { label: "§fReset World Day to 1", action: () => triggerDebugCommand("reset_day") },
+            { label: "§fSet Day...", action: () => promptSetDay() }
+        ];
+
+        const form = new ActionFormData().title("§cDeveloper Tools");
+        form.body("§7Debug utilities:");
+        for (const opt of options) {
+            form.button(opt.label);
+        }
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === options.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openMain();
+            }
+
+            const chosen = options[res.selection];
+            if (chosen) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+                chosen.action();
+            } else {
+                openDeveloperTools();
+            }
+        });
+    }
+
+    function triggerDebugCommand(subcommand, args = []) {
+        try {
+            const payload = JSON.stringify({ command: subcommand, args });
+            let handled = false;
+
+            try {
+                const directHandler = globalThis?.mbExecuteDebugCommand;
+                if (typeof directHandler === "function") {
+                    directHandler(player, subcommand, args);
+                    handled = true;
+                }
+            } catch (err) {
+                console.warn(`[MBI] Direct debug command dispatch failed (${subcommand}):`, err);
+            }
+
+            if (!handled) {
+                try {
+                    const sendScriptEvent = world?.sendScriptEvent;
+                    if (typeof sendScriptEvent === "function") {
+                        sendScriptEvent.call(world, "mb:cmd", payload);
+                        handled = true;
+                    }
+                } catch (err) {
+                    console.warn(`[MBI] Script event dispatch failed (${subcommand}):`, err);
+                }
+            }
+
+            if (!handled) {
+                try {
+                    const dim = player?.dimension ?? world.getDimension("overworld");
+                    if (dim?.runCommandAsync) {
+                        const escaped = payload.replace(/"/g, '\\"');
+                        dim.runCommandAsync(`scriptevent mb:cmd ${escaped}`);
+                        handled = true;
+                    }
+                } catch (err) {
+                    console.warn(`[MBI] Command dispatch failed (${subcommand}):`, err);
+                }
+            }
+
+            if (!handled) {
+                console.warn(`[MBI] Failed to trigger debug command ${subcommand}.`);
+                player?.sendMessage?.("§7[MBI] Failed to send debug command. See log.");
+            }
+        } catch (err) {
+            console.warn("[MBI] Failed to prepare debug command payload:", err);
+            player?.sendMessage?.("§7[MBI] Failed to send debug command.");
+        } finally {
+            system.run(() => openDeveloperTools());
+        }
+    }
+
+    function promptSetDay() {
+        const modal = new ModalFormData().title("§cSet Day")
+            .textField("Enter new day number", "20");
+
+        modal.show(player).then((res) => {
+            if (!res || res.canceled) {
+                return openDeveloperTools();
+            }
+
+            const dayString = res.formValues?.[0] ?? "";
+            const dayNumber = parseInt(dayString, 10);
+            if (Number.isNaN(dayNumber) || dayNumber < 1) {
+                player.sendMessage("§7[MBI] Invalid day number.");
+                return openDeveloperTools();
+            }
+
+            triggerDebugCommand("set_day", [String(dayNumber)]);
         });
     }
 

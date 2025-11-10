@@ -44,6 +44,15 @@
 		"mb_buff_mb_day13_egg": {
 			"textures": "textures/items/buff_mb_day13_egg"
 		},
+		"mb_mb_day20_egg": {
+			"textures": "textures/items/mb_day13_egg"
+		},
+		"mb_infected_day20_egg": {
+			"textures": "textures/items/infected_day13_egg"
+		},
+		"mb_buff_mb_day20_egg": {
+			"textures": "textures/items/buff_mb_day13_egg"
+		},
 		"flying_mb_egg": {
 			"textures": "textures/items/flying_mb_egg"
 		}

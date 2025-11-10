@@ -21,7 +21,7 @@
 			"minecraft:material_instances": {
 				"*": {
 					"texture": "'snow'_layer",
-					"render_method": "alpha_test"
+					"render_method": "opaque"
 				}
 			},
 			"minecraft:collision_box": {
