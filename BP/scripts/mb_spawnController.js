@@ -1,6 +1,62 @@
 import { system, world } from "@minecraft/server";
 import { getCurrentDay, isMilestoneDay } from "./mb_dayTracker.js";
 
+// Debug flags - set to true to enable detailed logging
+const DEBUG_SPAWNING = false; // Enable detailed spawn debugging
+const DEBUG_CACHE = false; // Enable cache debugging
+const DEBUG_GROUPS = false; // Enable player group debugging
+const ERROR_LOGGING = true; // Always log errors (recommended: true)
+
+// Error tracking to prevent spam
+const errorLogCounts = new Map(); // Track error frequency
+const ERROR_LOG_COOLDOWN = 6000; // Only log same error every 100 seconds (6000 ticks)
+const MAX_ERROR_LOGS = 10; // Max times to log the same error
+
+// Helper function for conditional debug logging
+function debugLog(category, message, ...args) {
+    if (category === 'spawn' && DEBUG_SPAWNING) {
+        console.warn(`[SPAWN DEBUG] ${message}`, ...args);
+    } else if (category === 'cache' && DEBUG_CACHE) {
+        console.warn(`[CACHE DEBUG] ${message}`, ...args);
+    } else if (category === 'groups' && DEBUG_GROUPS) {
+        console.warn(`[GROUP DEBUG] ${message}`, ...args);
+    }
+}
+
+// Helper function for error logging with rate limiting
+function errorLog(message, error = null, context = {}) {
+    if (!ERROR_LOGGING) return;
+    
+    const errorKey = `${message}-${error?.message || 'unknown'}`;
+    const now = system.currentTick;
+    const lastLog = errorLogCounts.get(errorKey);
+    
+    // Check if we should log this error
+    if (lastLog) {
+        const timeSinceLastLog = now - lastLog.lastTick;
+        const logCount = lastLog.count;
+        
+        // Skip if logged too recently or too many times
+        if (timeSinceLastLog < ERROR_LOG_COOLDOWN || logCount >= MAX_ERROR_LOGS) {
+            return;
+        }
+        
+        // Update log count
+        errorLogCounts.set(errorKey, { lastTick: now, count: logCount + 1 });
+    } else {
+        // First time logging this error
+        errorLogCounts.set(errorKey, { lastTick: now, count: 1 });
+    }
+    
+    // Log the error
+    const contextStr = Object.keys(context).length > 0 ? ` Context: ${JSON.stringify(context)}` : '';
+    if (error) {
+        console.warn(`[SPAWN ERROR] ${message}${contextStr}`, error);
+    } else {
+        console.warn(`[SPAWN ERROR] ${message}${contextStr}`);
+    }
+}
+
 const TINY_BEAR_ID = "mb:mb";
 const DAY4_BEAR_ID = "mb:mb_day4";
 const DAY8_BEAR_ID = "mb:mb_day8";
@@ -234,6 +290,17 @@ const PLAYER_PROCESSING_ROTATION = []; // Rotate which players to process
 let playerRotationIndex = 0;
 let lastBlockScanTick = 0; // Track when we last did expensive block scans
 
+// Player grouping system for overlapping spawn rectangles
+const PLAYER_GROUP_OVERLAP_DISTANCE = MAX_SPAWN_DISTANCE * 2; // Players within this distance have overlapping rectangles (96 blocks)
+const PLAYER_GROUP_OVERLAP_DISTANCE_SQ = PLAYER_GROUP_OVERLAP_DISTANCE * PLAYER_GROUP_OVERLAP_DISTANCE;
+const playerGroups = new Map(); // playerId -> groupId
+const groupCaches = new Map(); // groupId -> { tiles, density, center, tick, players: Set<playerId>, dimension }
+let nextGroupId = 1;
+const scannedGroupsThisTick = new Set(); // Track which groups have been scanned this tick (to avoid duplicate logs)
+const loggedDimensionsThisTick = new Set(); // Track which dimensions have been logged this tick
+const loggedSelectedGroupsThisTick = new Set(); // Track which groups have been logged as "selected" this tick
+const loggedMaintainedGroupsThisTick = new Set(); // Track which groups have been logged as "maintained" this tick
+
 // Calculate dynamic spawn limit based on current day
 function getMaxSpawnsPerTick(day) {
     if (day < 2) return 1;
@@ -246,15 +313,24 @@ function getMaxSpawnsPerTick(day) {
 }
 
 // Global cache for dusted_dirt block positions
-const dustedDirtCache = new Map(); // key: "x,y,z" -> { x, y, z, tick }
+const dustedDirtCache = new Map(); // key: "x,y,z" -> { x, y, z, tick, dimension }
 const DUSTED_DIRT_CACHE_TTL = SCAN_INTERVAL * 10; // Keep cache entries for 10 scan intervals (~50 seconds)
 const MAX_CACHE_SIZE = 5000; // Maximum cached positions
 const CACHE_CHECK_RADIUS = 100; // Only check cached blocks within 100 blocks of player (performance optimization)
+const CACHE_VALIDATION_INTERVAL = SCAN_INTERVAL * 3; // Validate cache every 3 scan intervals (~15 seconds)
+const CACHE_VALIDATION_SAMPLE_SIZE = 50; // Validate up to 50 blocks per validation cycle
+let lastCacheValidationTick = 0;
 
 // Export functions for main.js to register dusted_dirt blocks
-export function registerDustedDirtBlock(x, y, z) {
+export function registerDustedDirtBlock(x, y, z, dimension = null) {
     const key = `${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`;
-    dustedDirtCache.set(key, { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z), tick: system.currentTick });
+    dustedDirtCache.set(key, { 
+        x: Math.floor(x), 
+        y: Math.floor(y), 
+        z: Math.floor(z), 
+        tick: system.currentTick,
+        dimension: dimension ? dimension.id : null
+    });
     
     // Trim cache if it gets too large
     if (dustedDirtCache.size > MAX_CACHE_SIZE) {
@@ -282,6 +358,77 @@ function cleanupDustedDirtCache() {
     }
     for (const key of toRemove) {
         dustedDirtCache.delete(key);
+    }
+}
+
+// Validate cached blocks - check if they still exist and are still dusted_dirt
+function validateDustedDirtCache(dimension) {
+    const now = system.currentTick;
+    if (now - lastCacheValidationTick < CACHE_VALIDATION_INTERVAL) {
+        return; // Don't validate too frequently
+    }
+    lastCacheValidationTick = now;
+    
+    // Get a sample of cached blocks to validate (prioritize older entries)
+    const entries = Array.from(dustedDirtCache.entries())
+        .filter(([key, value]) => {
+            // Only validate blocks in the same dimension if dimension is provided
+            if (dimension && value.dimension && value.dimension !== dimension.id) {
+                return false;
+            }
+            // Prioritize entries that are not too new and not too old
+            const age = now - value.tick;
+            return age > SCAN_INTERVAL && age < DUSTED_DIRT_CACHE_TTL;
+        })
+        .sort((a, b) => a[1].tick - b[1].tick); // Sort by age (oldest first)
+    
+    // Validate a sample of entries
+    const sampleSize = Math.min(CACHE_VALIDATION_SAMPLE_SIZE, entries.length);
+    const toRemove = [];
+    let validated = 0;
+    
+    for (let i = 0; i < sampleSize && validated < CACHE_VALIDATION_SAMPLE_SIZE; i++) {
+        const [key, value] = entries[i];
+        validated++;
+        
+        try {
+            if (!dimension || !value.dimension || value.dimension === dimension.id) {
+                const checkDim = dimension || (value.dimension ? world.getDimension(value.dimension) : null);
+                if (checkDim) {
+                    const block = checkDim.getBlock({ x: value.x, y: value.y, z: value.z });
+                    if (!block || block.typeId !== TARGET_BLOCK) {
+                        // Block no longer exists or changed type, remove from cache
+                        toRemove.push(key);
+                        debugLog('cache', `Removed invalid cache entry: ${key} (block: ${block?.typeId || 'null'})`);
+                    }
+                } else if (value.dimension) {
+                    // Dimension doesn't exist, remove entry
+                    toRemove.push(key);
+                    debugLog('cache', `Removed cache entry with invalid dimension: ${key}`);
+                }
+            }
+        } catch (error) {
+            // Chunk not loaded or error - don't remove from cache if it's just unloaded
+            // Only log if it's a serious error (not chunk not loaded)
+            if (error && !error.message?.includes('not loaded') && !error.message?.includes('Chunk')) {
+                errorLog(`Error validating cached block ${key}`, error, { x: value.x, y: value.y, z: value.z, dimension: value.dimension });
+            }
+        }
+    }
+    
+    // Remove invalid entries
+    for (const key of toRemove) {
+        dustedDirtCache.delete(key);
+    }
+    
+    // Also remove entries where we can't validate (dimension mismatch or missing)
+    if (dimension) {
+        for (const [key, value] of dustedDirtCache.entries()) {
+            if (value.dimension && value.dimension !== dimension.id) {
+                // Entry is for a different dimension, skip validation
+                continue;
+            }
+        }
     }
 }
 
@@ -327,7 +474,8 @@ function scanAroundDustedDirt(dimension, centerX, centerY, centerZ, seen, candid
                             if (isAir(blockAbove) && isAir(blockTwoAbove)) {
                                 seen.add(yKey);
                                 candidates.push({ x, y, z });
-                                registerDustedDirtBlock(x, y, z);
+                                // Register with dimension for proper cache validation
+                                registerDustedDirtBlock(x, y, z, dimension);
                                 if (candidates.length >= limit) {
                                     return localQueries; // Early exit if we hit limit
                                 }
@@ -339,8 +487,14 @@ function scanAroundDustedDirt(dimension, centerX, centerY, centerZ, seen, candid
                     if (!isAir(block)) {
                         break; // Hit solid non-target block, move to next XZ
                     }
-                } catch {
-                    // Chunk not loaded, skip
+                } catch (error) {
+                    // Chunk not loaded - this is normal, just skip
+                    if (error && error.message?.includes('not loaded') || error.message?.includes('Chunk')) {
+                        // Normal case, skip silently
+                    } else {
+                        // Unexpected error - log it
+                        errorLog(`Error in scanAroundDustedDirt`, error, { x, y, z, dimension: dimension.id });
+                    }
                 }
             }
         }
@@ -359,15 +513,22 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     const seen = new Set();
     let blockQueryCount = 0;
 
+    // Validate cache periodically
+    validateDustedDirtCache(dimension);
+
     // First, check cached dusted_dirt positions
     const cachedTiles = [];
     const now = system.currentTick;
     const cacheMaxDistance = 45; // Stricter limit for cached blocks (45 instead of 48)
     const cacheMaxSq = cacheMaxDistance * cacheMaxDistance;
     const cacheCheckRadiusSq = CACHE_CHECK_RADIUS * CACHE_CHECK_RADIUS; // Only check blocks within this radius
+    const dimensionId = dimension.id;
     
     for (const [key, value] of dustedDirtCache.entries()) {
         if (now - value.tick > DUSTED_DIRT_CACHE_TTL) continue; // Skip expired entries
+        
+        // Skip entries from different dimensions
+        if (value.dimension && value.dimension !== dimensionId) continue;
         
         // Quick distance check: Skip cached blocks that are too far from player
         // This prevents checking thousands of cached blocks on the other side of the world
@@ -395,9 +556,9 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     const blockTwoAbove = dimension.getBlock({ x: value.x, y: value.y + 2, z: value.z });
                     blockQueryCount++;
                     if (isAir(blockAbove) && isAir(blockTwoAbove)) {
-                        const key = `${value.x},${value.y},${value.z}`;
-                        if (!seen.has(key)) {
-                            seen.add(key);
+                        const tileKey = `${value.x},${value.y},${value.z}`;
+                        if (!seen.has(tileKey)) {
+                            seen.add(tileKey);
                             cachedTiles.push({ x: value.x, y: value.y, z: value.z });
                         }
                     }
@@ -405,9 +566,14 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
             } else if (!block || block.typeId !== TARGET_BLOCK) {
                 // Block no longer exists or changed, remove from cache
                 unregisterDustedDirtBlock(value.x, value.y, value.z);
+                debugLog('cache', `Removed invalid block from cache: ${value.x},${value.y},${value.z} (type: ${block?.typeId || 'null'})`);
             }
-        } catch {
-            // Chunk not loaded or error, skip
+        } catch (error) {
+            // Chunk not loaded or error, skip (but don't remove from cache - might just be unloaded)
+            // Only log if it's a serious error (not chunk not loaded)
+            if (error && !error.message?.includes('not loaded') && !error.message?.includes('Chunk')) {
+                errorLog(`Error checking cached block`, error, { x: value.x, y: value.y, z: value.z });
+            }
         }
     }
     
@@ -467,7 +633,13 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                 try {
                     block = dimension.getBlock({ x, y, z });
                     blockQueryCount++;
-                } catch {
+                } catch (error) {
+                    // Chunk not loaded - this is normal, just skip
+                    if (error && error.message?.includes('not loaded') || error.message?.includes('Chunk')) {
+                        continue;
+                    }
+                    // Unexpected error - log it
+                    errorLog(`Error getting block during scan`, error, { x, y, z, dimension: dimension.id });
                     continue;
                 }
                 if (!block) continue;
@@ -484,7 +656,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                                 seen.add(key);
                                 candidates.push({ x, y, z });
                                 // Register in cache for future use
-                                registerDustedDirtBlock(x, y, z);
+                                registerDustedDirtBlock(x, y, z, dimension);
                                 
                                 // Scan around this block for nearby dusted_dirt patches
                                 if (blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN - 30) { // Reserve some queries for local scan
@@ -534,7 +706,13 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     try {
                         block = dimension.getBlock({ x, y, z });
                         blockQueryCount++;
-                    } catch {
+                    } catch (error) {
+                        // Chunk not loaded - this is normal, just skip
+                        if (error && error.message?.includes('not loaded') || error.message?.includes('Chunk')) {
+                            continue;
+                        }
+                        // Unexpected error - log it
+                        errorLog(`Error getting block during expanded scan`, error, { x, y, z, dimension: dimension.id });
                         continue;
                     }
                     if (!block) continue;
@@ -548,20 +726,20 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                             if (isAir(blockAbove) && isAir(blockTwoAbove)) {
                                 const key = `${x},${y},${z}`;
                                 if (!seen.has(key)) {
-                                    seen.add(key);
-                                    candidates.push({ x, y, z });
-                                    // Register in cache for future use
-                                    registerDustedDirtBlock(x, y, z);
-                                    
-                                    // Scan around this block for nearby dusted_dirt patches
-                                    if (blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN - 30) { // Reserve some queries for local scan
-                                        const localQueries = scanAroundDustedDirt(dimension, x, y, z, seen, candidates, blockQueryCount, limit);
-                                        blockQueryCount += localQueries;
-                                    }
-                                    
-                                    if (candidates.length >= limit) {
-                                        break;
-                                    }
+                                seen.add(key);
+                                candidates.push({ x, y, z });
+                                // Register in cache for future use
+                                registerDustedDirtBlock(x, y, z, dimension);
+                                
+                                // Scan around this block for nearby dusted_dirt patches
+                                if (blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN - 30) { // Reserve some queries for local scan
+                                    const localQueries = scanAroundDustedDirt(dimension, x, y, z, seen, candidates, blockQueryCount, limit);
+                                    blockQueryCount += localQueries;
+                                }
+                                
+                                if (candidates.length >= limit) {
+                                    break;
+                                }
                                 }
                             }
                         }
@@ -644,49 +822,521 @@ function sampleTiles(tiles, max = MAX_CANDIDATES_PER_SCAN) {
 
 function removeTileFromCache(playerId, tile) {
     if (!tile) return;
+    
+    // Check player's individual cache
     const cache = playerTileCache.get(playerId);
-    if (!cache || !Array.isArray(cache.tiles)) return;
-    const index = cache.tiles.findIndex((cached) => cached.x === tile.x && cached.y === tile.y && cached.z === tile.z);
-    if (index !== -1) {
-        cache.tiles.splice(index, 1);
-        cache.density = cache.tiles.length;
+    if (cache && Array.isArray(cache.tiles)) {
+        const index = cache.tiles.findIndex((cached) => cached.x === tile.x && cached.y === tile.y && cached.z === tile.z);
+        if (index !== -1) {
+            cache.tiles.splice(index, 1);
+            cache.density = cache.tiles.length;
+        }
+    }
+    
+    // Check group cache if player is in a group
+    const groupId = playerGroups.get(playerId);
+    if (groupId) {
+        const groupCache = groupCaches.get(groupId);
+        if (groupCache && Array.isArray(groupCache.tiles)) {
+            const index = groupCache.tiles.findIndex((cached) => cached.x === tile.x && cached.y === tile.y && cached.z === tile.z);
+            if (index !== -1) {
+                groupCache.tiles.splice(index, 1);
+                groupCache.density = groupCache.tiles.length;
+            }
+        }
+    }
+    
+    // Also remove from global dusted dirt cache
+    unregisterDustedDirtBlock(tile.x, tile.y, tile.z);
+}
+
+// Find or create a player group for overlapping spawn rectangles
+function getPlayerGroup(players, dimension) {
+    if (players.length === 0) return null;
+    
+    // Find existing groups or create new ones
+    const groups = new Map(); // groupId -> Set<playerId>
+    const playerToGroup = new Map(); // playerId -> groupId
+    
+    // Initialize: each player starts in their own group
+    for (const player of players) {
+        const existingGroupId = playerGroups.get(player.id);
+        if (existingGroupId && groupCaches.has(existingGroupId)) {
+            // Player is already in a group, check if group is still valid
+            const groupCache = groupCaches.get(existingGroupId);
+            if (groupCache.dimension === dimension.id) {
+                // Check if any players in the group are still close enough
+                let stillClose = false;
+                let closestDistance = Infinity;
+                let closestPlayerName = null;
+                for (const otherPlayerId of groupCache.players) {
+                    if (otherPlayerId === player.id) continue;
+                    const otherPlayer = players.find(p => p.id === otherPlayerId);
+                    if (!otherPlayer) continue;
+                    
+                    const dx = player.location.x - otherPlayer.location.x;
+                    const dz = player.location.z - otherPlayer.location.z;
+                    const distSq = dx * dx + dz * dz;
+                    const dist = Math.sqrt(distSq);
+                    if (dist < closestDistance) {
+                        closestDistance = dist;
+                        closestPlayerName = otherPlayer.name;
+                    }
+                    if (distSq <= PLAYER_GROUP_OVERLAP_DISTANCE_SQ) {
+                        stillClose = true;
+                        break;
+                    }
+                }
+                
+                if (stillClose) {
+                    // Add to existing group
+                    if (!groups.has(existingGroupId)) {
+                        groups.set(existingGroupId, new Set(groupCache.players));
+                    }
+                    groups.get(existingGroupId).add(player.id);
+                    playerToGroup.set(player.id, existingGroupId);
+                    
+                    // Only log group status once per group per tick (use global tracker)
+                    if (!loggedMaintainedGroupsThisTick.has(existingGroupId)) {
+                        loggedMaintainedGroupsThisTick.add(existingGroupId);
+                        const groupPlayerNames = Array.from(groups.get(existingGroupId)).map(id => players.find(p => p.id === id)?.name || id).join(', ');
+                        debugLog('groups', `Group ${existingGroupId} maintained: ${groupPlayerNames} (distance: ${closestDistance.toFixed(1)} blocks)`);
+                    }
+                    continue;
+                } else {
+                    debugLog('groups', `${player.name} leaving group ${existingGroupId} (closest: ${closestPlayerName} at ${closestDistance.toFixed(1)} blocks, threshold: ${PLAYER_GROUP_OVERLAP_DISTANCE})`);
+                }
+            }
+        }
+        
+        // Player needs a new group or existing group is invalid
+        // Check if they're close to any other player
+        let addedToGroup = false;
+        for (const otherPlayer of players) {
+            if (otherPlayer.id === player.id) continue;
+            
+            const dx = player.location.x - otherPlayer.location.x;
+            const dz = player.location.z - otherPlayer.location.z;
+            const distSq = dx * dx + dz * dz;
+            const dist = Math.sqrt(distSq);
+            
+            if (distSq <= PLAYER_GROUP_OVERLAP_DISTANCE_SQ) {
+                // Players are close enough to share a group
+                const otherGroupId = playerToGroup.get(otherPlayer.id);
+                if (otherGroupId) {
+                    // Add to existing group
+                    groups.get(otherGroupId).add(player.id);
+                    playerToGroup.set(player.id, otherGroupId);
+                    addedToGroup = true;
+                    
+                    // Only log group formation once per group per tick (tracked globally)
+                    // Note: "Selected group" log already shows this, so we can skip "formed" log
+                    // to reduce redundancy
+                    break;
+                } else {
+                    // Create new group with both players
+                    const newGroupId = nextGroupId++;
+                    const newGroup = new Set([player.id, otherPlayer.id]);
+                    groups.set(newGroupId, newGroup);
+                    playerToGroup.set(player.id, newGroupId);
+                    playerToGroup.set(otherPlayer.id, newGroupId);
+                    addedToGroup = true;
+                    // Only log group creation once per group per tick
+                    // Note: "Selected group" log will show this group, so we skip individual creation log
+                    // to reduce redundancy (it will be shown in the "Selected group" log)
+                    break;
+                }
+            }
+        }
+        
+        if (!addedToGroup) {
+            // Player is alone, create their own group (only log if single player)
+            if (players.length === 1) {
+                const newGroupId = nextGroupId++;
+                groups.set(newGroupId, new Set([player.id]));
+                playerToGroup.set(player.id, newGroupId);
+                debugLog('groups', `${player.name} is alone, created solo group ${newGroupId}`);
+            }
+        }
+    }
+    
+    // Merge groups that are connected (players in different groups that are close)
+    let merged = true;
+    while (merged) {
+        merged = false;
+        for (const [groupId1, players1] of groups.entries()) {
+            for (const [groupId2, players2] of groups.entries()) {
+                if (groupId1 === groupId2) continue;
+                
+                // Check if any player in group1 is close to any player in group2
+                let shouldMerge = false;
+                for (const playerId1 of players1) {
+                    const player1 = players.find(p => p.id === playerId1);
+                    if (!player1) continue;
+                    
+                    for (const playerId2 of players2) {
+                        const player2 = players.find(p => p.id === playerId2);
+                        if (!player2) continue;
+                        
+                        const dx = player1.location.x - player2.location.x;
+                        const dz = player1.location.z - player2.location.z;
+                        const distSq = dx * dx + dz * dz;
+                        
+                        if (distSq <= PLAYER_GROUP_OVERLAP_DISTANCE_SQ) {
+                            shouldMerge = true;
+                            break;
+                        }
+                    }
+                    if (shouldMerge) break;
+                }
+                
+                if (shouldMerge) {
+                    // Merge group2 into group1
+                    const group1PlayerNames = Array.from(players1).map(id => players.find(p => p.id === id)?.name || id);
+                    const group2PlayerNames = Array.from(players2).map(id => players.find(p => p.id === id)?.name || id);
+                    debugLog('groups', `Merging group ${groupId2} (${group2PlayerNames.join(', ')}) into group ${groupId1} (${group1PlayerNames.join(', ')})`);
+                    
+                    for (const playerId of players2) {
+                        players1.add(playerId);
+                        playerToGroup.set(playerId, groupId1);
+                    }
+                    groups.delete(groupId2);
+                    merged = true;
+                    break;
+                }
+            }
+            if (merged) break;
+        }
+    }
+    
+    // Return the first group (we'll process one group at a time)
+    // For now, return the group with the most players (or first if tie)
+    let largestGroup = null;
+    let largestGroupSize = 0;
+    for (const [groupId, playerSet] of groups.entries()) {
+        if (playerSet.size > largestGroupSize) {
+            largestGroupSize = playerSet.size;
+            const groupPlayers = Array.from(playerSet).map(id => players.find(p => p.id === id)).filter(p => p);
+            largestGroup = { groupId, players: groupPlayers };
+        }
+    }
+    
+    // Only log group selection once per group per tick
+    if (largestGroup && (groups.size > 1 || largestGroupSize > 1)) {
+        const groupId = largestGroup.groupId;
+        if (!loggedSelectedGroupsThisTick.has(groupId)) {
+            loggedSelectedGroupsThisTick.add(groupId);
+            const playerNames = largestGroup.players.map(p => p.name).join(', ');
+            debugLog('groups', `Selected group ${groupId} with ${largestGroupSize} players: ${playerNames}`);
+        }
+    }
+    
+    return largestGroup;
+}
+
+// Calculate combined bounding rectangle for a group of players
+function calculateGroupBoundingRect(players, logDetails = false) {
+    if (players.length === 0) return null;
+    
+    let minX = Infinity, maxX = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+    let centerX = 0, centerZ = 0;
+    
+    // Calculate player positions
+    const playerPositions = [];
+    for (const player of players) {
+        const x = player.location.x;
+        const z = player.location.z;
+        playerPositions.push({ name: player.name, x, z });
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minZ = Math.min(minZ, z);
+        maxZ = Math.max(maxZ, z);
+    }
+    
+    centerX = (minX + maxX) / 2;
+    centerZ = (minZ + maxZ) / 2;
+    
+    // Calculate player spread
+    const spreadX = maxX - minX;
+    const spreadZ = maxZ - minZ;
+    const maxSpread = Math.max(spreadX, spreadZ);
+    
+    // Expand rectangle to ensure all players' spawn rectangles are covered
+    // Each player needs MAX_SPAWN_DISTANCE blocks around them
+    const expandedMinX = centerX - MAX_SPAWN_DISTANCE;
+    const expandedMaxX = centerX + MAX_SPAWN_DISTANCE;
+    const expandedMinZ = centerZ - MAX_SPAWN_DISTANCE;
+    const expandedMaxZ = centerZ + MAX_SPAWN_DISTANCE;
+    
+    // Only log when explicitly requested (e.g., when rescanning)
+    if (logDetails) {
+        debugLog('groups', `Calculated bounding rect for ${players.length} players: center (${centerX.toFixed(1)}, ${centerZ.toFixed(1)}), spread: ${maxSpread.toFixed(1)} blocks, rect: X[${expandedMinX.toFixed(1)} to ${expandedMaxX.toFixed(1)}], Z[${expandedMinZ.toFixed(1)} to ${expandedMaxZ.toFixed(1)}]`);
+        debugLog('groups', `Player positions: ${playerPositions.map(p => `${p.name}(${p.x.toFixed(1)}, ${p.z.toFixed(1)})`).join(', ')}`);
+    }
+    
+    return {
+        center: { x: centerX, z: centerZ },
+        minX: expandedMinX,
+        maxX: expandedMaxX,
+        minZ: expandedMinZ,
+        maxZ: expandedMaxZ
+    };
+}
+
+// Cleanup stale player groups - remove groups with no active players or stale caches
+function cleanupPlayerGroups(allPlayers) {
+    try {
+        const activePlayerIds = new Set(allPlayers.map(p => p.id));
+        const now = system.currentTick;
+        const groupsToRemove = [];
+        
+        // Find groups with no active players or stale caches
+        for (const [groupId, groupCache] of groupCaches.entries()) {
+            try {
+                // Check if any players in the group are still active
+                let hasActivePlayer = false;
+                if (groupCache.players) {
+                    for (const playerId of groupCache.players) {
+                        if (activePlayerIds.has(playerId)) {
+                            hasActivePlayer = true;
+                            break;
+                        }
+                    }
+                }
+                
+                // Remove group if no active players or cache is too old
+                if (!hasActivePlayer || (now - groupCache.tick > CACHE_TICK_TTL * 2)) {
+                    groupsToRemove.push(groupId);
+                    debugLog('groups', `Marking group ${groupId} for removal (hasActive: ${hasActivePlayer}, age: ${now - groupCache.tick})`);
+                }
+            } catch (error) {
+                errorLog(`Error processing group ${groupId} in cleanup`, error, { groupId });
+                // Mark for removal on error
+                groupsToRemove.push(groupId);
+            }
+        }
+        
+        // Remove stale groups
+        for (const groupId of groupsToRemove) {
+            try {
+                groupCaches.delete(groupId);
+                // Remove player assignments for this group
+                for (const [playerId, assignedGroupId] of playerGroups.entries()) {
+                    if (assignedGroupId === groupId) {
+                        playerGroups.delete(playerId);
+                    }
+                }
+                debugLog('groups', `Removed group ${groupId}`);
+            } catch (error) {
+                errorLog(`Error removing group ${groupId}`, error, { groupId });
+            }
+        }
+        
+        // Also remove player assignments for players that are no longer active
+        for (const [playerId, groupId] of playerGroups.entries()) {
+            if (!activePlayerIds.has(playerId)) {
+                playerGroups.delete(playerId);
+                debugLog('groups', `Removed player ${playerId} from group ${groupId} (player left)`);
+            }
+        }
+    } catch (error) {
+        errorLog(`Error in cleanupPlayerGroups`, error);
     }
 }
 
-function getTilesForPlayer(player, dimension, playerPos, currentDay) {
+function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCache = false, groupPlayers = null) {
     const playerId = player.id;
     const now = system.currentTick;
-    let cache = playerTileCache.get(playerId);
+    
+    // Try to use group cache if available and enabled
+    let cache = null;
     let needsRescan = false;
     let movedSq = 0;
-
-    if (!cache) {
-        needsRescan = true;
-    } else {
-        const dx = playerPos.x - cache.center.x;
-        const dz = playerPos.z - cache.center.z;
-        movedSq = dx * dx + dz * dz;
-        // Only rescan if moved significantly OR cache expired OR it's time for a block scan
-        const timeSinceLastScan = now - lastBlockScanTick;
-        if (movedSq > CACHE_MOVE_THRESHOLD_SQ || now - cache.tick > CACHE_TICK_TTL || timeSinceLastScan >= BLOCK_SCAN_COOLDOWN) {
+    let isGroupCache = false;
+    
+    if (useGroupCache && groupPlayers && groupPlayers.length > 1) {
+        // Use group cache - find or create group
+        const group = getPlayerGroup(groupPlayers, dimension);
+        if (group && group.players.length > 1) {
+            const groupId = group.groupId;
+            const groupCache = groupCaches.get(groupId);
+            
+            if (groupCache) {
+                // Check if group cache is still valid (don't log bounding rect details here)
+                const boundingRect = calculateGroupBoundingRect(group.players, false);
+                if (boundingRect) {
+                    // Check if player is within the bounding rectangle
+                    const inBounds = playerPos.x >= boundingRect.minX && playerPos.x <= boundingRect.maxX &&
+                                    playerPos.z >= boundingRect.minZ && playerPos.z <= boundingRect.maxZ;
+                    
+                    if (inBounds) {
+                        const dx = playerPos.x - groupCache.center.x;
+                        const dz = playerPos.z - groupCache.center.z;
+                        movedSq = dx * dx + dz * dz;
+                        const timeSinceLastScan = now - lastBlockScanTick;
+                        const cacheAge = now - groupCache.tick;
+                        
+                        // Use group cache if it's recent and group hasn't moved much
+                        if (now - groupCache.tick < CACHE_TICK_TTL && timeSinceLastScan < BLOCK_SCAN_COOLDOWN) {
+                            cache = groupCache;
+                            isGroupCache = true;
+                            // Update player's group assignment
+                            playerGroups.set(playerId, groupId);
+                            // Only log cache usage when it's first created or refreshed
+                            // (per-player tile counts are logged later after filtering)
+                        } else {
+                            // Only log when cache expires (not every time)
+                            if (cacheAge >= CACHE_TICK_TTL || timeSinceLastScan >= BLOCK_SCAN_COOLDOWN) {
+                                debugLog('groups', `Group ${groupId} cache expired for ${player.name} (age: ${cacheAge}, cooldown: ${timeSinceLastScan}), rescanning`);
+                            }
+                            needsRescan = true;
+                        }
+                    } else {
+                        debugLog('groups', `${player.name}: Outside group ${groupId} bounds, rescanning`);
+                        needsRescan = true;
+                    }
+                } else {
+                    debugLog('groups', `Could not calculate bounding rect for group ${groupId}, rescanning`);
+                    needsRescan = true;
+                }
+            } else {
+                // No cache yet - will be created during rescan
+                needsRescan = true;
+            }
+        } else {
+            // No group or single player - use individual cache
+            useGroupCache = false;
+        }
+    }
+    
+    // Fall back to individual cache if group cache not available
+    if (!cache && !useGroupCache) {
+        cache = playerTileCache.get(playerId);
+        if (!cache) {
             needsRescan = true;
+        } else {
+            const dx = playerPos.x - cache.center.x;
+            const dz = playerPos.z - cache.center.z;
+            movedSq = dx * dx + dz * dz;
+            const timeSinceLastScan = now - lastBlockScanTick;
+            if (movedSq > CACHE_MOVE_THRESHOLD_SQ || now - cache.tick > CACHE_TICK_TTL || timeSinceLastScan >= BLOCK_SCAN_COOLDOWN) {
+                needsRescan = true;
+            }
         }
     }
 
     if (needsRescan) {
         lastBlockScanTick = now;
-        // console.warn(`[SPAWN DEBUG] Rescanning tiles for ${player.name} (moved: ${Math.sqrt(movedSq).toFixed(1)} blocks, cache age: ${now - (cache?.tick || 0)} ticks)`);
-        const tiles = collectDustedTiles(dimension, playerPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN);
-        cache = {
-            tiles,
-            density: tiles.length,
-            center: { x: playerPos.x, z: playerPos.z },
-            tick: now
-        };
-        playerTileCache.set(playerId, cache);
+        
+        if (useGroupCache && groupPlayers && groupPlayers.length > 1) {
+            // Rescan for group - scan from each player and combine tiles
+            const group = getPlayerGroup(groupPlayers, dimension);
+            if (group && group.players.length > 1) {
+                const groupId = group.groupId;
+                
+                // Only scan/log once per group per tick
+                if (!scannedGroupsThisTick.has(groupId)) {
+                    scannedGroupsThisTick.add(groupId);
+                    
+                    // Log bounding rect details when rescanning
+                    const boundingRect = calculateGroupBoundingRect(group.players, true);
+                    if (boundingRect) {
+                        // Instead of scanning from center, scan from each player and combine unique tiles
+                        // This ensures we get all tiles within range of any player
+                        const allTiles = new Map(); // key: "x,y,z" -> tile object
+                        const tilesPerPlayer = [];
+                        
+                        debugLog('groups', `Scanning group ${groupId} from each player's position (${group.players.map(p => p.name).join(', ')})`);
+                        
+                        for (const p of group.players) {
+                            const pPos = p.location;
+                            // Scan from each player with their normal spawn radius
+                            // Use full candidate limit per player since players may be far apart
+                            // The limit prevents excessive scanning, but we need full coverage for each player
+                            const playerTiles = collectDustedTiles(dimension, pPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN);
+                            
+                            tilesPerPlayer.push({ name: p.name, count: playerTiles.length });
+                            
+                            // Add tiles to combined set (deduplicate by coordinates)
+                            for (const tile of playerTiles) {
+                                const key = `${tile.x},${tile.y},${tile.z}`;
+                                if (!allTiles.has(key)) {
+                                    allTiles.set(key, tile);
+                                }
+                            }
+                        }
+                        
+                        const tiles = Array.from(allTiles.values());
+                        
+                        debugLog('groups', `Group ${groupId} scan results: ${tilesPerPlayer.map(t => `${t.name}: ${t.count}`).join(', ')}, combined: ${tiles.length} unique tiles`);
+                        
+                        // Calculate group center for cache (average of all player positions)
+                        const groupCenter = {
+                            x: boundingRect.center.x,
+                            z: boundingRect.center.z
+                        };
+                        
+                        cache = {
+                            tiles,
+                            density: tiles.length,
+                            center: groupCenter,
+                            tick: now,
+                            players: new Set(group.players.map(p => p.id)),
+                            dimension: dimension.id
+                        };
+                        groupCaches.set(groupId, cache);
+                        
+                        // Update all players in group
+                        for (const p of group.players) {
+                            playerGroups.set(p.id, groupId);
+                        }
+                        
+                        isGroupCache = true;
+                        debugLog('groups', `Group ${groupId} cache updated: ${tiles.length} tiles for ${group.players.length} players`);
+                    }
+                } else {
+                    // Group was already scanned this tick, use existing cache
+                    const existingCache = groupCaches.get(groupId);
+                    if (existingCache && existingCache.tick === now) {
+                        cache = existingCache;
+                        isGroupCache = true;
+                        playerGroups.set(playerId, groupId);
+                    }
+                }
+            }
+        }
+        
+        // If group cache failed or not using groups, use individual cache
+        if (!cache || !isGroupCache) {
+            // console.warn(`[SPAWN DEBUG] Rescanning tiles for ${player.name} (moved: ${Math.sqrt(movedSq).toFixed(1)} blocks, cache age: ${now - (cache?.tick || 0)} ticks)`);
+            const tiles = collectDustedTiles(dimension, playerPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN);
+            cache = {
+                tiles,
+                density: tiles.length,
+                center: { x: playerPos.x, z: playerPos.z },
+                tick: now
+            };
+            playerTileCache.set(playerId, cache);
+            isGroupCache = false;
+        }
+    }
+    
+    // Filter tiles to only include those within valid spawn distance for this specific player
+    const validTiles = cache.tiles.filter(tile => {
+        const dx = tile.x + 0.5 - playerPos.x;
+        const dz = tile.z + 0.5 - playerPos.z;
+        const distSq = dx * dx + dz * dz;
+        const minSq = MIN_SPAWN_DISTANCE * MIN_SPAWN_DISTANCE;
+        const maxSq = MAX_SPAWN_DISTANCE * MAX_SPAWN_DISTANCE;
+        return distSq >= minSq && distSq <= maxSq;
+    });
+
+    if (isGroupCache && cache.tiles.length !== validTiles.length) {
+        debugLog('groups', `${player.name}: Filtered group cache tiles from ${cache.tiles.length} to ${validTiles.length} (within ${MIN_SPAWN_DISTANCE}-${MAX_SPAWN_DISTANCE} blocks of player)`);
     }
 
-    const density = cache.density ?? cache.tiles.length;
+    const density = validTiles.length;
     let spacing = BASE_MIN_TILE_SPACING;
     // On day 20+, reduce spacing further if we have good density
     if (currentDay >= 20) {
@@ -698,13 +1348,13 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay) {
     }
     spacing = Math.max(2, spacing);
 
-    const sampled = sampleTiles(cache.tiles, MAX_CANDIDATES_PER_SCAN);
+    const sampled = sampleTiles(validTiles, MAX_CANDIDATES_PER_SCAN);
     const spacedTiles = filterTilesWithSpacing(sampled, spacing, MAX_SPACED_TILES);
     
     // Debug: show spacing info
     // if (spacedTiles.length > 0) {
     //     const avgDist = calculateAverageSpacing(spacedTiles);
-    //     console.warn(`[SPAWN DEBUG] ${player.name}: ${spacedTiles.length} spaced tiles (spacing: ${spacing.toFixed(1)}, avg dist: ${avgDist.toFixed(1)} blocks)`);
+    //     console.warn(`[SPAWN DEBUG] ${player.name}: ${spacedTiles.length} spaced tiles (spacing: ${spacing.toFixed(1)}, avg dist: ${avgDist.toFixed(1)} blocks, group: ${isGroupCache})`);
     // }
 
     return { density, spacedTiles, spacing };
@@ -813,27 +1463,47 @@ function getEntityCountsForPlayer(player, dimension, playerPos) {
     let cache = entityCountCache.get(playerId);
     
     if (!cache || now - cache.tick > ENTITY_COUNT_CACHE_TTL) {
-        // Refresh entity counts
-        const maxRadius = Math.max(...SPAWN_CONFIGS.map(c => c.spreadRadius));
-        const allNearbyEntities = dimension.getEntities({
-            location: playerPos,
-            maxDistance: maxRadius
-        });
-        
-        const counts = {};
-        const mbTypePrefixes = ["mb:mb", "mb:infected", "mb:buff_mb"];
-        for (const entity of allNearbyEntities) {
-            const typeId = entity.typeId;
-            if (mbTypePrefixes.some(prefix => typeId.startsWith(prefix))) {
-                counts[typeId] = (counts[typeId] || 0) + 1;
+        try {
+            // Refresh entity counts
+            const maxRadius = Math.max(...SPAWN_CONFIGS.map(c => c.spreadRadius));
+            const allNearbyEntities = dimension.getEntities({
+                location: playerPos,
+                maxDistance: maxRadius
+            });
+            
+            const counts = {};
+            const mbTypePrefixes = ["mb:mb", "mb:infected", "mb:buff_mb"];
+            for (const entity of allNearbyEntities) {
+                try {
+                    const typeId = entity.typeId;
+                    if (mbTypePrefixes.some(prefix => typeId.startsWith(prefix))) {
+                        counts[typeId] = (counts[typeId] || 0) + 1;
+                    }
+                } catch (error) {
+                    // Entity might have been removed - skip it
+                    if (error && !error.message?.includes('invalid') && !error.message?.includes('removed')) {
+                        errorLog(`Error processing entity in getEntityCountsForPlayer`, error, {
+                            player: player.name,
+                            entityType: entity?.typeId || 'unknown'
+                        });
+                    }
+                }
             }
+            
+            cache = {
+                counts,
+                tick: now
+            };
+            entityCountCache.set(playerId, cache);
+        } catch (error) {
+            errorLog(`Error getting entity counts for player ${player.name}`, error, {
+                player: player.name,
+                dimension: dimension.id,
+                position: playerPos
+            });
+            // Return empty counts on error
+            return {};
         }
-        
-        cache = {
-            counts,
-            tick: now
-        };
-        entityCountCache.set(playerId, cache);
     }
     
     return cache.counts;
@@ -886,7 +1556,11 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     }
 
     const pool = [...tiles];
-    const attempts = Math.min(SPAWN_ATTEMPTS + (modifiers.attemptBonus ?? 0), pool.length);
+    // Single player bonus: more spawn attempts to compensate for fewer tiles
+    const baseAttempts = SPAWN_ATTEMPTS + (modifiers.attemptBonus ?? 0);
+    const isSinglePlayer = !modifiers.isGroupCache;
+    const attemptBonus = isSinglePlayer ? Math.floor(baseAttempts * 0.3) : 0; // 30% more attempts for single players
+    const attempts = Math.min(baseAttempts + attemptBonus, pool.length);
     // console.warn(`[SPAWN DEBUG] Attempting ${config.id} for ${player.name}: ${attempts} attempts, ${pool.length} tiles, ${nearbyCount}/${maxCount} nearby (type limit: ${typeSpawnCount}/${perTypeSpawnLimit})`);
 
     let chance = config.baseChance + (config.chancePerDay ?? 0) * Math.max(0, currentDay - config.startDay);
@@ -921,7 +1595,7 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
         try {
             const entity = dimension.spawnEntity(config.id, spawnLocation);
             if (entity) {
-                // console.warn(`[SPAWN] ${config.id} spawned at (${Math.floor(spawnLocation.x)}, ${Math.floor(spawnLocation.y)}, ${Math.floor(spawnLocation.z)})`);
+                debugLog('spawn', `${config.id} spawned at (${Math.floor(spawnLocation.x)}, ${Math.floor(spawnLocation.y)}, ${Math.floor(spawnLocation.z)})`);
                 lastSpawnTickByType.set(key, system.currentTick);
                 removeTileFromCache(player.id, candidate);
                 const originalIndex = tiles.findIndex(t => t.x === x && t.y === y && t.z === z);
@@ -937,7 +1611,13 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
                 return true;
             }
         } catch (error) {
-            // console.warn(`[SPAWN] Failed to spawn ${config.id} at ${spawnLocation.x}, ${spawnLocation.y}, ${spawnLocation.z}:`, error);
+            // Log spawn failures - these are important to track
+            errorLog(`Failed to spawn ${config.id}`, error, {
+                location: spawnLocation,
+                player: player.name,
+                dimension: dimension.id,
+                config: config.id
+            });
         }
     }
 
@@ -978,18 +1658,27 @@ function getPerTypeSpawnLimit(day, config) {
     return 2;
 }
 
-// console.warn("[SPAWN DEBUG] Maple Bear spawn controller initialized.");
+// Initialize spawn controller
+if (ERROR_LOGGING) {
+    console.warn("[SPAWN] Maple Bear spawn controller initialized.");
+}
+debugLog('spawn', "Maple Bear spawn controller initialized with debugging enabled");
 
 system.runInterval(() => {
-    const currentDay = getCurrentDay(); // Cache this value
-    if (currentDay < 2) {
-        return;
-    }
+    try {
+        const currentDay = getCurrentDay(); // Cache this value
+        if (currentDay < 2) {
+            return;
+        }
 
-    // Cleanup old cache entries periodically
-    if (system.currentTick % (SCAN_INTERVAL * 5) === 0) {
-        cleanupDustedDirtCache();
-    }
+        // Cleanup old cache entries periodically
+        if (system.currentTick % (SCAN_INTERVAL * 5) === 0) {
+            try {
+                cleanupDustedDirtCache();
+            } catch (error) {
+                errorLog(`Error in cleanupDustedDirtCache`, error);
+            }
+        }
 
     if (currentDay > lastProcessedDay) {
         if (currentDay >= 20) {
@@ -1022,51 +1711,146 @@ system.runInterval(() => {
 
     const sunriseActive = sunriseBoostTicks > 0;
 
-    // Get all players and rotate processing
-    const allPlayers = world.getAllPlayers();
-    if (allPlayers.length === 0) return;
+        // Get all players and rotate processing
+        let allPlayers;
+        try {
+            allPlayers = world.getAllPlayers();
+        } catch (error) {
+            errorLog(`Error getting all players`, error);
+            return;
+        }
+        if (allPlayers.length === 0) return;
+        
+        // Clear all tick trackers for this tick (fresh start each tick)
+        scannedGroupsThisTick.clear();
+        loggedDimensionsThisTick.clear();
+        loggedSelectedGroupsThisTick.clear();
+        loggedMaintainedGroupsThisTick.clear();
 
-    // Update player rotation list
-    if (PLAYER_PROCESSING_ROTATION.length !== allPlayers.length) {
-        PLAYER_PROCESSING_ROTATION.length = 0;
-        PLAYER_PROCESSING_ROTATION.push(...allPlayers.map((_, i) => i));
-    }
+        // Cleanup stale player groups periodically
+        if (system.currentTick % (SCAN_INTERVAL * 5) === 0) {
+            try {
+                cleanupPlayerGroups(allPlayers);
+            } catch (error) {
+                errorLog(`Error in cleanupPlayerGroups`, error);
+            }
+        }
 
-    // Process one player per tick (rotate)
-    const playerIndex = PLAYER_PROCESSING_ROTATION[playerRotationIndex % allPlayers.length];
-    playerRotationIndex++;
-    const player = allPlayers[playerIndex];
+        // Group players by dimension
+        const playersByDimension = new Map();
+        for (const player of allPlayers) {
+            try {
+                const dimId = player.dimension.id;
+                if (!playersByDimension.has(dimId)) {
+                    playersByDimension.set(dimId, []);
+                }
+                playersByDimension.get(dimId).push(player);
+            } catch (error) {
+                errorLog(`Error grouping player ${player.name} by dimension`, error, { player: player.name });
+            }
+        }
+        
+        // Only log dimensions once per tick
+        if (loggedDimensionsThisTick.size === 0) {
+            const dimensionInfo = Array.from(playersByDimension.entries()).map(([dim, players]) => `${dim}: ${players.length} (${players.map(p => p.name).join(', ')})`).join('; ');
+            if (dimensionInfo) {
+                debugLog('groups', `Players by dimension: ${dimensionInfo}`);
+                for (const dim of playersByDimension.keys()) {
+                    loggedDimensionsThisTick.add(dim);
+                }
+            }
+        }
+
+    // Process one dimension per tick (rotate)
+    const dimensions = Array.from(playersByDimension.keys());
+    if (dimensions.length === 0) return;
+    
+    const dimensionIndex = playerRotationIndex % dimensions.length;
+    const dimensionId = dimensions[dimensionIndex];
+    const dimensionPlayers = playersByDimension.get(dimensionId);
+    if (!dimensionPlayers || dimensionPlayers.length === 0) return;
+    
+    // Get dimension object
+    const dimension = dimensionPlayers[0].dimension;
+    
+    // Try to use group cache if multiple players in same dimension
+    const useGroupCache = dimensionPlayers.length > 1;
+    
+    // Process one player per tick (rotate within dimension)
+    const playerIndex = Math.floor(playerRotationIndex / dimensions.length) % dimensionPlayers.length;
+    const player = dimensionPlayers[playerIndex];
     if (!player) return;
 
-    const dimension = player.dimension;
     const playerPos = player.location;
 
-    const tileInfo = getTilesForPlayer(player, dimension, playerPos, currentDay);
+    // Update player rotation index for next tick
+    playerRotationIndex++;
+    if (playerRotationIndex >= dimensions.length * dimensionPlayers.length) {
+        playerRotationIndex = 0;
+    }
+
+    let tileInfo;
+    try {
+        tileInfo = getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCache, dimensionPlayers);
+    } catch (error) {
+        errorLog(`Error getting tiles for player ${player.name}`, error, {
+            player: player.name,
+            dimension: dimension.id,
+            position: playerPos,
+            useGroupCache
+        });
+        return;
+    }
+    
     const density = tileInfo?.density ?? 0;
     const spacedTiles = tileInfo?.spacedTiles ?? [];
     const spacing = tileInfo?.spacing ?? BASE_MIN_TILE_SPACING;
 
-    // console.warn(`[SPAWN DEBUG] Using ${density} dusted tiles near ${player.name}; ${spacedTiles.length} after spacing filter (d=${spacing})`);
+    debugLog('spawn', `Using ${density} dusted tiles near ${player.name}; ${spacedTiles.length} after spacing filter (d=${spacing})`);
     if (spacedTiles.length === 0) {
-        // console.warn(`[SPAWN DEBUG] No valid spawn tiles for ${player.name} (density: ${density}, spaced: ${spacedTiles.length})`);
+        debugLog('spawn', `No valid spawn tiles for ${player.name} (density: ${density}, spaced: ${spacedTiles.length})`);
         return;
     }
 
     // Early exit if too many entities nearby (skip processing)
-    const entityCounts = getEntityCountsForPlayer(player, dimension, playerPos);
+    let entityCounts;
+    try {
+        entityCounts = getEntityCountsForPlayer(player, dimension, playerPos);
+    } catch (error) {
+        errorLog(`Error getting entity counts for player ${player.name}`, error, {
+            player: player.name,
+            dimension: dimension.id,
+            position: playerPos
+        });
+        return;
+    }
+    
     const totalNearbyBears = Object.values(entityCounts).reduce((sum, count) => sum + count, 0);
-    // console.warn(`[SPAWN DEBUG] ${player.name}: ${totalNearbyBears} nearby bears, ${spacedTiles.length} spawn tiles available`);
+    debugLog('spawn', `${player.name}: ${totalNearbyBears} nearby bears, ${spacedTiles.length} spawn tiles available`);
     if (totalNearbyBears > 30) {
-        // console.warn(`[SPAWN DEBUG] Skipping ${player.name} - too many bears nearby (${totalNearbyBears})`);
+        debugLog('spawn', `Skipping ${player.name} - too many bears nearby (${totalNearbyBears})`);
         return; // Too many bears, skip this cycle
     }
 
+    // Check if single player (no group cache benefit)
+    const isSinglePlayer = !useGroupCache || (dimensionPlayers && dimensionPlayers.length === 1);
+    
     let chanceMultiplier = 1;
     if (currentDay >= 20) {
         chanceMultiplier *= 1 + Math.min(0.4, (currentDay - 20) * 0.02);
     }
     if (density > 80) {
         chanceMultiplier *= 1 + Math.min(0.2, (density - 80) / 300);
+    }
+    // Single player bonus: compensate for lack of group cache (fewer tiles = lower density)
+    if (isSinglePlayer) {
+        // Give single players a boost to match multiplayer spawn rates
+        // This compensates for not having shared group cache tiles
+        chanceMultiplier *= 1.25; // 25% boost to spawn chance
+        // Also apply density bonus at lower threshold for single players
+        if (density > 50) {
+            chanceMultiplier *= 1 + Math.min(0.15, (density - 50) / 250);
+        }
     }
     if (sunriseActive) {
         chanceMultiplier *= SUNRISE_BOOST_MULTIPLIER;
@@ -1076,6 +1860,10 @@ system.runInterval(() => {
     if (density > 140) {
         extraCount += Math.min(1, Math.floor((density - 140) / 120));
     }
+    // Single player bonus: lower threshold for extra count
+    if (isSinglePlayer && density > 80) {
+        extraCount += Math.min(1, Math.floor((density - 80) / 100));
+    }
     if (sunriseActive) {
         extraCount += 1;
     }
@@ -1083,7 +1871,8 @@ system.runInterval(() => {
     const modifiers = {
         chanceMultiplier,
         chanceCap: 0.9,
-        extraCount
+        extraCount,
+        isGroupCache: useGroupCache && dimensionPlayers && dimensionPlayers.length > 1
     };
 
     const timeOfDay = dimension.getTimeOfDay ? dimension.getTimeOfDay() : 0;
@@ -1102,22 +1891,30 @@ system.runInterval(() => {
         if (currentDay < config.startDay || currentDay > config.endDay) continue;
         processedConfigs++;
         
-        const configModifiers = { ...modifiers };
-        if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
-            configModifiers.chanceMultiplier *= 0.5;
-            if (config.id === BUFF_BEAR_DAY20_ID) {
-                configModifiers.chanceCap = Math.min(configModifiers.chanceCap, 0.065);
-            } else {
-                configModifiers.chanceCap = Math.min(configModifiers.chanceCap, config.id === BUFF_BEAR_ID ? 0.06 : 0.07);
+        try {
+            const configModifiers = { ...modifiers };
+            if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
+                configModifiers.chanceMultiplier *= 0.5;
+                if (config.id === BUFF_BEAR_DAY20_ID) {
+                    configModifiers.chanceCap = Math.min(configModifiers.chanceCap, 0.065);
+                } else {
+                    configModifiers.chanceCap = Math.min(configModifiers.chanceCap, config.id === BUFF_BEAR_ID ? 0.06 : 0.07);
+                }
+                configModifiers.extraCount = Math.min(configModifiers.extraCount, 0);
             }
-            configModifiers.extraCount = Math.min(configModifiers.extraCount, 0);
+            const spawned = attemptSpawnType(player, dimension, playerPos, spacedTiles, config, configModifiers, entityCounts, spawnCount);
+            debugLog('spawn', `Successfully spawned ${config.id} for ${player.name}`, spawned);
+        } catch (error) {
+            errorLog(`Error attempting spawn for ${config.id}`, error, {
+                player: player.name,
+                config: config.id,
+                currentDay,
+                dimension: dimension.id
+            });
         }
-        const spawned = attemptSpawnType(player, dimension, playerPos, spacedTiles, config, configModifiers, entityCounts, spawnCount);
-        // if (spawned) {
-        //     console.warn(`[SPAWN DEBUG] Successfully spawned ${config.id} for ${player.name}`);
-        // }
     }
-    // if (processedConfigs === 0) {
-    //     console.warn(`[SPAWN DEBUG] No active spawn configs for day ${currentDay}`);
-    // }
+        debugLog('spawn', `No active spawn configs for day ${currentDay}`, processedConfigs === 0);
+    } catch (error) {
+        errorLog(`Error in main spawn interval`, error, { currentDay: getCurrentDay() });
+    }
 }, SCAN_INTERVAL);

@@ -2230,7 +2230,7 @@ function spreadDustedDirt(location, dimension, killerType, victimType) {
                     blocksConverted++;
                     
                     // Register in spawn controller cache
-                    registerDustedDirtBlock(candidate.x, candidate.y, candidate.z);
+                    registerDustedDirtBlock(candidate.x, candidate.y, candidate.z, dimension);
 
                     // Add particle effect for each conversion
                     dimension.runCommand(`particle minecraft:snowflake ${candidate.x} ${candidate.y + 1} ${candidate.z}`);
@@ -3723,7 +3723,7 @@ world.afterEvents.playerPlaceBlock.subscribe((event) => {
                     belowBlock.setType("mb:dusted_dirt");
                     
                     // Register in spawn controller cache
-                    registerDustedDirtBlock(belowPos.x, belowPos.y, belowPos.z);
+                    registerDustedDirtBlock(belowPos.x, belowPos.y, belowPos.z, dim);
                     
                     // Add particle effect
                         dim.runCommand(`particle minecraft:snowflake ${Math.floor(belowPos.x)} ${Math.floor(belowPos.y + 1)} ${Math.floor(belowPos.z)}`); 
