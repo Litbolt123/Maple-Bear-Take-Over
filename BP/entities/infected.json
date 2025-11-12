@@ -279,7 +279,7 @@
 				"max": 64
 			},
 			"minecraft:walk_animation_speed": {
-				"value": 1600
+				"value": 1.0
 			},
 			"minecraft:annotation.break_door": {
 				"break_time": 9,

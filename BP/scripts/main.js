@@ -1,7 +1,8 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { getCodex, getDefaultCodex, markCodex, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge } from "./mb_codex.js";
-import { initializeDayTracking, getCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent } from "./mb_dayTracker.js";
+import { initializeDayTracking, getCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
+import { registerDustedDirtBlock, unregisterDustedDirtBlock } from "./mb_spawnController.js";
 import "./mb_spawnController.js";
 
 // NOTE: Debug and testing features have been commented out for playability
@@ -124,8 +125,8 @@ const INFECTION_RATE_CONFIG = {
     DAY_6_RATE: 0.50,    // 50% on day 6
     DAY_7_RATE: 0.50,    // 50% on day 7
     DAY_8_RATE: 0.60,    // 60% on day 8
-    RATE_INCREASE: 0.10, // 10% increase every 5 days
-    RATE_INTERVAL: 5,    // Every 5 days
+    RATE_INCREASE: 0.10, // 10% increase every 2 days
+    RATE_INTERVAL: 2,    // Every 2 days (changed from 5 to reach 100% by day 20)
     MAX_RATE: 1.0        // Cap at 100%
 };
 
@@ -139,7 +140,7 @@ function getInfectionRate(day) {
     if (day === 7) return INFECTION_RATE_CONFIG.DAY_7_RATE;
     if (day === 8) return INFECTION_RATE_CONFIG.DAY_8_RATE;
     
-    // After day 8, increase by 10% every 5 days
+    // After day 8, increase by 10% every 2 days until reaching 100% at day 20
     const daysAfter8 = day - 8;
     const rateIncrease = Math.floor(daysAfter8 / INFECTION_RATE_CONFIG.RATE_INTERVAL) * INFECTION_RATE_CONFIG.RATE_INCREASE;
     const baseRate = INFECTION_RATE_CONFIG.DAY_8_RATE;
@@ -521,15 +522,40 @@ function checkVariantUnlock(player, codexParam = null) {
             };
         }
 
+        // Track which variant unlocks need messages (for staggered display)
+        const pendingUnlocks = [];
+        let messageDelay = 0; // Start with no delay, increment for each unlock
+
         // Check for day 4+ variant unlock - only when day 4 variants can actually spawn
-        const dayUnlock = currentDay >= 4 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen);
+        const dayUnlock4 = currentDay >= 4 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen);
 
         // Unlock day 4+ variants only when they can actually spawn (day 4+)
-        if (dayUnlock) {
-            unlockDay4Variant(player, codex, true, "day4VariantsUnlockedTiny", "day4MessageShownTiny", "Tiny Bear");
-            unlockDay4Variant(player, codex, true, "day4VariantsUnlockedInfected", "day4MessageShownInfected", "Infected Bear");
-            unlockDay4Variant(player, codex, true, "day4VariantsUnlockedBuff", "day4MessageShownBuff", "Buff Bear");
-            unlockDay4Variant(player, codex, true, "day4VariantsUnlockedOther", "day4MessageShownOther", "Other Mob");
+        if (dayUnlock4 && !codex.mobs.day4VariantsUnlocked) {
+            // Unlock all day 4+ variant types
+            codex.mobs.day4VariantsUnlocked = true;
+            codex.mobs.day4VariantsUnlockedTiny = true;
+            codex.mobs.day4VariantsUnlockedInfected = true;
+            codex.mobs.day4VariantsUnlockedBuff = true;
+            codex.mobs.day4VariantsUnlockedOther = true;
+
+            // Record this event in the daily log for tomorrow
+            const tomorrowDay = getCurrentDay() + 1;
+            const eventMessage = "New variants of the Maple Bears have been observed. They appear stronger and more aggressive than before.";
+            recordDailyEvent(player, tomorrowDay, eventMessage, "variants", codex);
+
+            // Schedule unlock message with delay
+            if (!codex.mobs.day4MessageShown) {
+                codex.mobs.day4MessageShown = true;
+                pendingUnlocks.push({
+                    delay: messageDelay,
+                    message: codex.items.snowBookCrafted ? "§8Day 4+ variants unlocked." : "§7You feel your knowledge expanding...",
+                    sounds: codex.items.snowBookCrafted ? 
+                        [{ sound: "random.orb", pitch: 1.5, volume: 0.8 }, { sound: "mob.villager.idle", pitch: 1.2, volume: 0.6 }] :
+                        [{ sound: "random.orb", pitch: 1.3, volume: 0.6 }, { sound: "mob.villager.idle", pitch: 1.0, volume: 0.4 }]
+                });
+                messageDelay += 40; // 2 seconds delay (40 ticks) for next message
+                console.log(`[CODEX] ${player.name} unlocked day 4+ variants`);
+            }
         }
         
         // Check for day 8+ variant unlock (either by day OR by 3 kills of day 4+ variants)
@@ -552,25 +578,17 @@ function checkVariantUnlock(player, codexParam = null) {
                 const eventMessage = "The most dangerous Maple Bear variants yet have been documented. The infection continues to evolve.";
                 recordDailyEvent(player, tomorrowDay, eventMessage, "variants", codex);
 
-                // Only show unlock message if not already shown
+                // Schedule unlock message with delay
                 if (!codex.mobs.day8MessageShown) {
                     codex.mobs.day8MessageShown = true;
-
-                    // Only show unlock message if player has a codex (snow book crafted)
-                    if (codex.items.snowBookCrafted) {
-                if (killUnlock) {
-                            player.sendMessage("§8Day 8+ variants unlocked.");
-                    player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
-                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-                        }
-                    } else {
-                        // Player doesn't have codex yet - show different message (only once)
-                        if (killUnlock) {
-                            player.sendMessage("§7You feel your knowledge expanding...");
-                            player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
-                            player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
-                }
-                    }
+                    pendingUnlocks.push({
+                        delay: messageDelay,
+                        message: codex.items.snowBookCrafted ? "§8Day 8+ variants unlocked." : "§7You feel your knowledge expanding...",
+                        sounds: codex.items.snowBookCrafted ? 
+                            [{ sound: "random.orb", pitch: 1.5, volume: 0.8 }, { sound: "mob.villager.idle", pitch: 1.2, volume: 0.6 }] :
+                            [{ sound: "random.orb", pitch: 1.3, volume: 0.6 }, { sound: "mob.villager.idle", pitch: 1.0, volume: 0.4 }]
+                    });
+                    messageDelay += 40; // 2 seconds delay for next message
                     console.log(`[CODEX] ${player.name} unlocked day 8+ variants`);
                 }
             }
@@ -596,25 +614,17 @@ function checkVariantUnlock(player, codexParam = null) {
                 const eventMessage = "The most advanced Maple Bear variants have been observed. The infection has reached unprecedented levels.";
                 recordDailyEvent(player, tomorrowDay, eventMessage, "variants", codex);
 
-                // Only show unlock message if not already shown
+                // Schedule unlock message with delay
                 if (!codex.mobs.day13MessageShown) {
                     codex.mobs.day13MessageShown = true;
-
-                    // Only show unlock message if player has a codex (snow book crafted)
-                    if (codex.items.snowBookCrafted) {
-                if (killUnlock) {
-                            player.sendMessage("§8Day 13+ variants unlocked.");
-                    player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
-                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-                        }
-                    } else {
-                        // Player doesn't have codex yet - show different message (only once)
-                        if (killUnlock) {
-                            player.sendMessage("§7You feel your knowledge expanding...");
-                            player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
-                            player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
-                        }
-                    }
+                    pendingUnlocks.push({
+                        delay: messageDelay,
+                        message: codex.items.snowBookCrafted ? "§8Day 13+ variants unlocked." : "§7You feel your knowledge expanding...",
+                        sounds: codex.items.snowBookCrafted ? 
+                            [{ sound: "random.orb", pitch: 1.5, volume: 0.8 }, { sound: "mob.villager.idle", pitch: 1.2, volume: 0.6 }] :
+                            [{ sound: "random.orb", pitch: 1.3, volume: 0.6 }, { sound: "mob.villager.idle", pitch: 1.0, volume: 0.4 }]
+                    });
+                    messageDelay += 40; // 2 seconds delay for next message
                     console.log(`[CODEX] ${player.name} unlocked day 13+ variants`);
                 }
             }
@@ -642,25 +652,35 @@ function checkVariantUnlock(player, codexParam = null) {
                 const eventMessage = "Day 20+ Maple Bear forms have surfaced, displaying unmatched ferocity and influence over the infection.";
                 recordDailyEvent(player, tomorrowDay, eventMessage, "variants", codex);
 
+                // Schedule unlock message with delay
                 if (!codex.mobs.day20MessageShown) {
                     codex.mobs.day20MessageShown = true;
-
-                    if (codex.items.snowBookCrafted) {
-                        if (killUnlock20) {
-                            player.sendMessage("§8Day 20+ variants unlocked.");
-                            player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
-                            player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-                        }
-                    } else {
-                        if (killUnlock20) {
-                            player.sendMessage("§7You feel your knowledge pulled toward something dreadful...");
-                            player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
-                            player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
-                        }
-                    }
+                    pendingUnlocks.push({
+                        delay: messageDelay,
+                        message: codex.items.snowBookCrafted ? "§8Day 20+ variants unlocked." : "§7You feel your knowledge pulled toward something dreadful...",
+                        sounds: codex.items.snowBookCrafted ? 
+                            [{ sound: "random.orb", pitch: 1.5, volume: 0.8 }, { sound: "mob.villager.idle", pitch: 1.2, volume: 0.6 }] :
+                            [{ sound: "random.orb", pitch: 1.3, volume: 0.6 }, { sound: "mob.villager.idle", pitch: 1.0, volume: 0.4 }]
+                    });
                     console.log(`[CODEX] ${player.name} unlocked day 20+ variants`);
                 }
             }
+        }
+
+        // Schedule all pending unlock messages with staggered delays
+        for (const unlock of pendingUnlocks) {
+            system.runTimeout(() => {
+                try {
+                    if (player && player.isValid) {
+                        player.sendMessage(unlock.message);
+                        for (const sound of unlock.sounds) {
+                            player.playSound(sound.sound, { pitch: sound.pitch, volume: sound.volume });
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`[VARIANT] Failed to show delayed unlock message:`, error);
+                }
+            }, unlock.delay);
         }
 
         // Update knowledge progression after variant unlock check
@@ -1055,7 +1075,7 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
 function convertEntity(deadEntity, killer, targetEntityId, conversionName) {
     // Validate entities
     if (!deadEntity || !deadEntity.isValid || !killer || !killer.isValid) {
-        console.log(`[${conversionName}] Skipping - entity or killer is invalid`);
+        // console.log(`[${conversionName}] Skipping - entity or killer is invalid`);
         return null;
     }
     
@@ -1070,7 +1090,7 @@ function convertEntity(deadEntity, killer, targetEntityId, conversionName) {
             z: Math.floor(location.z) 
         });
         } catch (chunkError) {
-        console.log(`[${conversionName}] Skipping - chunk not loaded at ${Math.floor(location.x)}, ${Math.floor(location.y)}, ${Math.floor(location.z)}`);
+        // console.log(`[${conversionName}] Skipping - chunk not loaded at ${Math.floor(location.x)}, ${Math.floor(location.y)}, ${Math.floor(location.z)}`);
         return null;
         }
         
@@ -1080,7 +1100,7 @@ function convertEntity(deadEntity, killer, targetEntityId, conversionName) {
     // Add visual feedback
         dimension.spawnParticle("mb:white_dust_particale", location);
         
-    console.log(`[${conversionName}] Conversion complete`);
+    // console.log(`[${conversionName}] Conversion complete`);
     return newEntity;
 }
 
@@ -1094,11 +1114,11 @@ function convertPigToInfectedPig(deadPig, killer) {
         const infectedPig = convertEntity(deadPig, killer, INFECTED_PIG_ID, "PIG CONVERSION");
         
         if (infectedPig) {
-        console.log(`[PIG CONVERSION] Day ${currentDay}: Pig killed by ${killerType} → spawned Infected Pig`);
+        // console.log(`[PIG CONVERSION] Day ${currentDay}: Pig killed by ${killerType} → spawned Infected Pig`);
         }
         
     } catch (error) {
-        console.warn(`[PIG CONVERSION] Error converting pig to infected pig:`, error);
+        // console.warn(`[PIG CONVERSION] Error converting pig to infected pig:`, error);
     }
 }
 
@@ -1112,7 +1132,7 @@ function convertCowToInfectedCow(deadCow, killer) {
         const infectedCow = convertEntity(deadCow, killer, INFECTED_COW_ID, "COW CONVERSION");
         
         if (infectedCow) {
-        console.log(`[COW CONVERSION] Day ${currentDay}: Cow killed by ${killerType} → spawned Infected Cow`);
+        // console.log(`[COW CONVERSION] Day ${currentDay}: Cow killed by ${killerType} → spawned Infected Cow`);
         }
         
     } catch (error) {
@@ -1146,7 +1166,7 @@ function convertMobToMapleBear(deadMob, killer) {
         if (killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY13_ID || killerType === BUFF_BEAR_DAY20_ID) {
             newBearType = MAPLE_BEAR_ID;
             bearSize = "normal";
-        } else if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID) {
+        } else if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID || killerType === MAPLE_BEAR_DAY20_ID) {
             // Tiny Maple Bears behavior changes based on day
             // console.log(`[CONVERSION] Tiny bear detected (${killerType}), current day: ${currentDay}`);
             if (currentDay < 4) {
@@ -1180,8 +1200,8 @@ function convertMobToMapleBear(deadMob, killer) {
                     newBearType = INFECTED_BEAR_DAY8_ID; // Day 8+ normal bears
                     bearSize = "normal";
                 }
-            } else {
-                // Day 13+: Tiny Maple Bears use size-based system with day 13+ variants
+            } else if (currentDay < 20) {
+                // Day 13-19: Tiny Maple Bears use size-based system with day 13+ variants
                 const mobSize = getMobSize(mobType);
                 if (mobSize === "tiny") {
                     newBearType = MAPLE_BEAR_DAY13_ID; // Day 13+ tiny bears
@@ -1191,6 +1211,19 @@ function convertMobToMapleBear(deadMob, killer) {
                     bearSize = "buff";
                 } else {
                     newBearType = INFECTED_BEAR_DAY13_ID; // Day 13+ normal bears
+                    bearSize = "normal";
+                }
+            } else {
+                // Day 20+: Tiny Maple Bears use size-based system with day 20+ variants
+                const mobSize = getMobSize(mobType);
+                if (mobSize === "tiny") {
+                    newBearType = MAPLE_BEAR_DAY20_ID; // Day 20+ tiny bears
+                    bearSize = "tiny";
+                } else if (mobSize === "large") {
+                    newBearType = BUFF_BEAR_DAY20_ID; // Day 20+ Buff Maple Bears for large mobs
+                    bearSize = "buff";
+                } else {
+                    newBearType = INFECTED_BEAR_DAY20_ID; // Day 20+ normal bears
                     bearSize = "normal";
                 }
             }
@@ -1250,7 +1283,7 @@ function convertMobToMapleBear(deadMob, killer) {
         }
         
     } catch (error) {
-        console.warn(`[MOB CONVERSION] Error converting ${deadMob.typeId} to Maple Bear:`, error);
+        // console.warn(`[MOB CONVERSION] Error converting ${deadMob.typeId} to Maple Bear:`, error);
     }
 }
 
@@ -1949,7 +1982,7 @@ function handlePlayerDeath(player) {
 function handleMobConversion(entity, killer) {
     // Validate entities are still valid before processing
     if (!entity || !entity.isValid || !killer || !killer.isValid) {
-        console.log(`[CONVERSION] Skipping conversion - entity or killer is invalid`);
+        // console.log(`[CONVERSION] Skipping conversion - entity or killer is invalid`);
         return;
     }
     
@@ -1959,7 +1992,7 @@ function handleMobConversion(entity, killer) {
     // Don't convert items, XP orbs, or other non-mob entities
     if (entityType === "minecraft:item" || entityType === "minecraft:xp_orb" || entityType === "minecraft:arrow" || 
         entityType === "minecraft:fireball" || entityType === "minecraft:small_fireball" || entityType === "minecraft:firework_rocket") {
-        console.log(`[CONVERSION] Skipping conversion - ${entityType} is not a valid mob for conversion`);
+        // console.log(`[CONVERSION] Skipping conversion - ${entityType} is not a valid mob for conversion`);
         return;
     }
     
@@ -1968,11 +2001,11 @@ function handleMobConversion(entity, killer) {
     const conversionRate = getInfectionRate(currentDay);
     
     // Check if killer is a Maple Bear or infected pig
-    if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID || killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === INFECTED_BEAR_DAY13_ID || killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY13_ID || killerType === BUFF_BEAR_DAY20_ID || killerType === INFECTED_PIG_ID) {
+    if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID || killerType === MAPLE_BEAR_DAY20_ID || killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === INFECTED_BEAR_DAY13_ID || killerType === INFECTED_BEAR_DAY20_ID || killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY13_ID || killerType === BUFF_BEAR_DAY20_ID || killerType === INFECTED_PIG_ID) {
         
         // PREVENT BEAR-TO-BEAR CONVERSION: Don't convert Maple Bears or infected creatures
-        const isVictimABear = entityType === MAPLE_BEAR_ID || entityType === MAPLE_BEAR_DAY4_ID || entityType === MAPLE_BEAR_DAY8_ID || entityType === MAPLE_BEAR_DAY13_ID || 
-                              entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === INFECTED_BEAR_DAY13_ID || entityType === BUFF_BEAR_ID || entityType === BUFF_BEAR_DAY13_ID || entityType === BUFF_BEAR_DAY20_ID;
+        const isVictimABear = entityType === MAPLE_BEAR_ID || entityType === MAPLE_BEAR_DAY4_ID || entityType === MAPLE_BEAR_DAY8_ID || entityType === MAPLE_BEAR_DAY13_ID || entityType === MAPLE_BEAR_DAY20_ID ||
+                              entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === INFECTED_BEAR_DAY13_ID || entityType === INFECTED_BEAR_DAY20_ID || entityType === BUFF_BEAR_ID || entityType === BUFF_BEAR_DAY13_ID || entityType === BUFF_BEAR_DAY20_ID;
         const isVictimInfected = entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID;
         
         if (isVictimABear || isVictimInfected) {
@@ -2025,8 +2058,8 @@ function handleMobConversion(entity, killer) {
 function handleMapleBearKillTracking(entity, killer) {
     if (killer instanceof Player && !(entity instanceof Player)) {
         const entityType = entity.typeId;
-        if (entityType === MAPLE_BEAR_ID || entityType === MAPLE_BEAR_DAY4_ID || entityType === MAPLE_BEAR_DAY8_ID || entityType === MAPLE_BEAR_DAY13_ID || 
-            entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === INFECTED_BEAR_DAY13_ID || entityType === BUFF_BEAR_ID || entityType === BUFF_BEAR_DAY13_ID || entityType === BUFF_BEAR_DAY20_ID || entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID) {
+        if (entityType === MAPLE_BEAR_ID || entityType === MAPLE_BEAR_DAY4_ID || entityType === MAPLE_BEAR_DAY8_ID || entityType === MAPLE_BEAR_DAY13_ID || entityType === MAPLE_BEAR_DAY20_ID ||
+            entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === INFECTED_BEAR_DAY13_ID || entityType === INFECTED_BEAR_DAY20_ID || entityType === BUFF_BEAR_ID || entityType === BUFF_BEAR_DAY13_ID || entityType === BUFF_BEAR_DAY20_ID || entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID) {
             trackBearKill(killer, entityType);
         }
     }
@@ -2078,8 +2111,8 @@ function spreadDustedDirt(location, dimension, killerType, victimType) {
             killerSizeMultiplier = 1.3;
         }
         // Normal Maple Bears are medium-large
-        else if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID ||
-            killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === INFECTED_BEAR_DAY13_ID) {
+        else if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID || killerType === MAPLE_BEAR_DAY20_ID ||
+            killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === INFECTED_BEAR_DAY13_ID || killerType === INFECTED_BEAR_DAY20_ID) {
             killerSizeMultiplier = 1.1;
         }
         // Tiny Maple Bears are small
@@ -2091,10 +2124,10 @@ function spreadDustedDirt(location, dimension, killerType, victimType) {
             killerSizeMultiplier = 1.05;
         }
 
-        // Calculate base spread values (reduced)
-        let baseRadius = 1;
-        let baseChance = 0.2;
-        let baseMaxBlocks = 4;
+        // Calculate base spread values (increased)
+        let baseRadius = 2; // Increased from 1
+        let baseChance = 0.35; // Increased from 0.2
+        let baseMaxBlocks = 8; // Increased from 4
 
         // Determine world infection multiplier based on current day
         let worldInfectionMultiplier = 0.0; // No spreading before day 4
@@ -2112,68 +2145,108 @@ function spreadDustedDirt(location, dimension, killerType, victimType) {
         if (currentDay >= 20) {
             worldInfectionMultiplier = 1.3; // Day 20: enhanced spreading
         }
+        if (currentDay >= 25) {
+            worldInfectionMultiplier = 1.6; // Day 25: victory threshold, but infection intensifies
+        }
         if (currentDay >= 30) {
-            worldInfectionMultiplier = 1.6; // Day 30: maximum infection
+            worldInfectionMultiplier = 2.0; // Day 30: maximum infection (post-victory scaling)
+        }
+        if (currentDay >= 40) {
+            worldInfectionMultiplier = 2.5; // Day 40: extreme infection
         }
 
         // Apply all multipliers
         const totalMultiplier = victimSizeMultiplier * killerSizeMultiplier * worldInfectionMultiplier;
-        const spreadRadius = Math.max(1, Math.min(6, Math.floor(baseRadius * totalMultiplier)));
-        const spreadChance = Math.min(0.7, baseChance * totalMultiplier);
-        const maxBlocks = Math.max(2, Math.min(25, Math.floor(baseMaxBlocks * totalMultiplier)));
+        const spreadRadius = Math.max(2, Math.min(8, Math.floor(baseRadius * totalMultiplier))); // Increased max from 6 to 8
+        const spreadChance = Math.min(0.85, baseChance * totalMultiplier); // Increased max from 0.7 to 0.85
+        const maxBlocks = Math.max(4, Math.min(20, Math.floor(baseMaxBlocks * totalMultiplier))); // Increased max from 25 to 20, min from 2 to 4
 
         let blocksConverted = 0;
 
-        // Spread in a radius around the kill location
-        for (let dx = -spreadRadius; dx <= spreadRadius && blocksConverted < maxBlocks; dx++) {
-            for (let dz = -spreadRadius; dz <= spreadRadius && blocksConverted < maxBlocks; dz++) {
-                for (let dy = -1; dy <= 1 && blocksConverted < maxBlocks; dy++) {
+        // Create a circular/spherical spread pattern (like powder falling from air)
+        // Generate candidate positions within the radius
+        const candidates = [];
+        
+        for (let dx = -spreadRadius; dx <= spreadRadius; dx++) {
+            for (let dz = -spreadRadius; dz <= spreadRadius; dz++) {
+                for (let dy = -2; dy <= 2; dy++) { // Allow some vertical spread
+                    // Calculate distance from center (circular pattern)
+                    const horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+                    const totalDistance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    
+                    // Skip if outside circular radius
+                    if (horizontalDistance > spreadRadius) continue;
+                    
                     // Skip center block (where the kill happened)
                     if (dx === 0 && dz === 0 && dy === 0) continue;
-
-                    // Random chance to spread
-                    if (Math.random() > spreadChance) continue;
-
-                    const targetX = x + dx;
-                    const targetY = y + dy;
-                    const targetZ = z + dz;
-
-                    try {
-                        const block = dimension.getBlock({ x: targetX, y: targetY, z: targetZ });
-
-                        // Only convert certain blocks to dusted dirt
-                        const convertibleBlocks = [
-                            'minecraft:grass_block',
-                            'minecraft:dirt',
-                            'minecraft:coarse_dirt',
-                            'minecraft:podzol',
-                            'minecraft:mycelium',
-                            'minecraft:stone',
-                            'minecraft:cobblestone',
-                            'minecraft:mossy_cobblestone'
-                        ];
-
-                        if (block && convertibleBlocks.includes(block.typeId)) {
-                            block.setType('mb:dusted_dirt');
-                            blocksConverted++;
-
-                            // Add particle effect for each conversion
-                            dimension.runCommand(`particle minecraft:snowflake ${targetX} ${targetY + 1} ${targetZ}`);
-                        }
-                    } catch (e) {
-                        // Ignore errors for individual blocks
+                    
+                    // Distance-based probability: closer blocks more likely
+                    // Use a falloff curve: probability decreases with distance
+                    const normalizedDistance = horizontalDistance / spreadRadius; // 0 to 1
+                    const distanceMultiplier = 1 - (normalizedDistance * 0.6); // 1.0 at center, 0.4 at edge
+                    
+                    // Vertical falloff: prefer blocks at or below the kill location
+                    const verticalMultiplier = dy <= 0 ? 1.0 : (1 - (dy / 3) * 0.5); // Prefer downward spread
+                    
+                    // Combined probability
+                    const adjustedChance = spreadChance * distanceMultiplier * verticalMultiplier;
+                    
+                    if (Math.random() < adjustedChance) {
+                        candidates.push({
+                            x: x + dx,
+                            y: y + dy,
+                            z: z + dz,
+                            distance: totalDistance
+                        });
                     }
                 }
+            }
+        }
+        
+        // Sort by distance (closer first) to create natural spread pattern
+        candidates.sort((a, b) => a.distance - b.distance);
+        
+        // Convert blocks up to maxBlocks limit
+        for (const candidate of candidates) {
+            if (blocksConverted >= maxBlocks) break;
+            
+            try {
+                const block = dimension.getBlock({ x: candidate.x, y: candidate.y, z: candidate.z });
+
+                // Only convert certain blocks to dusted dirt
+                const convertibleBlocks = [
+                    'minecraft:grass_block',
+                    'minecraft:dirt',
+                    'minecraft:coarse_dirt',
+                    'minecraft:podzol',
+                    'minecraft:mycelium',
+                    'minecraft:stone',
+                    'minecraft:cobblestone',
+                    'minecraft:mossy_cobblestone'
+                ];
+
+                if (block && convertibleBlocks.includes(block.typeId)) {
+                    block.setType('mb:dusted_dirt');
+                    blocksConverted++;
+                    
+                    // Register in spawn controller cache
+                    registerDustedDirtBlock(candidate.x, candidate.y, candidate.z);
+
+                    // Add particle effect for each conversion
+                    dimension.runCommand(`particle minecraft:snowflake ${candidate.x} ${candidate.y + 1} ${candidate.z}`);
+                }
+            } catch (e) {
+                // Ignore errors for individual blocks
             }
         }
 
 
         if (blocksConverted > 0) {
-            console.log(`[DUSTED DIRT] ${killerType} killed ${victimType || 'unknown'} on day ${currentDay} - spread dusted dirt to ${blocksConverted} blocks (radius: ${spreadRadius}, chance: ${(spreadChance * 100).toFixed(1)}%, world multiplier: ${worldInfectionMultiplier.toFixed(1)}x) at ${x}, ${y}, ${z}`);
+            // console.log(`[DUSTED DIRT] ${killerType} killed ${victimType || 'unknown'} on day ${currentDay} - spread dusted dirt to ${blocksConverted} blocks (radius: ${spreadRadius}, chance: ${(spreadChance * 100).toFixed(1)}%, world multiplier: ${worldInfectionMultiplier.toFixed(1)}x) at ${x}, ${y}, ${z}`);
         }
 
     } catch (error) {
-        console.warn('[DUSTED DIRT] Error spreading dusted dirt:', error);
+        // console.warn('[DUSTED DIRT] Error spreading dusted dirt:', error);
     }
 }
 
@@ -2212,12 +2285,24 @@ world.afterEvents.entityDie.subscribe((event) => {
         const killerType = killer.typeId;
 
         // Check if killer is a Maple Bear type
-        const mapleBearTypes = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID,
-            INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID,
+        const mapleBearTypes = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
+            INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
             BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID, INFECTED_PIG_ID, INFECTED_COW_ID];
 
         if (mapleBearTypes.includes(killerType)) {
-            spreadDustedDirt(entity.location, entity.dimension, killerType, entity.typeId);
+            // Store location and dimension immediately before entity might become invalid
+            try {
+                const entityLocation = entity.location;
+                const entityDimension = entity.dimension;
+                const entityTypeId = entity.typeId;
+                
+                if (entityLocation && entityDimension) {
+                    spreadDustedDirt(entityLocation, entityDimension, killerType, entityTypeId);
+                }
+            } catch (error) {
+                // Entity already invalidated, skip dusted dirt spreading
+                // console.warn('[DUSTED DIRT] Entity invalidated before spreading:', error);
+            }
         }
     }
     // Note: Bear death corruption logic removed - no bears should spawn on death
@@ -2299,7 +2384,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
     const source = event.damageSource;
     if (!(player instanceof Player)) return;
 
-                const mapleBearTypes = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID, INFECTED_PIG_ID, INFECTED_COW_ID];
+                const mapleBearTypes = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID, INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID, BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID, INFECTED_PIG_ID, INFECTED_COW_ID];
     if (source && source.damagingEntity && mapleBearTypes.includes(source.damagingEntity.typeId)) {
         // Track hits for mob discovery
         try {
@@ -2307,10 +2392,10 @@ world.afterEvents.entityHurt.subscribe((event) => {
             const mobType = source.damagingEntity.typeId;
             
             // Increment hit counter based on mob type
-            if (mobType === MAPLE_BEAR_ID || mobType === MAPLE_BEAR_DAY4_ID || mobType === MAPLE_BEAR_DAY8_ID || mobType === MAPLE_BEAR_DAY13_ID) {
+            if (mobType === MAPLE_BEAR_ID || mobType === MAPLE_BEAR_DAY4_ID || mobType === MAPLE_BEAR_DAY8_ID || mobType === MAPLE_BEAR_DAY13_ID || mobType === MAPLE_BEAR_DAY20_ID) {
                 codex.mobs.tinyBearHits = (codex.mobs.tinyBearHits || 0) + 1;
                 checkAndUnlockMobDiscovery(codex, player, "tinyBearKills", "tinyBearMobKills", "tinyBearHits", "mapleBearSeen", 3, "mysterious");
-            } else if (mobType === INFECTED_BEAR_ID || mobType === INFECTED_BEAR_DAY8_ID || mobType === INFECTED_BEAR_DAY13_ID) {
+            } else if (mobType === INFECTED_BEAR_ID || mobType === INFECTED_BEAR_DAY8_ID || mobType === INFECTED_BEAR_DAY13_ID || mobType === INFECTED_BEAR_DAY20_ID) {
                 codex.mobs.infectedBearHits = (codex.mobs.infectedBearHits || 0) + 1;
                 checkAndUnlockMobDiscovery(codex, player, "infectedBearKills", "infectedBearMobKills", "infectedBearHits", "infectedBearSeen", 3, "dangerous");
             } else if (mobType === BUFF_BEAR_ID || mobType === BUFF_BEAR_DAY13_ID || mobType === BUFF_BEAR_DAY20_ID) {
@@ -2335,9 +2420,9 @@ world.afterEvents.entityHurt.subscribe((event) => {
             if (hasActiveInfection) {
                 // Increase snow count based on mob type
                 let snowIncrease = 0;
-                if (source.damagingEntity.typeId === MAPLE_BEAR_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY4_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY8_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY13_ID) {
+                if (source.damagingEntity.typeId === MAPLE_BEAR_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY4_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY8_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY13_ID || source.damagingEntity.typeId === MAPLE_BEAR_DAY20_ID) {
                     snowIncrease = SNOW_INCREASE.TINY_BEAR;
-                } else if (source.damagingEntity.typeId === INFECTED_BEAR_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY8_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY13_ID || source.damagingEntity.typeId === INFECTED_PIG_ID) {
+                } else if (source.damagingEntity.typeId === INFECTED_BEAR_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY8_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY13_ID || source.damagingEntity.typeId === INFECTED_BEAR_DAY20_ID || source.damagingEntity.typeId === INFECTED_PIG_ID) {
                     snowIncrease = SNOW_INCREASE.INFECTED;
                 } else if (source.damagingEntity.typeId === BUFF_BEAR_ID || source.damagingEntity.typeId === BUFF_BEAR_DAY13_ID || source.damagingEntity.typeId === BUFF_BEAR_DAY20_ID) {
                     snowIncrease = SNOW_INCREASE.BUFF_BEAR;
@@ -2870,16 +2955,18 @@ system.runInterval(() => {
         for (const entity of world.getAllEntities()) {
             if (!entity || !entity.isValid) continue;
             const t = entity.typeId;
-            if (t !== MAPLE_BEAR_ID && t !== MAPLE_BEAR_DAY4_ID && t !== MAPLE_BEAR_DAY8_ID && t !== MAPLE_BEAR_DAY13_ID && t !== INFECTED_BEAR_ID && t !== INFECTED_BEAR_DAY8_ID && t !== INFECTED_BEAR_DAY13_ID && t !== BUFF_BEAR_ID && t !== BUFF_BEAR_DAY13_ID && t !== BUFF_BEAR_DAY20_ID && t !== INFECTED_PIG_ID) continue;
+            if (t !== MAPLE_BEAR_ID && t !== MAPLE_BEAR_DAY4_ID && t !== MAPLE_BEAR_DAY8_ID && t !== MAPLE_BEAR_DAY13_ID && t !== MAPLE_BEAR_DAY20_ID && t !== INFECTED_BEAR_ID && t !== INFECTED_BEAR_DAY8_ID && t !== INFECTED_BEAR_DAY13_ID && t !== INFECTED_BEAR_DAY20_ID && t !== BUFF_BEAR_ID && t !== BUFF_BEAR_DAY13_ID && t !== BUFF_BEAR_DAY20_ID && t !== INFECTED_PIG_ID) continue;
 
             // Snow trail placement (for all types)
             let trailChance = 0.02; // tiny default
             if (t === MAPLE_BEAR_DAY4_ID) trailChance = 0.03; // Day 4+ tiny bears
             if (t === MAPLE_BEAR_DAY8_ID) trailChance = 0.04; // Day 8+ tiny bears
             if (t === MAPLE_BEAR_DAY13_ID) trailChance = 0.05; // Day 13+ tiny bears
+            if (t === MAPLE_BEAR_DAY20_ID) trailChance = 0.06; // Day 20+ tiny bears
             if (t === INFECTED_BEAR_ID) trailChance = 0.06;
             if (t === INFECTED_BEAR_DAY8_ID) trailChance = 0.08; // Day 8+ normal bears
             if (t === INFECTED_BEAR_DAY13_ID) trailChance = 0.1; // Day 13+ normal bears
+            if (t === INFECTED_BEAR_DAY20_ID) trailChance = 0.12; // Day 20+ normal bears
             if (t === BUFF_BEAR_ID) trailChance = 0.2;
             if (t === BUFF_BEAR_DAY13_ID) trailChance = 0.25; // Day 13+ buff bears
             if (t === BUFF_BEAR_DAY20_ID) trailChance = 0.3; // Day 20+ buff bears
@@ -2892,7 +2979,7 @@ system.runInterval(() => {
             }
 
             // Snow item drops (only for tiny Maple Bears)
-            if (t === MAPLE_BEAR_ID || t === MAPLE_BEAR_DAY4_ID || t === MAPLE_BEAR_DAY8_ID || t === MAPLE_BEAR_DAY13_ID) {
+            if (t === MAPLE_BEAR_ID || t === MAPLE_BEAR_DAY4_ID || t === MAPLE_BEAR_DAY8_ID || t === MAPLE_BEAR_DAY13_ID || t === MAPLE_BEAR_DAY20_ID) {
                 const lastDrop = lastSnowDropTickByEntity.get(entity.id) ?? 0;
                 if (nowTick - lastDrop >= SNOW_DROP_COOLDOWN_TICKS && Math.random() < 0.6) { // 60% chance
                     tryDropSnowItem(entity);
@@ -3634,6 +3721,10 @@ world.afterEvents.playerPlaceBlock.subscribe((event) => {
             system.run(() => {
                 try {
                     belowBlock.setType("mb:dusted_dirt");
+                    
+                    // Register in spawn controller cache
+                    registerDustedDirtBlock(belowPos.x, belowPos.y, belowPos.z);
+                    
                     // Add particle effect
                         dim.runCommand(`particle minecraft:snowflake ${Math.floor(belowPos.x)} ${Math.floor(belowPos.y + 1)} ${Math.floor(belowPos.z)}`); 
                     } catch (e) {
@@ -3641,6 +3732,15 @@ world.afterEvents.playerPlaceBlock.subscribe((event) => {
                 }
             });
         }
+    }
+});
+
+// Track block breaks to remove dusted_dirt from cache
+world.afterEvents.playerBreakBlock.subscribe((event) => {
+    const permutation = event.brokenBlockPermutation;
+    if (permutation && permutation.type?.id === "mb:dusted_dirt") {
+        const pos = event.block.location;
+        unregisterDustedDirtBlock(pos.x, pos.y, pos.z);
     }
 });
 
@@ -3719,6 +3819,156 @@ function clearPlayerCodexState(player) {
     maxSnowLevels.delete(player.id);
 }
 
+/**
+ * Unlocks all content that would normally unlock up to a given day
+ * Used for testing when manually setting the day
+ * @param {number} day The day to unlock content up to
+ */
+function unlockAllContentForDay(day) {
+    try {
+        const MILESTONE_DAYS = [2, 4, 8, 13, 20, 25];
+        
+        // Process all milestone days up to the set day
+        for (const milestoneDay of MILESTONE_DAYS) {
+            if (milestoneDay <= day && typeof mbiHandleMilestoneDay === 'function') {
+                // Temporarily set the day to trigger milestone handling
+                const originalDay = getCurrentDay();
+                world.setDynamicProperty("mb_day_count", milestoneDay);
+                
+                // Handle milestone day
+                mbiHandleMilestoneDay(milestoneDay);
+                
+                // Restore the actual day
+                world.setDynamicProperty("mb_day_count", day);
+            }
+        }
+        
+        // Generate daily logs for each day up to the set day
+        // Events are stored under the actual day they occurred (not the reflection day)
+        for (let d = 1; d < day; d++) {
+            // Get milestone message if this is a milestone day
+            let milestoneMessage = null;
+            if (MILESTONE_DAYS.includes(d)) {
+                // We need to get the milestone message - it's not exported, so we'll recreate the logic
+                switch (d) {
+                    case 2:
+                        milestoneMessage = "You notice strange, tiny white bears beginning to emerge from the shadows. Their eyes seem to follow you wherever you go, and they leave behind a peculiar white dust wherever they step. These creatures appear to be drawn to larger animals, and you've witnessed them attacking and converting other creatures into more of their kind. The infection has begun its silent spread across the land.";
+                        break;
+                    case 4:
+                        milestoneMessage = "The tiny bears have evolved into more dangerous variants. You've observed infected Maple Bears that are larger and more aggressive than their predecessors. These creatures seem to have developed a taste for corruption, actively seeking out and transforming other animals. The white dust they leave behind has become more concentrated, and you've noticed it seems to affect the very ground they walk on.";
+                        break;
+                    case 8:
+                        milestoneMessage = "A new threat has emerged - massive Buff Maple Bears that tower over their smaller counterparts. These behemoths are incredibly dangerous and seem to possess an intelligence that the smaller variants lack. They actively hunt larger creatures and have been observed coordinating attacks. The infection has reached a critical point, with these powerful variants capable of spreading the corruption at an alarming rate.";
+                        break;
+                    case 13:
+                        milestoneMessage = "The infection has reached its most advanced stage. The most powerful Maple Bear variants have appeared, combining the intelligence of the Buff Bears with enhanced abilities. These creatures are no longer just spreading infection - they seem to be actively building something, creating structures from the white dust and corrupted materials. The very landscape is beginning to change under their influence, and the infection has become an unstoppable force of nature.";
+                        break;
+                    case 20:
+                        milestoneMessage = "The world feels hushed, as if holding its breath. Day 20 bears walk like winter's final verdict, and the dust they shed clings to the air itself. Survivors whisper that the infection now remembers every step we've taken.";
+                        break;
+                    case 25:
+                        milestoneMessage = "You have survived. Twenty-five days of relentless infection, of watching the world transform under the weight of white dust and corrupted creatures. You stand as proof that humanity can endure even when the very ground beneath your feet turns against you. But the infection does not rest. It will only grow stronger, more relentless. The challenge continues, but you have proven yourself a true survivor.";
+                        break;
+                }
+            }
+            
+            // Record daily events for all players
+            for (const player of world.getAllPlayers()) {
+                try {
+                    const codex = getCodex(player);
+                    
+                    // Record milestone message if this is a milestone day
+                    // Store under the actual day (d), not the reflection day
+                    if (milestoneMessage) {
+                        recordDailyEvent(player, d, milestoneMessage, "general", codex);
+                    }
+                    
+                    // Record a general day progression message for non-milestone days
+                    // Day 1 gets a special message, other days get progression messages
+                    if (!milestoneMessage) {
+                        let generalMessage;
+                        if (d === 1) {
+                            generalMessage = "The first day has passed. You've noticed strange changes in the world around you, though you can't quite put your finger on what's different.";
+                        } else {
+                            generalMessage = `Day ${d} has passed. The infection continues to evolve, and the world grows more dangerous with each sunrise.`;
+                        }
+                        recordDailyEvent(player, d, generalMessage, "general", codex);
+                    }
+                    
+                    saveCodex(player, codex);
+                } catch (error) {
+                    console.warn(`[MBI] Failed to record daily log for day ${d} for ${player.name}:`, error);
+                }
+            }
+        }
+        
+        // Unlock variants and other content for all players based on the day
+        for (const player of world.getAllPlayers()) {
+            try {
+                const codex = getCodex(player);
+                
+                // Ensure mobs are marked as seen if day is high enough (for variant unlocks)
+                if (day >= 2 && !codex.mobs.mapleBearSeen) {
+                    codex.mobs.mapleBearSeen = true;
+                }
+                if (day >= 4 && !codex.mobs.infectedBearSeen) {
+                    codex.mobs.infectedBearSeen = true;
+                }
+                if (day >= 8 && !codex.mobs.buffBearSeen) {
+                    codex.mobs.buffBearSeen = true;
+                }
+                
+                // Unlock variants based on day
+                checkVariantUnlock(player, codex);
+                
+                // Unlock Day 20+ lore entries if day >= 20
+                if (day >= 20) {
+                    if (!codex.journal) {
+                        codex.journal = {};
+                    }
+                    
+                    // Day 20 world lore (unlocked at milestone)
+                    if (!codex.journal.day20WorldLoreUnlocked) {
+                        codex.journal.day20WorldLoreUnlocked = true;
+                        const reflectionDay = day + 1;
+                        const loreEntry = "Day 20 pressed down like a heavy frost. The journal insists the world remembers our missteps.";
+                        recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
+                    }
+                    
+                    // Day 20+ variant lore (unlocked when variants are seen/killed)
+                    // These will unlock naturally when players encounter the variants
+                    // But we can pre-unlock them for testing if desired
+                    // (Commented out - let them unlock naturally through encounters)
+                }
+                
+                // Unlock Day 25 victory achievement if day >= 25
+                if (day >= 25) {
+                    if (!codex.achievements) {
+                        codex.achievements = {};
+                    }
+                    if (!codex.achievements.day25Victory) {
+                        codex.achievements.day25Victory = true;
+                        codex.achievements.day25VictoryDate = day;
+                    }
+                    
+                    // Update max days survived
+                    if (!codex.achievements.maxDaysSurvived || codex.achievements.maxDaysSurvived < day) {
+                        codex.achievements.maxDaysSurvived = day;
+                    }
+                }
+                
+                saveCodex(player, codex);
+            } catch (error) {
+                console.warn(`[MBI] Failed to unlock content for ${player.name}:`, error);
+            }
+        }
+        
+        console.log(`[MBI] Unlocked all content up to day ${day} for testing, including daily logs.`);
+    } catch (error) {
+        console.warn("[MBI] Error unlocking content for day:", error);
+    }
+}
+
 function executeMbCommand(sender, subcommand, args = []) {
     if (!sender || !playerHasCheats(sender)) {
         sender?.sendMessage?.("§7[MBI] You lack permission to run Maple Bear debug commands.");
@@ -3758,6 +4008,10 @@ function executeMbCommand(sender, subcommand, args = []) {
             }
             world.setDynamicProperty("mb_day_count", dayNumber);
             sender.sendMessage(`§7[MBI] Forced current day to ${dayNumber}.`);
+            
+            // Unlock all content that would normally unlock up to this day
+            unlockAllContentForDay(dayNumber);
+            
             return;
         }
         default:

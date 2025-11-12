@@ -26,7 +26,7 @@ const INITIALIZED_FLAG = "mb_day_tracker_initialized";
 const DAY_COUNT_KEY = "mb_day_count";
 const SCOREBOARD_NAME = "mb_day_tracker";
 const DAY_SCORE_ID = "current_day";
-const MILESTONE_DAYS = [2, 4, 8, 13, 20]; // Tiny Maple Bears, Infected Maple Bears, Buff Maple Bears, Day 13 variants, Day 20 escalation
+const MILESTONE_DAYS = [2, 4, 8, 13, 20, 25]; // Tiny Maple Bears, Infected Maple Bears, Buff Maple Bears, Day 13 variants, Day 20 escalation, Day 25 victory
 
 // Scoreboard
 const SCOREBOARD_OBJECTIVE = "mb_days";
@@ -75,9 +75,28 @@ export function getDayDisplayInfo(day) {
     } else if (day <= 17) {
         color = "§c"; // light red
         exclamations = 5;
-    } else {
+    } else if (day < 25) {
         color = "§4"; // dark red
         exclamations = 5;
+    } else if (day === 25) {
+        color = "§a"; // green for victory day
+        exclamations = 0;
+    } else {
+        // Post-victory: Escalating danger colors
+        const daysPastVictory = day - 25;
+        if (daysPastVictory <= 5) {
+            color = "§c"; // light red - still manageable
+            exclamations = 6;
+        } else if (daysPastVictory <= 10) {
+            color = "§4"; // dark red - getting dangerous
+            exclamations = 7;
+        } else if (daysPastVictory <= 20) {
+            color = "§5"; // dark purple - extreme danger
+            exclamations = 8;
+        } else {
+            color = "§0"; // black - maximum danger
+            exclamations = 9;
+        }
     }
 
     return { color, symbols: "!".repeat(exclamations) };
@@ -208,6 +227,20 @@ function getInfectionSound(day) {
         return { sound: "mob.wither.spawn", pitch: 0.7, volume: 0.7 };
     } else if (day <= 17) {
         return { sound: "mob.wither.death", pitch: 0.7, volume: 0.8 };
+    } else if (day === 25) {
+        return { sound: "mob.player.levelup", pitch: 1.2, volume: 1.0 };
+    } else if (day > 25) {
+        // Post-victory: Escalating danger sounds
+        const daysPastVictory = day - 25;
+        if (daysPastVictory <= 5) {
+            return { sound: "mob.wither.spawn", pitch: 0.7, volume: 0.8 };
+        } else if (daysPastVictory <= 10) {
+            return { sound: "mob.wither.spawn", pitch: 0.6, volume: 0.9 };
+        } else if (daysPastVictory <= 20) {
+            return { sound: "mob.wither.death", pitch: 0.5, volume: 1.0 };
+        } else {
+            return { sound: "mob.wither.death", pitch: 0.4, volume: 1.0 };
+        }
     }
     return { sound: "ambient.weather.thunder", pitch: 0.6, volume: 0.9 };
 }
@@ -257,41 +290,17 @@ export function checkDailyEventsForAllPlayers() {
 
         if (dayToRecord <= 0) return; // No events to record for day 0 or negative days
 
-        const events = [];
-
         // Use the centralized milestone message function
         const milestoneMessage = getMilestoneMessage(dayToRecord);
-        if (milestoneMessage) {
-            events.push(milestoneMessage);
-        }
-
-        // Variant unlock events are now recorded dynamically when players actually unlock them
 
         // Record events for all players if any events occurred
-        if (events.length > 0) {
+        if (milestoneMessage) {
             for (const player of world.getAllPlayers()) {
                 if (player && player.isValid) {
-                    const codex = getCodex(player);
-                    if (!codex.dailyEvents) {
-                        codex.dailyEvents = {};
-                    }
-                    if (!codex.dailyEvents[dayToRecord]) {
-                        codex.dailyEvents[dayToRecord] = [];
-                    }
-
-                    // Record each event individually, checking for duplicates
-                    let hasNewEvents = false;
-                    for (const event of events) {
-                        if (!codex.dailyEvents[dayToRecord].includes(event)) {
-                            codex.dailyEvents[dayToRecord].push(event);
-                            hasNewEvents = true;
-                        }
-                    }
-
-                    // Only save and play sounds if we actually added new events
-                    if (hasNewEvents) {
-                        saveCodex(player, codex);
-
+                    try {
+                        // Use recordDailyEvent for consistent categorized format
+                        recordDailyEvent(player, dayToRecord, milestoneMessage, "general");
+                        
                         // Play sound and send message for milestone days (like item discovery)
                         if (dayToRecord === 2 || dayToRecord === 4 || dayToRecord === 8 || dayToRecord === 13) {
                             try {
@@ -307,6 +316,8 @@ export function checkDailyEventsForAllPlayers() {
                         }
 
                         console.log(`[DAILY EVENTS] Recorded Day ${dayToRecord} events for ${player.name}`);
+                    } catch (error) {
+                        console.warn(`[DAILY EVENTS] Failed to record events for ${player.name}:`, error);
                     }
                 }
             }
@@ -380,6 +391,8 @@ export function getInfectionMessage(type, level = "normal") {
  */
 function getMilestoneMessage(day) {
     switch (day) {
+        case 1:
+            return "The first day has passed. You've noticed strange changes in the world around you, though you can't quite put your finger on what's different.";
         case 2:
             return "You notice strange, tiny white bears beginning to emerge from the shadows. Their eyes seem to follow you wherever you go, and they leave behind a peculiar white dust wherever they step. These creatures appear to be drawn to larger animals, and you've witnessed them attacking and converting other creatures into more of their kind. The infection has begun its silent spread across the land.";
         case 4:
@@ -390,8 +403,10 @@ function getMilestoneMessage(day) {
             return "The infection has reached its most advanced stage. The most powerful Maple Bear variants have appeared, combining the intelligence of the Buff Bears with enhanced abilities. These creatures are no longer just spreading infection - they seem to be actively building something, creating structures from the white dust and corrupted materials. The very landscape is beginning to change under their influence, and the infection has become an unstoppable force of nature.";
         case 20:
             return "The world feels hushed, as if holding its breath. Day 20 bears walk like winter's final verdict, and the dust they shed clings to the air itself. Survivors whisper that the infection now remembers every step we've taken.";
+        case 25:
+            return "You have survived. Twenty-five days of relentless infection, of watching the world transform under the weight of white dust and corrupted creatures. You stand as proof that humanity can endure even when the very ground beneath your feet turns against you. But the infection does not rest. It will only grow stronger, more relentless. The challenge continues, but you have proven yourself a true survivor.";
         default:
-            return `Day ${day} has passed, and the infection continues to evolve in ways you never imagined possible.`;
+            return `Day ${day} has passed. The infection continues to evolve, and the world grows more dangerous with each sunrise.`;
     }
 }
 
@@ -567,15 +582,63 @@ function startDayCycleLoop() {
                             pitch: soundConfig.pitch,
                             volume: soundConfig.volume
                         });
-                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${newDay}`, undefined, {}, newDay);
-                        showPlayerActionbar(player, "The Maple Bear infection continues...");
+                        
+                        // Enhanced title for post-victory days
+                        let titleText = `${displayInfo.color}${displayInfo.symbols} Day ${newDay}`;
+                        if (newDay > 25) {
+                            const daysPastVictory = newDay - 25;
+                            titleText = `${displayInfo.color}${displayInfo.symbols} Day ${newDay} §7(+${daysPastVictory} past victory)`;
+                        }
+                        
+                        showPlayerTitle(player, titleText, undefined, {}, newDay);
+                        
+                        // Enhanced actionbar messages
+                        let actionbarText = "The Maple Bear infection continues...";
+                        if (newDay > 25) {
+                            const daysPastVictory = newDay - 25;
+                            actionbarText = `§cThe infection intensifies... §7(${daysPastVictory} days past victory)`;
+                        } else if (newDay === 25) {
+                            actionbarText = "§aVictory achieved! But the infection persists...";
+                        }
+                        showPlayerActionbar(player, actionbarText);
+                        
+                        // Post-victory periodic warnings (every 5 days)
+                        if (newDay > 25 && (newDay - 25) % 5 === 0) {
+                            const daysPastVictory = newDay - 25;
+                            player.sendMessage(`§c§l[WARNING] §r§cThe infection has grown ${daysPastVictory} days stronger since victory.`);
+                            player.sendMessage(`§cThe world becomes more dangerous with each passing day.`);
+                            player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.7 });
+                            
+                            // Track achievement milestones
+                            try {
+                                const codex = getCodex(player);
+                                if (!codex.achievements) {
+                                    codex.achievements = {};
+                                }
+                                const milestoneKey = `day${newDay}Survived`;
+                                if (!codex.achievements[milestoneKey]) {
+                                    codex.achievements[milestoneKey] = true;
+                                    codex.achievements.maxDaysSurvived = Math.max(codex.achievements.maxDaysSurvived || 25, newDay);
+                                    saveCodex(player, codex);
+                                }
+                            } catch (error) {
+                                console.warn("[MBI] Failed to track post-victory milestone:", error);
+                            }
+                        }
                     }
                 }
 
                 // Send chat message for new day
                 const worldAge = world.getAbsoluteTime ? world.getAbsoluteTime() : world.getTime();
                 console.log(`🌅 Day ${newDay} - World age: ${worldAge} ticks`);
-                world.sendMessage(`${displayInfo.color}${displayInfo.symbols} A new day begins... Day ${newDay}`);
+                
+                // Enhanced day message for post-victory
+                if (newDay > 25) {
+                    const daysPastVictory = newDay - 25;
+                    world.sendMessage(`${displayInfo.color}${displayInfo.symbols} Day ${newDay} §7(+${daysPastVictory} past victory) - The infection intensifies...`);
+                } else {
+                    world.sendMessage(`${displayInfo.color}${displayInfo.symbols} A new day begins... Day ${newDay}`);
+                }
 
                 // Handle milestone days
                 if (isMilestoneDay(newDay)) {
@@ -641,6 +704,10 @@ export function mbiHandleMilestoneDay(day) {
                 case 20:
                     world.sendMessage(`§8[MBI] §7The air feels thin. Day 20 has settled in.`);
                     break;
+                case 25:
+                    world.sendMessage(`§8[MBI] §a§lVICTORY! §r§aYou have survived 25 days!`);
+                    world.sendMessage(`§8[MBI] §7The infection continues, but you have proven yourself a true survivor.`);
+                    break;
             }
 
             if (day === 20) {
@@ -652,15 +719,49 @@ export function mbiHandleMilestoneDay(day) {
                         }
                         if (!codex.journal.day20WorldLoreUnlocked) {
                             codex.journal.day20WorldLoreUnlocked = true;
-                            const reflectionDay = getCurrentDay() + 1;
                             const loreEntry = "Day 20 pressed down like a heavy frost. The journal insists the world remembers our missteps.";
-                            recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
+                            recordDailyEvent(player, 20, loreEntry, "lore", codex);
                             saveCodex(player, codex);
                         } else {
                             saveCodex(player, codex);
                         }
                     } catch (error) {
                         console.warn("[MBI] Failed to mark Day 20 lore for player", error);
+                    }
+                }
+            }
+
+            // Day 25: Victory condition - celebrate but warn of continued difficulty
+            if (day === 25) {
+                for (const player of world.getAllPlayers()) {
+                    try {
+                        // Victory celebration
+                        player.playSound("mob.wither.death", { pitch: 0.5, volume: 1.0 });
+                        player.playSound("mob.player.levelup", { pitch: 1.2, volume: 1.0 });
+                        showPlayerTitle(player, `§a§lVICTORY!`, `§7You survived 25 days!`, { fadeInDuration: 20, stayDuration: 100, fadeOutDuration: 20 }, day);
+                        
+                        // Mark victory achievement
+                        const codex = getCodex(player);
+                        if (!codex.achievements) {
+                            codex.achievements = {};
+                        }
+                        if (!codex.achievements.day25Victory) {
+                            codex.achievements.day25Victory = true;
+                            codex.achievements.day25VictoryDate = getCurrentDay();
+                            saveCodex(player, codex);
+                        }
+                        
+                        // Send victory message
+                        player.sendMessage("§a§l═══════════════════════════════════");
+                        player.sendMessage("§a§l  VICTORY ACHIEVED!");
+                        player.sendMessage("§7  You have survived 25 days of infection.");
+                        player.sendMessage("§7  The world recognizes your resilience.");
+                        player.sendMessage("§c§l  WARNING:");
+                        player.sendMessage("§c  The infection will only grow stronger.");
+                        player.sendMessage("§c  Continue at your own risk.");
+                        player.sendMessage("§a§l═══════════════════════════════════");
+                    } catch (error) {
+                        console.warn("[MBI] Failed to celebrate Day 25 victory for player", error);
                     }
                 }
             }
@@ -736,7 +837,7 @@ function runMilestoneSpawnPulse(day) {
                 const typeId = types[i % types.length];
                 // Offset around player (no brightness/biome restrictions; they spawn everywhere)
                 const angle = Math.random() * Math.PI * 2;
-                const isBuff = typeId === "mb:buff_mb" || typeId === "mb:buff_mb_day13";
+                const isBuff = typeId === "mb:buff_mb" || typeId === "mb:buff_mb_day13" || typeId === "mb:buff_mb_day20";
                 const radius = isBuff ? (30 + Math.floor(Math.random() * 21)) : (8 + Math.floor(Math.random() * 7));
                 const targetX = base.x + Math.cos(angle) * radius;
                 const targetZ = base.z + Math.sin(angle) * radius;
@@ -813,6 +914,29 @@ export function initializeDayTracking() {
         const currentDay = getCurrentDay();
         if (typeof currentDay !== 'number' || isNaN(currentDay)) {
             console.warn('[ERROR] getCurrentDay() did not return a valid number!');
+        }
+
+        // If world is on day 2 or later, ensure previous day events are recorded
+        // This handles cases where a world loads on day 2+ but day 1 events weren't recorded
+        if (currentDay >= 2) {
+            const previousDay = currentDay - 1;
+            // Check if previous day events exist for any player
+            let needsBackfill = false;
+            for (const player of world.getAllPlayers()) {
+                if (player && player.isValid) {
+                    const codex = getCodex(player);
+                    if (!codex.dailyEvents || !codex.dailyEvents[previousDay]) {
+                        needsBackfill = true;
+                        break;
+                    }
+                }
+            }
+            
+            // If previous day events don't exist, record them now
+            if (needsBackfill) {
+                console.log(`[DAILY EVENTS] Backfilling events for Day ${previousDay} (world loaded on Day ${currentDay})`);
+                checkDailyEventsForAllPlayers();
+            }
         }
 
         // Get display info for the current day

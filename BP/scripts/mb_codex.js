@@ -37,10 +37,10 @@ export function getDefaultCodex() {
         // Aggregated metadata by effect id
         symptomsMeta: {},
         items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, dustedDirtSeen: false, bookCraftMessageShown: false },
-        mobs: {
-            mapleBearSeen: false,
-            infectedBearSeen: false,
-            infectedPigSeen: false,
+        mobs: { 
+            mapleBearSeen: false, 
+            infectedBearSeen: false, 
+            infectedPigSeen: false, 
             infectedCowSeen: false,
             buffBearSeen: false,
             tinyBearKills: 0,
@@ -537,12 +537,12 @@ export function showCodexBook(player, context) {
             return !!end && Date.now() < end;
         })();
         const summary = [];
-
+        
         // Add current day
         const currentDay = getCurrentDay ? getCurrentDay() : 0;
         const display = typeof getDayDisplayInfo === 'function' ? getDayDisplayInfo(currentDay) : { color: '§f', symbols: '' };
         summary.push(`${display.color}${display.symbols} Current Day: ${currentDay}`);
-
+        
         // Health status logic - progressive based on knowledge
         let infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
         if ((hasInfection || codex.history.totalInfections > 0) && infectionKnowledge < 1) {
@@ -551,12 +551,12 @@ export function showCodexBook(player, context) {
         }
         if (hasInfection) {
             if (infectionKnowledge >= 1) {
-                summary.push(`§eStatus: §cINFECTED`);
-                const ticks = infectionState.ticksLeft || 0;
-                const days = Math.ceil(ticks / 24000);
-                const snowCount = infectionState.snowCount || 0;
-                summary.push(`§eTime: §c${formatTicksDuration(ticks)} (§f~${days} day${days !== 1 ? 's' : ''}§c)`);
-                summary.push(`§eSnow consumed: §c${snowCount}`);
+            summary.push(`§eStatus: §cINFECTED`);
+            const ticks = infectionState.ticksLeft || 0;
+            const days = Math.ceil(ticks / 24000);
+            const snowCount = infectionState.snowCount || 0;
+            summary.push(`§eTime: §c${formatTicksDuration(ticks)} (§f~${days} day${days !== 1 ? 's' : ''}§c)`);
+            summary.push(`§eSnow consumed: §c${snowCount}`);
                 if (codex.cures.bearCureKnown) summary.push("§7Cure: §fWeakness + Enchanted Golden Apple");
             } else {
                 summary.push(`§eStatus: §cSomething is wrong with you...`);
@@ -596,70 +596,82 @@ export function showCodexBook(player, context) {
         const codex = getCodex(player);
         const form = new ActionFormData().title("§6Powdery Journal");
         form.body(`${buildSummary()}\n\n§eChoose a section:`);
-
+        
         // Only show buttons for unlocked sections
         const buttons = [];
         const buttonActions = [];
-
+        
         // Infection section - always available
         buttons.push("§fInfection");
         buttonActions.push(() => openInfections());
-
+        
         // Symptoms section - show if any symptoms/snow effects discovered
         const hasAnySymptoms = Object.values(codex.effects).some(seen => seen);
         const hasAnySnowEffects = Object.values(codex.snowEffects).some(seen => seen);
         const hasSnowKnowledge = codex.items.snowIdentified;
         const maxSnow = maxSnowLevels.get(player.id);
-
+        
         // Show symptoms tab if any symptoms/snow effects have been recorded
         if (hasAnySymptoms || hasAnySnowEffects || (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0)) {
             buttons.push("§fSymptoms");
             buttonActions.push(() => openSymptoms());
         }
-
+        
         // Mobs section - only if any mobs discovered
         const hasAnyMobs = Object.values(codex.mobs).some(seen => seen === true);
         if (hasAnyMobs) {
             buttons.push("§fMobs");
             buttonActions.push(() => openMobs());
         }
-
+        
         // Items section - only if any items discovered
         const hasAnyItems = Object.values(codex.items).some(seen => seen);
         if (hasAnyItems) {
             buttons.push("§fItems");
             buttonActions.push(() => openItems());
         }
-
+        
         const hasAnyBiomes = codex.biomes.infectedBiomeSeen;
         if (hasAnyBiomes) {
             buttons.push("§fBiomes");
             buttonActions.push(() => openBiomes());
         }
-
+        
         const hasEndgameLore = !!(codex.journal?.day20TinyLoreUnlocked || codex.journal?.day20InfectedLoreUnlocked || codex.journal?.day20BuffLoreUnlocked || codex.journal?.day20WorldLoreUnlocked);
         if (hasEndgameLore) {
             buttons.push("§fLate Lore");
             buttonActions.push(() => openLateLore());
         }
 
+        // Timeline section - only show if there's content available
+        const currentDay = getCurrentDay ? getCurrentDay() : 0;
+        const hasDailyEvents = codex.dailyEvents && Object.keys(codex.dailyEvents).length > 0;
+        const hasTimelineContent = currentDay >= 2 || hasDailyEvents;
+        if (hasTimelineContent) {
+            buttons.push("§fTimeline");
+            buttonActions.push(() => openTimeline());
+        }
+
+        // Achievements section - show if any achievements exist
+        const hasAchievements = codex.achievements && (codex.achievements.day25Victory || codex.achievements.maxDaysSurvived);
+        if (hasAchievements) {
+            buttons.push("§fAchievements");
+            buttonActions.push(() => openAchievements());
+        }
+
         const hasDebugOptions = (player.hasTag && player.hasTag("mb_cheats")) || Boolean(system?.isEnableCheats?.());
         const debugActions = [];
-
-        // Daily Log section - always available
-        buttons.push("§fDaily Log");
-        buttonActions.push(() => openDailyLog());
 
         if (hasDebugOptions) {
             buttons.push("§cDeveloper Tools");
             buttonActions.push(() => openDeveloperTools());
         }
-
+        
         // Add buttons to form
         for (const button of buttons) {
             form.button(button);
         }
-
+        
         form.show(player).then((res) => {
             if (!res || res.canceled) {
                 // Play journal close sound when canceling/closing
@@ -678,32 +690,40 @@ export function showCodexBook(player, context) {
     function openInfections() {
         const codex = getCodex(player);
         const lines = [];
-
+        
         if (codex.infections.bear.discovered || codex.infections.snow.discovered) {
             lines.push("§eThe Infection");
-
+            
             // Infection details (status is shown on main page)
-
+            
             lines.push(getCodex(player).cures.bearCureKnown ? "§7Cure: Weakness + Enchanted Golden Apple" : "§8Cure: ???");
             lines.push("§7Notes: §8Infection advances over time. Snow consumption affects the timer.");
-
+            
+            lines.push("\n§6Infection Mechanics:");
+            lines.push("§7• Maple Bears can infect you through attacks");
+            lines.push("§7• Infection progresses through multiple stages");
+            lines.push("§7• Symptoms worsen as infection advances");
+            lines.push("§7• Snow can slow or accelerate infection");
+            lines.push("§7• Conversion rate increases with each day");
+            lines.push("§7• By Day 20, all mob kills convert to infected variants");
+            
             // Add infection history if available
             if (codex.history.totalInfections > 0) {
                 lines.push("");
                 lines.push("§6Infection History:");
                 lines.push(`§7Total Infections: §f${codex.history.totalInfections}`);
                 lines.push(`§7Total Cures: §f${codex.history.totalCures}`);
-
+                
                 if (codex.history.firstInfectionAt > 0) {
                     const firstDate = new Date(codex.history.firstInfectionAt);
                     lines.push(`§7First Infection: §f${firstDate.toLocaleDateString()}`);
                 }
-
+                
                 if (codex.history.lastInfectionAt > 0) {
                     const lastDate = new Date(codex.history.lastInfectionAt);
                     lines.push(`§7Last Infection: §f${lastDate.toLocaleDateString()}`);
                 }
-
+                
                 if (codex.history.lastCureAt > 0) {
                     const lastCureDate = new Date(codex.history.lastCureAt);
                     lines.push(`§7Last Cure: §f${lastCureDate.toLocaleDateString()}`);
@@ -712,7 +732,7 @@ export function showCodexBook(player, context) {
         } else {
             lines.push("§e???");
         }
-
+        
         new ActionFormData().title("§6Infection").body(lines.join("\n")).button("§8Back").show(player).then(() => {
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
             openMain();
@@ -721,51 +741,51 @@ export function showCodexBook(player, context) {
 
     function openSymptoms() {
         const codex = getCodex(player);
-
+        
         // Calculate infection status from context
         const infectionState = playerInfection.get(player.id);
         const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
-
+        
         // Check unlock conditions
         const hasSnowKnowledge = codex.items.snowIdentified;
         const maxSnow = maxSnowLevels.get(player.id);
         const hasAnyInfection = hasInfection;
-
+        
         // Progressive unlock conditions - only show if content is actually experienced
-        const showSnowTierAnalysis = codex.symptomsUnlocks.snowTierAnalysisUnlocked ||
-            ((hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0) || hasAnyInfection);
+        const showSnowTierAnalysis = codex.symptomsUnlocks.snowTierAnalysisUnlocked || 
+                                    ((hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0) || hasAnyInfection);
         const showInfectionSymptoms = Object.values(codex.effects).some(seen => seen);
         const showSnowEffects = Object.values(codex.snowEffects).some(seen => seen);
-
+        
         const form = new ActionFormData().title("§6Symptoms");
-
+        
         // Check if any content is available
         if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects) {
             form.body("§7No symptoms have been experienced yet.\n§8You need to experience effects while infected to unlock symptom information.");
             form.button("§8Back");
         } else {
             form.body("§7Select a category to view:");
-
+            
             let buttonIndex = 0;
-
+            
             // Add snow tier analysis at the top if unlocked
             if (showSnowTierAnalysis) {
                 form.button(`§eInfection Level Analysis`);
                 buttonIndex++;
             }
-
+            
             // Add infection symptoms if unlocked
             if (showInfectionSymptoms) {
                 form.button("§cInfection Symptoms");
                 buttonIndex++;
             }
-
+            
             // Add snow effects if unlocked
             if (showSnowEffects) {
                 form.button("§bSnow Effects");
                 buttonIndex++;
             }
-
+            
             form.button("§8Back");
         }
         form.show(player).then((res) => {
@@ -773,36 +793,36 @@ export function showCodexBook(player, context) {
 
             // Play page turn sound
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
-
+            
             // If no content available, just go back
             if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects) {
                 openMain();
                 return;
             }
-
+            
             let currentIndex = 0;
-
+            
             if (showSnowTierAnalysis && res.selection === currentIndex) {
                 openSnowTierAnalysis();
                 return;
             }
             if (showSnowTierAnalysis) currentIndex++;
-
+            
             if (showInfectionSymptoms && res.selection === currentIndex) {
                 openInfectionSymptoms();
                 return;
             }
             if (showInfectionSymptoms) currentIndex++;
-
+            
             if (showSnowEffects && res.selection === currentIndex) {
                 openSnowEffects();
                 return;
             }
-
+            
             openMain();
         });
     }
-
+    
     function openInfectionSymptoms() {
         const codex = getCodex(player);
         const allEntries = [
@@ -812,22 +832,22 @@ export function showCodexBook(player, context) {
             { key: "slownessSeen", title: "Slowness", id: "minecraft:slowness" },
             { key: "hungerSeen", title: "Hunger", id: "minecraft:hunger" }
         ];
-
+        
         // Only show experienced symptoms
         const entries = allEntries.filter(e => codex.effects[e.key]);
-
+        
         const form = new ActionFormData().title("§6Infection Symptoms");
-
+        
         if (entries.length === 0) {
             form.body("§7No infection symptoms have been experienced yet.\n§8You need to experience negative effects while infected to unlock symptom information.");
             form.button("§8Back");
         } else {
             form.body("§7Select a symptom to view details:");
-
+            
             for (const e of entries) {
                 form.button(`§f${e.title}`);
             }
-
+            
             form.button("§8Back");
         }
         form.show(player).then((res) => {
@@ -838,13 +858,13 @@ export function showCodexBook(player, context) {
 
             // Play page turn sound
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
-
+            
             // If no symptoms available, just go back
             if (entries.length === 0) {
                 openSymptoms();
                 return;
             }
-
+            
             if (res.selection >= 0 && res.selection < entries.length) {
                 const e = entries[res.selection];
                 const known = codex.effects[e.key];
@@ -856,7 +876,7 @@ export function showCodexBook(player, context) {
                     const maxDur = meta.maxDuration != null ? Math.floor((meta.maxDuration || 0) / 20) : "?";
                     const minAmp = meta.minAmp != null ? meta.minAmp : "?";
                     const maxAmp = meta.maxAmp != null ? meta.maxAmp : "?";
-                    const timing = meta.timing || {};
+                    const timing = meta.timing || {}; 
                     const timingStr = [timing.early ? `early(${timing.early})` : null, timing.mid ? `mid(${timing.mid})` : null, timing.late ? `late(${timing.late})` : null].filter(Boolean).join(", ") || "unknown";
                     const sc = meta.snowCounts || {};
                     const snowStr = [sc.low ? `1-5(${sc.low})` : null, sc.mid ? `6-10(${sc.mid})` : null, sc.high ? `11+(${sc.high})` : null].filter(Boolean).join(", ") || "-";
@@ -871,7 +891,7 @@ export function showCodexBook(player, context) {
             }
         });
     }
-
+    
     function openSnowEffects() {
         const codex = getCodex(player);
         const allEntries = [
@@ -886,24 +906,24 @@ export function showCodexBook(player, context) {
             { key: "hungerSeen", title: "Hunger", id: "minecraft:hunger", type: "negative" },
             { key: "miningFatigueSeen", title: "Mining Fatigue", id: "minecraft:mining_fatigue", type: "negative" }
         ];
-
+        
         // Only show experienced snow effects
         const entries = allEntries.filter(e => codex.snowEffects[e.key]);
-
+        
         const form = new ActionFormData().title("§6Snow Effects");
-
+        
         if (entries.length === 0) {
             form.body("§7No snow effects have been experienced yet.\n§8You need to consume snow while infected to unlock effect information.");
             form.button("§8Back");
         } else {
             form.body("§7Select an effect to view details:");
-
+            
             for (const e of entries) {
                 const color = e.type === "positive" ? "§a" : "§c";
                 const prefix = e.type === "positive" ? "§a+" : "§c-";
                 form.button(`${color}${prefix} ${e.title}`);
             }
-
+            
             form.button("§8Back");
         }
         form.show(player).then((res) => {
@@ -914,13 +934,13 @@ export function showCodexBook(player, context) {
 
             // Play page turn sound
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
-
+            
             // If no effects available, just go back
             if (entries.length === 0) {
                 openSymptoms();
                 return;
             }
-
+            
             if (res.selection >= 0 && res.selection < entries.length) {
                 const e = entries[res.selection];
                 const known = codex.snowEffects[e.key];
@@ -939,19 +959,19 @@ export function showCodexBook(player, context) {
             }
         });
     }
-
+    
     function openSnowTierAnalysis() {
         const codex = getCodex(player);
         const maxSnow = maxSnowLevels.get(player.id);
         const infectionState = playerInfection.get(player.id);
         const currentSnow = infectionState ? (infectionState.snowCount || 0) : 0;
-
+        
         const form = new ActionFormData().title("§6Infection Level Analysis");
-
+        
         // Check if maxSnow exists, otherwise use 0
         const maxLevel = maxSnow ? maxSnow.maxLevel : 0;
         let body = `§eMaximum Infection Level Achieved: §f${maxLevel.toFixed(1)}\n\n`;
-
+        
         // Detailed analysis based on experience
         if (maxLevel >= 5) {
             body += `§7Tier 1 (1-5): §fThe Awakening\n`;
@@ -959,45 +979,45 @@ export function showCodexBook(player, context) {
             body += `§7• Effects: Mild random potions (weakness, nausea)\n`;
             body += `§7• Duration: 10 seconds\n`;
         }
-
+        
         if (maxLevel >= 10) {
             body += `\n§7Tier 2 (6-10): §fThe Craving\n`;
             body += `§7• Time effect: No change\n`;
             body += `§7• Effects: Moderate random potions (weakness, nausea, slowness)\n`;
             body += `§7• Duration: 15 seconds\n`;
         }
-
+        
         if (maxLevel >= 20) {
             body += `\n§7Tier 3 (11-20): §fThe Descent\n`;
             body += `§7• Time effect: -1% infection time\n`;
             body += `§7• Effects: Strong random potions (weakness, nausea, slowness, blindness)\n`;
             body += `§7• Duration: 20 seconds\n`;
         }
-
+        
         if (maxLevel >= 50) {
             body += `\n§7Tier 4 (21-50): §fThe Void\n`;
             body += `§7• Time effect: -2.5% infection time\n`;
             body += `§7• Effects: Severe random potions (weakness, nausea, slowness, blindness, hunger)\n`;
             body += `§7• Duration: 25 seconds\n`;
         }
-
+        
         if (maxLevel >= 100) {
             body += `\n§7Tier 5 (51-100): §fThe Abyss\n`;
             body += `§7• Time effect: -5% infection time\n`;
             body += `§7• Effects: Extreme random potions (all effects + mining fatigue)\n`;
             body += `§7• Duration: 30 seconds\n`;
         }
-
+        
         if (maxLevel > 100) {
             body += `\n§7Tier 6 (100+): §fThe Black Void\n`;
             body += `§7• Time effect: -15% infection time\n`;
             body += `§7• Effects: Devastating random potions (maximum intensity)\n`;
             body += `§7• Duration: 40 seconds\n`;
         }
-
+        
         // Show current status if infected
         const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
-
+        
         if (hasInfection) {
             body += `\n§eCurrent Infection Level: §f${currentSnow.toFixed(1)}`;
             if (currentSnow > 0) {
@@ -1006,14 +1026,14 @@ export function showCodexBook(player, context) {
                 body += `\n§7Current Tier: §f${tier} (${tierName})`;
             }
         }
-
+        
         // Show warnings based on experience
         if (maxLevel >= 20) {
             body += `\n\n§c⚠ Warning: High infection levels are extremely dangerous!`;
         } else if (maxLevel >= 10) {
             body += `\n\n§e⚠ Caution: Infection effects become severe at higher levels.`;
         }
-
+        
         form.body(body);
         form.button("§8Back");
         form.show(player).then(() => openSymptoms());
@@ -1028,13 +1048,13 @@ export function showCodexBook(player, context) {
             { key: "infectedPigSeen", title: "Infected Pig", icon: "textures/items/infected_pig_spawn_egg" },
             { key: "infectedCowSeen", title: "Infected Cow", icon: "textures/items/infected_cow_egg" }
         ];
-
+        
         const form = new ActionFormData().title("§6Mobs");
         form.body("§7Entries:");
         for (const e of entries) {
             const known = codex.mobs[e.key];
             let label = `§f${maskTitle(e.title, known)}`;
-
+            
             // Show kill count only if mob is known and has kills
             if (known) {
                 let killCount = 0;
@@ -1049,12 +1069,12 @@ export function showCodexBook(player, context) {
                 } else if (e.key === "buffBearSeen") {
                     killCount = codex.mobs.buffBearKills || 0;
                 }
-
+                
                 if (killCount > 0) {
                     label += ` §7(Kills: ${killCount})`;
                 }
             }
-
+            
             if (known) form.button(label, e.icon);
             else form.button(label);
         }
@@ -1068,7 +1088,7 @@ export function showCodexBook(player, context) {
                 const e = entries[res.selection];
                 const known = codex.mobs[e.key];
                 let body = "§e???";
-
+                
                 if (known) {
                     // Get kill count (total kills including all variants)
                     let killCount = 0;
@@ -1091,8 +1111,8 @@ export function showCodexBook(player, context) {
 
                     // Progressive information based on knowledge level and kills
                     if (bearKnowledge >= 1) {
-                        body = `§e${e.title}\n§7Hostile entity involved in the outbreak.\n\n§6Kills: §f${killCount}`;
-
+                    body = `§e${e.title}\n§7Hostile entity involved in the outbreak.\n\n§6Kills: §f${killCount}`;
+                    
                         // Basic stats (available at knowledge level 1)
                         if (killCount >= 5) {
                             body += `\n\n§6Basic Analysis:\n§7This creature appears to be dangerous and unpredictable.`;
@@ -1196,7 +1216,7 @@ export function showCodexBook(player, context) {
                         const expertThreshold = isBuffBear ? 5 : 100; // Max expert info at 5 kills for Buff Bears
                         if (bearKnowledge >= 3 && killCount >= expertThreshold) {
                             body += `\n\n§6Expert Analysis:\n§7Detailed behavioral patterns and combat strategies documented.`;
-                            if (codex.mobs.day4VariantsUnlocked || codex.mobs.day8VariantsUnlocked || codex.mobs.day13VariantsUnlocked) {
+                            if (codex.mobs.day4VariantsUnlocked || codex.mobs.day8VariantsUnlocked || codex.mobs.day13VariantsUnlocked || codex.mobs.day20VariantsUnlocked) {
                                 body += `\n§7Advanced variants show enhanced capabilities compared to earlier forms.`;
                             }
                         }
@@ -1221,7 +1241,7 @@ export function showCodexBook(player, context) {
 
     function openItems() {
         const codex = getCodex(player);
-
+        
         // Item icon configuration
         const ITEM_ICONS = {
             'snowFound': "textures/items/mb_snow",
@@ -1234,7 +1254,7 @@ export function showCodexBook(player, context) {
             'brewingStandSeen': "textures/items/brewing_stand",
             'dustedDirtSeen': "textures/blocks/dusted_dirt"
         };
-
+        
         const entries = [
             { key: "snowFound", title: "'Snow' (Powder)", icon: ITEM_ICONS.snowFound },
             { key: "snowBookCrafted", title: "Powdery Journal", icon: ITEM_ICONS.snowBookCrafted },
@@ -1245,22 +1265,22 @@ export function showCodexBook(player, context) {
             { key: "brewingStandSeen", title: "Brewing Stand", icon: ITEM_ICONS.brewingStandSeen },
             { key: "dustedDirtSeen", title: "Dusted Dirt", icon: ITEM_ICONS.dustedDirtSeen }
         ];
-
+        
         // Calculate infection status from context
         const infectionState = playerInfection.get(player.id);
         const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
-
+        
         const form = new ActionFormData().title("§6Items");
         form.body("§7Entries:");
         for (const e of entries) {
             let title = e.title;
             let showIcon = false;
-
+            
             if (e.key === 'snowFound') {
                 // Show as "'Snow' (Powder)" if player has been infected AND has found snow
                 const hasBeenInfected = hasInfection;
                 const hasFoundSnow = codex.items.snowFound;
-
+                
                 if (hasBeenInfected && hasFoundSnow) {
                     title = e.title; // "'Snow' (Powder)"
                     showIcon = true;
@@ -1273,9 +1293,9 @@ export function showCodexBook(player, context) {
             } else if (e.key === 'snowBookCrafted' && codex.items.snowBookCrafted) {
                 showIcon = true;
             }
-
+            
             const label = `§f${maskTitle(title, codex.items[e.key])}`;
-
+            
             // Add icons for known items only
             if (codex.items[e.key] && ITEM_ICONS[e.key]) {
                 form.button(label, ITEM_ICONS[e.key]);
@@ -1299,7 +1319,7 @@ export function showCodexBook(player, context) {
                         const hasFoundSnow = codex.items.snowFound;
                         const snowKnowledge = getKnowledgeLevel(player, 'snowLevel');
                         const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
-
+                        
                         if (hasBeenInfected && hasFoundSnow && infectionKnowledge >= 1) {
                             body = "§eSnow (Powder)\n§7Risky substance. Leads to symptoms and doom.";
                         } else if (codex.items.snowIdentified && infectionKnowledge >= 1) {
@@ -1313,7 +1333,7 @@ export function showCodexBook(player, context) {
                         // Progressive journal information based on usage
                         const totalKills = (codex.mobs.tinyBearKills || 0) + (codex.mobs.infectedBearKills || 0) + (codex.mobs.infectedPigKills || 0) + (codex.mobs.infectedCowKills || 0) + (codex.mobs.buffBearKills || 0);
                         const totalInfections = codex.history.totalInfections || 0;
-
+                        
                         if (totalKills < 5 && totalInfections === 0) {
                             // Basic journal info
                             body = "§ePowdery Journal\n§7A leather-bound journal that documents your discoveries about the mysterious outbreak.\n\n§7Basic Features:\n§7• Tracks infection status\n§7• Records basic mob information\n§7• Simple discovery logging\n\n§7This journal appears to update itself with new information as you make discoveries.";
@@ -1328,7 +1348,7 @@ export function showCodexBook(player, context) {
                         // Progressive cure information based on experience
                         const cureAttempts = codex.history.totalCures || 0;
                         const hasCured = cureAttempts > 0;
-
+                        
                         if (!hasCured && !codex.cures.bearCureKnown) {
                             // Basic cure info with hints based on discoveries
                             let hintText = "";
@@ -1337,7 +1357,7 @@ export function showCodexBook(player, context) {
                             } else if (codex.items.weaknessPotionSeen || codex.items.enchantedGoldenAppleSeen) {
                                 hintText = "\n\n§7Research Notes:\n§7• One component discovered\n§7• Second component required\n§7• Timing appears crucial";
                             }
-
+                            
                             body = "§eCure Components\n§7Rumors suggest that certain items can reverse infections when used together.\n\n§7Suspected Components:\n§7• Weakness Potion: May weaken the infection\n§7• Enchanted Golden Apple: Provides healing energy\n§7• Timing: Must be used at specific moments" + hintText + "\n\n§8Note: Cure mechanism is not fully understood. Experimentation required.";
                         } else if (codex.cures.bearCureKnown && !hasCured) {
                             // Known cure info
@@ -1362,14 +1382,42 @@ export function showCodexBook(player, context) {
                         if (codex.items.weaknessPotionSeen) {
                             hintText = "\n\n§7Research Connection:\n§7• Weakness + Enchanted Golden Apple = Potential Cure\n§7• Timing appears to be critical\n§7• Both components must be present simultaneously";
                         }
-
+                        
                         body = "§eEnchanted Golden Apple\n§7An extremely rare and powerful variant of the golden apple, enhanced with magical properties.\n\n§7Enhanced Properties:\n§7• Superior healing capabilities\n§7• Magical enhancement increases potency\n§7• Contains concentrated life energy\n§7• May have unique therapeutic applications\n\n§7Research Notes:\n§7• Enchanted golden apples are extremely rare\n§7• Their enhanced properties may be crucial for treatment\n§7• May be required for certain medical procedures" + hintText + "\n\n§eThis enhanced fruit may be the key to advanced treatments.";
                     } else if (e.key === "brewingStandSeen") {
                         // Brewing stand information
                         body = "§eBrewing Stand\n§7A specialized apparatus for creating alchemical concoctions. Essential for potion production.\n\n§7Function:\n§7• Allows creation of various potions\n§7• Can produce weakness potions\n§7• Essential for alchemical research\n\n§7Research Applications:\n§7• Weakness potions can be brewed here\n§7• Essential for cure research\n§7• Allows experimentation with different concoctions\n\n§eThis apparatus is crucial for developing treatments.";
                     } else if (e.key === "dustedDirtSeen") {
-                        // Dusted dirt information
-                        body = "§eDusted Dirt\n§7A mysterious substance that appears to be contaminated with unknown particles.\n\n§7Properties:\n§7• Contains foreign particulate matter\n§7• Appears to be contaminated soil\n§7• May be related to the infection\n\n§7Research Notes:\n§7• Origin unknown\n§7• May be a byproduct of infection\n§7• Requires further investigation\n\n§eThis contaminated material may hold clues about the infection's nature.";
+                        // Enhanced dusted dirt information
+                        const currentDay = getCurrentDay ? getCurrentDay() : 0;
+                        body = "§eDusted Dirt\n§7A mysterious block covered in white powder. This appears to be the primary spawning ground for Maple Bears.\n\n";
+                        
+                        body += "§6Properties:\n";
+                        body += "§7• Covered in white particulate matter\n";
+                        body += "§7• Maple Bears spawn exclusively on this block\n";
+                        body += "§7• Spreads when Maple Bears kill mobs\n";
+                        body += "§7• Mining toughness similar to regular dirt\n";
+                        body += "§7• Can be broken and collected\n\n";
+                        
+                        body += "§6Spreading Mechanism:\n";
+                        body += "§7• When Maple Bears kill mobs, dusted dirt spreads nearby\n";
+                        body += "§7• Spread radius increases with day progression\n";
+                        body += "§7• Conversion rate increases over time\n";
+                        if (currentDay >= 20) {
+                            body += "§7• By Day 20+, spread is significantly enhanced\n";
+                        }
+                        if (currentDay >= 25) {
+                            body += "§7• Post-victory: Spread intensifies dramatically\n";
+                        }
+                        
+                        body += "\n§6Research Notes:\n";
+                        body += "§7• Origin: Created when Maple Bears kill creatures\n";
+                        body += "§7• Also created by placing snow layers on dirt\n";
+                        body += "§7• The dust appears to be the same substance as 'Snow'\n";
+                        body += "§7• Blocks must have air above them for spawning\n";
+                        body += "§7• Spawning occurs within 15-48 blocks of players\n\n";
+                        
+                        body += "§cWarning: This block is dangerous. Avoid areas with heavy dusted dirt coverage.";
                     }
                 }
                 new ActionFormData().title(`§6Items: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
@@ -1385,31 +1433,31 @@ export function showCodexBook(player, context) {
     function openDailyLog() {
         const codex = getCodex(player);
         const currentDay = getCurrentDay ? getCurrentDay() : 0;
-
+        
         // Get all days with events, sorted by day number
         const daysWithEvents = Object.keys(codex.dailyEvents || {})
             .map(day => parseInt(day))
             .filter(day => day > 0 && day < currentDay)
             .sort((a, b) => b - a); // Most recent first
-
+        
         if (daysWithEvents.length === 0) {
             const form = new ActionFormData().title("§6Daily Log");
             form.body("§7No significant events recorded yet.\n\n§8Events are recorded one day after they occur, as you reflect on the previous day's discoveries.");
             form.button("§8Back");
             form.show(player).then((res) => {
-                if (!res || res.canceled) return openMain();
+                if (!res || res.canceled) return openTimeline();
 
                 // Play page turn sound
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
 
-                openMain();
+                openTimeline();
             });
             return;
         }
-
+        
         const form = new ActionFormData().title("§6Daily Log");
         form.body("§7Reflections on past days:\n");
-
+        
         // Add buttons for each day with events
         for (const day of daysWithEvents) {
             const dayEvents = codex.dailyEvents[day];
@@ -1426,17 +1474,17 @@ export function showCodexBook(player, context) {
                 form.button(`§fDay ${day}`);
             }
         }
-
+        
         form.button("§8Back");
         form.show(player).then((res) => {
-            if (!res || res.canceled) return openMain();
+            if (!res || res.canceled) return openTimeline();
 
             // Play page turn sound
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
             if (res.selection >= 0 && res.selection < daysWithEvents.length) {
                 const selectedDay = daysWithEvents[res.selection];
                 const dayEvents = codex.dailyEvents[selectedDay];
-
+                
                 let body = `§6Day ${selectedDay}\n\n`;
 
                 // Handle both old format (array) and new format (object with categories)
@@ -1445,9 +1493,9 @@ export function showCodexBook(player, context) {
                     if (dayEvents.length > 0) {
                         body += "§7Other Events\n";
                         body += dayEvents.join("\n\n");
-                    } else {
-                        body += "§7No significant events recorded for this day.";
-                    }
+                } else {
+                    body += "§7No significant events recorded for this day.";
+                }
                 } else if (dayEvents && typeof dayEvents === 'object') {
                     // New format: categorized events
                     const categoryOrder = ["variants", "knowledge", "items", "effects", "mobs", "lore", "general"];
@@ -1487,13 +1535,13 @@ export function showCodexBook(player, context) {
             }
         });
     }
-
+    
     function openBiomes() {
         const codex = getCodex(player);
         const form = new ActionFormData().title("§6Biomes");
-
+        
         let body = "§7Biomes discovered:\n\n";
-
+        
         const biomeKnowledge = getKnowledgeLevel(player, 'biomeLevel');
 
         if (codex.biomes.infectedBiomeSeen) {
@@ -1525,7 +1573,7 @@ export function showCodexBook(player, context) {
         } else {
             body += "§8No biomes discovered yet.";
         }
-
+        
         form.body(body);
         form.button("§8Back");
         form.show(player).then((res) => {
@@ -1595,6 +1643,230 @@ export function showCodexBook(player, context) {
                     player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
                     openLateLore();
                 });
+        }).catch(() => { openMain(); });
+    }
+
+    function openTimeline() {
+        const codex = getCodex(player);
+        const currentDay = getCurrentDay ? getCurrentDay() : 0;
+        const hasDailyEvents = codex.dailyEvents && Object.keys(codex.dailyEvents).length > 0;
+        
+        const form = new ActionFormData().title("§6Timeline");
+        form.body("§7Choose what to view:");
+        
+        const buttons = [];
+        const buttonActions = [];
+        
+        // Days & Milestones - available from day 2+
+        if (currentDay >= 2) {
+            buttons.push("§fDays & Milestones");
+            buttonActions.push(() => openDaysMilestones());
+        }
+        
+        // Daily Log - available when events exist
+        if (hasDailyEvents) {
+            buttons.push("§fDaily Log");
+            buttonActions.push(() => openDailyLog());
+        }
+        
+        // If nothing is available yet, show a message
+        if (buttons.length === 0) {
+            form.body("§7Timeline content will unlock as you progress.\n\n§8• Days & Milestones unlock at Day 2\n§8• Daily Log unlocks when events are recorded");
+        }
+        
+        for (const button of buttons) {
+            form.button(button);
+        }
+        form.button("§8Back");
+        
+        form.show(player).then((res) => {
+            if (!res || res.canceled) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openMain();
+            }
+            
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+            const selection = res.selection;
+            if (selection >= 0 && selection < buttonActions.length) {
+                buttonActions[selection]();
+            } else {
+                openMain();
+            }
+        }).catch(() => { openMain(); });
+    }
+
+    function openDaysMilestones() {
+        const codex = getCodex(player);
+        const currentDay = getCurrentDay ? getCurrentDay() : 0;
+        const display = typeof getDayDisplayInfo === 'function' ? getDayDisplayInfo(currentDay) : { color: '§f', symbols: '' };
+        
+        let body = `§6Days & Milestones\n\n`;
+        body += `${display.color}${display.symbols} §7Current Day: §f${currentDay}\n\n`;
+        
+        // Victory status - always show goal, but hide details until reached
+        if (currentDay > 25) {
+            const daysPastVictory = currentDay - 25;
+            body += `§a✓ Victory Achieved! §7(+${daysPastVictory} days past victory)\n`;
+            body += `§cThe infection intensifies with each passing day.\n\n`;
+        } else if (currentDay === 25) {
+            body += `§a§lVICTORY! §r§7You have survived 25 days!\n`;
+            body += `§7The infection continues, but you have proven yourself a true survivor.\n\n`;
+        } else if (currentDay === 24) {
+            body += `§e§lYou're so close... §r§7Only 1 day until victory!\n`;
+            body += `§7Survive one more day to achieve your goal.\n\n`;
+        } else if (currentDay >= 20) {
+            const daysUntilVictory = 25 - currentDay;
+            body += `§eAlmost there... §7${daysUntilVictory} days until victory.\n\n`;
+        } else {
+            body += `§7Your goal: §fSurvive until Day 25\n`;
+            body += `§8What happens then? You'll find out when you get there...\n\n`;
+        }
+        
+        // Milestone Days - only show what has been reached or is about to be reached
+        body += `§6Milestone Days:\n`;
+        
+        const milestones = [
+            { day: 2, name: "Tiny Maple Bears emerge", reached: currentDay >= 2 },
+            { day: 4, name: "Infected variants appear", reached: currentDay >= 4 },
+            { day: 8, name: "Buff Bears arrive", reached: currentDay >= 8 },
+            { day: 13, name: "Advanced variants spawn", reached: currentDay >= 13 },
+            { day: 20, name: "Escalation begins", reached: currentDay >= 20 },
+            { day: 25, name: "Victory threshold", reached: currentDay >= 25, isVictory: true }
+        ];
+        
+        for (const milestone of milestones) {
+            if (milestone.reached) {
+                // Show reached milestones
+                if (milestone.isVictory) {
+                    body += `§aDay ${milestone.day}: §7${milestone.name}\n`;
+                } else {
+                    body += `§eDay ${milestone.day}: §7${milestone.name} §a✓\n`;
+                }
+            } else if (milestone.day === currentDay + 1) {
+                // Show next milestone as "coming soon"
+                body += `§eDay ${milestone.day}: §8??? §7(Next milestone)\n`;
+            } else if (milestone.day <= currentDay + 3) {
+                // Show upcoming milestones within 3 days as "coming soon"
+                body += `§8Day ${milestone.day}: §8??? §7(Coming soon)\n`;
+            } else {
+                // Hide future milestones
+                body += `§8Day ${milestone.day}: §8???\n`;
+            }
+        }
+        
+        // Post-victory information - only show if victory achieved
+        if (currentDay > 25) {
+            body += `\n§cPost-Victory:\n`;
+            body += `§7The infection continues to intensify.\n`;
+            body += `§7Every 5 days brings increased danger.\n`;
+            body += `§7Spawn rates and conversion rates scale higher.\n`;
+        }
+        
+        // Day Progression Guide - show current and past ranges, hide future
+        body += `\n§6Day Progression:\n`;
+        const progressionRanges = [
+            { range: "Days 0-2", label: "Safe", color: "§a", maxDay: 2 },
+            { range: "Days 3-5", label: "Caution", color: "§2", maxDay: 5 },
+            { range: "Days 6-7", label: "Warning", color: "§e", maxDay: 7 },
+            { range: "Days 8-10", label: "Danger", color: "§6", maxDay: 10 },
+            { range: "Days 11-13", label: "High Danger", color: "§6", maxDay: 13 },
+            { range: "Days 14-17", label: "Critical", color: "§c", maxDay: 17 },
+            { range: "Days 18-24", label: "Extreme", color: "§4", maxDay: 24 },
+            { range: "Day 25", label: "Victory", color: "§a", maxDay: 25, isVictory: true }
+        ];
+        
+        for (const range of progressionRanges) {
+            if (currentDay >= range.maxDay || (range.isVictory && currentDay >= 24)) {
+                // Show reached ranges
+                body += `§7${range.range}: ${range.color}${range.label}\n`;
+            } else if (currentDay >= range.maxDay - 2) {
+                // Show upcoming range within 2 days
+                body += `§8${range.range}: §8??? §7(Approaching)\n`;
+            } else {
+                // Hide future ranges
+                body += `§8${range.range}: §8???\n`;
+            }
+        }
+        
+        // Post-victory progression - only show if victory achieved
+        if (currentDay > 25) {
+            const postVictoryRanges = [
+                { range: "Days 26-30", label: "Escalating", color: "§c", maxDay: 30 },
+                { range: "Days 31-35", label: "Intensifying", color: "§4", maxDay: 35 },
+                { range: "Days 36-45", label: "Extreme", color: "§5", maxDay: 45 },
+                { range: "Days 46+", label: "Maximum Danger", color: "§0", maxDay: Infinity }
+            ];
+            
+            for (const range of postVictoryRanges) {
+                if (currentDay >= range.maxDay) {
+                    body += `§7${range.range}: ${range.color}${range.label}\n`;
+                } else if (range.maxDay === Infinity || currentDay >= range.maxDay - 2) {
+                    body += `§8${range.range}: §8??? §7(Approaching)\n`;
+                } else {
+                    body += `§8${range.range}: §8???\n`;
+                }
+            }
+        }
+        
+        const form = new ActionFormData().title("§6Days & Milestones").body(body).button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openTimeline();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+            openTimeline();
+        }).catch(() => { openTimeline(); });
+    }
+
+    function openAchievements() {
+        const codex = getCodex(player);
+        let body = `§6Achievements\n\n`;
+        
+        const achievements = codex.achievements || {};
+        
+        if (achievements.day25Victory) {
+            body += `§a✓ Victory Achieved\n`;
+            body += `§7Survived until Day 25\n`;
+            if (achievements.day25VictoryDate) {
+                body += `§8Achieved on Day ${achievements.day25VictoryDate}\n`;
+            }
+            body += `\n`;
+        } else {
+            body += `§8✗ Victory Achieved\n`;
+            body += `§7Survive until Day 25\n\n`;
+        }
+        
+        if (achievements.maxDaysSurvived && achievements.maxDaysSurvived > 25) {
+            const daysPastVictory = achievements.maxDaysSurvived - 25;
+            body += `§6Post-Victory Milestones:\n`;
+            body += `§7Maximum Days Survived: §f${achievements.maxDaysSurvived}\n`;
+            body += `§7Days Past Victory: §f${daysPastVictory}\n\n`;
+            
+            // Show milestone achievements
+            const milestones = [30, 35, 40, 45, 50];
+            for (const milestone of milestones) {
+                const milestoneKey = `day${milestone}Survived`;
+                if (achievements[milestoneKey]) {
+                    body += `§a✓ Day ${milestone} Survived\n`;
+                } else if (achievements.maxDaysSurvived >= milestone) {
+                    body += `§a✓ Day ${milestone} Survived\n`;
+                } else {
+                    body += `§8✗ Day ${milestone} Survived\n`;
+                }
+            }
+        } else if (achievements.maxDaysSurvived) {
+            body += `§7Maximum Days Survived: §f${achievements.maxDaysSurvived}\n`;
+        }
+        
+        const form = new ActionFormData().title("§6Achievements").body(body).button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openMain();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+            openMain();
         }).catch(() => { openMain(); });
     }
 

@@ -173,7 +173,6 @@
 				"value": 5.2
 			},
 			"minecraft:block_climber": {},
-			"minecraft:movement.generic": {},
 			"minecraft:behavior.leap_at_target": {
 				"priority": 2,
 				"set_persistent": true,
@@ -185,8 +184,8 @@
 			},
 			"minecraft:behavior.jump_to_block": {
 				"priority": 3,
-				"search_width": 18,
-				"search_height": 18,
+				"search_width": 15,
+				"search_height": 15,
 				"minimum_path_length": 14,
 				"minimum_distance": 0,
 				"scale_factor": 1.6,
@@ -217,6 +216,10 @@
 					"minecraft:twisting_vines",
 					"minecraft:cave_vines_body_with_berries",
 					"minecraft:cave_vines_head_with_berries",
+					"minecraft:vines",
+					"minecraft:mangrove_roots",
+					"minecraft:waterlily",
+					"minecraft:lily_pad",
 					"minecraft:acacia_fence",
 					"minecraft:acacia_fence_gate",
 					"minecraft:bamboo_fence",
