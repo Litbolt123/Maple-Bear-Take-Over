@@ -3,6 +3,8 @@ import { ActionFormData } from "@minecraft/server-ui";
 import { recordDailyEvent, getCurrentDay } from "./mb_dayTracker.js";
 import { ModalFormData } from "@minecraft/server-ui";
 
+const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
+
 export function getDefaultCodex() {
     return {
         infections: { bear: { discovered: false, firstHitAt: 0 }, snow: { discovered: false, firstUseAt: 0 } },
@@ -43,21 +45,33 @@ export function getDefaultCodex() {
             infectedPigSeen: false, 
             infectedCowSeen: false,
             buffBearSeen: false,
+            flyingBearSeen: false,
+            miningBearSeen: false,
+            torpedoBearSeen: false,
             tinyBearKills: 0,
             infectedBearKills: 0,
             infectedPigKills: 0,
             infectedCowKills: 0,
             buffBearKills: 0,
+            flyingBearKills: 0,
+            miningBearKills: 0,
+            torpedoBearKills: 0,
             tinyBearMobKills: 0,
             infectedBearMobKills: 0,
             infectedPigMobKills: 0,
             infectedCowMobKills: 0,
             buffBearMobKills: 0,
+            flyingBearMobKills: 0,
+            miningBearMobKills: 0,
+            torpedoBearMobKills: 0,
             tinyBearHits: 0,
             infectedBearHits: 0,
             infectedPigHits: 0,
             infectedCowHits: 0,
             buffBearHits: 0,
+            flyingBearHits: 0,
+            miningBearHits: 0,
+            torpedoBearHits: 0,
             // Day variant unlock tracking
             day4VariantsUnlocked: false,
             day8VariantsUnlocked: false,
@@ -186,7 +200,8 @@ export function checkKnowledgeProgression(player) {
     }
 
     // Bear knowledge progression
-    const totalBearKills = (codex.mobs.tinyBearKills || 0) + (codex.mobs.infectedBearKills || 0) + (codex.mobs.buffBearKills || 0);
+    const totalBearKills = (codex.mobs.tinyBearKills || 0) + (codex.mobs.infectedBearKills || 0) + (codex.mobs.buffBearKills || 0) +
+        (codex.mobs.flyingBearKills || 0) + (codex.mobs.miningBearKills || 0) + (codex.mobs.torpedoBearKills || 0);
     if (totalBearKills > 0) {
         updateKnowledgeLevel(player, 'bearLevel', 1); // Basic awareness
         if (totalBearKills >= 10) {
@@ -271,6 +286,7 @@ export function shareKnowledge(fromPlayer, toPlayer) {
 
     const fromCodex = getCodex(fromPlayer);
     const toCodex = getCodex(toPlayer);
+    const recipientHasJournal = !!(toCodex?.items?.snowBookCrafted);
     let hasNewKnowledge = false;
     let sharedItems = [];
 
@@ -313,7 +329,10 @@ export function shareKnowledge(fromPlayer, toPlayer) {
                 case 'infectedBearSeen': friendlyName = 'Infected Maple Bear'; break;
                 case 'buffBearSeen': friendlyName = 'Buff Maple Bear'; break;
                 case 'infectedPigSeen': friendlyName = 'Infected Pig'; break;
-                case 'infectedCowSeen': friendlyName = 'Infected Cow'; break;
+                    case 'infectedCowSeen': friendlyName = 'Infected Cow'; break;
+                    case 'flyingBearSeen': friendlyName = 'Flying Maple Bear'; break;
+                    case 'miningBearSeen': friendlyName = 'Mining Maple Bear'; break;
+                    case 'torpedoBearSeen': friendlyName = 'Torpedo Maple Bear'; break;
                 default: friendlyName = mobKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
             }
 
@@ -465,8 +484,13 @@ export function shareKnowledge(fromPlayer, toPlayer) {
         recordDailyEvent(toPlayer, tomorrowDay, eventMessage, "knowledge");
 
         // Send special feedback to both players
-        fromPlayer.sendMessage(`§7You shared knowledge with §f${toPlayer.name}§7: §a${sharedItems.join(', ')}`);
-        toPlayer.sendMessage(`§b${fromPlayer.name} §7shared their knowledge with you: §a${sharedItems.join(', ')}`);
+        const summary = sharedItems.join(', ');
+        fromPlayer.sendMessage(`§7You shared knowledge with §f${toPlayer.name}§7: §a${summary}`);
+        if (recipientHasJournal) {
+            toPlayer.sendMessage(`§b${fromPlayer.name} §7shared their knowledge with you: §a${summary}`);
+        } else {
+            toPlayer.sendMessage(`§7A rush of distant memories brushes past you, but without a Powdery Journal nothing is recorded. Craft one to review what others share.`);
+        }
         toPlayer.playSound("random.orb", { pitch: 1.2, volume: 0.8 });
         toPlayer.playSound("mob.experience_orb.pickup", { pitch: 1.0, volume: 0.6 });
 
@@ -1046,7 +1070,10 @@ export function showCodexBook(player, context) {
             { key: "infectedBearSeen", title: "Infected Maple Bear", icon: "textures/items/Infected_human_mb_egg" },
             { key: "buffBearSeen", title: "Buff Maple Bear", icon: "textures/items/buff_mb_egg" },
             { key: "infectedPigSeen", title: "Infected Pig", icon: "textures/items/infected_pig_spawn_egg" },
-            { key: "infectedCowSeen", title: "Infected Cow", icon: "textures/items/infected_cow_egg" }
+            { key: "infectedCowSeen", title: "Infected Cow", icon: "textures/items/infected_cow_egg" },
+            { key: "flyingBearSeen", title: "Flying Maple Bear", icon: "textures/items/flying_mb_egg" },
+            { key: "miningBearSeen", title: "Mining Maple Bear", icon: "textures/items/infected_day13_egg" },
+            { key: "torpedoBearSeen", title: "Torpedo Maple Bear", icon: "textures/items/infected_day20_egg" }
         ];
         
         const form = new ActionFormData().title("§6Mobs");
@@ -1068,6 +1095,12 @@ export function showCodexBook(player, context) {
                     killCount = codex.mobs.infectedCowKills || 0;
                 } else if (e.key === "buffBearSeen") {
                     killCount = codex.mobs.buffBearKills || 0;
+                } else if (e.key === "flyingBearSeen") {
+                    killCount = codex.mobs.flyingBearKills || 0;
+                } else if (e.key === "miningBearSeen") {
+                    killCount = codex.mobs.miningBearKills || 0;
+                } else if (e.key === "torpedoBearSeen") {
+                    killCount = codex.mobs.torpedoBearKills || 0;
                 }
                 
                 if (killCount > 0) {
@@ -1102,6 +1135,12 @@ export function showCodexBook(player, context) {
                         killCount = codex.mobs.infectedCowKills || 0;
                     } else if (e.key === "buffBearSeen") {
                         killCount = codex.mobs.buffBearKills || 0; // This already includes all variants
+                    } else if (e.key === "flyingBearSeen") {
+                        killCount = codex.mobs.flyingBearKills || 0;
+                    } else if (e.key === "miningBearSeen") {
+                        killCount = codex.mobs.miningBearKills || 0;
+                    } else if (e.key === "torpedoBearSeen") {
+                        killCount = codex.mobs.torpedoBearKills || 0;
                     }
 
                     const bearKnowledge = getKnowledgeLevel(player, 'bearLevel');
@@ -1118,6 +1157,14 @@ export function showCodexBook(player, context) {
                             body += `\n\n§6Basic Analysis:\n§7This creature appears to be dangerous and unpredictable.`;
                         }
 
+                        if (e.key === "flyingBearSeen") {
+                            body += `\n\n§6Field Notes:\n§7Sky hunters that shower you with the white powder—ground them or risk suffocation.`;
+                        } else if (e.key === "miningBearSeen") {
+                            body += `\n\n§6Field Notes:\n§7Engineers that carve 1x2 tunnels so more Maple Bears can march through.`;
+                        } else if (e.key === "torpedoBearSeen") {
+                            body += `\n\n§6Field Notes:\n§7Airborne battering rams that streak toward sky bases and burst into powdery shrapnel.`;
+                        }
+
                         // Detailed stats (available at knowledge level 2)
                         if (bearKnowledge >= 2 && killCount >= 25) {
                             body += `\n\n§6Combat Analysis:`;
@@ -1131,6 +1178,12 @@ export function showCodexBook(player, context) {
                                 body += `\n§7Drop Rate: 75% chance\n§7Loot: 1-4 snow items\n§7Health: 10 HP\n§7Damage: 2`;
                             } else if (e.key === "buffBearSeen") {
                                 body += `\n§7Drop Rate: 80% chance\n§7Loot: 3-15 snow items\n§7Health: 100 HP\n§7Damage: 8`;
+                            } else if (e.key === "flyingBearSeen") {
+                                body += `\n§7Drop Rate: 80% chance\n§7Loot: 2-6 'Snow' (Powder) shavings & aerial kit\n§7Health: 50 HP (Day 20 patrols climb higher)\n§7Damage: 10\n§7Special: 70% low swoops, 30% high patrols dusting you from above.`;
+                            } else if (e.key === "miningBearSeen") {
+                                body += `\n§7Drop Rate: 85% chance\n§7Loot: 1-4 'Snow' (Powder) clumps plus tools\n§7Health: 50 HP (Day 20 engineers: 70 HP)\n§7Damage: 10-14\n§7Special: Mines one block at a time to open tunnels for the horde.`;
+                            } else if (e.key === "torpedoBearSeen") {
+                                body += `\n§7Drop Rate: 90% chance\n§7Loot: 3-8 'Snow' (Powder) shards & sky-salvage\n§7Health: 60 HP (Ascended torpedoes strike harder)\n§7Damage: 12+\n§7Special: Dive-bombs bases and chews through non-obsidian blocks mid-flight.`;
                             }
                         }
 
@@ -1189,9 +1242,13 @@ export function showCodexBook(player, context) {
                                 }
                             }
 
-                            const day20Unlocked = Boolean(e.key === "mapleBearSeen" ? codex.mobs?.day20VariantsUnlockedTiny :
+                            const day20Unlocked = Boolean(
+                                e.key === "mapleBearSeen" ? codex.mobs?.day20VariantsUnlockedTiny :
                                 e.key === "infectedBearSeen" ? codex.mobs?.day20VariantsUnlockedInfected :
-                                e.key === "buffBearSeen" ? codex.mobs?.day20VariantsUnlockedBuff : false);
+                                e.key === "buffBearSeen" ? codex.mobs?.day20VariantsUnlockedBuff :
+                                (e.key === "flyingBearSeen" || e.key === "miningBearSeen" || e.key === "torpedoBearSeen") ? codex.mobs?.day20VariantsUnlockedOther :
+                                false
+                            );
 
                             if (day20Unlocked && killCount >= day20Threshold) {
                                 variantInfo += `\n\n§eDay 20+ Variants:`;
@@ -1202,6 +1259,30 @@ export function showCodexBook(player, context) {
                                     variantInfo += `\n§7Ascended: 40 HP, 8 Damage, 95% drop rate, 3-15 snow items\n§7Special: Dust saturation expands infection radius`;
                                 } else if (e.key === "buffBearSeen") {
                                     variantInfo += `\n§7Ascended: 200 HP, 12 Damage, 98% drop rate, 5-18 snow items\n§7Special: Long-range leaps and crushing roar`;
+                                }
+                            }
+
+                            if (e.key === "flyingBearSeen" && killCount >= 5) {
+                                hasVariants = true;
+                                variantInfo += `\n\n§eSky Doctrine:\n§7• Day 11-14 Skirmishers fly low and dust targets with white powder.\n§7• Day 15+ Patrols arc higher with wider strafes and armored claws.`;
+                                if (day20Unlocked && killCount >= 8) {
+                                    variantInfo += `\n§7• Day 20+ Stratos Wings linger above cloud-top bases and unleash torpedo escorts.`;
+                                }
+                            }
+
+                            if (e.key === "miningBearSeen" && killCount >= 5) {
+                                hasVariants = true;
+                                variantInfo += `\n\n§eTunnel Doctrine:\n§7• Early engineers carve 1x2 passages and keep squads supplied with 'Snow' (Powder).\n§7• Coordinators (Day 15+) reserve build queues so only one miner breaks blocks at a time.`;
+                                if (day20Unlocked && killCount >= 8) {
+                                    variantInfo += `\n§7• Siege engineers (Day 20+) plan 1x3 access spirals so even buff bears can march through.`;
+                                }
+                            }
+
+                            if (e.key === "torpedoBearSeen" && killCount >= 3) {
+                                hasVariants = true;
+                                variantInfo += `\n\n§eTorpedo Profiles:\n§7• Standard payloads dive from 30-70y and chew soft blocks mid-flight.\n§7• Reinforced payloads (Day 20+) spiral before impact to confuse archers.`;
+                                if (day20Unlocked && killCount >= 6) {
+                                    variantInfo += `\n§7• Ascended payloads call flying escorts and refuse to touch obsidian or netherite blocks.`;
                                 }
                             }
 
@@ -1331,7 +1412,8 @@ export function showCodexBook(player, context) {
                         }
                     } else if (e.key === "snowBookCrafted") {
                         // Progressive journal information based on usage
-                        const totalKills = (codex.mobs.tinyBearKills || 0) + (codex.mobs.infectedBearKills || 0) + (codex.mobs.infectedPigKills || 0) + (codex.mobs.infectedCowKills || 0) + (codex.mobs.buffBearKills || 0);
+                        const totalKills = (codex.mobs.tinyBearKills || 0) + (codex.mobs.infectedBearKills || 0) + (codex.mobs.infectedPigKills || 0) + (codex.mobs.infectedCowKills || 0) + (codex.mobs.buffBearKills || 0) +
+                            (codex.mobs.flyingBearKills || 0) + (codex.mobs.miningBearKills || 0) + (codex.mobs.torpedoBearKills || 0);
                         const totalInfections = codex.history.totalInfections || 0;
                         
                         if (totalKills < 5 && totalInfections === 0) {
@@ -1874,7 +1956,8 @@ export function showCodexBook(player, context) {
         const options = [
             { label: "§fReset My Codex", action: () => triggerDebugCommand("reset_codex") },
             { label: "§fReset World Day to 1", action: () => triggerDebugCommand("reset_day") },
-            { label: "§fSet Day...", action: () => promptSetDay() }
+            { label: "§fSet Day...", action: () => promptSetDay() },
+            { label: "§fSpawn Difficulty", action: () => openSpawnDifficultyMenu() }
         ];
 
         const form = new ActionFormData().title("§cDeveloper Tools");
@@ -1900,7 +1983,75 @@ export function showCodexBook(player, context) {
         });
     }
 
-    function triggerDebugCommand(subcommand, args = []) {
+    function getSpawnDifficultyLabel(value) {
+        if (value === -1) return "Easy";
+        if (value === 0) return "Normal";
+        if (value === 1) return "Hard";
+        return value > 0 ? `Custom (+${value})` : `Custom (${value})`;
+    }
+
+    function openSpawnDifficultyMenu() {
+        const currentRaw = Number(world.getDynamicProperty(SPAWN_DIFFICULTY_PROPERTY) ?? 0);
+        const label = getSpawnDifficultyLabel(currentRaw);
+        const form = new ActionFormData()
+            .title("§cSpawn Difficulty")
+            .body(`§7Current Setting: §f${label}\n§7Value: §f${currentRaw}\n\n§8Adjust how aggressively Maple Bears spawn.\n§8Custom values range from §f-5 (calm)§8 to §f+5 (relentless).`);
+
+        form.button("§aEasy (-1)");
+        form.button("§fNormal (0)");
+        form.button("§cHard (+1)");
+        form.button("§eCustom Value");
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 4) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openDeveloperTools();
+            }
+
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            switch (res.selection) {
+                case 0:
+                    return triggerDebugCommand("set_spawn_difficulty", ["easy"], () => openSpawnDifficultyMenu());
+                case 1:
+                    return triggerDebugCommand("set_spawn_difficulty", ["normal"], () => openSpawnDifficultyMenu());
+                case 2:
+                    return triggerDebugCommand("set_spawn_difficulty", ["hard"], () => openSpawnDifficultyMenu());
+                case 3:
+                    return promptCustomSpawnDifficulty(currentRaw);
+                default:
+                    return openDeveloperTools();
+            }
+        }).catch(() => openDeveloperTools());
+    }
+
+    function promptCustomSpawnDifficulty(currentValue = 0) {
+        const modal = new ModalFormData()
+            .title("§cCustom Spawn Difficulty")
+            .textField("Enter value (-5 to 5)", String(currentValue));
+
+        modal.show(player).then((res) => {
+            if (!res || res.canceled) {
+                return openSpawnDifficultyMenu();
+            }
+
+            const rawInput = res.formValues?.[0] ?? "";
+            const parsed = parseInt(rawInput, 10);
+            if (Number.isNaN(parsed)) {
+                player.sendMessage("§7[MBI] Invalid difficulty value.");
+                return openSpawnDifficultyMenu();
+            }
+
+            if (parsed < -5 || parsed > 5) {
+                player.sendMessage("§7[MBI] Enter a value between -5 (calm) and +5 (relentless).");
+                return openSpawnDifficultyMenu();
+            }
+
+            triggerDebugCommand("set_spawn_difficulty_value", [String(parsed)], () => openSpawnDifficultyMenu());
+        }).catch(() => openSpawnDifficultyMenu());
+    }
+
+    function triggerDebugCommand(subcommand, args = [], onComplete = () => openDeveloperTools()) {
         try {
             const payload = JSON.stringify({ command: subcommand, args });
             let handled = false;
@@ -1948,7 +2099,7 @@ export function showCodexBook(player, context) {
             console.warn("[MBI] Failed to prepare debug command payload:", err);
             player?.sendMessage?.("§7[MBI] Failed to send debug command.");
         } finally {
-            system.run(() => openDeveloperTools());
+            system.run(onComplete);
         }
     }
 

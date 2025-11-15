@@ -2,16 +2,10 @@
 	"format_version": "1.20.80",
 	"minecraft:client_entity": {
 		"description": {
-			"identifier": "mb:flying_mb",
-			"materials": {
-				"default": "enderman"
-			},
-			"textures": {
-				"default": "textures/entity/infected_day13"
-			},
-			"geometry": {
-				"default": "geometry.infected"
-			},
+			"identifier": "mb:torpedo_mb_day20",
+			"materials": { "default": "enderman" },
+			"textures": { "default": "textures/entity/infected_day20" },
+			"geometry": { "default": "geometry.infected" },
 			"particle_effects": {
 				"death_dust": "mb:white_dust_particale"
 			},
@@ -19,7 +13,7 @@
 				"controller.render.infected"
 			],
 			"spawn_egg": {
-				"texture": "mb_infected_day13_egg",
+				"texture": "mb_infected_day20_egg",
 				"texture_index": 0
 			},
 			"animations": {
@@ -34,34 +28,25 @@
 				"walk3": "animation.infected.walk3",
 				"walk4": "animation.infected.walk4",
 				"walk5": "animation.infected.walk5",
-				"falling": "animation.infected.falling",
-				"falling2": "animation.infected.falling2",
-				"falling3": "animation.infected.falling3",
-				"falling4": "animation.infected.falling4",
-				"falling5": "animation.infected.falling5",
 				"attack": "animation.infected.attack",
 				"attack2": "animation.infected.attack2",
 				"attack3": "animation.infected.attack3",
+				"falling": "animation.infected.falling",
+				"falling2": "animation.infected.falling2",
+				"falling3": "animation.infected.falling3",
 				"infected_controller": "controller.animation.infected_mb_variant_0",
 				"attack_controller": "controller.animation.infected_mb_attack",
 				"death_particles": "animation.mb.death_particles"
 			},
 			"scripts": {
 				"animate": [
-					{
-						"look_at_target": true
-					},
-					{
-						"infected_controller": true
-					},
-					{
-						"attack_controller": true
-					},
-					{
-						"death_particles": "!query.is_alive"
-					}
+					{ "look_at_target": true },
+					{ "infected_controller": true },
+					{ "attack_controller": true },
+					{ "death_particles": "!query.is_alive" }
 				]
 			}
 		}
 	}
 }
+

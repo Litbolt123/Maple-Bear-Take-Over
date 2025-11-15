@@ -4,6 +4,9 @@ import { getCodex, getDefaultCodex, markCodex, showCodexBook, saveCodex, recordB
 import { initializeDayTracking, getCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock } from "./mb_spawnController.js";
 import "./mb_spawnController.js";
+import "./mb_miningAI.js";
+import "./mb_flyingAI.js";
+import "./mb_torpedoAI.js";
 
 // NOTE: Debug and testing features have been commented out for playability
 // To re-enable testing features, uncomment the following sections:
@@ -81,6 +84,13 @@ const INFECTED_BEAR_DAY20_ID = "mb:infected_day20";
 const BUFF_BEAR_ID = "mb:buff_mb";
 const BUFF_BEAR_DAY13_ID = "mb:buff_mb_day13";
 const BUFF_BEAR_DAY20_ID = "mb:buff_mb_day20";
+const FLYING_BEAR_ID = "mb:flying_mb";
+const FLYING_BEAR_DAY15_ID = "mb:flying_mb_day15";
+const FLYING_BEAR_DAY20_ID = "mb:flying_mb_day20";
+const MINING_BEAR_ID = "mb:mining_mb";
+const MINING_BEAR_DAY20_ID = "mb:mining_mb_day20";
+const TORPEDO_BEAR_ID = "mb:torpedo_mb";
+const TORPEDO_BEAR_DAY20_ID = "mb:torpedo_mb_day20";
 const INFECTED_PIG_ID = "mb:infected_pig";
 const INFECTED_COW_ID = "mb:infected_cow";
 const SNOW_ITEM_ID = "mb:snow";
@@ -194,7 +204,10 @@ const INFINITE_DURATION = Number.MAX_SAFE_INTEGER;
 const SNOW_INCREASE = {
     TINY_BEAR: 0.25,    // Small increase for tiny bears
     INFECTED: 0.5,      // Moderate increase for infected bears/pigs  
-    BUFF_BEAR: 3.0      // Large increase for buff bears (equals 3 snow)
+    BUFF_BEAR: 3.0,     // Large increase for buff bears (equals 3 snow)
+    FLYING_BEAR: 0.5,
+    MINING_BEAR: 0.45,
+    TORPEDO_BEAR: 0.9
 };
 
 const EFFECT_DURATIONS = {
@@ -314,7 +327,10 @@ function trackBearKill(player, bearType) {
                 infectedBear: { original: 0, day8: 0, day13: 0, day20: 0 },
                 buffBear: { original: 0, day13: 0, day20: 0 },
                 infectedPig: { original: 0, day4: 0, day8: 0, day13: 0, day20: 0 },
-                infectedCow: { original: 0, day4: 0, day8: 0, day13: 0, day20: 0 }
+                infectedCow: { original: 0, day4: 0, day8: 0, day13: 0, day20: 0 },
+                flyingBear: { original: 0, day15: 0, day20: 0 },
+                miningBear: { original: 0, day20: 0 },
+                torpedoBear: { original: 0, day20: 0 }
             };
         }
 
@@ -387,6 +403,34 @@ function trackBearKill(player, bearType) {
             codex.mobs.infectedCowKills = (codex.mobs.infectedCowKills || 0) + 1;
             codex.mobs.variantKills.infectedCow.original = (codex.mobs.variantKills.infectedCow.original || 0) + 1;
             checkAndUnlockMobDiscovery(codex, player, "infectedCowKills", "infectedCowMobKills", "infectedCowHits", "infectedCowSeen", 3, "dangerous", "infected_cow");
+        } else if (bearType === FLYING_BEAR_ID) {
+            codex.mobs.flyingBearKills = (codex.mobs.flyingBearKills || 0) + 1;
+            codex.mobs.variantKills.flyingBear.original = (codex.mobs.variantKills.flyingBear.original || 0) + 1;
+            checkAndUnlockMobDiscovery(codex, player, "flyingBearKills", "flyingBearMobKills", "flyingBearHits", "flyingBearSeen", 2, "dangerous", "flying_bear");
+        } else if (bearType === FLYING_BEAR_DAY15_ID) {
+            codex.mobs.flyingBearKills = (codex.mobs.flyingBearKills || 0) + 1;
+            codex.mobs.variantKills.flyingBear.day15 = (codex.mobs.variantKills.flyingBear.day15 || 0) + 1;
+            checkAndUnlockMobDiscovery(codex, player, "flyingBearKills", "flyingBearMobKills", "flyingBearHits", "flyingBearSeen", 2, "dangerous", "flying_bear");
+        } else if (bearType === FLYING_BEAR_DAY20_ID) {
+            codex.mobs.flyingBearKills = (codex.mobs.flyingBearKills || 0) + 1;
+            codex.mobs.variantKills.flyingBear.day20 = (codex.mobs.variantKills.flyingBear.day20 || 0) + 1;
+            checkAndUnlockMobDiscovery(codex, player, "flyingBearKills", "flyingBearMobKills", "flyingBearHits", "flyingBearSeen", 2, "dangerous", "flying_bear");
+        } else if (bearType === MINING_BEAR_ID) {
+            codex.mobs.miningBearKills = (codex.mobs.miningBearKills || 0) + 1;
+            codex.mobs.variantKills.miningBear.original = (codex.mobs.variantKills.miningBear.original || 0) + 1;
+            checkAndUnlockMobDiscovery(codex, player, "miningBearKills", "miningBearMobKills", "miningBearHits", "miningBearSeen", 2, "dangerous", "mining_bear");
+        } else if (bearType === MINING_BEAR_DAY20_ID) {
+            codex.mobs.miningBearKills = (codex.mobs.miningBearKills || 0) + 1;
+            codex.mobs.variantKills.miningBear.day20 = (codex.mobs.variantKills.miningBear.day20 || 0) + 1;
+            checkAndUnlockMobDiscovery(codex, player, "miningBearKills", "miningBearMobKills", "miningBearHits", "miningBearSeen", 2, "dangerous", "mining_bear");
+        } else if (bearType === TORPEDO_BEAR_ID) {
+            codex.mobs.torpedoBearKills = (codex.mobs.torpedoBearKills || 0) + 1;
+            codex.mobs.variantKills.torpedoBear.original = (codex.mobs.variantKills.torpedoBear.original || 0) + 1;
+            checkAndUnlockMobDiscovery(codex, player, "torpedoBearKills", "torpedoBearMobKills", "torpedoBearHits", "torpedoBearSeen", 1, "threatening", "torpedo_bear");
+        } else if (bearType === TORPEDO_BEAR_DAY20_ID) {
+            codex.mobs.torpedoBearKills = (codex.mobs.torpedoBearKills || 0) + 1;
+            codex.mobs.variantKills.torpedoBear.day20 = (codex.mobs.variantKills.torpedoBear.day20 || 0) + 1;
+            checkAndUnlockMobDiscovery(codex, player, "torpedoBearKills", "torpedoBearMobKills", "torpedoBearHits", "torpedoBearSeen", 1, "threatening", "torpedo_bear");
         }
         
         // Check for day variant unlocks based on specific variant kills
@@ -404,7 +448,10 @@ function trackMobKill(killer, victim) {
         const killerType = killer.typeId;
         if (killerType !== MAPLE_BEAR_ID && killerType !== MAPLE_BEAR_DAY4_ID && killerType !== MAPLE_BEAR_DAY8_ID && killerType !== MAPLE_BEAR_DAY13_ID && 
             killerType !== MAPLE_BEAR_DAY20_ID && killerType !== INFECTED_BEAR_ID && killerType !== INFECTED_BEAR_DAY8_ID && killerType !== INFECTED_BEAR_DAY13_ID && killerType !== INFECTED_BEAR_DAY20_ID &&
-            killerType !== BUFF_BEAR_ID && killerType !== BUFF_BEAR_DAY13_ID && killerType !== BUFF_BEAR_DAY20_ID && killerType !== INFECTED_PIG_ID) {
+            killerType !== BUFF_BEAR_ID && killerType !== BUFF_BEAR_DAY13_ID && killerType !== BUFF_BEAR_DAY20_ID && killerType !== INFECTED_PIG_ID &&
+            killerType !== FLYING_BEAR_ID && killerType !== FLYING_BEAR_DAY15_ID && killerType !== FLYING_BEAR_DAY20_ID &&
+            killerType !== MINING_BEAR_ID && killerType !== MINING_BEAR_DAY20_ID &&
+            killerType !== TORPEDO_BEAR_ID && killerType !== TORPEDO_BEAR_DAY20_ID) {
             return;
         }
         
@@ -458,6 +505,15 @@ function trackMobKill(killer, victim) {
                 } else if (killerType === INFECTED_COW_ID) {
                     codex.mobs.infectedCowMobKills = (codex.mobs.infectedCowMobKills || 0) + 1;
                     checkAndUnlockMobDiscovery(codex, player, "infectedCowKills", "infectedCowMobKills", "infectedCowHits", "infectedCowSeen", 3, "dangerous");
+                } else if (killerType === FLYING_BEAR_ID || killerType === FLYING_BEAR_DAY15_ID || killerType === FLYING_BEAR_DAY20_ID) {
+                    codex.mobs.flyingBearMobKills = (codex.mobs.flyingBearMobKills || 0) + 1;
+                    checkAndUnlockMobDiscovery(codex, player, "flyingBearKills", "flyingBearMobKills", "flyingBearHits", "flyingBearSeen", 2, "dangerous", "flying_bear");
+                } else if (killerType === MINING_BEAR_ID || killerType === MINING_BEAR_DAY20_ID) {
+                    codex.mobs.miningBearMobKills = (codex.mobs.miningBearMobKills || 0) + 1;
+                    checkAndUnlockMobDiscovery(codex, player, "miningBearKills", "miningBearMobKills", "miningBearHits", "miningBearSeen", 2, "dangerous", "mining_bear");
+                } else if (killerType === TORPEDO_BEAR_ID || killerType === TORPEDO_BEAR_DAY20_ID) {
+                    codex.mobs.torpedoBearMobKills = (codex.mobs.torpedoBearMobKills || 0) + 1;
+                    checkAndUnlockMobDiscovery(codex, player, "torpedoBearKills", "torpedoBearMobKills", "torpedoBearHits", "torpedoBearSeen", 1, "threatening", "torpedo_bear");
                 }
                 
                 // Day variant unlocks are handled in trackBearKill when Maple Bears are encountered
@@ -518,7 +574,10 @@ function checkVariantUnlock(player, codexParam = null) {
                 infectedBear: { original: 0, day8: 0, day13: 0, day20: 0 },
                 buffBear: { original: 0, day13: 0, day20: 0 },
                 infectedPig: { original: 0, day4: 0, day8: 0, day13: 0, day20: 0 },
-                infectedCow: { original: 0, day4: 0, day8: 0, day13: 0, day20: 0 }
+                infectedCow: { original: 0, day4: 0, day8: 0, day13: 0, day20: 0 },
+                flyingBear: { original: 0, day15: 0, day20: 0 },
+                miningBear: { original: 0, day20: 0 },
+                torpedoBear: { original: 0, day20: 0 }
             };
         }
 
@@ -1043,6 +1102,8 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
                 infected_bear: "§7An infected bear... This creature is dangerous and corrupted!",
                 infected_pig: "§7An infected pig... This creature is dangerous and corrupted!",
                 infected_cow: "§7An infected cow... This creature is dangerous and corrupted!",
+                flying_bear: "§7A flying Maple Bear... the white powder rains from the sky now.",
+                mining_bear: "§7A mining Maple Bear... it digs careful powder lanes straight to you.",
                 default: "§7This creature is dangerous... I should remember its behavior."
             },
             mysterious: {
@@ -1051,6 +1112,7 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
             },
             threatening: {
                 buff_bear: "§7A buff Maple Bear... Book it bro, run for your life.",
+                torpedo_bear: "§7A torpedo Maple Bear... sky-borne white powder warheads are real.",
                 default: "§7This creature is threatening... I must understand its nature."
             },
             interesting: {
@@ -2059,7 +2121,12 @@ function handleMapleBearKillTracking(entity, killer) {
     if (killer instanceof Player && !(entity instanceof Player)) {
         const entityType = entity.typeId;
         if (entityType === MAPLE_BEAR_ID || entityType === MAPLE_BEAR_DAY4_ID || entityType === MAPLE_BEAR_DAY8_ID || entityType === MAPLE_BEAR_DAY13_ID || entityType === MAPLE_BEAR_DAY20_ID ||
-            entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === INFECTED_BEAR_DAY13_ID || entityType === INFECTED_BEAR_DAY20_ID || entityType === BUFF_BEAR_ID || entityType === BUFF_BEAR_DAY13_ID || entityType === BUFF_BEAR_DAY20_ID || entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID) {
+            entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === INFECTED_BEAR_DAY13_ID || entityType === INFECTED_BEAR_DAY20_ID ||
+            entityType === BUFF_BEAR_ID || entityType === BUFF_BEAR_DAY13_ID || entityType === BUFF_BEAR_DAY20_ID ||
+            entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID ||
+            entityType === FLYING_BEAR_ID || entityType === FLYING_BEAR_DAY15_ID || entityType === FLYING_BEAR_DAY20_ID ||
+            entityType === MINING_BEAR_ID || entityType === MINING_BEAR_DAY20_ID ||
+            entityType === TORPEDO_BEAR_ID || entityType === TORPEDO_BEAR_DAY20_ID) {
             trackBearKill(killer, entityType);
         }
     }
@@ -2384,7 +2451,15 @@ world.afterEvents.entityHurt.subscribe((event) => {
     const source = event.damageSource;
     if (!(player instanceof Player)) return;
 
-                const mapleBearTypes = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID, INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID, BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID, INFECTED_PIG_ID, INFECTED_COW_ID];
+                const mapleBearTypes = [
+                    MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
+                    INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
+                    BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+                    INFECTED_PIG_ID, INFECTED_COW_ID,
+                    FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
+                    MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
+                    TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID
+                ];
     if (source && source.damagingEntity && mapleBearTypes.includes(source.damagingEntity.typeId)) {
         // Track hits for mob discovery
         try {
@@ -2407,6 +2482,15 @@ world.afterEvents.entityHurt.subscribe((event) => {
             } else if (mobType === INFECTED_COW_ID) {
                 codex.mobs.infectedCowHits = (codex.mobs.infectedCowHits || 0) + 1;
                 checkAndUnlockMobDiscovery(codex, player, "infectedCowKills", "infectedCowMobKills", "infectedCowHits", "infectedCowSeen", 3, "dangerous");
+            } else if (mobType === FLYING_BEAR_ID || mobType === FLYING_BEAR_DAY15_ID || mobType === FLYING_BEAR_DAY20_ID) {
+                codex.mobs.flyingBearHits = (codex.mobs.flyingBearHits || 0) + 1;
+                checkAndUnlockMobDiscovery(codex, player, "flyingBearKills", "flyingBearMobKills", "flyingBearHits", "flyingBearSeen", 2, "dangerous", "flying_bear");
+            } else if (mobType === MINING_BEAR_ID || mobType === MINING_BEAR_DAY20_ID) {
+                codex.mobs.miningBearHits = (codex.mobs.miningBearHits || 0) + 1;
+                checkAndUnlockMobDiscovery(codex, player, "miningBearKills", "miningBearMobKills", "miningBearHits", "miningBearSeen", 2, "dangerous", "mining_bear");
+            } else if (mobType === TORPEDO_BEAR_ID || mobType === TORPEDO_BEAR_DAY20_ID) {
+                codex.mobs.torpedoBearHits = (codex.mobs.torpedoBearHits || 0) + 1;
+                checkAndUnlockMobDiscovery(codex, player, "torpedoBearKills", "torpedoBearMobKills", "torpedoBearHits", "torpedoBearSeen", 1, "threatening", "torpedo_bear");
             }
             
             saveCodex(player, codex);
@@ -2426,6 +2510,12 @@ world.afterEvents.entityHurt.subscribe((event) => {
                     snowIncrease = SNOW_INCREASE.INFECTED;
                 } else if (source.damagingEntity.typeId === BUFF_BEAR_ID || source.damagingEntity.typeId === BUFF_BEAR_DAY13_ID || source.damagingEntity.typeId === BUFF_BEAR_DAY20_ID) {
                     snowIncrease = SNOW_INCREASE.BUFF_BEAR;
+                } else if (source.damagingEntity.typeId === FLYING_BEAR_ID || source.damagingEntity.typeId === FLYING_BEAR_DAY15_ID || source.damagingEntity.typeId === FLYING_BEAR_DAY20_ID) {
+                    snowIncrease = SNOW_INCREASE.FLYING_BEAR;
+                } else if (source.damagingEntity.typeId === MINING_BEAR_ID || source.damagingEntity.typeId === MINING_BEAR_DAY20_ID) {
+                    snowIncrease = SNOW_INCREASE.MINING_BEAR;
+                } else if (source.damagingEntity.typeId === TORPEDO_BEAR_ID || source.damagingEntity.typeId === TORPEDO_BEAR_DAY20_ID) {
+                    snowIncrease = SNOW_INCREASE.TORPEDO_BEAR;
                 }
                 
                 // Update snow count
@@ -3969,6 +4059,21 @@ function unlockAllContentForDay(day) {
     }
 }
 
+const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
+
+function describeSpawnDifficultyLabel(value) {
+    if (value === -1) return "Easy";
+    if (value === 0) return "Normal";
+    if (value === 1) return "Hard";
+    return value > 0 ? `Custom +${value}` : `Custom ${value}`;
+}
+
+function applySpawnDifficulty(value, sender) {
+    const clamped = Math.max(-5, Math.min(5, value));
+    world.setDynamicProperty(SPAWN_DIFFICULTY_PROPERTY, clamped);
+    sender?.sendMessage?.(`§7[MBI] Spawn difficulty set to ${describeSpawnDifficultyLabel(clamped)} (§f${clamped}§7).`);
+}
+
 function executeMbCommand(sender, subcommand, args = []) {
     if (!sender || !playerHasCheats(sender)) {
         sender?.sendMessage?.("§7[MBI] You lack permission to run Maple Bear debug commands.");
@@ -4012,6 +4117,23 @@ function executeMbCommand(sender, subcommand, args = []) {
             // Unlock all content that would normally unlock up to this day
             unlockAllContentForDay(dayNumber);
             
+            return;
+        }
+        case "set_spawn_difficulty": {
+            const mode = (args[0] ?? "normal").toLowerCase();
+            let value = 0;
+            if (mode === "easy") value = -1;
+            else if (mode === "hard") value = 1;
+            applySpawnDifficulty(value, sender);
+            return;
+        }
+        case "set_spawn_difficulty_value": {
+            const raw = parseInt(args[0], 10);
+            if (Number.isNaN(raw)) {
+                sender.sendMessage("§7[MBI] Usage: set_spawn_difficulty_value <number between -5 and 5>");
+                return;
+            }
+            applySpawnDifficulty(raw, sender);
             return;
         }
         default:

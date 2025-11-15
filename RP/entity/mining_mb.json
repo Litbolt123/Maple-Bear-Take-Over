@@ -2,7 +2,7 @@
 	"format_version": "1.20.80",
 	"minecraft:client_entity": {
 		"description": {
-			"identifier": "mb:flying_mb",
+			"identifier": "mb:mining_mb",
 			"materials": {
 				"default": "enderman"
 			},
@@ -65,3 +65,4 @@
 		}
 	}
 }
+

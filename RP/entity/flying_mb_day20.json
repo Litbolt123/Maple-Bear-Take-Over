@@ -2,12 +2,12 @@
 	"format_version": "1.20.80",
 	"minecraft:client_entity": {
 		"description": {
-			"identifier": "mb:flying_mb",
+			"identifier": "mb:flying_mb_day20",
 			"materials": {
 				"default": "enderman"
 			},
 			"textures": {
-				"default": "textures/entity/infected_day13"
+				"default": "textures/entity/infected_day20"
 			},
 			"geometry": {
 				"default": "geometry.infected"
@@ -19,7 +19,7 @@
 				"controller.render.infected"
 			],
 			"spawn_egg": {
-				"texture": "mb_infected_day13_egg",
+				"texture": "mb_infected_day20_egg",
 				"texture_index": 0
 			},
 			"animations": {
@@ -65,3 +65,4 @@
 		}
 	}
 }
+

@@ -1,0 +1,155 @@
+{
+	"format_version": "1.21.80",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "mb:torpedo_mb_day20",
+			"is_spawnable": true,
+			"is_summonable": true,
+			"is_experimental": false
+		},
+		"component_groups": {
+			"bridge:": {
+				"minecraft:on_target_acquired": {
+					"filters": [
+						{
+							"all_of": [
+								{
+									"any_of": [
+										{
+											"test": "is_family",
+											"value": "player"
+										}
+									]
+								}
+							]
+						}
+					],
+					"target": "player"
+				},
+				"minecraft:angry": {
+					"broadcast_anger": true,
+					"broadcast_range": 40,
+					"broadcast_anger_on_being_attacked": true,
+					"broadcast_anger_on_attack": true
+				}
+			}
+		},
+		"components": {
+			"minecraft:inventory": {
+				"inventory_size": 20,
+				"private": false,
+				"restrict_to_owner": false
+			},
+			"minecraft:equipment": {
+				"table": "loot_tables/mb_loot_tables/infected_bear_equipment.json",
+				"slot_drop_chance": [
+					{ "slot": "slot.armor.head", "drop_chance": 1 },
+					{ "slot": "slot.armor.chest", "drop_chance": 1 },
+					{ "slot": "slot.armor.legs", "drop_chance": 1 },
+					{ "slot": "slot.armor.feet", "drop_chance": 1 },
+					{ "slot": "slot.weapon.offhand", "drop_chance": 1 }
+				]
+			},
+			"minecraft:equippable": {
+				"slots": [
+					{ "slot": 0, "accepted_items": ["minecraft:leather_helmet","minecraft:iron_helmet","minecraft:diamond_helmet","minecraft:netherite_helmet","minecraft:golden_helmet","minecraft:chainmail_helmet","minecraft:turtle_helmet"], "on_equip": { "event": "equip_armor" } },
+					{ "slot": 1, "accepted_items": ["minecraft:leather_chestplate","minecraft:iron_chestplate","minecraft:diamond_chestplate","minecraft:netherite_chestplate","minecraft:golden_chestplate","minecraft:chainmail_chestplate","minecraft:elytra"], "on_equip": { "event": "equip_armor" } },
+					{ "slot": 2, "accepted_items": ["minecraft:leather_leggings","minecraft:iron_leggings","minecraft:diamond_leggings","minecraft:netherite_leggings","minecraft:golden_leggings","minecraft:chainmail_leggings"], "on_equip": { "event": "equip_armor" } },
+					{ "slot": 3, "accepted_items": ["minecraft:leather_boots","minecraft:iron_boots","minecraft:diamond_boots","minecraft:netherite_boots","minecraft:golden_boots","minecraft:chainmail_boots"], "on_equip": { "event": "equip_armor" } },
+					{ "slot": 4, "accepted_items": ["minecraft:shield","minecraft:totem_of_undying","minecraft:torch","minecraft:soul_torch","minecraft:lantern","minecraft:soul_lantern"], "on_equip": { "event": "equip_weapon" } }
+				]
+			},
+			"minecraft:damage_sensor": {
+				"triggers": {
+					"cause": "fall",
+					"deals_damage": "no"
+				}
+			},
+			"minecraft:health": { "value": 90, "max": 90 },
+			"minecraft:attack": { "damage": 20 },
+			"minecraft:movement": { "value": 0.52 },
+			"minecraft:movement.fly": { "value": 0.7 },
+			"minecraft:navigation.fly": {
+				"can_land_on_trees": true,
+				"can_path_over_water": true,
+				"can_path_over_lava": true,
+				"can_pass_doors": true,
+				"can_open_doors": true,
+				"avoid_water": false,
+				"is_amphibious": true,
+				"avoid_damage_blocks": true
+			},
+			"minecraft:behavior.random_fly": {
+				"priority": 4,
+				"speed_multiplier": 0.85,
+				"xz_dist": 20,
+				"y_dist": 9
+			},
+			"minecraft:behavior.melee_attack": {
+				"priority": 1,
+				"speed_multiplier": 1.35,
+				"track_target": true,
+				"reach_multiplier": 2.9
+			},
+			"minecraft:behavior.move_towards_target": {
+				"priority": 2,
+				"speed_multiplier": 1.35,
+				"within_radius": 6,
+				"ignore_vertical_distance": false
+			},
+			"minecraft:behavior.look_at_player": {
+				"priority": 5,
+				"look_distance": 24
+			},
+			"minecraft:behavior.hurt_by_target": { "priority": 1 },
+			"minecraft:behavior.nearest_attackable_target": {
+				"priority": 1,
+				"reselect_targets": true,
+				"entity_types": [
+					{ "filters": { "test": "is_family", "subject": "other", "value": "player" }, "max_dist": 72 },
+					{ "filters": { "test": "is_family", "subject": "other", "value": "mob" }, "max_dist": 72 }
+				],
+				"set_persistent": true,
+				"must_see": true,
+				"within_radius": 48,
+				"target_search_height": 80
+			},
+			"minecraft:collision_box": { "width": 0.7, "height": 2.2 },
+			"minecraft:pushable": {
+				"is_pushable": true,
+				"is_pushable_by_piston": true
+			},
+			"minecraft:physics": {
+				"has_collision": true,
+				"has_gravity": false
+			},
+			"minecraft:breathable": {
+				"breathes_air": true,
+				"total_supply": 40,
+				"suffocate_time": -20
+			},
+			"minecraft:fire_immune": false,
+			"minecraft:follow_range": { "value": 80, "max": 80 },
+			"minecraft:knockback_resistance": { "value": 0.6, "max": 0.6 },
+			"minecraft:scale": { "value": 1.12 },
+			"minecraft:loot": { "table": "loot_tables/mb_loot_tables/infected_loot_table.json" },
+			"minecraft:behavior.pickup_items": {
+				"priority": 6,
+				"max_dist": 4,
+				"goal_radius": 1.5,
+				"speed_multiplier": 1.25,
+				"pickup_based_on_chance": false,
+				"can_pickup_any_item": true,
+				"excluded_items": [ "minecraft:glow_ink_sac" ]
+			},
+			"minecraft:shareables": {
+				"items": [
+					{ "item": "minecraft:netherite_sword", "want_amount": 1, "surplus_amount": 1, "priority": 0 },
+					{ "item": "minecraft:diamond_sword", "want_amount": 1, "surplus_amount": 1, "priority": 1 },
+					{ "item": "minecraft:iron_sword", "want_amount": 1, "surplus_amount": 1, "priority": 2 }
+				]
+			}
+		}
+	}
+}
+

@@ -69,8 +69,138 @@ const INFECTED_BEAR_DAY20_ID = "mb:infected_day20";
 const BUFF_BEAR_ID = "mb:buff_mb";
 const BUFF_BEAR_DAY13_ID = "mb:buff_mb_day13";
 const BUFF_BEAR_DAY20_ID = "mb:buff_mb_day20";
+const FLYING_BEAR_ID = "mb:flying_mb";
+const FLYING_BEAR_DAY15_ID = "mb:flying_mb_day15";
+const FLYING_BEAR_DAY20_ID = "mb:flying_mb_day20";
+const MINING_BEAR_ID = "mb:mining_mb";
+const MINING_BEAR_DAY20_ID = "mb:mining_mb_day20";
+const TORPEDO_BEAR_ID = "mb:torpedo_mb";
+const TORPEDO_BEAR_DAY20_ID = "mb:torpedo_mb_day20";
+const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
 const TARGET_BLOCK = "mb:dusted_dirt";
+const AIR_BLOCKS = new Set([
+    "minecraft:air",
+    "minecraft:cave_air",
+    "minecraft:void_air"
+]);
+
+const FLYING_SPAWN_SETTINGS = {
+    [FLYING_BEAR_ID]: { minAbsoluteY: 70, offset: 5, maxLift: 8, skyClearance: 6 },
+    [FLYING_BEAR_DAY15_ID]: { minAbsoluteY: 74, offset: 6, maxLift: 9, skyClearance: 7 },
+    [FLYING_BEAR_DAY20_ID]: { minAbsoluteY: 78, offset: 7, maxLift: 10, skyClearance: 8 },
+    [TORPEDO_BEAR_ID]: { minAbsoluteY: 82, offset: 10, maxLift: 12, skyClearance: 10 },
+    [TORPEDO_BEAR_DAY20_ID]: { minAbsoluteY: 88, offset: 12, maxLift: 14, skyClearance: 12 }
+};
+
+const MINING_SPAWN_SETTINGS = {
+    [MINING_BEAR_ID]: { maxAbsoluteY: 55, roofProbe: 6, requiredRoofBlocks: 2, clearance: 3 },
+    [MINING_BEAR_DAY20_ID]: { maxAbsoluteY: 55, roofProbe: 7, requiredRoofBlocks: 2, clearance: 4 }
+};
+
+function getBlockSafe(dimension, x, y, z) {
+    try {
+        return dimension.getBlock({ x, y, z });
+    } catch {
+        return null;
+    }
+}
+
+function columnIsClear(dimension, x, z, startY, endY) {
+    if (!dimension) return false;
+    const minY = Math.floor(Math.min(startY, endY));
+    const maxY = Math.floor(Math.max(startY, endY));
+    for (let y = minY; y <= maxY; y++) {
+        const block = getBlockSafe(dimension, x, y, z);
+        if (!isAir(block)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function skyIsClear(dimension, x, z, startY, height) {
+    for (let i = 0; i < height; i++) {
+        const block = getBlockSafe(dimension, x, startY + i, z);
+        if (!isAir(block)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function hasRoof(dimension, x, z, startY, probe, requiredSolid) {
+    let solidCount = 0;
+    for (let i = 0; i < probe; i++) {
+        const block = getBlockSafe(dimension, x, startY + i, z);
+        if (block && !isAir(block)) {
+            solidCount++;
+            if (solidCount >= requiredSolid) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function getSpawnLocationForConfig(configId, dimension, tile) {
+    if (FLYING_SPAWN_SETTINGS[configId]) {
+        return getFlyingSpawnLocation(FLYING_SPAWN_SETTINGS[configId], dimension, tile);
+    }
+    if (MINING_SPAWN_SETTINGS[configId]) {
+        return getMiningSpawnLocation(MINING_SPAWN_SETTINGS[configId], dimension, tile);
+    }
+    return { x: tile.x + 0.5, y: tile.y + 1, z: tile.z + 0.5 };
+}
+
+function getFlyingSpawnLocation(settings, dimension, tile) {
+    const baseX = tile.x;
+    const baseZ = tile.z;
+    const groundY = tile.y + 1;
+    let desiredY = Math.max(groundY + settings.offset, settings.minAbsoluteY);
+    const targetY = Math.floor(desiredY);
+
+    if (!columnIsClear(dimension, baseX, baseZ, groundY, targetY)) {
+        let lifted = false;
+        for (let i = 1; i <= settings.maxLift; i++) {
+            if (columnIsClear(dimension, baseX, baseZ, groundY, targetY + i)) {
+                desiredY = targetY + i;
+                lifted = true;
+                break;
+            }
+        }
+        if (!lifted) {
+            return null;
+        }
+    }
+
+    if (!skyIsClear(dimension, baseX, baseZ, Math.floor(desiredY) + 1, settings.skyClearance)) {
+        return null;
+    }
+
+    return { x: baseX + 0.5, y: desiredY, z: baseZ + 0.5 };
+}
+
+function getMiningSpawnLocation(settings, dimension, tile) {
+    if (tile.y > settings.maxAbsoluteY) {
+        return null;
+    }
+
+    const baseX = tile.x;
+    const baseZ = tile.z;
+    const spawnY = tile.y + 1;
+    const clearanceTop = spawnY + settings.clearance;
+
+    if (!columnIsClear(dimension, baseX, baseZ, spawnY, clearanceTop)) {
+        return null;
+    }
+
+    if (!hasRoof(dimension, baseX, baseZ, clearanceTop + 1, settings.roofProbe, settings.requiredRoofBlocks)) {
+        return null;
+    }
+
+    return { x: baseX + 0.5, y: spawnY, z: baseZ + 0.5 };
+}
 
 const SPAWN_ATTEMPTS = 18; // Increased from 12 for more spawns per cycle
 const MIN_SPAWN_DISTANCE = 15;
@@ -88,6 +218,36 @@ const MAX_SPACED_TILES = 90;
 const CACHE_MOVE_THRESHOLD = 6; // blocks
 const CACHE_MOVE_THRESHOLD_SQ = CACHE_MOVE_THRESHOLD * CACHE_MOVE_THRESHOLD;
 const CACHE_TICK_TTL = SCAN_INTERVAL * 3;
+
+function getSpawnDifficultyState() {
+    let rawValue = world.getDynamicProperty(SPAWN_DIFFICULTY_PROPERTY);
+    if (typeof rawValue !== "number") {
+        rawValue = 0;
+        try {
+            world.setDynamicProperty(SPAWN_DIFFICULTY_PROPERTY, rawValue);
+        } catch { /* ignored */ }
+    }
+
+    const clampedValue = Math.max(-5, Math.min(5, rawValue));
+    if (clampedValue !== rawValue) {
+        try {
+            world.setDynamicProperty(SPAWN_DIFFICULTY_PROPERTY, clampedValue);
+        } catch { /* ignored */ }
+    }
+
+    const multiplier = Math.max(0.25, 1 + clampedValue * 0.15);
+    const capAdjust = clampedValue * 0.02;
+    const extraAdjust = clampedValue === 0 ? 0 : (clampedValue > 0 ? Math.ceil(clampedValue / 2) : Math.floor(clampedValue / 2));
+    const attemptBonus = clampedValue * 2;
+
+    return {
+        value: clampedValue,
+        multiplier,
+        capAdjust,
+        extraAdjust,
+        attemptBonus
+    };
+}
 
 const SPAWN_CONFIGS = [
     {
@@ -161,6 +321,20 @@ const SPAWN_CONFIGS = [
         spreadRadius: 26
     },
     {
+        id: FLYING_BEAR_ID,
+        startDay: 11,
+        endDay: 14,
+        baseChance: 0.16,
+        chancePerDay: 0.02,
+        maxChance: 0.5,
+        baseMaxCount: 2,
+        maxCountStep: 1,
+        maxCountStepDays: 2,
+        maxCountCap: 4,
+        delayTicks: 360,
+        spreadRadius: 30
+    },
+    {
         id: DAY13_BEAR_ID,
         startDay: 13,
         endDay: 19,
@@ -187,6 +361,34 @@ const SPAWN_CONFIGS = [
         maxCountCap: 7,
         delayTicks: 380,
         spreadRadius: 28
+    },
+    {
+        id: FLYING_BEAR_DAY15_ID,
+        startDay: 15,
+        endDay: 19,
+        baseChance: 0.22,
+        chancePerDay: 0.02,
+        maxChance: 0.55,
+        baseMaxCount: 3,
+        maxCountStep: 1,
+        maxCountStepDays: 3,
+        maxCountCap: 5,
+        delayTicks: 340,
+        spreadRadius: 32
+    },
+    {
+        id: MINING_BEAR_ID,
+        startDay: 15,
+        endDay: 19,
+        baseChance: 0.18,
+        chancePerDay: 0.02,
+        maxChance: 0.48,
+        baseMaxCount: 2,
+        maxCountStep: 1,
+        maxCountStepDays: 3,
+        maxCountCap: 4,
+        delayTicks: 420,
+        spreadRadius: 26
     },
     {
         id: BUFF_BEAR_ID,
@@ -274,6 +476,86 @@ const SPAWN_CONFIGS = [
             capStep: 0,
             capBonusMax: 0,
             maxCountCap: 2
+        }
+    },
+    {
+        id: FLYING_BEAR_DAY20_ID,
+        startDay: 20,
+        endDay: Infinity,
+        baseChance: 0.26,
+        chancePerDay: 0.018,
+        maxChance: 0.6,
+        baseMaxCount: 4,
+        maxCountStep: 1,
+        maxCountStepDays: 3,
+        maxCountCap: 7,
+        delayTicks: 320,
+        spreadRadius: 34,
+        lateRamp: {
+            tierSpan: 6,
+            chanceStep: 0.04,
+            maxChance: 0.72,
+            capStep: 1,
+            capBonusMax: 3,
+            maxCountCap: 12
+        }
+    },
+    {
+        id: MINING_BEAR_DAY20_ID,
+        startDay: 20,
+        endDay: Infinity,
+        baseChance: 0.22,
+        chancePerDay: 0.02,
+        maxChance: 0.5,
+        baseMaxCount: 3,
+        maxCountStep: 1,
+        maxCountStepDays: 4,
+        maxCountCap: 6,
+        delayTicks: 420,
+        spreadRadius: 28,
+        lateRamp: {
+            tierSpan: 6,
+            chanceStep: 0.03,
+            maxChance: 0.62,
+            capStep: 1,
+            capBonusMax: 2,
+            maxCountCap: 10
+        }
+    },
+    {
+        id: TORPEDO_BEAR_ID,
+        startDay: 17,
+        endDay: 21,
+        baseChance: 0.14,
+        chancePerDay: 0.025,
+        maxChance: 0.45,
+        baseMaxCount: 1,
+        maxCountStep: 1,
+        maxCountStepDays: 3,
+        maxCountCap: 3,
+        delayTicks: 360,
+        spreadRadius: 38
+    },
+    {
+        id: TORPEDO_BEAR_DAY20_ID,
+        startDay: 22,
+        endDay: Infinity,
+        baseChance: 0.2,
+        chancePerDay: 0.02,
+        maxChance: 0.55,
+        baseMaxCount: 2,
+        maxCountStep: 1,
+        maxCountStepDays: 4,
+        maxCountCap: 5,
+        delayTicks: 340,
+        spreadRadius: 42,
+        lateRamp: {
+            tierSpan: 6,
+            chanceStep: 0.04,
+            maxChance: 0.68,
+            capStep: 1,
+            capBonusMax: 2,
+            maxCountCap: 9
         }
     }
 ];
@@ -1452,6 +1734,11 @@ function getLateMultipliers(config, day) {
         if (day >= 25) {
             extraCount += Math.min(4, Math.floor((day - 25) / 6)); // Up to +4 more after day 25
         }
+    } else if (config.id === FLYING_BEAR_DAY20_ID || config.id === MINING_BEAR_DAY20_ID || config.id === TORPEDO_BEAR_DAY20_ID) {
+        extraCount = Math.min(4, Math.floor(over / 6));
+        if (day >= 25) {
+            extraCount += Math.min(2, Math.floor((day - 25) / 8));
+        }
     }
 
     return { chanceMultiplier, chanceCap, extraCount };
@@ -1472,7 +1759,7 @@ function getEntityCountsForPlayer(player, dimension, playerPos) {
             });
             
             const counts = {};
-            const mbTypePrefixes = ["mb:mb", "mb:infected", "mb:buff_mb"];
+            const mbTypePrefixes = ["mb:mb", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
             for (const entity of allNearbyEntities) {
                 try {
                     const typeId = entity.typeId;
@@ -1557,7 +1844,7 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
 
     const pool = [...tiles];
     // Single player bonus: more spawn attempts to compensate for fewer tiles
-    const baseAttempts = SPAWN_ATTEMPTS + (modifiers.attemptBonus ?? 0);
+    const baseAttempts = Math.max(1, SPAWN_ATTEMPTS + (modifiers.attemptBonus ?? 0));
     const isSinglePlayer = !modifiers.isGroupCache;
     const attemptBonus = isSinglePlayer ? Math.floor(baseAttempts * 0.3) : 0; // 30% more attempts for single players
     const attempts = Math.min(baseAttempts + attemptBonus, pool.length);
@@ -1591,7 +1878,10 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
 
         // console.warn(`[SPAWN DEBUG] Attempt ${i + 1} for ${config.id} near ${player.name} at (${x}, ${y}, ${z})`);
 
-        const spawnLocation = { x: x + 0.5, y: y + 1, z: z + 0.5 };
+        const spawnLocation = getSpawnLocationForConfig(config.id, dimension, candidate);
+        if (!spawnLocation) {
+            continue;
+        }
         try {
             const entity = dimension.spawnEntity(config.id, spawnLocation);
             if (entity) {
@@ -1629,6 +1919,33 @@ function getPerTypeSpawnLimit(day, config) {
     // Per-type spawn limits to prevent one type from dominating
     if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
         return 1; // Buff bears always limited to 1 per tick
+    }
+    
+    if (config.id === FLYING_BEAR_ID) {
+        return 2;
+    }
+    
+    if (config.id === FLYING_BEAR_DAY15_ID) {
+        return 3;
+    }
+    
+    if (config.id === MINING_BEAR_ID) {
+        return 2;
+    }
+    
+    if (config.id === FLYING_BEAR_DAY20_ID || config.id === MINING_BEAR_DAY20_ID) {
+        if (day < 25) return 3;
+        if (day < 30) return 4;
+        return 5;
+    }
+
+    if (config.id === TORPEDO_BEAR_ID) {
+        return 1;
+    }
+
+    if (config.id === TORPEDO_BEAR_DAY20_ID) {
+        if (day < 28) return 2;
+        return 3;
     }
     
     // Day 20+ variants get higher limits
@@ -1710,6 +2027,7 @@ system.runInterval(() => {
     }
 
     const sunriseActive = sunriseBoostTicks > 0;
+    const spawnDifficultyState = getSpawnDifficultyState();
 
         // Get all players and rotate processing
         let allPlayers;
@@ -1855,6 +2173,7 @@ system.runInterval(() => {
     if (sunriseActive) {
         chanceMultiplier *= SUNRISE_BOOST_MULTIPLIER;
     }
+    chanceMultiplier *= spawnDifficultyState.multiplier;
 
     let extraCount = 0;
     if (density > 140) {
@@ -1867,13 +2186,20 @@ system.runInterval(() => {
     if (sunriseActive) {
         extraCount += 1;
     }
+    extraCount += spawnDifficultyState.extraAdjust;
+    if (extraCount < 0) {
+        extraCount = 0;
+    }
 
     const modifiers = {
         chanceMultiplier,
-        chanceCap: 0.9,
+        chanceCap: Math.min(0.99, Math.max(0.35, 0.9 + spawnDifficultyState.capAdjust)),
         extraCount,
         isGroupCache: useGroupCache && dimensionPlayers && dimensionPlayers.length > 1
     };
+    if (spawnDifficultyState.attemptBonus !== 0) {
+        modifiers.attemptBonus = (modifiers.attemptBonus || 0) + spawnDifficultyState.attemptBonus;
+    }
 
     const timeOfDay = dimension.getTimeOfDay ? dimension.getTimeOfDay() : 0;
     const isSunsetWindow = timeOfDay >= 12000 && timeOfDay <= 12500;
