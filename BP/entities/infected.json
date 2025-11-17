@@ -40,7 +40,7 @@
 					"max": 30
 				},
 				"minecraft:attack": {
-					"damage": 7
+					"damage": 5.5
 				}
 			},
 			"variant_0": {},
@@ -202,7 +202,7 @@
 				"height": 1.9
 			},
 			"minecraft:attack": {
-				"damage": 2.5
+				"damage": 2
 			},
 			"minecraft:movement": {
 				"value": 0.4
@@ -592,7 +592,7 @@
 				]
 			},
 			"minecraft:underwater_movement": {
-				"value": 0.15
+				"value": 0.08
 			}
 		},
 		"events": {

@@ -233,7 +233,7 @@
 				]
 			},
 			"minecraft:underwater_movement": {
-				"value": 0.24
+				"value": 0.12
 			}
 		},
 		"events": {}
