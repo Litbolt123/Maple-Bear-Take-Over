@@ -12,7 +12,7 @@
 			"minecraft:geometry": "geometry.dusted_dirt",
 			"minecraft:material_instances": {
 				"*": {
-					"texture": "bridge_dusted_dirt",
+					"texture": "dusted_dirt",
 					"render_method": "opaque"
 				}
 			},

@@ -4,7 +4,7 @@
 	"resource_pack_name": "MapleBear TakeOver",
 	"texture_name": "atlas.terrain",
 	"texture_data": {
-		"bridge_dusted_dirt": {
+		"dusted_dirt": {
 			"textures": "textures/blocks/dusted_dirt"
 		},
 		"'snow'_layer": {
