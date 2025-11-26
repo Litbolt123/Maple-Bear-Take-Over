@@ -40,7 +40,7 @@
 					"max": 90
 				},
 				"minecraft:attack": {
-					"damage": 13.5
+					"damage": 7
 				}
 			},
 			"variant_0": {},
@@ -180,9 +180,9 @@
 				"width": 0.55,
 				"height": 2.05
 			},
-			"minecraft:attack": {
-				"damage": 10.5
-			},
+		"minecraft:attack": {
+			"damage": 6
+		},
 			"minecraft:movement": {
 				"value": 0.58
 			},

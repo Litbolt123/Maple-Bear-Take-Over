@@ -155,6 +155,11 @@ function generateAirSpawnTiles(dimension, playerPos, minAbsoluteY, maxAbsoluteY,
         yLevels.push(y);
     }
     
+    // Guard against empty yLevels array
+    if (yLevels.length === 0) {
+        return airTiles;
+    }
+    
     for (let i = 0; i < count && airTiles.length < count; i++) {
         // Random position around player within spawn distance
         const angle = Math.random() * Math.PI * 2;
@@ -228,24 +233,108 @@ function getFlyingSpawnLocation(settings, dimension, tile) {
     return null;
 }
 
+// Check if a block type is valid for mining bear spawning (stone, deepslate, etc. in caves)
+function isValidMiningSpawnBlock(blockType) {
+    if (!blockType) return false;
+    // Allow stone and deepslate variants for cave spawning
+    return blockType.startsWith("minecraft:stone") || 
+           blockType.startsWith("minecraft:deepslate") ||
+           blockType.startsWith("minecraft:cobbled_deepslate") ||
+           blockType.startsWith("minecraft:polished_deepslate") ||
+           blockType.startsWith("minecraft:deepslate_bricks") ||
+           blockType.startsWith("minecraft:deepslate_tiles") ||
+           blockType === "minecraft:cobblestone" ||
+           blockType === "minecraft:mossy_cobblestone" ||
+           blockType.startsWith("minecraft:andesite") ||
+           blockType.startsWith("minecraft:diorite") ||
+           blockType.startsWith("minecraft:granite") ||
+           blockType.startsWith("minecraft:tuff") ||
+           blockType.startsWith("minecraft:calcite");
+}
+
 function getMiningSpawnLocation(settings, dimension, tile) {
     if (tile.y > settings.maxAbsoluteY) {
         return null;
     }
 
-    const baseX = tile.x;
-    const baseZ = tile.z;
-    const spawnY = tile.y + 1;
+    let baseX = tile.x;
+    let baseZ = tile.z;
+    let spawnY = tile.y + 1;
     const clearanceTop = spawnY + settings.clearance;
+
+    // Check if the tile position has a valid block (dusted_dirt or stone/deepslate in caves)
+    let tileBlock;
+    try {
+        tileBlock = dimension.getBlock({ x: baseX, y: tile.y, z: baseZ });
+    } catch {
+        return null;
+    }
+    
+    // If tile doesn't have dusted_dirt, check if it has stone/deepslate (for cave spawning)
+    if (!tileBlock || tileBlock.typeId !== TARGET_BLOCK) {
+        // Check if it's a valid mining spawn block (stone/deepslate)
+        if (tileBlock && isValidMiningSpawnBlock(tileBlock.typeId)) {
+            // Only allow if it's in a cave (has roof) - don't spawn on surface stone
+            if (!hasRoof(dimension, baseX, baseZ, clearanceTop + 1, settings.roofProbe, settings.requiredRoofBlocks)) {
+                return null; // Not in a cave, skip
+            }
+            // Valid stone/deepslate in cave - proceed with spawn
+        } else {
+            // Not a valid spawn block, try nearby positions (within 2 blocks)
+            let foundValidBlock = false;
+            for (let dx = -2; dx <= 2 && !foundValidBlock; dx++) {
+                for (let dz = -2; dz <= 2 && !foundValidBlock; dz++) {
+                    if (dx === 0 && dz === 0) continue;
+                    try {
+                        const nearbyBlock = dimension.getBlock({ x: baseX + dx, y: tile.y, z: baseZ + dz });
+                        if (nearbyBlock && (nearbyBlock.typeId === TARGET_BLOCK || isValidMiningSpawnBlock(nearbyBlock.typeId))) {
+                            // Check if it's in a cave (for stone/deepslate)
+                            if (nearbyBlock.typeId !== TARGET_BLOCK && !hasRoof(dimension, baseX + dx, baseZ + dz, clearanceTop + 1, settings.roofProbe, settings.requiredRoofBlocks)) {
+                                continue; // Not in cave, skip
+                            }
+                            // Found valid block nearby - adjust spawn position
+                            const nearbyAbove = dimension.getBlock({ x: baseX + dx, y: tile.y + 1, z: baseZ + dz });
+                            const nearbyTwoAbove = dimension.getBlock({ x: baseX + dx, y: tile.y + 2, z: baseZ + dz });
+                            if (nearbyAbove && isAir(nearbyAbove) && nearbyTwoAbove && isAir(nearbyTwoAbove)) {
+                                baseX = baseX + dx;
+                                baseZ = baseZ + dz;
+                                foundValidBlock = true;
+                                break;
+                            }
+                        }
+                    } catch {
+                        continue;
+                    }
+                }
+            }
+            if (!foundValidBlock) {
+                return null; // No valid block found
+            }
+        }
+    }
 
     if (!columnIsClear(dimension, baseX, baseZ, spawnY, clearanceTop)) {
         return null;
     }
 
-    // After day 20, allow surface spawning (no roof required)
+    // After day 20, allow surface spawning (no roof required) - but only for dusted_dirt
     if (settings.allowSurface) {
-        // Surface spawns allowed - just need clearance
-        return { x: baseX + 0.5, y: spawnY, z: baseZ + 0.5 };
+        // Check if this is dusted_dirt (surface spawn allowed) or stone/deepslate (must be in cave)
+        try {
+            const checkBlock = dimension.getBlock({ x: baseX, y: tile.y, z: baseZ });
+            if (checkBlock && checkBlock.typeId === TARGET_BLOCK) {
+                // Surface spawns allowed for dusted_dirt - just need clearance
+                return { x: baseX + 0.5, y: spawnY, z: baseZ + 0.5 };
+            } else if (checkBlock && isValidMiningSpawnBlock(checkBlock.typeId)) {
+                // Stone/deepslate - must be in cave even after day 20
+                if (!hasRoof(dimension, baseX, baseZ, clearanceTop + 1, settings.roofProbe, settings.requiredRoofBlocks)) {
+                    return null;
+                }
+                return { x: baseX + 0.5, y: spawnY, z: baseZ + 0.5 };
+            }
+        } catch {
+            return null;
+        }
     }
 
     // Pre-day 20: require roof (underground only)
@@ -839,6 +928,100 @@ function scanAroundDustedDirt(dimension, centerX, centerY, centerZ, seen, candid
     return localQueries;
 }
 
+// Collect tiles for mining bear spawning (includes dusted_dirt AND stone/deepslate in caves)
+function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, limit = MAX_CANDIDATES_PER_SCAN) {
+    const cx = Math.floor(center.x);
+    const cy = Math.floor(center.y);
+    const cz = Math.floor(center.z);
+    const minSq = minDistance * minDistance;
+    const maxSq = maxDistance * maxDistance;
+    const candidates = [];
+    const seen = new Set();
+    let blockQueryCount = 0;
+
+    // First, get dusted_dirt tiles (reuse existing function)
+    const dustedTiles = collectDustedTiles(dimension, center, minDistance, maxDistance, Math.floor(limit * 0.6)); // 60% from dusted_dirt
+    candidates.push(...dustedTiles);
+    dustedTiles.forEach(t => seen.add(`${t.x},${t.y},${t.z}`));
+    
+    // Then, collect stone/deepslate blocks in caves (40% from stone/deepslate)
+    // Only collect if we need more tiles and haven't hit the limit
+    if (candidates.length < limit && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN * 0.4) {
+        const xStart = cx - maxDistance;
+        const xEnd = cx + maxDistance;
+        const zStart = cz - maxDistance;
+        const zEnd = cz + maxDistance;
+        const yStart = Math.min(cy + 10, 320);
+        const yEnd = Math.max(cy - 10, -64);
+        
+        for (let x = xStart; x <= xEnd && candidates.length < limit && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN * 0.4; x++) {
+            for (let z = zStart; z <= zEnd && candidates.length < limit && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN * 0.4; z++) {
+                const dx = x + 0.5 - center.x;
+                const dz = z + 0.5 - center.z;
+                const distSq = dx * dx + dz * dz;
+                if (distSq < minSq || distSq > maxSq) continue;
+                
+                // Check Y levels from top to bottom
+                for (let y = yStart; y >= yEnd && candidates.length < limit && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN * 0.4; y--) {
+                    if (y < -64 || y > 320) continue;
+                    
+                    const key = `${x},${y},${z}`;
+                    if (seen.has(key)) continue;
+                    
+                    let block;
+                    try {
+                        block = dimension.getBlock({ x, y, z });
+                        blockQueryCount++;
+                    } catch {
+                        continue;
+                    }
+                    if (!block) continue;
+                    
+                    // Check if it's a valid mining spawn block (stone/deepslate)
+                    if (isValidMiningSpawnBlock(block.typeId)) {
+                        // Check if it's in a cave (has roof above)
+                        const blockAbove = dimension.getBlock({ x, y: y + 1, z });
+                        blockQueryCount++;
+                        if (blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN * 0.4) {
+                            const blockTwoAbove = dimension.getBlock({ x, y: y + 2, z });
+                            blockQueryCount++;
+                            if (isAir(blockAbove) && isAir(blockTwoAbove)) {
+                                // Check for roof (cave requirement) - check 5 blocks up
+                                let hasRoof = false;
+                                for (let checkY = y + 3; checkY <= y + 7 && checkY <= 320; checkY++) {
+                                    try {
+                                        const roofBlock = dimension.getBlock({ x, y: checkY, z });
+                                        blockQueryCount++;
+                                        if (roofBlock && !isAir(roofBlock)) {
+                                            hasRoof = true;
+                                            break;
+                                        }
+                                    } catch {
+                                        break;
+                                    }
+                                }
+                                
+                                // Only add if it has a roof (it's in a cave)
+                                if (hasRoof) {
+                                    seen.add(key);
+                                    candidates.push({ x, y, z });
+                                }
+                            }
+                        }
+                        break; // Found solid block, move to next XZ
+                    }
+                    
+                    if (!isAir(block)) {
+                        break; // Hit solid non-target block, move to next XZ
+                    }
+                }
+            }
+        }
+    }
+    
+    return candidates.slice(0, limit);
+}
+
 function collectDustedTiles(dimension, center, minDistance, maxDistance, limit = MAX_CANDIDATES_PER_SCAN) {
     const cx = Math.floor(center.x);
     const cy = Math.floor(center.y);
@@ -962,16 +1145,25 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
             if (distSq < minSq || distSq > maxSq) continue;
             
             // Check Y levels from top to bottom
-            for (let y = yStart; y >= yEnd; y--) {
+            // Minecraft Bedrock minimum Y is -64, maximum is 320
+            const MIN_Y = -64;
+            const MAX_Y = 320;
+            const clampedYStart = Math.min(yStart, MAX_Y);
+            const clampedYEnd = Math.max(yEnd, MIN_Y);
+            
+            for (let y = clampedYStart; y >= clampedYEnd; y--) {
                 if (blockQueryCount >= MAX_BLOCK_QUERIES_PER_SCAN) break;
+                
+                // Skip if Y is out of world bounds
+                if (y < MIN_Y || y > MAX_Y) continue;
                 
                 let block;
                 try {
                     block = dimension.getBlock({ x, y, z });
                     blockQueryCount++;
                 } catch (error) {
-                    // Chunk not loaded - this is normal, just skip
-                    if (error && error.message?.includes('not loaded') || error.message?.includes('Chunk')) {
+                    // Chunk not loaded or out of bounds - this is normal, just skip
+                    if (error && (error.message?.includes('not loaded') || error.message?.includes('Chunk') || error.message?.includes('boundaries') || error.message?.includes('LocationOutOfWorld'))) {
                         continue;
                     }
                     // Unexpected error - log it
@@ -1034,17 +1226,26 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                 if (distSq < minSq || distSq > maxSq) continue;
                 
                 // Check expanded Y range (skip already checked area)
-                for (let y = expandedYStart; y >= expandedYEnd; y--) {
+                // Minecraft Bedrock minimum Y is -64, maximum is 320
+                const MIN_Y = -64;
+                const MAX_Y = 320;
+                const clampedYStart = Math.min(expandedYStart, MAX_Y);
+                const clampedYEnd = Math.max(expandedYEnd, MIN_Y);
+                
+                for (let y = clampedYStart; y >= clampedYEnd; y--) {
                     if (y <= yStart && y >= yEnd) continue; // Skip already checked
                     if (blockQueryCount >= MAX_BLOCK_QUERIES_PER_SCAN) break;
+                    
+                    // Skip if Y is out of world bounds
+                    if (y < MIN_Y || y > MAX_Y) continue;
                     
                     let block;
                     try {
                         block = dimension.getBlock({ x, y, z });
                         blockQueryCount++;
                     } catch (error) {
-                        // Chunk not loaded - this is normal, just skip
-                        if (error && error.message?.includes('not loaded') || error.message?.includes('Chunk')) {
+                        // Chunk not loaded or out of bounds - this is normal, just skip
+                        if (error && (error.message?.includes('not loaded') || error.message?.includes('Chunk') || error.message?.includes('boundaries') || error.message?.includes('LocationOutOfWorld'))) {
                             continue;
                         }
                         // Unexpected error - log it
@@ -1590,7 +1791,8 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
                             // Scan from each player with their normal spawn radius
                             // Use full candidate limit per player since players may be far apart
                             // The limit prevents excessive scanning, but we need full coverage for each player
-                            const playerTiles = collectDustedTiles(dimension, pPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN);
+                            // For mining bears, also collect stone/deepslate tiles in caves
+                            const playerTiles = collectMiningSpawnTiles(dimension, pPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN);
                             
                             tilesPerPlayer.push({ name: p.name, count: playerTiles.length });
                             
@@ -1646,7 +1848,8 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
         // If group cache failed or not using groups, use individual cache
         if (!cache || !isGroupCache) {
             // console.warn(`[SPAWN DEBUG] Rescanning tiles for ${player.name} (moved: ${Math.sqrt(movedSq).toFixed(1)} blocks, cache age: ${now - (cache?.tick || 0)} ticks)`);
-            const tiles = collectDustedTiles(dimension, playerPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN);
+            // For mining bears, also collect stone/deepslate tiles in caves
+            const tiles = collectMiningSpawnTiles(dimension, playerPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN);
             cache = {
                 tiles,
                 density: tiles.length,
@@ -1984,16 +2187,19 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
                 }
                 
                 // Place snow layer at spawn location (all Maple Bears spawn on snow)
+                // Place snow at the block below the entity (where there's air above ground)
                 try {
-                    const spawnY = Math.floor(spawnLocation.y);
+                    const spawnY = Math.floor(spawnLocation.y - 1);
                     const snowLoc = { x: Math.floor(spawnLocation.x), y: spawnY, z: Math.floor(spawnLocation.z) };
                     const snowBlock = dimension.getBlock(snowLoc);
-                    if (snowBlock && snowBlock.isAir) {
+                    const aboveBlock = dimension.getBlock({ x: snowLoc.x, y: spawnY + 1, z: snowLoc.z });
+                    // Place snow if the block below is solid and the space above (where entity spawns) is air
+                    if (snowBlock && aboveBlock && snowBlock.isAir !== undefined && !snowBlock.isAir && snowBlock.isLiquid !== undefined && !snowBlock.isLiquid && aboveBlock.isAir !== undefined && aboveBlock.isAir) {
                         // Use custom snow layer if available, otherwise vanilla
                         try {
-                            snowBlock.setType("mb:snow_layer");
+                            aboveBlock.setType("mb:snow_layer");
                         } catch {
-                            snowBlock.setType("minecraft:snow_layer");
+                            aboveBlock.setType("minecraft:snow_layer");
                         }
                     }
                 } catch {
@@ -2325,7 +2531,7 @@ system.runInterval(() => {
             modifiers.extraCount += 1;
         }
 
-        // Track spawns per tick for this player (shared across all players when processing multiple)
+        // Track spawns per tick for this player (per-player budget, not shared)
         const spawnCount = { value: 0 };
 
         // Only process configs that are active for current day
@@ -2360,9 +2566,9 @@ system.runInterval(() => {
     }
     
     // Update player rotation index for next tick
-    // For 3+ players, we processed all in one tick, so increment normally
-    // For 1-2 players, we processed one, so increment normally
-    playerRotationIndex++;
+    // Advance by the number of players actually processed to keep rotation synchronized
+    const playersProcessed = playersToProcess.length;
+    playerRotationIndex += playersProcessed;
     const maxPlayers = Math.max(...Array.from(playersByDimension.values()).map(arr => arr.length), 1);
     if (playerRotationIndex >= dimensions.length * maxPlayers) {
         playerRotationIndex = 0;

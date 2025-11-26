@@ -174,7 +174,7 @@
 				"reach_multiplier": 1
 			},
 			"minecraft:attack": {
-				"damage": 1.5
+				"damage": 1
 			},
 			"minecraft:behavior.nearest_attackable_target": {
 				"priority": 1,

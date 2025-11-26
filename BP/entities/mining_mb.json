@@ -36,11 +36,11 @@
 			},
 			"buffed": {
 				"minecraft:health": {
-					"value": 70,
-					"max": 70
+					"value": 25,
+					"max": 25
 				},
 				"minecraft:attack": {
-					"damage": 10.5
+					"damage": 6
 				}
 			},
 			"variant_0": {},
@@ -85,11 +85,11 @@
 							"max_dist": 64
 						}
 					],
-					"must_see": true,
+					"must_see": false,
 					"set_persistent": true,
 					"target_search_height": 24,
 					"target_invisible_multiplier": 2,
-					"must_see_forget_duration": 60,
+					"must_see_forget_duration": 300,
 					"within_radius": 32,
 					"target_sneak_visibility_multiplier": 1
 				}
@@ -222,26 +222,25 @@
 				}
 			},
 			"minecraft:health": {
-				"value": 50,
-				"max": 50
+				"value": 15,
+				"max": 15
 			},
 			"minecraft:collision_box": {
 				"width": 0.55,
 				"height": 2.1
 			},
 			"minecraft:attack": {
-				"damage": 7.5
+				"damage": 4
 			},
 			"minecraft:movement": {
 				"value": 0.38
 			},
 			"minecraft:navigation.generic": {
-				"can_float": true,
+				"can_float": false,
 				"can_walk": true,
 				"can_jump": true,
 				"can_swim": true,
 				"can_path_over_lava": true,
-				"can_path_from_air": true,
 				"can_sink": true,
 				"can_path_over_water": true,
 				"can_pass_doors": true,

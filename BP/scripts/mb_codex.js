@@ -392,7 +392,9 @@ export function shareKnowledge(fromPlayer, toPlayer) {
         if (discovered && !toCodex.effects[effectKey]) {
             toCodex.effects[effectKey] = discovered;
             hasNewKnowledge = true;
-            sharedItems.push(`Effect`);
+            // Use descriptive label with effect name
+            const effectName = effectKey.replace(/Seen$/, '').replace(/([A-Z])/g, ' $1').trim();
+            sharedItems.push(`Infection Effect: ${effectName}`);
         }
     }
 
@@ -402,7 +404,9 @@ export function shareKnowledge(fromPlayer, toPlayer) {
         if (discovered && !toCodex.snowEffects[effectKey]) {
             toCodex.snowEffects[effectKey] = discovered;
             hasNewKnowledge = true;
-            sharedItems.push(`Snow Effect`);
+            // Use descriptive label with effect name
+            const effectName = effectKey.replace(/Seen$/, '').replace(/([A-Z])/g, ' $1').trim();
+            sharedItems.push(`Snow Effect: ${effectName}`);
         }
     }
 

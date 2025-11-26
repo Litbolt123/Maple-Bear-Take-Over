@@ -1,5 +1,5 @@
 import { system, world } from "@minecraft/server";
-import { TORPEDO_BREAKABLE_BLOCK_SET } from "./mb_miningBlockList.js";
+import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
 
 const DIMENSION_IDS = ["overworld", "nether", "the_end"];
 const TORPEDO_TYPES = [
@@ -7,8 +7,10 @@ const TORPEDO_TYPES = [
     { id: "mb:torpedo_mb_day20", cruiseMin: 70, cruiseMax: 180, diveRange: 80, forwardForce: 0.65, breaksPerTick: 18, structureScanRadius: 8, minY: 70, maxBlocks: 50 }
 ];
 const DRIFT_FORCE = 0.03; // Reduced for straighter movement
-const ALTITUDE_CORRECTION_FORCE = 0.35; // Increased for aggressive sky staying
+const ALTITUDE_CORRECTION_FORCE = 0.5; // Increased for aggressive sky staying
 const DIVE_BOOST_MULTIPLIER = 2.5; // High speed diving multiplier
+const DIVE_COOLDOWN_TICKS = 40; // Cooldown between dives (2 seconds)
+const MAX_DIVE_DEPTH = 10; // Maximum blocks below cruise altitude before forced back up
 const STATE_MAP = new Map();
 const BREAK_COUNT_MAP = new Map(); // Track total blocks broken per entity
 const SEE_THROUGH_BREAK_COUNT = 3; // Break this many blocks before backing off
@@ -26,28 +28,13 @@ const SOUND_RADIUS = 16;
 const MIN_STRUCTURE_Y = 60; // Minimum Y level - torpedos never go below this
 const PASSIVE_WANDER_TICKS = 2400; // 2 minutes without seeing target = passive wandering
 
-// Blocks that torpedos CANNOT break (diamond-pickaxe-only and unbreakable)
-const UNBREAKABLE_BLOCKS = new Set([
-    "minecraft:bedrock",
-    "minecraft:barrier",
-    "minecraft:command_block",
-    "minecraft:chain_command_block",
-    "minecraft:repeating_command_block",
-    "minecraft:structure_block",
-    "minecraft:structure_void",
-    "minecraft:obsidian",
-    "minecraft:crying_obsidian",
-    "minecraft:ancient_debris",
-    "minecraft:netherite_block",
-    "minecraft:respawn_anchor",
-    "minecraft:end_portal_frame",
-    "minecraft:end_gateway"
-]);
+// UNBREAKABLE_BLOCKS is imported from mb_miningBlockList.js
+// All blocks are breakable by default except those in UNBREAKABLE_BLOCKS
 
 function getState(entity) {
     const id = entity.id;
     if (!STATE_MAP.has(id)) {
-        STATE_MAP.set(id, { mode: "cruise", cooldown: 0, lastTarget: null, lastSeenTick: 0, breakCount: 0, backoffTicks: 0 });
+        STATE_MAP.set(id, { mode: "cruise", cooldown: 0, lastTarget: null, lastSeenTick: 0, breakCount: 0, backoffTicks: 0, diveCooldown: 0, lastDiveTick: 0 });
     }
     if (!BREAK_COUNT_MAP.has(id)) {
         BREAK_COUNT_MAP.set(id, 0);
@@ -73,13 +60,21 @@ function checkTorpedoExhaustion(entity, config) {
         const loc = entity.location;
         const dimension = entity.dimension;
         
+        if (!dimension || !entity) return true; // Entity or dimension invalid
+        
         try {
             // Spawn explosion particles
-            dimension.runCommand(`particle minecraft:explosion ${loc.x} ${loc.y} ${loc.z} 0.5 0.5 0.5 0.1 10`);
-            dimension.runCommand(`particle minecraft:explosion_emitter ${loc.x} ${loc.y} ${loc.z} 1 1 1 0.2 20`);
+            try {
+                dimension.runCommand(`particle minecraft:explosion ${loc.x} ${loc.y} ${loc.z} 0.5 0.5 0.5 0.1 10`);
+            } catch { }
+            try {
+                dimension.runCommand(`particle minecraft:explosion_emitter ${loc.x} ${loc.y} ${loc.z} 1 1 1 0.2 20`);
+            } catch { }
             
             // Play explosion sound
-            dimension.runCommand(`playsound mob.tnt.explode @a ${loc.x} ${loc.y} ${loc.z} 1 1`);
+            try {
+                dimension.runCommand(`playsound mob.tnt.explode @a ${loc.x} ${loc.y} ${loc.z} 1 1`);
+            } catch { }
             
             // Place snow layers on blocks nearby (5 block radius) - only if there are nearby blocks
             const explosionRadius = 5;
@@ -96,7 +91,8 @@ function checkTorpedoExhaustion(entity, config) {
                     for (let dy = -2; dy <= 2; dy++) {
                         try {
                             const checkBlock = dimension.getBlock({ x: centerX + dx, y: centerY + dy, z: centerZ + dz });
-                            if (checkBlock && !checkBlock.isAir && !checkBlock.isLiquid) {
+                            if (checkBlock && checkBlock.isAir !== undefined && !checkBlock.isAir && 
+                                checkBlock.isLiquid !== undefined && !checkBlock.isLiquid) {
                                 hasNearbyBlocks = true;
                                 break;
                             }
@@ -114,25 +110,82 @@ function checkTorpedoExhaustion(entity, config) {
                         const dist = Math.hypot(dx, dz);
                         if (dist > explosionRadius) continue;
                         
-                        for (let dy = -2; dy <= 2; dy++) {
-                            const checkX = centerX + dx;
+                        const checkX = centerX + dx;
+                        const checkZ = centerZ + dz;
+                        
+                        // Find the topmost solid block at this X,Z position (search downward from explosion center)
+                        // Exclude snow layers - we want the actual solid block below any snow
+                        let topSolidY = null;
+                        let topSolidBlock = null;
+                        for (let dy = 2; dy >= -2; dy--) {
                             const checkY = centerY + dy;
-                            const checkZ = centerZ + dz;
-                            
                             try {
-                                const blockLoc = { x: checkX, y: checkY, z: checkZ };
-                                const aboveLoc = { x: checkX, y: checkY + 1, z: checkZ };
-                                const block = dimension.getBlock(blockLoc);
-                                const above = dimension.getBlock(aboveLoc);
-                                
-                                if (!block || !above) continue;
-                                
-                                // Place snow layer if there's air above and solid below
-                                if (above.isAir && !block.isAir && !block.isLiquid) {
+                                const block = dimension.getBlock({ x: checkX, y: checkY, z: checkZ });
+                                if (block) {
+                                    const blockType = block.typeId;
+                                    // Skip snow layers - they're not considered "solid" for placement purposes
+                                    if (blockType === "mb:snow_layer" || blockType === "minecraft:snow_layer") {
+                                        continue;
+                                    }
+                                    if (block.isAir !== undefined && !block.isAir && 
+                                        block.isLiquid !== undefined && !block.isLiquid) {
+                                        topSolidY = checkY;
+                                        topSolidBlock = block;
+                                        break; // Found the topmost solid block
+                                    }
+                                }
+                            } catch {
+                                continue;
+                            }
+                        }
+                        
+                        // Place snow - replace grass blocks, otherwise place on top
+                        if (topSolidY !== null && topSolidBlock) {
+                            try {
+                                const blockType = topSolidBlock.typeId;
+                                // If it's any ground foliage (grass, flowers, desert plants, etc.), replace it with snow
+                                if (blockType === "minecraft:grass_block" || blockType === "minecraft:grass" || 
+                                    blockType === "minecraft:tall_grass" || blockType === "minecraft:fern" || 
+                                    blockType === "minecraft:large_fern" ||
+                                    blockType === "minecraft:dandelion" || blockType === "minecraft:poppy" ||
+                                    blockType === "minecraft:blue_orchid" || blockType === "minecraft:allium" ||
+                                    blockType === "minecraft:azure_bluet" || blockType === "minecraft:red_tulip" ||
+                                    blockType === "minecraft:orange_tulip" || blockType === "minecraft:white_tulip" ||
+                                    blockType === "minecraft:pink_tulip" || blockType === "minecraft:oxeye_daisy" ||
+                                    blockType === "minecraft:cornflower" || blockType === "minecraft:lily_of_the_valley" ||
+                                    blockType === "minecraft:sunflower" || blockType === "minecraft:lilac" ||
+                                    blockType === "minecraft:rose_bush" || blockType === "minecraft:peony" ||
+                                    blockType === "minecraft:dead_bush" || blockType === "minecraft:cactus" ||
+                                    blockType === "minecraft:sweet_berry_bush" || blockType === "minecraft:nether_sprouts" ||
+                                    blockType === "minecraft:warped_roots" || blockType === "minecraft:crimson_roots" ||
+                                    blockType === "minecraft:small_dripleaf" || blockType === "minecraft:big_dripleaf" ||
+                                    blockType === "minecraft:big_dripleaf_stem" || blockType === "minecraft:spore_blossom" ||
+                                    blockType === "minecraft:glow_lichen" || blockType === "minecraft:moss_carpet" ||
+                                    blockType === "minecraft:vine" || blockType === "minecraft:weeping_vines" ||
+                                    blockType === "minecraft:twisting_vines" || blockType === "minecraft:cave_vines" ||
+                                    blockType === "minecraft:sea_pickle" || blockType === "minecraft:kelp" ||
+                                    blockType === "minecraft:seagrass" || blockType === "minecraft:tall_seagrass" ||
+                                    blockType === "minecraft:waterlily" || blockType === "minecraft:lily_pad") {
                                     try {
-                                        above.setType("mb:snow_layer");
+                                        topSolidBlock.setType("mb:snow_layer");
                                     } catch {
-                                        above.setType("minecraft:snow_layer");
+                                        topSolidBlock.setType("minecraft:snow_layer");
+                                    }
+                                } else {
+                                    // Otherwise, place snow in the air above
+                                    const snowY = topSolidY + 1;
+                                    const snowBlock = dimension.getBlock({ x: checkX, y: snowY, z: checkZ });
+                                    if (snowBlock && snowBlock.isAir !== undefined && snowBlock.isAir) {
+                                        // Check if it's already a snow layer - don't stack them
+                                        const snowBlockType = snowBlock.typeId;
+                                        if (snowBlockType === "mb:snow_layer" || snowBlockType === "minecraft:snow_layer") {
+                                            continue; // Already has snow, skip
+                                        }
+                                        try {
+                                            snowBlock.setType("mb:snow_layer");
+                                        } catch {
+                                            snowBlock.setType("minecraft:snow_layer");
+                                        }
                                     }
                                 }
                             } catch {
@@ -143,12 +196,20 @@ function checkTorpedoExhaustion(entity, config) {
                 }
             }
             
-            entity.kill();
-        } catch {
-            // If explosion fails, just kill it
+            // Kill the entity - this will trigger the death event handler in main.js as well
             try {
                 entity.kill();
-            } catch { }
+            } catch {
+                // Entity might already be dead or invalid
+            }
+        } catch (error) {
+            // Log error for debugging and still try to kill
+            console.warn(`Torpedo explosion error: ${error}`);
+            try {
+                entity.kill();
+            } catch {
+                // Entity might already be dead or invalid
+            }
         }
         return true;
     }
@@ -384,9 +445,10 @@ function breakBlocksInPath(entity, direction, config) {
     // This makes it feel like a destructive torpedo smashing through everything
     const offsets = [];
     
-    // Generate all blocks in a 3x3x3 cube around the entity
+    // Generate all blocks in a 3x3x3 area around the entity (3x3 horizontally, 3 blocks vertically)
+    // Break blocks above (1 block), same level, and below (1 block) the entity
     for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 3; dy++) { // Prioritize above (-1 to 3 = 5 blocks up, 1 block down)
+        for (let dy = -1; dy <= 1; dy++) { // -1 to 1 = 1 block below, same level, 1 block above
             for (let dz = -1; dz <= 1; dz++) {
                 if (dx === 0 && dy === 0 && dz === 0) continue; // Skip entity's own block
                 offsets.push({ dx, dy, dz, priority: dy }); // Higher dy = higher priority
@@ -450,17 +512,33 @@ function breakBlocksInPath(entity, direction, config) {
 function adjustAltitude(entity, config) {
     const loc = entity.location;
     const minY = config.minY || MIN_STRUCTURE_Y;
+    const state = getState(entity);
     
     // Never go below minimum Y - aggressively push up
     if (loc.y < minY) {
         try {
-            const pushForce = Math.min(ALTITUDE_CORRECTION_FORCE * 2, 0.5); // Strong upward push
+            const pushForce = Math.min(ALTITUDE_CORRECTION_FORCE * 3, 0.7); // Very strong upward push
             entity.applyImpulse({ x: 0, y: pushForce, z: 0 });
         } catch { }
     } else if (loc.y < config.cruiseMin) {
-        try {
-            entity.applyImpulse({ x: 0, y: ALTITUDE_CORRECTION_FORCE, z: 0 });
-        } catch { }
+        // Below cruise altitude - push up, but allow occasional dives
+        const depthBelowCruise = config.cruiseMin - loc.y;
+        if (depthBelowCruise > MAX_DIVE_DEPTH) {
+            // Too far below cruise - force back up immediately
+            try {
+                entity.applyImpulse({ x: 0, y: ALTITUDE_CORRECTION_FORCE * 2, z: 0 });
+            } catch { }
+        } else if (state.diveCooldown === 0) {
+            // Can dive, but will be limited
+            try {
+                entity.applyImpulse({ x: 0, y: ALTITUDE_CORRECTION_FORCE * 0.3, z: 0 });
+            } catch { }
+        } else {
+            // Dive on cooldown - push up
+            try {
+                entity.applyImpulse({ x: 0, y: ALTITUDE_CORRECTION_FORCE, z: 0 });
+            } catch { }
+        }
     } else if (loc.y > config.cruiseMax) {
         try {
             entity.applyImpulse({ x: 0, y: -ALTITUDE_CORRECTION_FORCE * 0.5, z: 0 });
@@ -569,12 +647,17 @@ function diveTowardsTarget(entity, targetInfo, config, state) {
     // Check if stuck below sky base - if entity is below target by more than 5 blocks, prioritize rising
     const minY = config.minY || MIN_STRUCTURE_Y;
     let verticalForce = 0;
-    if (dy < -8 && entityY < minY + 10) {
+    
+    // Never dive below minY - always rise if below
+    if (entityY < minY) {
+        // Below minimum Y - force upward
+        verticalForce = 0.4;
+    } else if (dy < -8 && entityY < minY + 10) {
         // Stuck below sky base - rise aggressively
-        verticalForce = 0.25;
-    } else if (dy < -5 && targetY >= minY) {
-        // Target is significantly below but still above minY, dive slightly (boosted)
-        verticalForce = -0.15 * DIVE_BOOST_MULTIPLIER;
+        verticalForce = 0.3;
+    } else if (dy < -5 && targetY >= minY && entityY >= minY) {
+        // Target is significantly below but still above minY, dive slightly (boosted) - only if we're above minY
+        verticalForce = -0.1 * DIVE_BOOST_MULTIPLIER;
     } else if (dy > 5) {
         // Target is above, rise more aggressively (boosted)
         verticalForce = 0.2 * DIVE_BOOST_MULTIPLIER;
@@ -625,28 +708,88 @@ system.runInterval(() => {
             for (const entity of entities) {
                 if (typeof entity?.isValid === "function" && !entity.isValid()) continue;
                 seen.add(entity.id);
+                
+                // Prevent targeting creative players (entity JSON behavior can't filter this)
+                // Check if entity is moving towards a creative player and stop it
+                try {
+                    const vel = entity.getVelocity?.();
+                    if (vel) {
+                        const nearbyPlayers = dimension.getEntities({
+                            location: entity.location,
+                            maxDistance: 50,
+                            type: "minecraft:player"
+                        });
+                        for (const player of nearbyPlayers) {
+                            try {
+                                if (player.getGameMode() === "creative") {
+                                    const dx = player.location.x - entity.location.x;
+                                    const dy = player.location.y - entity.location.y;
+                                    const dz = player.location.z - entity.location.z;
+                                    const dist = Math.hypot(dx, dy, dz);
+                                    
+                                    // If creative player is within 40 blocks and entity is moving towards them
+                                    if (dist < 40 && dist > 0) {
+                                        const dirToPlayer = { x: dx / dist, y: dy / dist, z: dz / dist };
+                                        const velDir = { 
+                                            x: vel.x / (Math.hypot(vel.x, vel.z) || 1), 
+                                            y: 0, 
+                                            z: vel.z / (Math.hypot(vel.x, vel.z) || 1) 
+                                        };
+                                        const dot = dirToPlayer.x * velDir.x + dirToPlayer.z * velDir.z;
+                                        
+                                        // If moving towards creative player (dot product > 0.5), apply reverse impulse
+                                        if (dot > 0.5) {
+                                            try {
+                                                entity.applyImpulse({
+                                                    x: -vel.x * 0.3,
+                                                    y: 0,
+                                                    z: -vel.z * 0.3
+                                                });
+                                            } catch { }
+                                        }
+                                    }
+                                }
+                            } catch { }
+                        }
+                    }
+                } catch { }
+                
                 const state = getState(entity);
                 if (state.cooldown > 0) state.cooldown--;
+                if (state.diveCooldown > 0) state.diveCooldown--;
                 
-                // Always maintain altitude (enforce minimum Y)
+                const minY = config.minY || MIN_STRUCTURE_Y;
+                
+                // Always maintain altitude (enforce minimum Y) - do this BEFORE other logic
                 adjustAltitude(entity, config);
+                
+                // If entity is below minY, force it up and prevent diving
+                if (entity.location.y < minY) {
+                    state.diveCooldown = DIVE_COOLDOWN_TICKS; // Prevent diving when too low
+                }
                 
                 // Check exhaustion first
                 if (checkTorpedoExhaustion(entity, config)) continue;
                 
-                // Always break blocks around the entity while moving (ravager-style)
+                // Always break blocks around the entity (ravager-style) - even when stationary
+                // This ensures blocks above and below are broken
                 const vel = entity.getVelocity?.();
                 if (vel) {
                     const speed = Math.hypot(vel.x, vel.y, vel.z);
                     if (speed > 0.01) {
                         // Moving - break blocks all around
                         breakBlocksInPath(entity, { x: vel.x, z: vel.z }, config);
+                    } else {
+                        // Not moving much - still break blocks directly above and below
+                        breakBlocksInPath(entity, { x: 0, z: 0 }, config);
                     }
+                } else {
+                    // No velocity - still break blocks directly above and below
+                    breakBlocksInPath(entity, { x: 0, z: 0 }, config);
                 }
                 
                 const targetInfo = findTarget(entity, 64);
                 const currentTick = system.currentTick;
-                const minY = config.minY || MIN_STRUCTURE_Y;
 
                 if (targetInfo) {
                     // Ignore targets below minimum Y (torpedos stay in sky)
@@ -664,11 +807,15 @@ system.runInterval(() => {
                     const horizDist = Math.hypot(targetInfo.vector.x, targetInfo.vector.z);
                     
                     // Dive if within range and target is at reasonable altitude (sky base)
-                    if (horizDist < config.diveRange && targetInfo.location.y >= minY && state.cooldown === 0) {
+                    // Only allow diving if not on dive cooldown and entity is above minY
+                    const canDive = state.diveCooldown === 0 && entity.location.y >= minY;
+                    if (horizDist < config.diveRange && targetInfo.location.y >= minY && state.cooldown === 0 && canDive) {
                         diveTowardsTarget(entity, targetInfo, config, state);
                         state.mode = "dive";
                         state.lastTarget = targetInfo.location;
                         state.cooldown = 8;
+                        state.diveCooldown = DIVE_COOLDOWN_TICKS; // Set dive cooldown
+                        state.lastDiveTick = currentTick;
                     } else {
                         // Straighter line movement: Direct movement toward target (no random drift)
                         try {

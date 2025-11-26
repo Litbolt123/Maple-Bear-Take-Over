@@ -65,8 +65,8 @@
 					"deals_damage": "no"
 				}
 			},
-			"minecraft:health": { "value": 24, "max": 24 },
-			"minecraft:attack": { "damage": 9 },
+			"minecraft:health": { "value": 10, "max": 10 },
+			"minecraft:attack": { "damage": 3 },
 			"minecraft:movement": { "value": 0.85 },
 			"minecraft:movement.fly": { "value": 1.2 },
 			"minecraft:navigation.fly": {
@@ -110,7 +110,8 @@
 					{ "filters": { "test": "is_family", "subject": "other", "value": "mob" }, "max_dist": 64 }
 				],
 				"set_persistent": true,
-				"must_see": true,
+				"must_see": false,
+				"must_see_forget_duration": 600,
 				"within_radius": 40,
 				"target_search_height": 64
 			},
