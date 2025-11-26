@@ -94,8 +94,8 @@ const FLYING_SPAWN_SETTINGS = {
 };
 
 const MINING_SPAWN_SETTINGS = {
-    [MINING_BEAR_ID]: { maxAbsoluteY: 55, roofProbe: 6, requiredRoofBlocks: 2, clearance: 3 },
-    [MINING_BEAR_DAY20_ID]: { maxAbsoluteY: 55, roofProbe: 7, requiredRoofBlocks: 2, clearance: 4 }
+    [MINING_BEAR_ID]: { maxAbsoluteY: 55, roofProbe: 6, requiredRoofBlocks: 2, clearance: 3, allowSurface: false },
+    [MINING_BEAR_DAY20_ID]: { maxAbsoluteY: 320, roofProbe: 7, requiredRoofBlocks: 2, clearance: 4, allowSurface: true }
 };
 
 function getBlockSafe(dimension, x, y, z) {
@@ -143,6 +143,35 @@ function hasRoof(dimension, x, z, startY, probe, requiredSolid) {
     return false;
 }
 
+// Generate air spawn tiles for flying/torpedo bears (air gets more infected over time)
+function generateAirSpawnTiles(dimension, playerPos, minAbsoluteY, maxAbsoluteY, count = 15) {
+    const airTiles = [];
+    const playerX = Math.floor(playerPos.x);
+    const playerZ = Math.floor(playerPos.z);
+    
+    // Generate tiles at various Y levels in the air
+    const yLevels = [];
+    for (let y = minAbsoluteY; y <= maxAbsoluteY; y += 15) {
+        yLevels.push(y);
+    }
+    
+    for (let i = 0; i < count && airTiles.length < count; i++) {
+        // Random position around player within spawn distance
+        const angle = Math.random() * Math.PI * 2;
+        const distance = MIN_SPAWN_DISTANCE + Math.random() * (MAX_SPAWN_DISTANCE - MIN_SPAWN_DISTANCE);
+        const x = Math.floor(playerX + Math.cos(angle) * distance);
+        const z = Math.floor(playerZ + Math.sin(angle) * distance);
+        const y = yLevels[Math.floor(Math.random() * yLevels.length)];
+        
+        // Check if air is clear at this location
+        if (columnIsClear(dimension, x, z, y - 5, y + 10)) {
+            airTiles.push({ x, y, z });
+        }
+    }
+    
+    return airTiles;
+}
+
 function getSpawnLocationForConfig(configId, dimension, tile) {
     if (FLYING_SPAWN_SETTINGS[configId]) {
         return getFlyingSpawnLocation(FLYING_SPAWN_SETTINGS[configId], dimension, tile);
@@ -157,28 +186,46 @@ function getFlyingSpawnLocation(settings, dimension, tile) {
     const baseX = tile.x;
     const baseZ = tile.z;
     const groundY = tile.y + 1;
+    
+    // Air spawning: The air gets more infected as time goes on
+    // We can spawn in the air without requiring dusted_dirt below
+    // Try to find a clear air space at the desired altitude
+    
     let desiredY = Math.max(groundY + settings.offset, settings.minAbsoluteY);
     const targetY = Math.floor(desiredY);
-
-    if (!columnIsClear(dimension, baseX, baseZ, groundY, targetY)) {
-        let lifted = false;
-        for (let i = 1; i <= settings.maxLift; i++) {
-            if (columnIsClear(dimension, baseX, baseZ, groundY, targetY + i)) {
-                desiredY = targetY + i;
-                lifted = true;
-                break;
+    
+    // Check if we can spawn at the target Y (air spawning - don't require ground)
+    if (columnIsClear(dimension, baseX, baseZ, targetY - 5, targetY + settings.skyClearance)) {
+        // Clear air space found - spawn here
+        if (skyIsClear(dimension, baseX, baseZ, targetY + 1, settings.skyClearance)) {
+            return { x: baseX + 0.5, y: desiredY, z: baseZ + 0.5 };
+        }
+    }
+    
+    // Fallback: Try to lift from ground if we have a tile with dusted_dirt
+    if (groundY > 0) {
+        if (!columnIsClear(dimension, baseX, baseZ, groundY, targetY)) {
+            let lifted = false;
+            for (let i = 1; i <= settings.maxLift; i++) {
+                if (columnIsClear(dimension, baseX, baseZ, groundY, targetY + i)) {
+                    desiredY = targetY + i;
+                    lifted = true;
+                    break;
+                }
+            }
+            if (!lifted) {
+                return null;
             }
         }
-        if (!lifted) {
+
+        if (!skyIsClear(dimension, baseX, baseZ, Math.floor(desiredY) + 1, settings.skyClearance)) {
             return null;
         }
-    }
 
-    if (!skyIsClear(dimension, baseX, baseZ, Math.floor(desiredY) + 1, settings.skyClearance)) {
-        return null;
+        return { x: baseX + 0.5, y: desiredY, z: baseZ + 0.5 };
     }
-
-    return { x: baseX + 0.5, y: desiredY, z: baseZ + 0.5 };
+    
+    return null;
 }
 
 function getMiningSpawnLocation(settings, dimension, tile) {
@@ -195,6 +242,13 @@ function getMiningSpawnLocation(settings, dimension, tile) {
         return null;
     }
 
+    // After day 20, allow surface spawning (no roof required)
+    if (settings.allowSurface) {
+        // Surface spawns allowed - just need clearance
+        return { x: baseX + 0.5, y: spawnY, z: baseZ + 0.5 };
+    }
+
+    // Pre-day 20: require roof (underground only)
     if (!hasRoof(dimension, baseX, baseZ, clearanceTop + 1, settings.roofProbe, settings.requiredRoofBlocks)) {
         return null;
     }
@@ -324,9 +378,9 @@ const SPAWN_CONFIGS = [
         id: FLYING_BEAR_ID,
         startDay: 11,
         endDay: 14,
-        baseChance: 0.16,
-        chancePerDay: 0.02,
-        maxChance: 0.5,
+        baseChance: 0.12,
+        chancePerDay: 0.015,
+        maxChance: 0.38,
         baseMaxCount: 2,
         maxCountStep: 1,
         maxCountStepDays: 2,
@@ -366,9 +420,9 @@ const SPAWN_CONFIGS = [
         id: FLYING_BEAR_DAY15_ID,
         startDay: 15,
         endDay: 19,
-        baseChance: 0.22,
-        chancePerDay: 0.02,
-        maxChance: 0.55,
+        baseChance: 0.16,
+        chancePerDay: 0.015,
+        maxChance: 0.42,
         baseMaxCount: 3,
         maxCountStep: 1,
         maxCountStepDays: 3,
@@ -380,9 +434,9 @@ const SPAWN_CONFIGS = [
         id: MINING_BEAR_ID,
         startDay: 15,
         endDay: 19,
-        baseChance: 0.18,
-        chancePerDay: 0.02,
-        maxChance: 0.48,
+        baseChance: 0.14,
+        chancePerDay: 0.015,
+        maxChance: 0.38,
         baseMaxCount: 2,
         maxCountStep: 1,
         maxCountStepDays: 3,
@@ -482,9 +536,9 @@ const SPAWN_CONFIGS = [
         id: FLYING_BEAR_DAY20_ID,
         startDay: 20,
         endDay: Infinity,
-        baseChance: 0.26,
-        chancePerDay: 0.018,
-        maxChance: 0.6,
+        baseChance: 0.20,
+        chancePerDay: 0.015,
+        maxChance: 0.48,
         baseMaxCount: 4,
         maxCountStep: 1,
         maxCountStepDays: 3,
@@ -493,8 +547,8 @@ const SPAWN_CONFIGS = [
         spreadRadius: 34,
         lateRamp: {
             tierSpan: 6,
-            chanceStep: 0.04,
-            maxChance: 0.72,
+            chanceStep: 0.03,
+            maxChance: 0.60,
             capStep: 1,
             capBonusMax: 3,
             maxCountCap: 12
@@ -504,9 +558,9 @@ const SPAWN_CONFIGS = [
         id: MINING_BEAR_DAY20_ID,
         startDay: 20,
         endDay: Infinity,
-        baseChance: 0.22,
-        chancePerDay: 0.02,
-        maxChance: 0.5,
+        baseChance: 0.16,
+        chancePerDay: 0.015,
+        maxChance: 0.40,
         baseMaxCount: 3,
         maxCountStep: 1,
         maxCountStepDays: 4,
@@ -515,8 +569,8 @@ const SPAWN_CONFIGS = [
         spreadRadius: 28,
         lateRamp: {
             tierSpan: 6,
-            chanceStep: 0.03,
-            maxChance: 0.62,
+            chanceStep: 0.025,
+            maxChance: 0.52,
             capStep: 1,
             capBonusMax: 2,
             maxCountCap: 10
@@ -526,36 +580,36 @@ const SPAWN_CONFIGS = [
         id: TORPEDO_BEAR_ID,
         startDay: 17,
         endDay: 21,
-        baseChance: 0.14,
-        chancePerDay: 0.025,
-        maxChance: 0.45,
+        baseChance: 0.03, // Super rare - reduced from 0.10
+        chancePerDay: 0.005, // Reduced from 0.018
+        maxChance: 0.08, // Reduced from 0.34
         baseMaxCount: 1,
-        maxCountStep: 1,
-        maxCountStepDays: 3,
-        maxCountCap: 3,
-        delayTicks: 360,
+        maxCountStep: 0, // Never increase count
+        maxCountStepDays: 999,
+        maxCountCap: 1, // Always just 1
+        delayTicks: 600, // Reduced spawn rate
         spreadRadius: 38
     },
     {
         id: TORPEDO_BEAR_DAY20_ID,
         startDay: 22,
         endDay: Infinity,
-        baseChance: 0.2,
-        chancePerDay: 0.02,
-        maxChance: 0.55,
-        baseMaxCount: 2,
-        maxCountStep: 1,
-        maxCountStepDays: 4,
-        maxCountCap: 5,
-        delayTicks: 340,
+        baseChance: 0.04, // Super rare - reduced from 0.14
+        chancePerDay: 0.006, // Reduced from 0.015
+        maxChance: 0.12, // Reduced from 0.42
+        baseMaxCount: 1,
+        maxCountStep: 0, // Never increase count
+        maxCountStepDays: 999,
+        maxCountCap: 2, // Max 2 at day 20+
+        delayTicks: 550, // Reduced spawn rate
         spreadRadius: 42,
         lateRamp: {
             tierSpan: 6,
-            chanceStep: 0.04,
-            maxChance: 0.68,
-            capStep: 1,
-            capBonusMax: 2,
-            maxCountCap: 9
+            chanceStep: 0.01, // Reduced from 0.03
+            maxChance: 0.18, // Reduced from 0.54
+            capStep: 0,
+            capBonusMax: 0,
+            maxCountCap: 2
         }
     }
 ];
@@ -1825,6 +1879,22 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     if (nearbyCount >= maxCount) {
         return false; // Too many of this type nearby - stop spawning until some are killed
     }
+    
+    // Check total nearby bears - stop spawning if 40+ bears within range
+    const totalNearbyBears = Object.values(entityCounts).reduce((sum, count) => sum + count, 0);
+    if (totalNearbyBears >= 40) {
+        return false; // Too many bears total - stop spawning
+    }
+    
+    // Check buff bear limit - stop spawning buff bears if 5+ nearby
+    if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
+        const buffBearCount = (entityCounts[BUFF_BEAR_ID] || 0) + 
+                             (entityCounts[BUFF_BEAR_DAY13_ID] || 0) + 
+                             (entityCounts[BUFF_BEAR_DAY20_ID] || 0);
+        if (buffBearCount >= 5) {
+            return false; // Too many buff bears - stop spawning
+        }
+    }
 
     // Throttle spawns per tick (global limit - dynamic based on day)
     const maxSpawnsPerTick = getMaxSpawnsPerTick(currentDay);
@@ -1842,7 +1912,19 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
         return false; // Too many of this type spawned this tick
     }
 
+    // For flying/torpedo bears: add air spawn tiles (air gets more infected over time)
     const pool = [...tiles];
+    const isFlyingOrTorpedo = config.id === FLYING_BEAR_ID || config.id === FLYING_BEAR_DAY15_ID || 
+                               config.id === FLYING_BEAR_DAY20_ID || config.id === TORPEDO_BEAR_ID || 
+                               config.id === TORPEDO_BEAR_DAY20_ID;
+    if (isFlyingOrTorpedo) {
+        const settings = FLYING_SPAWN_SETTINGS[config.id];
+        if (settings) {
+            const airTiles = generateAirSpawnTiles(dimension, playerPos, settings.minAbsoluteY, settings.minAbsoluteY + 60, 20);
+            pool.push(...airTiles);
+        }
+    }
+    
     // Single player bonus: more spawn attempts to compensate for fewer tiles
     const baseAttempts = Math.max(1, SPAWN_ATTEMPTS + (modifiers.attemptBonus ?? 0));
     const isSinglePlayer = !modifiers.isGroupCache;
@@ -1858,6 +1940,14 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
 
     if (isMilestone) {
         chance = Math.min(chance * 1.2, chanceCap);
+    }
+    
+    // High Y level boost: If player is at high altitude, increase spawn chance for flying/torpedo bears
+    const playerY = playerPos.y;
+    if (isFlyingOrTorpedo && playerY >= 80) {
+        // Boost spawn chance by up to 50% when player is at high Y level
+        const yBoost = Math.min(1.5, 1.0 + ((playerY - 80) / 100) * 0.5); // 1.0x at Y=80, 1.5x at Y=180+
+        chance = Math.min(chance * yBoost, chanceCap);
     }
     // console.warn(`[SPAWN DEBUG] ${config.id} spawn chance: ${(chance * 100).toFixed(1)}% (cap: ${(chanceCap * 100).toFixed(1)}%)`);
 
@@ -1892,6 +1982,24 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
                 if (originalIndex !== -1) {
                     tiles.splice(originalIndex, 1);
                 }
+                
+                // Place snow layer at spawn location (all Maple Bears spawn on snow)
+                try {
+                    const spawnY = Math.floor(spawnLocation.y);
+                    const snowLoc = { x: Math.floor(spawnLocation.x), y: spawnY, z: Math.floor(spawnLocation.z) };
+                    const snowBlock = dimension.getBlock(snowLoc);
+                    if (snowBlock && snowBlock.isAir) {
+                        // Use custom snow layer if available, otherwise vanilla
+                        try {
+                            snowBlock.setType("mb:snow_layer");
+                        } catch {
+                            snowBlock.setType("minecraft:snow_layer");
+                        }
+                    }
+                } catch {
+                    // Ignore snow placement errors
+                }
+                
                 // Update cached count
                 entityCounts[config.id] = (entityCounts[config.id] || 0) + 1;
                 spawnCount.value++;
@@ -2091,155 +2199,174 @@ system.runInterval(() => {
     // Get dimension object
     const dimension = dimensionPlayers[0].dimension;
     
+    // Optimize for 3+ players: process all players in same dimension when grouped
     // Try to use group cache if multiple players in same dimension
     const useGroupCache = dimensionPlayers.length > 1;
     
-    // Process one player per tick (rotate within dimension)
-    const playerIndex = Math.floor(playerRotationIndex / dimensions.length) % dimensionPlayers.length;
-    const player = dimensionPlayers[playerIndex];
-    if (!player) return;
+    // For 3+ players, process them more efficiently by processing all in one tick
+    // For 1-2 players, rotate normally
+    let playersToProcess = [];
+    if (dimensionPlayers.length >= 3) {
+        // Process all players in dimension when 3+ players
+        playersToProcess = dimensionPlayers;
+    } else {
+        // Process one player per tick (rotate within dimension) for 1-2 players
+        const playerIndex = Math.floor(playerRotationIndex / dimensions.length) % dimensionPlayers.length;
+        const player = dimensionPlayers[playerIndex];
+        if (player) playersToProcess = [player];
+    }
+    
+    if (playersToProcess.length === 0) return;
+    
+    // Process all selected players
+    for (const player of playersToProcess) {
+        if (!player) continue;
 
-    const playerPos = player.location;
+        const playerPos = player.location;
 
+        let tileInfo;
+        try {
+            tileInfo = getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCache, dimensionPlayers);
+        } catch (error) {
+            errorLog(`Error getting tiles for player ${player.name}`, error, {
+                player: player.name,
+                dimension: dimension.id,
+                position: playerPos,
+                useGroupCache
+            });
+            continue; // Skip this player, continue with next
+        }
+        
+        const density = tileInfo?.density ?? 0;
+        const spacedTiles = tileInfo?.spacedTiles ?? [];
+        const spacing = tileInfo?.spacing ?? BASE_MIN_TILE_SPACING;
+
+        debugLog('spawn', `Using ${density} dusted tiles near ${player.name}; ${spacedTiles.length} after spacing filter (d=${spacing})`);
+        if (spacedTiles.length === 0) {
+            debugLog('spawn', `No valid spawn tiles for ${player.name} (density: ${density}, spaced: ${spacedTiles.length})`);
+            continue; // Skip this player, continue with next
+        }
+
+        // Early exit if too many entities nearby (skip processing)
+        let entityCounts;
+        try {
+            entityCounts = getEntityCountsForPlayer(player, dimension, playerPos);
+        } catch (error) {
+            errorLog(`Error getting entity counts for player ${player.name}`, error, {
+                player: player.name,
+                dimension: dimension.id,
+                position: playerPos
+            });
+            continue; // Skip this player, continue with next
+        }
+        
+        const totalNearbyBears = Object.values(entityCounts).reduce((sum, count) => sum + count, 0);
+        debugLog('spawn', `${player.name}: ${totalNearbyBears} nearby bears, ${spacedTiles.length} spawn tiles available`);
+        if (totalNearbyBears > 30) {
+            debugLog('spawn', `Skipping ${player.name} - too many bears nearby (${totalNearbyBears})`);
+            continue; // Too many bears, skip this player
+        }
+
+        // Check if single player (no group cache benefit)
+        const isSinglePlayer = !useGroupCache || (dimensionPlayers && dimensionPlayers.length === 1);
+        
+        let chanceMultiplier = 1;
+        if (currentDay >= 20) {
+            chanceMultiplier *= 1 + Math.min(0.4, (currentDay - 20) * 0.02);
+        }
+        if (density > 80) {
+            chanceMultiplier *= 1 + Math.min(0.2, (density - 80) / 300);
+        }
+        // Single player bonus: compensate for lack of group cache (fewer tiles = lower density)
+        if (isSinglePlayer) {
+            // Give single players a boost to match multiplayer spawn rates
+            // This compensates for not having shared group cache tiles
+            chanceMultiplier *= 1.25; // 25% boost to spawn chance
+            // Also apply density bonus at lower threshold for single players
+            if (density > 50) {
+                chanceMultiplier *= 1 + Math.min(0.15, (density - 50) / 250);
+            }
+        }
+        if (sunriseActive) {
+            chanceMultiplier *= SUNRISE_BOOST_MULTIPLIER;
+        }
+        chanceMultiplier *= spawnDifficultyState.multiplier;
+
+        let extraCount = 0;
+        if (density > 140) {
+            extraCount += Math.min(1, Math.floor((density - 140) / 120));
+        }
+        // Single player bonus: lower threshold for extra count
+        if (isSinglePlayer && density > 80) {
+            extraCount += Math.min(1, Math.floor((density - 80) / 100));
+        }
+        if (sunriseActive) {
+            extraCount += 1;
+        }
+        extraCount += spawnDifficultyState.extraAdjust;
+        if (extraCount < 0) {
+            extraCount = 0;
+        }
+
+        const modifiers = {
+            chanceMultiplier,
+            chanceCap: Math.min(0.99, Math.max(0.35, 0.9 + spawnDifficultyState.capAdjust)),
+            extraCount,
+            isGroupCache: useGroupCache && dimensionPlayers && dimensionPlayers.length > 1
+        };
+        if (spawnDifficultyState.attemptBonus !== 0) {
+            modifiers.attemptBonus = (modifiers.attemptBonus || 0) + spawnDifficultyState.attemptBonus;
+        }
+
+        const timeOfDay = dimension.getTimeOfDay ? dimension.getTimeOfDay() : 0;
+        const isSunsetWindow = timeOfDay >= 12000 && timeOfDay <= 12500;
+        if (isSunsetWindow) {
+            modifiers.chanceMultiplier *= 1.35;
+            modifiers.extraCount += 1;
+        }
+
+        // Track spawns per tick for this player (shared across all players when processing multiple)
+        const spawnCount = { value: 0 };
+
+        // Only process configs that are active for current day
+        let processedConfigs = 0;
+        for (const config of SPAWN_CONFIGS) {
+            if (currentDay < config.startDay || currentDay > config.endDay) continue;
+            processedConfigs++;
+            
+            try {
+                const configModifiers = { ...modifiers };
+                if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
+                    configModifiers.chanceMultiplier *= 0.5;
+                    if (config.id === BUFF_BEAR_DAY20_ID) {
+                        configModifiers.chanceCap = Math.min(configModifiers.chanceCap, 0.065);
+                    } else {
+                        configModifiers.chanceCap = Math.min(configModifiers.chanceCap, config.id === BUFF_BEAR_ID ? 0.06 : 0.07);
+                    }
+                    configModifiers.extraCount = Math.min(configModifiers.extraCount, 0);
+                }
+                const spawned = attemptSpawnType(player, dimension, playerPos, spacedTiles, config, configModifiers, entityCounts, spawnCount);
+                debugLog('spawn', `Successfully spawned ${config.id} for ${player.name}`, spawned);
+            } catch (error) {
+                errorLog(`Error attempting spawn for ${config.id}`, error, {
+                    player: player.name,
+                    config: config.id,
+                    currentDay,
+                    dimension: dimension.id
+                });
+            }
+        }
+        debugLog('spawn', `No active spawn configs for day ${currentDay}`, processedConfigs === 0);
+    }
+    
     // Update player rotation index for next tick
+    // For 3+ players, we processed all in one tick, so increment normally
+    // For 1-2 players, we processed one, so increment normally
     playerRotationIndex++;
-    if (playerRotationIndex >= dimensions.length * dimensionPlayers.length) {
+    const maxPlayers = Math.max(...Array.from(playersByDimension.values()).map(arr => arr.length), 1);
+    if (playerRotationIndex >= dimensions.length * maxPlayers) {
         playerRotationIndex = 0;
     }
-
-    let tileInfo;
-    try {
-        tileInfo = getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCache, dimensionPlayers);
-    } catch (error) {
-        errorLog(`Error getting tiles for player ${player.name}`, error, {
-            player: player.name,
-            dimension: dimension.id,
-            position: playerPos,
-            useGroupCache
-        });
-        return;
-    }
-    
-    const density = tileInfo?.density ?? 0;
-    const spacedTiles = tileInfo?.spacedTiles ?? [];
-    const spacing = tileInfo?.spacing ?? BASE_MIN_TILE_SPACING;
-
-    debugLog('spawn', `Using ${density} dusted tiles near ${player.name}; ${spacedTiles.length} after spacing filter (d=${spacing})`);
-    if (spacedTiles.length === 0) {
-        debugLog('spawn', `No valid spawn tiles for ${player.name} (density: ${density}, spaced: ${spacedTiles.length})`);
-        return;
-    }
-
-    // Early exit if too many entities nearby (skip processing)
-    let entityCounts;
-    try {
-        entityCounts = getEntityCountsForPlayer(player, dimension, playerPos);
-    } catch (error) {
-        errorLog(`Error getting entity counts for player ${player.name}`, error, {
-            player: player.name,
-            dimension: dimension.id,
-            position: playerPos
-        });
-        return;
-    }
-    
-    const totalNearbyBears = Object.values(entityCounts).reduce((sum, count) => sum + count, 0);
-    debugLog('spawn', `${player.name}: ${totalNearbyBears} nearby bears, ${spacedTiles.length} spawn tiles available`);
-    if (totalNearbyBears > 30) {
-        debugLog('spawn', `Skipping ${player.name} - too many bears nearby (${totalNearbyBears})`);
-        return; // Too many bears, skip this cycle
-    }
-
-    // Check if single player (no group cache benefit)
-    const isSinglePlayer = !useGroupCache || (dimensionPlayers && dimensionPlayers.length === 1);
-    
-    let chanceMultiplier = 1;
-    if (currentDay >= 20) {
-        chanceMultiplier *= 1 + Math.min(0.4, (currentDay - 20) * 0.02);
-    }
-    if (density > 80) {
-        chanceMultiplier *= 1 + Math.min(0.2, (density - 80) / 300);
-    }
-    // Single player bonus: compensate for lack of group cache (fewer tiles = lower density)
-    if (isSinglePlayer) {
-        // Give single players a boost to match multiplayer spawn rates
-        // This compensates for not having shared group cache tiles
-        chanceMultiplier *= 1.25; // 25% boost to spawn chance
-        // Also apply density bonus at lower threshold for single players
-        if (density > 50) {
-            chanceMultiplier *= 1 + Math.min(0.15, (density - 50) / 250);
-        }
-    }
-    if (sunriseActive) {
-        chanceMultiplier *= SUNRISE_BOOST_MULTIPLIER;
-    }
-    chanceMultiplier *= spawnDifficultyState.multiplier;
-
-    let extraCount = 0;
-    if (density > 140) {
-        extraCount += Math.min(1, Math.floor((density - 140) / 120));
-    }
-    // Single player bonus: lower threshold for extra count
-    if (isSinglePlayer && density > 80) {
-        extraCount += Math.min(1, Math.floor((density - 80) / 100));
-    }
-    if (sunriseActive) {
-        extraCount += 1;
-    }
-    extraCount += spawnDifficultyState.extraAdjust;
-    if (extraCount < 0) {
-        extraCount = 0;
-    }
-
-    const modifiers = {
-        chanceMultiplier,
-        chanceCap: Math.min(0.99, Math.max(0.35, 0.9 + spawnDifficultyState.capAdjust)),
-        extraCount,
-        isGroupCache: useGroupCache && dimensionPlayers && dimensionPlayers.length > 1
-    };
-    if (spawnDifficultyState.attemptBonus !== 0) {
-        modifiers.attemptBonus = (modifiers.attemptBonus || 0) + spawnDifficultyState.attemptBonus;
-    }
-
-    const timeOfDay = dimension.getTimeOfDay ? dimension.getTimeOfDay() : 0;
-    const isSunsetWindow = timeOfDay >= 12000 && timeOfDay <= 12500;
-    if (isSunsetWindow) {
-        modifiers.chanceMultiplier *= 1.35;
-        modifiers.extraCount += 1;
-    }
-
-    // Track spawns per tick for this player
-    const spawnCount = { value: 0 };
-
-    // Only process configs that are active for current day
-    let processedConfigs = 0;
-    for (const config of SPAWN_CONFIGS) {
-        if (currentDay < config.startDay || currentDay > config.endDay) continue;
-        processedConfigs++;
-        
-        try {
-            const configModifiers = { ...modifiers };
-            if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
-                configModifiers.chanceMultiplier *= 0.5;
-                if (config.id === BUFF_BEAR_DAY20_ID) {
-                    configModifiers.chanceCap = Math.min(configModifiers.chanceCap, 0.065);
-                } else {
-                    configModifiers.chanceCap = Math.min(configModifiers.chanceCap, config.id === BUFF_BEAR_ID ? 0.06 : 0.07);
-                }
-                configModifiers.extraCount = Math.min(configModifiers.extraCount, 0);
-            }
-            const spawned = attemptSpawnType(player, dimension, playerPos, spacedTiles, config, configModifiers, entityCounts, spawnCount);
-            debugLog('spawn', `Successfully spawned ${config.id} for ${player.name}`, spawned);
-        } catch (error) {
-            errorLog(`Error attempting spawn for ${config.id}`, error, {
-                player: player.name,
-                config: config.id,
-                currentDay,
-                dimension: dimension.id
-            });
-        }
-    }
-        debugLog('spawn', `No active spawn configs for day ${currentDay}`, processedConfigs === 0);
     } catch (error) {
         errorLog(`Error in main spawn interval`, error, { currentDay: getCurrentDay() });
     }

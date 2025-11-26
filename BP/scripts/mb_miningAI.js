@@ -1,5 +1,6 @@
 import { system, world } from "@minecraft/server";
 import { MINING_BREAKABLE_BLOCK_SET } from "./mb_miningBlockList.js";
+import { getCurrentDay } from "./mb_dayTracker.js";
 
 const DIMENSION_IDS = ["overworld", "nether", "the_end"];
 const MINING_BEAR_TYPES = [
@@ -14,7 +15,16 @@ const AIR_BLOCKS = new Set([
 ]);
 
 const BREAKABLE_BLOCKS = MINING_BREAKABLE_BLOCK_SET;
-const CLEAR_INTERVAL = 14; // ticks (~0.7s) - slightly slower digging cadence
+// Mining speed: starts at iron pickaxe speed (4 ticks) at day 15, increases to efficiency 5 diamond (1 tick) by day 25
+function getMiningInterval() {
+    const currentDay = getCurrentDay();
+    if (currentDay < 15) return 4; // Iron pickaxe speed
+    if (currentDay >= 25) return 1; // Efficiency 5 diamond pickaxe speed
+    // Linear progression: 4 ticks at day 15, 1 tick at day 25
+    // Formula: 4 - 0.3 * (day - 15)
+    const interval = Math.max(1, Math.floor(4 - 0.3 * (currentDay - 15)));
+    return interval;
+}
 const MAX_BLOCKS_PER_ENTITY = 3;
 const FOLLOWER_BLOCK_BUDGET = 1;
 const FOLLOWER_ASSIST_BLOCK_BUDGET = 1;
@@ -39,6 +49,7 @@ const ACCESS_CHECK_STEPS = 4;
 const BUILD_PRIORITY_BLOCK_BUDGET = 4;
 const TARGET_MEMORY_TICKS = 400;
 const MAX_PLAN_STEPS = 64;
+const PASSIVE_WANDER_TICKS = 2400; // 2 minutes without seeing target = passive wandering
 
 const BREAK_SOUND_DEFAULT = "dig.stone";
 const BREAK_SOUND_RULES = [
@@ -52,6 +63,8 @@ const BREAK_SOUND_RULES = [
 const SOUND_RADIUS = 16;
 
 const lastKnownTargets = new Map();
+const lastSeenTargetTick = new Map(); // Track when target was last seen (for passive wandering)
+const lastMiningTick = new Map(); // Track last mining action per entity (for dynamic speed)
 const buildQueues = new Map();
 const reservedNodes = new Map();
 const buildModeState = new Map();
@@ -137,7 +150,15 @@ function clearVerticalColumn(entity, tunnelHeight, extraHeight, digContext) {
     const z = Math.floor(loc.z);
     const startY = Math.floor(loc.y);
     const height = tunnelHeight + extraHeight;
-    for (let h = 1; h < height; h++) {
+    
+    // Break blocks above (for headroom)
+    for (let h = 1; h < height + 1; h++) { // +1 to break one block above tunnel height
+        if (digContext.cleared >= digContext.max) return;
+        clearBlock(dimension, x, startY + h, z, digContext);
+    }
+    
+    // Also break blocks below (for clearing floor obstacles)
+    for (let h = -1; h >= -2; h--) {
         if (digContext.cleared >= digContext.max) return;
         clearBlock(dimension, x, startY + h, z, digContext);
     }
@@ -173,6 +194,7 @@ function resolveDirection(entity, override) {
 
 function updateLastKnownTarget(entity, targetInfo) {
     if (!targetInfo?.entity?.location) return;
+    const currentTick = system.currentTick;
     lastKnownTargets.set(entity.id, {
         position: {
             x: targetInfo.entity.location.x,
@@ -180,8 +202,12 @@ function updateLastKnownTarget(entity, targetInfo) {
             z: targetInfo.entity.location.z
         },
         targetId: targetInfo.entity?.id ?? null,
-        tick: system.currentTick
+        tick: currentTick
     });
+    // Update last seen tick when target is actually visible
+    if (targetInfo.entity) {
+        lastSeenTargetTick.set(entity.id, currentTick);
+    }
 }
 
 function getStoredTargetInfo(entity) {
@@ -425,12 +451,16 @@ function needsAccessPath(entity, targetInfo, tunnelHeight, directionOverride = n
     const dimension = entity?.dimension;
     if (!dimension) return false;
     const targetY = targetInfo.entity?.location?.y;
+    
+    // More strict elevation check - only need path if significant height difference
     if (typeof targetY === "number") {
         const delta = targetY - entity.location.y;
-        if (Math.abs(delta) > ELEVATION_TOLERANCE) {
+        // Only consider path needed if elevation difference is significant (more than 2 blocks)
+        if (Math.abs(delta) > 2.0) {
             return true;
         }
     }
+    
     const loc = entity.location;
     const baseX = Math.floor(loc.x);
     const baseY = Math.floor(loc.y);
@@ -438,21 +468,39 @@ function needsAccessPath(entity, targetInfo, tunnelHeight, directionOverride = n
     const { x: dirX, z: dirZ } = resolveDirection(entity, directionOverride);
     if (dirX === 0 && dirZ === 0) return false;
 
+    // Check if there's a clear path forward (less strict - allow attacking through thin walls)
+    // Only mine if path is completely blocked for multiple steps
+    let blockedSteps = 0;
     for (let step = 1; step <= ACCESS_CHECK_STEPS; step++) {
         const x = baseX + dirX * step;
         const z = baseZ + dirZ * step;
+        let isBlocked = false;
+        
+        // Check if headroom is blocked
         for (let h = 0; h < tunnelHeight; h++) {
             const block = getBlock(dimension, x, baseY + h, z);
             if (isSolidBlock(block)) {
-                return true;
+                isBlocked = true;
+                break;
             }
         }
+        
+        // Check if floor is missing
         const floorBlock = getBlock(dimension, x, baseY - 1, z);
         if (!floorBlock || AIR_BLOCKS.has(floorBlock.typeId)) {
-            return true;
+            isBlocked = true;
+        }
+        
+        if (isBlocked) {
+            blockedSteps++;
+        } else {
+            // Found a clear path - no need to mine
+            return false;
         }
     }
-    return false;
+    
+    // Only return true if path is blocked for most steps (encourages attacking when possible)
+    return blockedSteps >= 3;
 }
 
 function dampenHorizontalMotion(entity) {
@@ -496,7 +544,18 @@ function clearForwardTunnel(entity, tunnelHeight, extraHeight, startOffset, digC
             start = footBlocked ? 0 : start;
         }
 
-        for (let h = start; h < height; h++) {
+        // Break blocks above (for clearing headroom)
+        for (let h = start; h < height + 1; h++) { // +1 to break one block above tunnel height
+            if (digContext.cleared >= digContext.max) return;
+            const targetY = baseY + h;
+            const block = getBlock(dimension, targetX, targetY, targetZ);
+            if (!isBreakableBlock(block)) continue;
+            clearBlock(dimension, targetX, targetY, targetZ, digContext);
+            return;
+        }
+        
+        // Also break blocks below (for clearing floor obstacles)
+        for (let h = -1; h >= -2; h--) {
             if (digContext.cleared >= digContext.max) return;
             const targetY = baseY + h;
             const block = getBlock(dimension, targetX, targetY, targetZ);
@@ -667,6 +726,10 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS) {
 
     for (const player of world.getPlayers()) {
         if (player.dimension !== dimension) continue;
+        // Skip creative mode players
+        try {
+            if (player.getGameMode() === "creative") continue;
+        } catch { }
         const dx = player.location.x - origin.x;
         const dy = player.location.y - origin.y;
         const dz = player.location.z - origin.z;
@@ -856,13 +919,10 @@ function followLeader(entity, waypoint) {
 }
 
 function idleWander(entity, tick) {
-    if (tick % IDLE_DRIFT_INTERVAL !== 0) return;
-    const angle = Math.random() * Math.PI * 2;
-    entity.applyImpulse({
-        x: Math.cos(angle) * 0.02,
-        y: 0,
-        z: Math.sin(angle) * 0.02
-    });
+    // Removed random wandering - mining bears should be more purposeful
+    // Instead, they will remain stationary and scan for targets periodically
+    // This makes their actions more intentional and less chaotic
+    return;
 }
 
 function hasActiveQueue(queue) {
@@ -937,9 +997,9 @@ function processContext(ctx, config, tick, leaderSummaryById) {
     } else if (role === "follower" && leaderSummary) {
         const waypoint = pickTrailWaypoint(leaderSummary.trail, entity) ?? leaderSummary.position;
         followLeader(entity, waypoint);
-    } else if (!hasTarget) {
-        idleWander(entity, tick);
     }
+    // Removed idleWander - mining bears without targets remain stationary
+    // They will continue scanning for targets through findNearestTarget
 
     if (digContext.max > 0) {
         clearVerticalColumn(entity, config.tunnelHeight, extraHeight, digContext);
@@ -1058,6 +1118,16 @@ system.runInterval(() => {
             const idleQueue = [];
 
             for (const ctx of contexts) {
+                // Check if should enter passive wandering (2 minutes without seeing target)
+                const lastSeen = lastSeenTargetTick.get(ctx.entity.id) || 0;
+                const timeSinceSeen = tick - lastSeen;
+                if (timeSinceSeen > PASSIVE_WANDER_TICKS && !ctx.targetInfo) {
+                    // Force passive wandering - clear stored target
+                    lastKnownTargets.delete(ctx.entity.id);
+                    lastSeenTargetTick.delete(ctx.entity.id);
+                    ctx.targetInfo = null;
+                }
+                
                 if (ctx.role === "leader") {
                     leaderQueue.push(ctx);
                 } else if (ctx.role === "follower") {
@@ -1067,14 +1137,34 @@ system.runInterval(() => {
                 }
             }
 
+            // Get dynamic mining interval based on current day
+            const miningInterval = getMiningInterval();
+            
             for (const ctx of leaderQueue) {
-                processContext(ctx, config, tick, leaderSummaryById);
+                // Check if enough time has passed since last mining action for this entity
+                const lastTick = lastMiningTick.get(ctx.entity.id) || 0;
+                if (tick - lastTick >= miningInterval) {
+                    processContext(ctx, config, tick, leaderSummaryById);
+                    lastMiningTick.set(ctx.entity.id, tick);
+                }
             }
             for (const ctx of followerQueue) {
-                processContext(ctx, config, tick, leaderSummaryById);
+                // Check if enough time has passed since last mining action for this entity
+                const lastTick = lastMiningTick.get(ctx.entity.id) || 0;
+                if (tick - lastTick >= miningInterval) {
+                    processContext(ctx, config, tick, leaderSummaryById);
+                    lastMiningTick.set(ctx.entity.id, tick);
+                }
             }
             for (const ctx of idleQueue) {
-                processContext(ctx, config, tick, leaderSummaryById);
+                // Idle bears without targets - they remain stationary and scan
+                // No random wandering, more purposeful behavior
+                // Still process to allow target scanning, but less frequently
+                const lastTick = lastMiningTick.get(ctx.entity.id) || 0;
+                if (tick - lastTick >= miningInterval * 2) {
+                    processContext(ctx, config, tick, leaderSummaryById);
+                    lastMiningTick.set(ctx.entity.id, tick);
+                }
             }
         }
     }
@@ -1088,6 +1178,17 @@ system.runInterval(() => {
     for (const [entityId, entry] of lastKnownTargets.entries()) {
         if (!activeWorkerIds.has(entityId) && system.currentTick - entry.tick > TARGET_MEMORY_TICKS) {
             lastKnownTargets.delete(entityId);
+            lastSeenTargetTick.delete(entityId);
+        }
+    }
+    for (const [entityId] of lastSeenTargetTick.entries()) {
+        if (!activeWorkerIds.has(entityId)) {
+            lastSeenTargetTick.delete(entityId);
+        }
+    }
+    for (const [entityId] of lastMiningTick.entries()) {
+        if (!activeWorkerIds.has(entityId)) {
+            lastMiningTick.delete(entityId);
         }
     }
     for (const entityId of Array.from(buildModeState.keys())) {
@@ -1095,6 +1196,6 @@ system.runInterval(() => {
             buildModeState.delete(entityId);
         }
     }
-}, CLEAR_INTERVAL);
+}, 1); // Run every tick, but only process mining when interval has passed
 
 

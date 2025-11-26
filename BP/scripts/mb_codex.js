@@ -5,6 +5,14 @@ import { ModalFormData } from "@minecraft/server-ui";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
+function getSpawnDifficultyValue() {
+    let rawValue = world.getDynamicProperty(SPAWN_DIFFICULTY_PROPERTY);
+    if (typeof rawValue !== "number") {
+        rawValue = 0;
+    }
+    return Math.max(-5, Math.min(5, rawValue));
+}
+
 export function getDefaultCodex() {
     return {
         infections: { bear: { discovered: false, firstHitAt: 0 }, snow: { discovered: false, firstUseAt: 0 } },
@@ -336,7 +344,7 @@ export function shareKnowledge(fromPlayer, toPlayer) {
                 default: friendlyName = mobKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
             }
 
-            sharedItems.push(`${friendlyName} Discovery`);
+            sharedItems.push(`${friendlyName}`);
         }
     }
 
@@ -384,7 +392,7 @@ export function shareKnowledge(fromPlayer, toPlayer) {
         if (discovered && !toCodex.effects[effectKey]) {
             toCodex.effects[effectKey] = discovered;
             hasNewKnowledge = true;
-            sharedItems.push(`Effect Discovery`);
+            sharedItems.push(`Effect`);
         }
     }
 
@@ -394,7 +402,7 @@ export function shareKnowledge(fromPlayer, toPlayer) {
         if (discovered && !toCodex.snowEffects[effectKey]) {
             toCodex.snowEffects[effectKey] = discovered;
             hasNewKnowledge = true;
-            sharedItems.push(`Snow Effect Discovery`);
+            sharedItems.push(`Snow Effect`);
         }
     }
 
@@ -480,16 +488,16 @@ export function shareKnowledge(fromPlayer, toPlayer) {
 
         // Record this knowledge sharing event in the daily log for tomorrow
         const tomorrowDay = getCurrentDay() + 1;
-        const eventMessage = `${fromPlayer.name} shared valuable knowledge with you: ${sharedItems.join(', ')}. This expanded understanding of the infection will prove useful.`;
+        const eventMessage = `${fromPlayer.name} shared knowledge: ${sharedItems.join(', ')}.`;
         recordDailyEvent(toPlayer, tomorrowDay, eventMessage, "knowledge");
 
         // Send special feedback to both players
         const summary = sharedItems.join(', ');
-        fromPlayer.sendMessage(`§7You shared knowledge with §f${toPlayer.name}§7: §a${summary}`);
+        fromPlayer.sendMessage(`§7Shared with §f${toPlayer.name}§7: §a${summary}`);
         if (recipientHasJournal) {
-            toPlayer.sendMessage(`§b${fromPlayer.name} §7shared their knowledge with you: §a${summary}`);
+            toPlayer.sendMessage(`§b${fromPlayer.name}§7 shared: §a${summary}`);
         } else {
-            toPlayer.sendMessage(`§7A rush of distant memories brushes past you, but without a Powdery Journal nothing is recorded. Craft one to review what others share.`);
+            toPlayer.sendMessage(`§7Knowledge shared, but no journal to record it.`);
         }
         toPlayer.playSound("random.orb", { pitch: 1.2, volume: 0.8 });
         toPlayer.playSound("mob.experience_orb.pickup", { pitch: 1.0, volume: 0.6 });
@@ -548,10 +556,24 @@ export function showCodexBook(player, context) {
         checkKnowledgeProgression(player);
     } catch { }
 
-    // Variant unlock checks are handled when mobs are killed, not when opening codex
-    function maskTitle(title, known) {
-        return known ? title : "?".repeat(title.length);
-    }
+        // Variant unlock checks are handled when mobs are killed, not when opening codex
+        function maskTitle(title, known) {
+            return known ? title : "?".repeat(title.length);
+        }
+        
+        // Get settings with defaults
+        function getSettings() {
+            const codex = getCodex(player);
+            if (!codex.settings) {
+                codex.settings = {
+                    showSearchButton: true,
+                    bearSoundVolume: 2, // 0=off, 1=low, 2=high
+                    blockBreakVolume: 2 // 0=off, 1=low, 2=high
+                };
+                saveCodex(player, codex);
+            }
+            return codex.settings;
+        }
     function buildSummary() {
         const codex = getCodex(player);
         const infectionState = playerInfection.get(player.id);
@@ -689,6 +711,17 @@ export function showCodexBook(player, context) {
         if (hasDebugOptions) {
             buttons.push("§cDeveloper Tools");
             buttonActions.push(() => openDeveloperTools());
+        }
+        
+        // Settings button - always available
+        buttons.push("§eSettings");
+        buttonActions.push(() => openSettings());
+        
+        // Search button - only if enabled in settings
+        const settings = getSettings();
+        if (settings.showSearchButton) {
+            buttons.push("§bSearch");
+            buttonActions.push(() => openSearch());
         }
         
         // Add buttons to form
@@ -2121,6 +2154,170 @@ export function showCodexBook(player, context) {
 
             triggerDebugCommand("set_day", [String(dayNumber)]);
         });
+    }
+
+    function openSettings() {
+        const settings = getSettings();
+        const codex = getCodex(player);
+        
+        // Get spawn difficulty state
+        const spawnValue = getSpawnDifficultyValue();
+        let spawnBoostText = "Normal (0)";
+        if (spawnValue === -1) spawnBoostText = "Easy (-1)";
+        else if (spawnValue === 0) spawnBoostText = "Normal (0)";
+        else if (spawnValue === 1) spawnBoostText = "Hard (+1)";
+        else if (spawnValue > 0) spawnBoostText = `Custom (+${spawnValue})`;
+        else spawnBoostText = `Custom (${spawnValue})`;
+        
+        const volumeLabels = ["Off", "Low", "High"];
+        const bearVolLabel = volumeLabels[settings.bearSoundVolume] || "High";
+        const breakVolLabel = volumeLabels[settings.blockBreakVolume] || "High";
+        
+        let body = `§6Settings\n\n`;
+        body += `§7Spawn Boost/Decrease: §f${spawnBoostText}\n`;
+        body += `§7Bear Sound Volume: §f${bearVolLabel} (${settings.bearSoundVolume}/2)\n`;
+        body += `§7Block Break Volume: §f${breakVolLabel} (${settings.blockBreakVolume}/2)\n`;
+        body += `§7Show Search Button: §f${settings.showSearchButton ? "Yes" : "No"}\n\n`;
+        body += `§8Adjust these settings to customize your journal experience.`;
+        
+        const form = new ActionFormData().title("§eSettings").body(body);
+        form.button(`§fBear Sounds: ${bearVolLabel}`);
+        form.button(`§fBlock Breaking: ${breakVolLabel}`);
+        form.button(`§fSearch Button: ${settings.showSearchButton ? "§aShow" : "§cHide"}`);
+        form.button("§8Back");
+        
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 3) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openMain();
+            }
+            
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            const codex = getCodex(player);
+            const settings = getSettings();
+            
+            switch (res.selection) {
+                case 0: // Bear sound volume
+                    settings.bearSoundVolume = (settings.bearSoundVolume + 1) % 3;
+                    saveCodex(player, codex);
+                    openSettings();
+                    break;
+                case 1: // Block break volume
+                    settings.blockBreakVolume = (settings.blockBreakVolume + 1) % 3;
+                    saveCodex(player, codex);
+                    openSettings();
+                    break;
+                case 2: // Search button toggle
+                    settings.showSearchButton = !settings.showSearchButton;
+                    saveCodex(player, codex);
+                    openSettings();
+                    break;
+                default:
+                    openMain();
+            }
+        }).catch(() => openMain());
+    }
+
+    function openSearch() {
+        const codex = getCodex(player);
+        const modal = new ModalFormData()
+            .title("§bSearch")
+            .textField("Enter search term", "");
+        
+        modal.show(player).then((res) => {
+            if (!res || res.canceled || !res.formValues?.[0]) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openMain();
+            }
+            
+            const searchTerm = (res.formValues[0] || "").toLowerCase().trim();
+            if (!searchTerm) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openMain();
+            }
+            
+            const results = [];
+            
+            // Search mobs
+            const mobEntries = [
+                { key: "mapleBearSeen", title: "Tiny Maple Bear", section: "Mobs" },
+                { key: "infectedBearSeen", title: "Infected Maple Bear", section: "Mobs" },
+                { key: "buffBearSeen", title: "Buff Maple Bear", section: "Mobs" },
+                { key: "infectedPigSeen", title: "Infected Pig", section: "Mobs" },
+                { key: "infectedCowSeen", title: "Infected Cow", section: "Mobs" },
+                { key: "flyingBearSeen", title: "Flying Maple Bear", section: "Mobs" },
+                { key: "miningBearSeen", title: "Mining Maple Bear", section: "Mobs" },
+                { key: "torpedoBearSeen", title: "Torpedo Maple Bear", section: "Mobs" }
+            ];
+            for (const entry of mobEntries) {
+                if (entry.title.toLowerCase().includes(searchTerm) && codex.mobs[entry.key]) {
+                    results.push({ ...entry, action: () => openMobs() });
+                }
+            }
+            
+            // Search items
+            const itemEntries = [
+                { key: "snowFound", title: "Snow", section: "Items" },
+                { key: "snowIdentified", title: "Snow Identified", section: "Items" },
+                { key: "snowBookCrafted", title: "Powdery Journal", section: "Items" },
+                { key: "cureItemsSeen", title: "Cure Items", section: "Items" },
+                { key: "brewingStandSeen", title: "Brewing Stand", section: "Items" },
+                { key: "dustedDirtSeen", title: "Dusted Dirt", section: "Items" }
+            ];
+            for (const entry of itemEntries) {
+                if (entry.title.toLowerCase().includes(searchTerm) && codex.items[entry.key]) {
+                    results.push({ ...entry, action: () => openItems() });
+                }
+            }
+            
+            // Search symptoms
+            const symptomEntries = [
+                { key: "weaknessSeen", title: "Weakness", section: "Symptoms" },
+                { key: "nauseaSeen", title: "Nausea", section: "Symptoms" },
+                { key: "blindnessSeen", title: "Blindness", section: "Symptoms" },
+                { key: "slownessSeen", title: "Slowness", section: "Symptoms" },
+                { key: "hungerSeen", title: "Hunger", section: "Symptoms" },
+                { key: "miningFatigueSeen", title: "Mining Fatigue", section: "Symptoms" }
+            ];
+            for (const entry of symptomEntries) {
+                if (entry.title.toLowerCase().includes(searchTerm) && codex.effects[entry.key]) {
+                    results.push({ ...entry, action: () => openSymptoms() });
+                }
+            }
+            
+            if (results.length === 0) {
+                const form = new ActionFormData()
+                    .title("§bSearch Results")
+                    .body(`§7No results found for: §f"${searchTerm}"\n\n§8Try a different search term.`);
+                form.button("§8Back");
+                form.show(player).then(() => openSearch());
+                return;
+            }
+            
+            const form = new ActionFormData()
+                .title(`§bSearch: "${searchTerm}"`)
+                .body(`§7Found §f${results.length}§7 result${results.length !== 1 ? 's' : ''}:`);
+            
+            for (const result of results) {
+                form.button(`§f${result.title}\n§8${result.section}`);
+            }
+            form.button("§8Back");
+            
+            form.show(player).then((res) => {
+                if (!res || res.canceled || res.selection === results.length) {
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                    return openSearch();
+                }
+                
+                player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+                const selected = results[res.selection];
+                if (selected && selected.action) {
+                    selected.action();
+                } else {
+                    openSearch();
+                }
+            }).catch(() => openMain());
+        }).catch(() => openMain());
     }
 
     try { openMain(); } catch { }

@@ -184,10 +184,10 @@
 				"damage": 7.5
 			},
 			"minecraft:movement": {
-				"value": 0.4
+				"value": 0.48
 			},
 			"minecraft:movement.fly": {
-				"value": 0.5
+				"value": 0.65
 			},
 			"minecraft:navigation.fly": {
 				"can_land_on_trees": true,
@@ -201,20 +201,20 @@
 			},
 			"minecraft:behavior.random_fly": {
 				"priority": 4,
-				"speed_multiplier": 0.7,
-				"xz_dist": 14,
-				"y_dist": 3
+				"speed_multiplier": 0.85,
+				"xz_dist": 16,
+				"y_dist": 4
 			},
 			"minecraft:behavior.melee_attack": {
 				"priority": 1,
-				"speed_multiplier": 1.25,
+				"speed_multiplier": 1.45,
 				"track_target": true,
 				"y_max_head_rotation": 360,
 				"reach_multiplier": 2.4
 			},
 			"minecraft:behavior.move_towards_target": {
 				"priority": 2,
-				"speed_multiplier": 1.2,
+				"speed_multiplier": 1.4,
 				"within_radius": 4,
 				"ignore_vertical_distance": false
 			},

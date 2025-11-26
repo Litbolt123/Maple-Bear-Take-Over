@@ -291,18 +291,6 @@
 				"max": 0.3
 			},
 			"minecraft:movement.generic": {},
-			"minecraft:behavior.jump_to_block": {
-				"priority": 4,
-				"search_width": 8,
-				"search_height": 6,
-				"minimum_path_length": 4,
-				"minimum_distance": 0,
-				"scale_factor": 0.4,
-				"cooldown_range": [
-					0.5,
-					4
-				]
-			},
 			"minecraft:conditional_bandwidth_optimization": {},
 			"minecraft:loot": {
 				"table": "loot_tables/mb_loot_tables/infected_loot_table.json"

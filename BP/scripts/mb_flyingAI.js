@@ -4,18 +4,18 @@ const DIMENSION_IDS = ["overworld", "nether", "the_end"];
 const FLYING_TYPES = [
     {
         id: "mb:flying_mb",
-        lowProfile: { minAltitude: 3, maxAltitude: 8, horizontalImpulse: 0.05, verticalImpulse: 0.035 },
-        highProfile: { minAltitude: 12, maxAltitude: 24, horizontalImpulse: 0.04, verticalImpulse: 0.03 }
+        lowProfile: { minAltitude: 3, maxAltitude: 8, horizontalImpulse: 0.065, verticalImpulse: 0.045 },
+        highProfile: { minAltitude: 12, maxAltitude: 24, horizontalImpulse: 0.055, verticalImpulse: 0.04 }
     },
     {
         id: "mb:flying_mb_day15",
-        lowProfile: { minAltitude: 4, maxAltitude: 10, horizontalImpulse: 0.055, verticalImpulse: 0.04 },
-        highProfile: { minAltitude: 14, maxAltitude: 26, horizontalImpulse: 0.045, verticalImpulse: 0.035 }
+        lowProfile: { minAltitude: 4, maxAltitude: 10, horizontalImpulse: 0.07, verticalImpulse: 0.05 },
+        highProfile: { minAltitude: 14, maxAltitude: 26, horizontalImpulse: 0.06, verticalImpulse: 0.045 }
     },
     {
         id: "mb:flying_mb_day20",
-        lowProfile: { minAltitude: 5, maxAltitude: 12, horizontalImpulse: 0.06, verticalImpulse: 0.045 },
-        highProfile: { minAltitude: 16, maxAltitude: 28, horizontalImpulse: 0.05, verticalImpulse: 0.04 }
+        lowProfile: { minAltitude: 5, maxAltitude: 12, horizontalImpulse: 0.075, verticalImpulse: 0.055 },
+        highProfile: { minAltitude: 16, maxAltitude: 28, horizontalImpulse: 0.065, verticalImpulse: 0.05 }
     }
 ];
 
@@ -26,6 +26,7 @@ const HIGH_PROFILE_RATIO = 0.3;
 const CEILING_CHECK_STEPS = 3;
 const CEILING_PUSH_FORCE = 0.12;
 const HORIZONTAL_BUMP_FORCE = 0.04;
+const PASSIVE_WANDER_TICKS = 2400; // 2 minutes without seeing target = passive wandering
 
 const AIR_BLOCKS = new Set([
     "minecraft:air",
@@ -34,6 +35,7 @@ const AIR_BLOCKS = new Set([
 ]);
 
 const flightRoleMap = new Map();
+const lastSeenTargetTick = new Map(); // Track when target was last seen (for passive wandering)
 
 function findTarget(entity, maxDistance = MAX_TARGET_DISTANCE) {
     const dimension = entity?.dimension;
@@ -230,9 +232,19 @@ system.runInterval(() => {
                 adjustAltitude(entity, profile, groundY);
                 resolveCeilingCollision(entity);
                 const targetInfo = findTarget(entity);
+                
+                // Track last seen target tick
                 if (targetInfo) {
+                    lastSeenTargetTick.set(entity.id, tick);
                     steerTowards(entity, targetInfo, profile);
                 } else {
+                    // Check if should enter passive wandering (2 minutes without seeing target)
+                    const lastSeen = lastSeenTargetTick.get(entity.id) || 0;
+                    const timeSinceSeen = tick - lastSeen;
+                    if (timeSinceSeen > PASSIVE_WANDER_TICKS) {
+                        // Force passive wandering - clear tracking
+                        lastSeenTargetTick.delete(entity.id);
+                    }
                     applyDrift(entity, tick, profile);
                 }
             }
@@ -241,6 +253,12 @@ system.runInterval(() => {
 
     if (seenIds.size > 0) {
         cleanupFlightRoles(seenIds);
+        // Clean up tracking for removed entities
+        for (const [entityId] of lastSeenTargetTick.entries()) {
+            if (!seenIds.has(entityId)) {
+                lastSeenTargetTick.delete(entityId);
+            }
+        }
     }
 }, 6);
 

@@ -65,10 +65,10 @@
 					"deals_damage": "no"
 				}
 			},
-			"minecraft:health": { "value": 90, "max": 90 },
+			"minecraft:health": { "value": 36, "max": 36 },
 			"minecraft:attack": { "damage": 15 },
-			"minecraft:movement": { "value": 0.52 },
-			"minecraft:movement.fly": { "value": 0.7 },
+			"minecraft:movement": { "value": 0.95 },
+			"minecraft:movement.fly": { "value": 1.35 },
 			"minecraft:navigation.fly": {
 				"can_land_on_trees": true,
 				"can_path_over_water": true,
@@ -81,19 +81,19 @@
 			},
 			"minecraft:behavior.random_fly": {
 				"priority": 4,
-				"speed_multiplier": 0.85,
-				"xz_dist": 20,
-				"y_dist": 9
+				"speed_multiplier": 1.3,
+				"xz_dist": 26,
+				"y_dist": 12
 			},
 			"minecraft:behavior.melee_attack": {
 				"priority": 1,
-				"speed_multiplier": 1.35,
+				"speed_multiplier": 2.2,
 				"track_target": true,
-				"reach_multiplier": 2.9
+				"reach_multiplier": 3.0
 			},
 			"minecraft:behavior.move_towards_target": {
 				"priority": 2,
-				"speed_multiplier": 1.35,
+				"speed_multiplier": 2.0,
 				"within_radius": 6,
 				"ignore_vertical_distance": false
 			},

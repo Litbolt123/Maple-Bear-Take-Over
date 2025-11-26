@@ -1086,7 +1086,7 @@ function handleInfectionExpiration(player, infectionState) {
 // --- Helper: Send contextual discovery message ---
 function sendDiscoveryMessage(player, codex, messageType = "interesting", itemType = "") {
     if (codex?.items?.snowBookCrafted) {
-        player.sendMessage("§7You feel like you should check your Powdery Journal...");
+        player.sendMessage("§7Check your journal.");
         // Play discovery sound
         player.playSound("random.orb", { pitch: 1.8, volume: 0.6 });
         } else {
@@ -1161,6 +1161,23 @@ function convertEntity(deadEntity, killer, targetEntityId, conversionName) {
         
     // Add visual feedback
         dimension.spawnParticle("mb:white_dust_particale", location);
+    
+    // Place snow layer at spawn location (all Maple Bears spawn on snow)
+    try {
+        const spawnY = Math.floor(location.y);
+        const snowLoc = { x: Math.floor(location.x), y: spawnY, z: Math.floor(location.z) };
+        const snowBlock = dimension.getBlock(snowLoc);
+        if (snowBlock && snowBlock.isAir) {
+            // Use custom snow layer if available, otherwise vanilla
+            try {
+                snowBlock.setType("mb:snow_layer");
+            } catch {
+                snowBlock.setType(SNOW_LAYER_BLOCK);
+            }
+        }
+    } catch {
+        // Ignore snow placement errors
+    }
         
     // console.log(`[${conversionName}] Conversion complete`);
     return newEntity;
@@ -1215,6 +1232,45 @@ function convertMobToMapleBear(deadMob, killer) {
         if (mobType === "minecraft:cow") {
             // console.log(`[CONVERSION] Ignoring cow conversion - handled by cow conversion system`);
             return;
+        }
+        
+        // Check nearby bear count - stop converting if 40+ Maple Bears within range
+        try {
+            const nearbyEntities = deadMob.dimension.getEntities({
+                location: deadMob.location,
+                maxDistance: 64,
+                families: ["maple_bear", "infected"]
+            });
+            let totalBearCount = 0;
+            let buffBearCount = 0;
+            const mbTypePrefixes = ["mb:mb", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+            
+            for (const nearby of nearbyEntities) {
+                const typeId = nearby.typeId;
+                if (mbTypePrefixes.some(prefix => typeId.startsWith(prefix))) {
+                    totalBearCount++;
+                    if (typeId === BUFF_BEAR_ID || typeId === BUFF_BEAR_DAY13_ID || typeId === BUFF_BEAR_DAY20_ID) {
+                        buffBearCount++;
+                    }
+                }
+            }
+            
+            // Stop conversion if too many bears (40 max)
+            if (totalBearCount >= 40) {
+                return; // Too many bears nearby - stop converting
+            }
+            // Stop buff bear creation if too many (5 max)
+            if (buffBearCount >= 5) {
+                const willBeBuff = (mobType.includes('warden') || mobType.includes('ravager') || 
+                                  mobType.includes('iron_golem') || mobType.includes('wither') ||
+                                  mobType.includes('ender_dragon') || mobType.includes('giant') ||
+                                  mobType.includes('shulker') || mobType.includes('elder_guardian'));
+                if (willBeBuff) {
+                    return; // Would create buff bear - skip conversion
+                }
+            }
+        } catch (error) {
+            // Error checking nearby entities - allow conversion to proceed
         }
         
         const killerType = killer.typeId;
@@ -2075,6 +2131,44 @@ function handleMobConversion(entity, killer) {
             return;
         }
         
+        // Check nearby bear count - stop converting if 40+ Maple Bears within range
+        try {
+            const nearbyEntities = entity.dimension.getEntities({
+                location: entity.location,
+                maxDistance: 64,
+                families: ["maple_bear", "infected"]
+            });
+            let totalBearCount = 0;
+            let buffBearCount = 0;
+            const mbTypePrefixes = ["mb:mb", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+            
+            for (const nearby of nearbyEntities) {
+                const typeId = nearby.typeId;
+                if (mbTypePrefixes.some(prefix => typeId.startsWith(prefix))) {
+                    totalBearCount++;
+                    if (typeId === BUFF_BEAR_ID || typeId === BUFF_BEAR_DAY13_ID || typeId === BUFF_BEAR_DAY20_ID) {
+                        buffBearCount++;
+                    }
+                }
+            }
+            
+            // Stop conversion if too many bears (40 max) or too many buff bears (5 max)
+            if (totalBearCount >= 40) {
+                return; // Too many bears nearby - stop converting
+            }
+            if (buffBearCount >= 5) {
+                // Too many buff bears - only allow non-buff conversions
+                const willBeBuff = (entityType.includes('warden') || entityType.includes('ravager') || 
+                                  entityType.includes('iron_golem') || entityType.includes('wither') ||
+                                  entityType.includes('ender_dragon') || entityType.includes('giant'));
+                if (willBeBuff) {
+                    return; // Would create buff bear - skip
+                }
+            }
+        } catch (error) {
+            // Error checking nearby entities - allow conversion to proceed
+        }
+        
         // Check if victim is a pig and convert to infected pig
         if (entityType === "minecraft:pig") {
             // console.log(`[PIG CONVERSION] Maple Bear killing pig on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
@@ -2132,9 +2226,67 @@ function handleMapleBearKillTracking(entity, killer) {
     }
 }
 
+// Global tracking for dusted_dirt blocks to prevent lag
+const DUSTED_DIRT_MAX_BLOCKS = 2000; // Maximum total dusted_dirt blocks in world
+const DUSTED_DIRT_CLEANUP_INTERVAL = 12000; // Cleanup every 10 minutes (12000 ticks)
+const DUSTED_DIRT_MAX_AGE = 24000; // Remove blocks older than 20 minutes
+let lastDustedDirtCleanup = 0;
+const trackedDustedDirtBlocks = new Map(); // key: "x,y,z,dim" -> { tick, dimension }
+
+// Run cleanup periodically
+system.runInterval(() => {
+    cleanupOldDustedDirt();
+}, 600); // Check every 30 seconds
+
+// Cleanup old dusted_dirt blocks to prevent lag
+function cleanupOldDustedDirt() {
+    const currentTick = system.currentTick;
+    if (currentTick - lastDustedDirtCleanup < DUSTED_DIRT_CLEANUP_INTERVAL) return;
+    lastDustedDirtCleanup = currentTick;
+    
+    // Count total blocks
+    let totalBlocks = trackedDustedDirtBlocks.size;
+    
+    // If we're over the limit, remove oldest blocks from tracking (don't convert back to dirt)
+    if (totalBlocks > DUSTED_DIRT_MAX_BLOCKS) {
+        const entries = Array.from(trackedDustedDirtBlocks.entries());
+        entries.sort((a, b) => a[1].tick - b[1].tick); // Sort by age
+        
+        const toRemove = totalBlocks - DUSTED_DIRT_MAX_BLOCKS;
+        for (let i = 0; i < toRemove && i < entries.length; i++) {
+            const [key, value] = entries[i];
+            // Just remove from tracking, don't convert blocks back
+            const parts = key.split(',');
+            unregisterDustedDirtBlock(parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]));
+            trackedDustedDirtBlocks.delete(key);
+        }
+    }
+    
+    // Also remove blocks older than max age from tracking (don't convert back to dirt)
+    const toRemoveOld = [];
+    for (const [key, value] of trackedDustedDirtBlocks.entries()) {
+        if (currentTick - value.tick > DUSTED_DIRT_MAX_AGE) {
+            toRemoveOld.push(key);
+        }
+    }
+    
+    for (const key of toRemoveOld) {
+        // Just remove from tracking, don't convert blocks back
+        const parts = key.split(',');
+        unregisterDustedDirtBlock(parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]));
+        trackedDustedDirtBlocks.delete(key);
+    }
+}
+
 // Spread dusted dirt like sculk when Maple Bears kill things
 function spreadDustedDirt(location, dimension, killerType, victimType) {
     try {
+        // Check if we're at the limit before spreading
+        cleanupOldDustedDirt();
+        if (trackedDustedDirtBlocks.size >= DUSTED_DIRT_MAX_BLOCKS) {
+            return; // Don't spread more if at limit
+        }
+        
         const x = Math.floor(location.x);
         const y = Math.floor(location.y);
         const z = Math.floor(location.z);
@@ -2293,8 +2445,15 @@ function spreadDustedDirt(location, dimension, killerType, victimType) {
                 ];
 
                 if (block && convertibleBlocks.includes(block.typeId)) {
+                    // Check limit before converting
+                    if (trackedDustedDirtBlocks.size >= DUSTED_DIRT_MAX_BLOCKS) break;
+                    
                     block.setType('mb:dusted_dirt');
                     blocksConverted++;
+                    
+                    // Track this block
+                    const key = `${candidate.x},${candidate.y},${candidate.z},${dimension.id}`;
+                    trackedDustedDirtBlocks.set(key, { tick: system.currentTick, dimension: dimension.id });
                     
                     // Register in spawn controller cache
                     registerDustedDirtBlock(candidate.x, candidate.y, candidate.z, dimension);
@@ -2439,6 +2598,87 @@ world.afterEvents.entityDie.subscribe((event) => {
             
         } catch (error) {
             // console.warn("Error handling infected cow death:", error);
+        }
+    }
+    
+    // Torpedo bear death: explode on death and place snow layers
+    if (entity.typeId === "mb:torpedo_mb" || entity.typeId === "mb:torpedo_mb_day20") {
+        try {
+            const loc = entity.location;
+            const dimension = entity.dimension;
+            
+            // Create explosion effect
+            dimension.runCommand(`particle minecraft:explosion ${loc.x} ${loc.y} ${loc.z} 0.5 0.5 0.5 0.1 10`);
+            dimension.runCommand(`particle minecraft:explosion_emitter ${loc.x} ${loc.y} ${loc.z} 1 1 1 0.2 20`);
+            
+            // Play explosion sound
+            dimension.runCommand(`playsound mob.tnt.explode @a ${loc.x} ${loc.y} ${loc.z} 1 1`);
+            
+            // Place snow layers on blocks nearby (5 block radius) - only if there are nearby blocks
+            const explosionRadius = 5;
+            const centerX = Math.floor(loc.x);
+            const centerY = Math.floor(loc.y);
+            const centerZ = Math.floor(loc.z);
+            
+            // First check if there are any nearby blocks before placing snow
+            let hasNearbyBlocks = false;
+            for (let dx = -explosionRadius; dx <= explosionRadius; dx++) {
+                for (let dz = -explosionRadius; dz <= explosionRadius; dz++) {
+                    const dist = Math.hypot(dx, dz);
+                    if (dist > explosionRadius) continue;
+                    for (let dy = -2; dy <= 2; dy++) {
+                        try {
+                            const checkBlock = dimension.getBlock({ x: centerX + dx, y: centerY + dy, z: centerZ + dz });
+                            if (checkBlock && !checkBlock.isAir && !checkBlock.isLiquid) {
+                                hasNearbyBlocks = true;
+                                break;
+                            }
+                        } catch { }
+                    }
+                    if (hasNearbyBlocks) break;
+                }
+                if (hasNearbyBlocks) break;
+            }
+            
+            // Only place snow layers if there are nearby blocks
+            if (hasNearbyBlocks) {
+                for (let dx = -explosionRadius; dx <= explosionRadius; dx++) {
+                    for (let dz = -explosionRadius; dz <= explosionRadius; dz++) {
+                        const dist = Math.hypot(dx, dz);
+                        if (dist > explosionRadius) continue; // Skip outside radius
+                        
+                        // Check various Y levels (explosion can affect multiple layers)
+                        for (let dy = -2; dy <= 2; dy++) {
+                            const checkX = centerX + dx;
+                            const checkY = centerY + dy;
+                            const checkZ = centerZ + dz;
+                            
+                            try {
+                                const blockLoc = { x: checkX, y: checkY, z: checkZ };
+                                const aboveLoc = { x: checkX, y: checkY + 1, z: checkZ };
+                                const block = dimension.getBlock(blockLoc);
+                                const above = dimension.getBlock(aboveLoc);
+                                
+                                if (!block || !above) continue;
+                                
+                                // Place snow layer if there's air above and solid below
+                                if (above.isAir && !block.isAir && !block.isLiquid) {
+                                    // Use custom snow layer if available, otherwise vanilla
+                                    try {
+                                        above.setType("mb:snow_layer");
+                                    } catch {
+                                        above.setType(SNOW_LAYER_BLOCK);
+                                    }
+                                }
+                            } catch {
+                                // Skip errors (chunk not loaded, etc.)
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            // Ignore explosion errors
         }
     }
 });
@@ -3013,13 +3253,37 @@ function tryPlaceSnowLayerUnder(entity) {
         const below = dim.getBlock(blockLoc);
         const above = dim.getBlock(aboveLoc);
         if (!below || !above) return;
+        
+        // Check if there are nearby blocks (don't place in empty air)
+        let hasNearbyBlocks = false;
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dz = -1; dz <= 1; dz++) {
+                if (dx === 0 && dz === 0) continue;
+                try {
+                    const nearbyBlock = dim.getBlock({ x: blockLoc.x + dx, y: blockLoc.y, z: blockLoc.z + dz });
+                    if (nearbyBlock && !nearbyBlock.isAir && !nearbyBlock.isLiquid) {
+                        hasNearbyBlocks = true;
+                        break;
+                    }
+                } catch { }
+            }
+            if (hasNearbyBlocks) break;
+        }
+        
+        // Only place if there are nearby blocks
+        if (!hasNearbyBlocks) return;
+        
         // Only place on solid-ish surfaces with air above
         if (!above.isAir) return;
         // Avoid placing inside fluids
         if (below.isLiquid) return;
-        // Place a thin layer of vanilla snow as a placeholder
+        // Place snow layer - use custom if available, otherwise vanilla
         if (above.isAir) {
-            above.setType(SNOW_LAYER_BLOCK);
+            try {
+                above.setType("mb:snow_layer");
+            } catch {
+                above.setType(SNOW_LAYER_BLOCK);
+            }
         }
     } catch { }
 }
@@ -3045,22 +3309,57 @@ system.runInterval(() => {
         for (const entity of world.getAllEntities()) {
             if (!entity || !entity.isValid) continue;
             const t = entity.typeId;
-            if (t !== MAPLE_BEAR_ID && t !== MAPLE_BEAR_DAY4_ID && t !== MAPLE_BEAR_DAY8_ID && t !== MAPLE_BEAR_DAY13_ID && t !== MAPLE_BEAR_DAY20_ID && t !== INFECTED_BEAR_ID && t !== INFECTED_BEAR_DAY8_ID && t !== INFECTED_BEAR_DAY13_ID && t !== INFECTED_BEAR_DAY20_ID && t !== BUFF_BEAR_ID && t !== BUFF_BEAR_DAY13_ID && t !== BUFF_BEAR_DAY20_ID && t !== INFECTED_PIG_ID) continue;
+            
+            // Check if it's any Maple Bear type (excluding flying and torpedo bears - they have their own snow systems)
+            const isMapleBear = t === MAPLE_BEAR_ID || t === MAPLE_BEAR_DAY4_ID || t === MAPLE_BEAR_DAY8_ID || 
+                               t === MAPLE_BEAR_DAY13_ID || t === MAPLE_BEAR_DAY20_ID ||
+                               t === INFECTED_BEAR_ID || t === INFECTED_BEAR_DAY8_ID || 
+                               t === INFECTED_BEAR_DAY13_ID || t === INFECTED_BEAR_DAY20_ID ||
+                               t === BUFF_BEAR_ID || t === BUFF_BEAR_DAY13_ID || t === BUFF_BEAR_DAY20_ID ||
+                               t === MINING_BEAR_ID || t === MINING_BEAR_DAY20_ID ||
+                               t === INFECTED_PIG_ID || t === INFECTED_COW_ID;
+            
+            // Skip flying bears - they have their own snow layer system
+            if (t === FLYING_BEAR_ID || t === FLYING_BEAR_DAY15_ID || t === FLYING_BEAR_DAY20_ID) {
+                // Only handle snow item drops for flying bears if needed, but skip trail system
+                continue;
+            }
+            
+            // Skip torpedo bears - they fly and have explosion snow effects
+            if (t === TORPEDO_BEAR_ID || t === TORPEDO_BEAR_DAY20_ID) {
+                continue;
+            }
+            
+            if (!isMapleBear) continue;
 
-            // Snow trail placement (for all types)
+            // Snow trail placement (size-based chances: tiny < infected < buff < special)
             let trailChance = 0.02; // tiny default
-            if (t === MAPLE_BEAR_DAY4_ID) trailChance = 0.03; // Day 4+ tiny bears
-            if (t === MAPLE_BEAR_DAY8_ID) trailChance = 0.04; // Day 8+ tiny bears
-            if (t === MAPLE_BEAR_DAY13_ID) trailChance = 0.05; // Day 13+ tiny bears
-            if (t === MAPLE_BEAR_DAY20_ID) trailChance = 0.06; // Day 20+ tiny bears
+            
+            // Tiny bears (smallest)
+            if (t === MAPLE_BEAR_ID) trailChance = 0.02;
+            if (t === MAPLE_BEAR_DAY4_ID) trailChance = 0.03;
+            if (t === MAPLE_BEAR_DAY8_ID) trailChance = 0.04;
+            if (t === MAPLE_BEAR_DAY13_ID) trailChance = 0.05;
+            if (t === MAPLE_BEAR_DAY20_ID) trailChance = 0.06;
+            
+            // Infected bears (medium)
             if (t === INFECTED_BEAR_ID) trailChance = 0.06;
-            if (t === INFECTED_BEAR_DAY8_ID) trailChance = 0.08; // Day 8+ normal bears
-            if (t === INFECTED_BEAR_DAY13_ID) trailChance = 0.1; // Day 13+ normal bears
-            if (t === INFECTED_BEAR_DAY20_ID) trailChance = 0.12; // Day 20+ normal bears
-            if (t === BUFF_BEAR_ID) trailChance = 0.2;
-            if (t === BUFF_BEAR_DAY13_ID) trailChance = 0.25; // Day 13+ buff bears
-            if (t === BUFF_BEAR_DAY20_ID) trailChance = 0.3; // Day 20+ buff bears
-            if (t === INFECTED_PIG_ID) trailChance = 0.06; // Same as infected bear
+            if (t === INFECTED_BEAR_DAY8_ID) trailChance = 0.08;
+            if (t === INFECTED_BEAR_DAY13_ID) trailChance = 0.1;
+            if (t === INFECTED_BEAR_DAY20_ID) trailChance = 0.12;
+            
+            // Buff bears (large)
+            if (t === BUFF_BEAR_ID) trailChance = 0.15;
+            if (t === BUFF_BEAR_DAY13_ID) trailChance = 0.2;
+            if (t === BUFF_BEAR_DAY20_ID) trailChance = 0.25;
+            
+            // Mining bears (medium-large)
+            if (t === MINING_BEAR_ID) trailChance = 0.1;
+            if (t === MINING_BEAR_DAY20_ID) trailChance = 0.15;
+            
+            // Infected animals (same as infected bears)
+            if (t === INFECTED_PIG_ID) trailChance = 0.06;
+            if (t === INFECTED_COW_ID) trailChance = 0.08;
 
             const lastTrail = lastSnowTrailTickByEntity.get(entity.id) ?? 0;
             if (nowTick - lastTrail >= TRAIL_COOLDOWN_TICKS && Math.random() < trailChance) {
@@ -3810,10 +4109,18 @@ world.afterEvents.playerPlaceBlock.subscribe((event) => {
         if (belowBlock && convertible.has(belowBlock.typeId)) {
             system.run(() => {
                 try {
-                    belowBlock.setType("mb:dusted_dirt");
-                    
-                    // Register in spawn controller cache
-                    registerDustedDirtBlock(belowPos.x, belowPos.y, belowPos.z, dim);
+                    // Check limit before converting
+                    cleanupOldDustedDirt();
+                    if (trackedDustedDirtBlocks.size < DUSTED_DIRT_MAX_BLOCKS) {
+                        belowBlock.setType("mb:dusted_dirt");
+                        
+                        // Track this block
+                        const key = `${belowPos.x},${belowPos.y},${belowPos.z},${dim.id}`;
+                        trackedDustedDirtBlocks.set(key, { tick: system.currentTick, dimension: dim.id });
+                        
+                        // Register in spawn controller cache
+                        registerDustedDirtBlock(belowPos.x, belowPos.y, belowPos.z, dim);
+                    }
                     
                     // Add particle effect
                         dim.runCommand(`particle minecraft:snowflake ${Math.floor(belowPos.x)} ${Math.floor(belowPos.y + 1)} ${Math.floor(belowPos.z)}`); 
@@ -3831,6 +4138,9 @@ world.afterEvents.playerBreakBlock.subscribe((event) => {
     if (permutation && permutation.type?.id === "mb:dusted_dirt") {
         const pos = event.block.location;
         unregisterDustedDirtBlock(pos.x, pos.y, pos.z);
+        // Also remove from tracked blocks
+        const key = `${Math.floor(pos.x)},${Math.floor(pos.y)},${Math.floor(pos.z)},${event.player.dimension.id}`;
+        trackedDustedDirtBlocks.delete(key);
     }
 });
 
