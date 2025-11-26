@@ -18,8 +18,9 @@ export const UNBREAKABLE_BLOCKS = new Set([
     "minecraft:end_gateway"
 ]);
 
-// Legacy list - kept for backwards compatibility but not used for checking
-// All blocks are now breakable by default except those in UNBREAKABLE_BLOCKS
+// List of blocks that mining bears can break
+// All blocks are breakable by default except those in UNBREAKABLE_BLOCKS
+// This list is used to create MINING_BREAKABLE_BLOCK_SET for efficient membership checks
 export const MINING_BREAKABLE_BLOCKS = [
     "minecraft:stone",
     "minecraft:cobblestone",
@@ -55,7 +56,6 @@ export const MINING_BREAKABLE_BLOCKS = [
     "minecraft:soul_soil",
     "minecraft:netherrack",
     "minecraft:end_stone",
-    "minecraft:obsidian",
     "minecraft:oak_log",
     "minecraft:spruce_log",
     "minecraft:birch_log",

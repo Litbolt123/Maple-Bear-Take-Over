@@ -102,10 +102,11 @@ function blockToItemType(blockTypeId) {
         "minecraft:cave_air": null,
         "minecraft:void_air": null,
         // Ores drop their respective items, not the ore blocks
-        "minecraft:iron_ore": "minecraft:iron_ingot",
-        "minecraft:deepslate_iron_ore": "minecraft:iron_ingot",
-        "minecraft:gold_ore": "minecraft:gold_ingot",
-        "minecraft:deepslate_gold_ore": "minecraft:gold_ingot",
+        // Iron and gold ores drop raw materials, not ingots
+        "minecraft:iron_ore": "minecraft:raw_iron",
+        "minecraft:deepslate_iron_ore": "minecraft:raw_iron",
+        "minecraft:gold_ore": "minecraft:raw_gold",
+        "minecraft:deepslate_gold_ore": "minecraft:raw_gold",
         "minecraft:copper_ore": "minecraft:raw_copper",
         "minecraft:deepslate_copper_ore": "minecraft:raw_copper",
         "minecraft:coal_ore": "minecraft:coal",

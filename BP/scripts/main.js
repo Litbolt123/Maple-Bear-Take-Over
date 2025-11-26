@@ -2253,20 +2253,13 @@ function cleanupOldDustedDirt() {
     
     // If we're over the limit, remove oldest blocks from tracking (don't convert back to dirt)
     if (totalBlocks > DUSTED_DIRT_MAX_BLOCKS) {
-        // Performance optimization: only get entries we need to remove, use partial sort
+        // Sort entries by age to find oldest blocks to remove
         const entries = Array.from(trackedDustedDirtBlocks.entries());
         const toRemove = totalBlocks - DUSTED_DIRT_MAX_BLOCKS;
         
-        // For small removals, use full sort. For large removals, use partial selection
-        if (toRemove < 100) {
-            // Small batch: full sort is acceptable
-            entries.sort((a, b) => a[1].tick - b[1].tick);
-        } else {
-            // Large batch: use partial sort - only sort the oldest entries we need
-            // This is more efficient than sorting all 2000+ entries
-            entries.sort((a, b) => a[1].tick - b[1].tick);
-            // Limit to only the entries we need to remove
-        }
+        // Sort all entries by tick (age) - oldest first
+        // For very large arrays, could use partial selection algorithms, but full sort is simpler
+        entries.sort((a, b) => a[1].tick - b[1].tick);
         
         for (let i = 0; i < toRemove && i < entries.length; i++) {
             const [key, value] = entries[i];

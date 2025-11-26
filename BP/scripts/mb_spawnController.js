@@ -937,16 +937,23 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
     const maxSq = maxDistance * maxDistance;
     const candidates = [];
     const seen = new Set();
-    let blockQueryCount = 0;
-
+    
+    // Track total query budget across both phases
+    // Allocate 60% for dusted_dirt, 40% for stone/deepslate
+    const dustedBudget = Math.floor(MAX_BLOCK_QUERIES_PER_SCAN * 0.6);
+    const stoneBudget = Math.floor(MAX_BLOCK_QUERIES_PER_SCAN * 0.4);
+    
     // First, get dusted_dirt tiles (reuse existing function)
+    // Note: collectDustedTiles has its own internal query budget management
+    // We can't directly track its usage, but we allocate the budget here for clarity
     const dustedTiles = collectDustedTiles(dimension, center, minDistance, maxDistance, Math.floor(limit * 0.6)); // 60% from dusted_dirt
     candidates.push(...dustedTiles);
     dustedTiles.forEach(t => seen.add(`${t.x},${t.y},${t.z}`));
     
     // Then, collect stone/deepslate blocks in caves (40% from stone/deepslate)
-    // Only collect if we need more tiles and haven't hit the limit
-    if (candidates.length < limit && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN * 0.4) {
+    // Only collect if we need more tiles and have budget remaining
+    let blockQueryCount = 0;
+    if (candidates.length < limit && blockQueryCount < stoneBudget) {
         const xStart = cx - maxDistance;
         const xEnd = cx + maxDistance;
         const zStart = cz - maxDistance;
@@ -954,15 +961,20 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
         const yStart = Math.min(cy + 10, 320);
         const yEnd = Math.max(cy - 10, -64);
         
-        for (let x = xStart; x <= xEnd && candidates.length < limit && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN * 0.4; x++) {
-            for (let z = zStart; z <= zEnd && candidates.length < limit && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN * 0.4; z++) {
+        // Use roofProbe from MINING_SPAWN_SETTINGS for consistency
+        // Use the maximum roofProbe value (7 from day20) to be consistent with the most permissive setting
+        const maxRoofProbe = Math.max(...Object.values(MINING_SPAWN_SETTINGS).map(s => s.roofProbe));
+        const roofProbeRange = maxRoofProbe; // Check up to roofProbe blocks above for roof detection
+        
+        for (let x = xStart; x <= xEnd && candidates.length < limit && blockQueryCount < stoneBudget; x++) {
+            for (let z = zStart; z <= zEnd && candidates.length < limit && blockQueryCount < stoneBudget; z++) {
                 const dx = x + 0.5 - center.x;
                 const dz = z + 0.5 - center.z;
                 const distSq = dx * dx + dz * dz;
                 if (distSq < minSq || distSq > maxSq) continue;
                 
                 // Check Y levels from top to bottom
-                for (let y = yStart; y >= yEnd && candidates.length < limit && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN * 0.4; y--) {
+                for (let y = yStart; y >= yEnd && candidates.length < limit && blockQueryCount < stoneBudget; y--) {
                     if (y < -64 || y > 320) continue;
                     
                     const key = `${x},${y},${z}`;
@@ -982,13 +994,15 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
                         // Check if it's in a cave (has roof above)
                         const blockAbove = dimension.getBlock({ x, y: y + 1, z });
                         blockQueryCount++;
-                        if (blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN * 0.4) {
+                        if (blockQueryCount < stoneBudget) {
                             const blockTwoAbove = dimension.getBlock({ x, y: y + 2, z });
                             blockQueryCount++;
                             if (isAir(blockAbove) && isAir(blockTwoAbove)) {
-                                // Check for roof (cave requirement) - check 5 blocks up
+                                // Check for roof (cave requirement) - check up to roofProbeRange blocks
                                 let hasRoof = false;
-                                for (let checkY = y + 3; checkY <= y + 7 && checkY <= 320; checkY++) {
+                                const roofCheckStart = y + 3;
+                                const roofCheckEnd = Math.min(y + 3 + roofProbeRange - 1, 320);
+                                for (let checkY = roofCheckStart; checkY <= roofCheckEnd && blockQueryCount < stoneBudget; checkY++) {
                                     try {
                                         const roofBlock = dimension.getBlock({ x, y: checkY, z });
                                         blockQueryCount++;
