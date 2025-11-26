@@ -23,14 +23,15 @@
 						}
 					],
 					"on_entry": [
-						"variable.idle_anim=math.random_integer(1,5);"
+						"variable.idle_anim=math.random_integer(1,5);",
+						"variable.falling_timer=0.0;"
 					],
 					"transitions": [
 						{
 							"walk": "query.ground_speed > 0.1"
 						},
 						{
-							"falling": "!query.is_on_ground"
+							"falling_delay": "!query.is_on_ground"
 						}
 					],
 					"blend_transition": 0.2
@@ -54,17 +55,35 @@
 						}
 					],
 					"on_entry": [
-						"variable.walk_anim=math.random_integer(1,5);"
+						"variable.walk_anim=math.random_integer(1,5);",
+						"variable.falling_timer=0.0;"
 					],
 					"transitions": [
 						{
 							"idle": "query.ground_speed < 0.1"
 						},
 						{
-							"falling": "!query.is_on_ground"
+							"falling_delay": "!query.is_on_ground"
 						}
 					],
 					"blend_transition": 0.2
+				},
+				"falling_delay": {
+					"on_entry": [
+						"variable.falling_timer=query.life_time;"
+					],
+					"transitions": [
+						{
+							"idle": "query.is_on_ground && query.ground_speed < 0.1"
+						},
+						{
+							"walk": "query.is_on_ground && query.ground_speed > 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground && (query.life_time - variable.falling_timer) > 0.4"
+						}
+					],
+					"blend_transition": 0.1
 				},
 				"falling": {
 					"animations": [
@@ -87,6 +106,9 @@
 					"on_entry": [
 						"variable.falling_anim=math.random_integer(1,5);"
 					],
+					"on_exit": [
+						"variable.falling_timer=0.0;"
+					],
 					"transitions": [
 						{
 							"idle": "query.is_on_ground && query.ground_speed < 0.1"
@@ -106,12 +128,15 @@
 					"animations": [
 						"idle2"
 					],
+					"on_entry": [
+						"variable.falling_timer=0.0;"
+					],
 					"transitions": [
 						{
 							"walk": "query.ground_speed > 0.1"
 						},
 						{
-							"falling": "!query.is_on_ground"
+							"falling_delay": "!query.is_on_ground"
 						}
 					],
 					"blend_transition": 0.2
@@ -120,19 +145,42 @@
 					"animations": [
 						"walk2"
 					],
+					"on_entry": [
+						"variable.falling_timer=0.0;"
+					],
 					"transitions": [
 						{
 							"idle": "query.ground_speed < 0.1"
 						},
 						{
-							"falling": "!query.is_on_ground"
+							"falling_delay": "!query.is_on_ground"
 						}
 					],
 					"blend_transition": 0.2
 				},
+				"falling_delay": {
+					"on_entry": [
+						"variable.falling_timer=query.life_time;"
+					],
+					"transitions": [
+						{
+							"idle": "query.is_on_ground && query.ground_speed < 0.1"
+						},
+						{
+							"walk": "query.is_on_ground && query.ground_speed > 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground && (query.life_time - variable.falling_timer) > 0.4"
+						}
+					],
+					"blend_transition": 0.1
+				},
 				"falling": {
 					"animations": [
 						"falling2"
+					],
+					"on_exit": [
+						"variable.falling_timer=0.0;"
 					],
 					"transitions": [
 						{
@@ -153,12 +201,15 @@
 					"animations": [
 						"idle3"
 					],
+					"on_entry": [
+						"variable.falling_timer=0.0;"
+					],
 					"transitions": [
 						{
 							"walk": "query.ground_speed > 0.1"
 						},
 						{
-							"falling": "!query.is_on_ground"
+							"falling_delay": "!query.is_on_ground"
 						}
 					],
 					"blend_transition": 0.2
@@ -167,19 +218,42 @@
 					"animations": [
 						"walk3"
 					],
+					"on_entry": [
+						"variable.falling_timer=0.0;"
+					],
 					"transitions": [
 						{
 							"idle": "query.ground_speed < 0.1"
 						},
 						{
-							"falling": "!query.is_on_ground"
+							"falling_delay": "!query.is_on_ground"
 						}
 					],
 					"blend_transition": 0.2
 				},
+				"falling_delay": {
+					"on_entry": [
+						"variable.falling_timer=query.life_time;"
+					],
+					"transitions": [
+						{
+							"idle": "query.is_on_ground && query.ground_speed < 0.1"
+						},
+						{
+							"walk": "query.is_on_ground && query.ground_speed > 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground && (query.life_time - variable.falling_timer) > 0.4"
+						}
+					],
+					"blend_transition": 0.1
+				},
 				"falling": {
 					"animations": [
 						"falling3"
+					],
+					"on_exit": [
+						"variable.falling_timer=0.0;"
 					],
 					"transitions": [
 						{
@@ -200,12 +274,15 @@
 					"animations": [
 						"idle4"
 					],
+					"on_entry": [
+						"variable.falling_timer=0.0;"
+					],
 					"transitions": [
 						{
 							"walk": "query.ground_speed > 0.1"
 						},
 						{
-							"falling": "!query.is_on_ground"
+							"falling_delay": "!query.is_on_ground"
 						}
 					],
 					"blend_transition": 0.2
@@ -214,19 +291,42 @@
 					"animations": [
 						"walk4"
 					],
+					"on_entry": [
+						"variable.falling_timer=0.0;"
+					],
 					"transitions": [
 						{
 							"idle": "query.ground_speed < 0.1"
 						},
 						{
-							"falling": "!query.is_on_ground"
+							"falling_delay": "!query.is_on_ground"
 						}
 					],
 					"blend_transition": 0.2
 				},
+				"falling_delay": {
+					"on_entry": [
+						"variable.falling_timer=query.life_time;"
+					],
+					"transitions": [
+						{
+							"idle": "query.is_on_ground && query.ground_speed < 0.1"
+						},
+						{
+							"walk": "query.is_on_ground && query.ground_speed > 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground && (query.life_time - variable.falling_timer) > 0.4"
+						}
+					],
+					"blend_transition": 0.1
+				},
 				"falling": {
 					"animations": [
 						"falling4"
+					],
+					"on_exit": [
+						"variable.falling_timer=0.0;"
 					],
 					"transitions": [
 						{
@@ -247,12 +347,15 @@
 					"animations": [
 						"idle5"
 					],
+					"on_entry": [
+						"variable.falling_timer=0.0;"
+					],
 					"transitions": [
 						{
 							"walk": "query.ground_speed > 0.1"
 						},
 						{
-							"falling": "!query.is_on_ground"
+							"falling_delay": "!query.is_on_ground"
 						}
 					],
 					"blend_transition": 0.2
@@ -261,19 +364,42 @@
 					"animations": [
 						"walk5"
 					],
+					"on_entry": [
+						"variable.falling_timer=0.0;"
+					],
 					"transitions": [
 						{
 							"idle": "query.ground_speed < 0.1"
 						},
 						{
-							"falling": "!query.is_on_ground"
+							"falling_delay": "!query.is_on_ground"
 						}
 					],
 					"blend_transition": 0.2
 				},
+				"falling_delay": {
+					"on_entry": [
+						"variable.falling_timer=query.life_time;"
+					],
+					"transitions": [
+						{
+							"idle": "query.is_on_ground && query.ground_speed < 0.1"
+						},
+						{
+							"walk": "query.is_on_ground && query.ground_speed > 0.1"
+						},
+						{
+							"falling": "!query.is_on_ground && (query.life_time - variable.falling_timer) > 0.4"
+						}
+					],
+					"blend_transition": 0.1
+				},
 				"falling": {
 					"animations": [
 						"falling5"
+					],
+					"on_exit": [
+						"variable.falling_timer=0.0;"
 					],
 					"transitions": [
 						{
