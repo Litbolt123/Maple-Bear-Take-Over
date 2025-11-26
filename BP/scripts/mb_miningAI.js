@@ -198,6 +198,98 @@ function isBreakableBlock(block) {
     return true;
 }
 
+// Player reach distance in Minecraft (typically 4.5 blocks)
+const PLAYER_REACH_DISTANCE = 4.5;
+
+// Check if a block is within player reach distance from entity
+function isBlockWithinReach(entity, blockX, blockY, blockZ) {
+    if (!entity || !entity.location) return false;
+    
+    const loc = entity.location;
+    const dx = (blockX + 0.5) - loc.x;
+    const dy = (blockY + 0.5) - loc.y;
+    const dz = (blockZ + 0.5) - loc.z;
+    const distance = Math.hypot(dx, dy, dz);
+    
+    return distance <= PLAYER_REACH_DISTANCE;
+}
+
+// Check if entity has line of sight to a block (can see it)
+// Similar to player reach - allows breaking blocks that are visible
+function canSeeBlock(entity, blockX, blockY, blockZ) {
+    if (!entity || !entity.location) return false;
+    const dimension = entity.dimension;
+    if (!dimension) return false;
+    
+    const origin = entity.location;
+    // Use eye position (typically ~1.5 blocks above feet for entities)
+    const eyeY = origin.y + 1.5;
+    
+    // Target is the center of the block
+    const targetX = blockX + 0.5;
+    const targetY = blockY + 0.5;
+    const targetZ = blockZ + 0.5;
+    
+    const dx = targetX - origin.x;
+    const dy = targetY - eyeY;
+    const dz = targetZ - origin.z;
+    const dist = Math.hypot(dx, dy, dz);
+    
+    if (dist < 0.5) return true; // Very close, assume visible
+    
+    // Raycast from entity eye position to block center
+    // Use smaller step size for more accurate checking
+    const steps = Math.max(3, Math.ceil(dist * 3)); // Sample at ~0.33 block intervals
+    const stepX = dx / steps;
+    const stepY = dy / steps;
+    const stepZ = dz / steps;
+    
+    let solidBlockCount = 0;
+    const maxSolidBlocks = 1; // Allow seeing through up to 1 solid block (like glass or partial occlusion)
+    
+    // Check line of sight - raycast from eye to block
+    for (let i = 1; i < steps; i++) {
+        const checkX = origin.x + stepX * i;
+        const checkY = eyeY + stepY * i;
+        const checkZ = origin.z + stepZ * i;
+        
+        const blockCheckX = Math.floor(checkX);
+        const blockCheckY = Math.floor(checkY);
+        const blockCheckZ = Math.floor(checkZ);
+        
+        // Skip if we're checking the target block itself (we want to break it)
+        if (blockCheckX === blockX && blockCheckY === blockY && blockCheckZ === blockZ) {
+            continue;
+        }
+        
+        try {
+            const block = dimension.getBlock({ x: blockCheckX, y: blockCheckY, z: blockCheckZ });
+            if (block && !AIR_BLOCKS.has(block.typeId)) {
+                // Check if this is a solid block that would block vision
+                if (block.isLiquid === undefined || !block.isLiquid) {
+                    // Unbreakable blocks always block line of sight
+                    if (UNBREAKABLE_BLOCKS.has(block.typeId)) {
+                        return false; // Completely blocked by unbreakable block
+                    }
+                    // Count solid breakable blocks
+                    if (isBreakableBlock(block)) {
+                        solidBlockCount++;
+                        // If too many solid blocks in the way, line of sight is blocked
+                        if (solidBlockCount > maxSolidBlocks) {
+                            return false; // Too many blocks in the way
+                        }
+                    }
+                }
+            }
+        } catch {
+            // Error checking block - for safety, if we can't check, allow it (better than blocking)
+            continue;
+        }
+    }
+    
+    return true; // Clear line of sight (or only minor occlusion)
+}
+
 function pickBreakSound(typeId) {
     if (!typeId) return BREAK_SOUND_DEFAULT;
     const shortId = (typeId.split(":")[1] ?? typeId).toLowerCase();
@@ -247,6 +339,18 @@ function clearBlock(dimension, x, y, z, digContext, entity = null) {
     const stairTick = recentStairBlocks.get(blockKey);
     if (stairTick !== undefined && (currentTick - stairTick) < 200) { // Protect for 10 seconds (200 ticks)
         return false; // This is a stair/ramp block, don't break it
+    }
+    
+    // NEW: Only break blocks that are within reach distance (like player reach)
+    if (entity) {
+        if (!isBlockWithinReach(entity, x, y, z)) {
+            return false; // Block is too far away
+        }
+        
+        // NEW: Only break blocks that the entity can see (line of sight check)
+        if (!canSeeBlock(entity, x, y, z)) {
+            return false; // Block is not visible (line of sight blocked)
+        }
     }
     
     const originalType = block.typeId;
