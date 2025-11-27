@@ -55,6 +55,16 @@
 		},
 		"flying_mb_egg": {
 			"textures": "textures/items/flying_mb_egg"
+		},
+		"mb_infected_miner_egg": {
+			"textures": [
+				"textures/items/Infected_human_miner_egg"
+			]
+		},
+		"mb_infected_miner2_egg": {
+			"textures": [
+				"textures/items/Infected_human_miner2_egg"
+			]
 		}
 	}
 }
