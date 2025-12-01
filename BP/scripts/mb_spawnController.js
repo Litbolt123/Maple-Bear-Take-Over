@@ -349,18 +349,19 @@ const SPAWN_ATTEMPTS = 18; // Increased from 12 for more spawns per cycle
 const MIN_SPAWN_DISTANCE = 15;
 const MAX_SPAWN_DISTANCE = 48;
 const BASE_MIN_TILE_SPACING = 2.5; // blocks between spawn tiles (reduced from 3 for better coverage on day 20+)
-const SCAN_INTERVAL = 100; // ticks (~5 seconds)
-const BLOCK_SCAN_COOLDOWN = SCAN_INTERVAL * 1.5; // Only scan blocks every 1.5 intervals (~7.5 seconds)
-const MAX_BLOCK_QUERIES_PER_SCAN = 30000; // Limit block queries per scan (reduced from 50000 for better performance)
+const SCAN_INTERVAL = 60; // ticks (~3 seconds) - reduced for more frequent smaller scans
+const BLOCK_SCAN_COOLDOWN = SCAN_INTERVAL * 2; // Only scan blocks every 2 intervals (~6 seconds)
+const MAX_BLOCK_QUERIES_PER_SCAN = 6000; // Limit block queries per scan (smaller batches, more frequent)
+// Total queries over time: 6000 every 60 ticks = ~100 queries/tick average (same as 12000 every 120 ticks)
 
 const SUNRISE_BOOST_DURATION = 200; // ticks
 const SUNRISE_BOOST_MULTIPLIER = 1.25;
 
-const MAX_CANDIDATES_PER_SCAN = 220;
-const MAX_SPACED_TILES = 90;
-const CACHE_MOVE_THRESHOLD = 6; // blocks
+const MAX_CANDIDATES_PER_SCAN = 180; // Reduced from 220 for better performance with multiple players
+const MAX_SPACED_TILES = 75; // Reduced from 90 for better performance
+const CACHE_MOVE_THRESHOLD = 8; // blocks - increased from 6 to reduce cache invalidations
 const CACHE_MOVE_THRESHOLD_SQ = CACHE_MOVE_THRESHOLD * CACHE_MOVE_THRESHOLD;
-const CACHE_TICK_TTL = SCAN_INTERVAL * 3;
+const CACHE_TICK_TTL = SCAN_INTERVAL * 4; // Increased from 3 to keep cache longer
 
 function getSpawnDifficultyState() {
     let rawValue = world.getDynamicProperty(SPAWN_DIFFICULTY_PROPERTY);
@@ -1113,11 +1114,94 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     // console.warn(`[SPAWN DEBUG] Found ${cachedTiles.length} valid tiles from cache (filtered by distance: ${minDistance}-${cacheMaxDistance} blocks), used ${blockQueryCount} queries`);
     candidates.push(...cachedTiles);
     
-    // If we have enough tiles from cache, skip expensive scan
-    if (cachedTiles.length >= 20) {
+    // Strategy: Prioritize cached tiles and scan around them first
+    // This is much more efficient than full area scans
+    const CACHE_SCAN_RADIUS = 8; // Scan 8 blocks around each cached tile
+    const MIN_CACHED_TILES_FOR_FULL_SCAN = 5; // Only do full scan if we have very few cached tiles
+    
+    // If we have enough tiles from cache, skip expensive scan entirely
+    if (cachedTiles.length >= limit) {
         // console.warn(`[SPAWN DEBUG] Using cached tiles only (${cachedTiles.length} tiles), skipping block scan`);
         return candidates.slice(0, limit);
     }
+    
+    // If we have some cached tiles, scan around them first (much more efficient)
+    if (cachedTiles.length >= MIN_CACHED_TILES_FOR_FULL_SCAN && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN) {
+        // Scan around each cached tile to find nearby spawn locations
+        // This is much more efficient than scanning the entire area
+        const tilesToScanAround = cachedTiles.slice(0, Math.min(10, cachedTiles.length)); // Limit to 10 tiles to avoid too many queries
+        for (const cachedTile of tilesToScanAround) {
+            if (candidates.length >= limit || blockQueryCount >= MAX_BLOCK_QUERIES_PER_SCAN) break;
+            
+            // Scan in a small box around this cached tile
+            const scanRadius = CACHE_SCAN_RADIUS;
+            for (let dx = -scanRadius; dx <= scanRadius && candidates.length < limit && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN; dx++) {
+                for (let dz = -scanRadius; dz <= scanRadius && candidates.length < limit && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN; dz++) {
+                    // Skip the center (we already have this tile)
+                    if (dx === 0 && dz === 0) continue;
+                    
+                    const checkX = cachedTile.x + dx;
+                    const checkZ = cachedTile.z + dz;
+                    
+                    // Check if this position is within valid spawn distance
+                    const distFromCenter = Math.hypot((checkX + 0.5) - center.x, (checkZ + 0.5) - center.z);
+                    if (distFromCenter < minDistance || distFromCenter > maxDistance) continue;
+                    
+                    // Check Y levels around the cached tile's Y level
+                    const checkYStart = Math.min(cachedTile.y + 5, 320);
+                    const checkYEnd = Math.max(cachedTile.y - 5, -64);
+                    
+                    for (let checkY = checkYStart; checkY >= checkYEnd && candidates.length < limit && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN; checkY--) {
+                        if (checkY < -64 || checkY > 320) continue;
+                        
+                        const tileKey = `${checkX},${checkY},${checkZ}`;
+                        if (seen.has(tileKey)) continue;
+                        
+                        let block;
+                        try {
+                            block = dimension.getBlock({ x: checkX, y: checkY, z: checkZ });
+                            blockQueryCount++;
+                        } catch {
+                            continue;
+                        }
+                        if (!block) continue;
+                        
+                        if (block.typeId === TARGET_BLOCK) {
+                            const blockAbove = dimension.getBlock({ x: checkX, y: checkY + 1, z: checkZ });
+                            blockQueryCount++;
+                            if (blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN) {
+                                const blockTwoAbove = dimension.getBlock({ x: checkX, y: checkY + 2, z: checkZ });
+                                blockQueryCount++;
+                                if (isAir(blockAbove) && isAir(blockTwoAbove)) {
+                                    seen.add(tileKey);
+                                    candidates.push({ x: checkX, y: checkY, z: checkZ });
+                                    // Register new tile in cache for future use
+                                    registerDustedDirtBlock(checkX, checkY, checkZ, dimension);
+                                    
+                                    // Found solid block, move to next XZ
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (!isAir(block)) {
+                            // Hit solid non-target block, move to next XZ
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // If we found enough tiles from cache + scanning around cache, we're done
+        if (candidates.length >= limit || cachedTiles.length >= MIN_CACHED_TILES_FOR_FULL_SCAN) {
+            // console.warn(`[SPAWN DEBUG] Found ${candidates.length} tiles (${cachedTiles.length} cached + ${candidates.length - cachedTiles.length} from cache scan), skipping full scan`);
+            return candidates.slice(0, limit);
+        }
+    }
+    
+    // Only do full area scan if we have very few cached tiles
+    // This is the expensive operation, so we avoid it when possible
 
     // Conceptualize as a rectangular cuboid:
     // - XZ: Square area from -maxDistance to +maxDistance around player (48 blocks = 97x97 = 9,409 XZ positions)
@@ -1223,7 +1307,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     }
     
     // Second pass: Expand Y range if we found few tiles and have queries left
-    if (candidates.length < 10 && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN * 0.7) {
+    // Adjusted threshold for smaller scan batches (more frequent scans)
+    if (candidates.length < 8 && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN * 0.6) {
         // console.warn(`[SPAWN DEBUG] Found only ${candidates.length} tiles, expanding Y range by ±${expandYRange} blocks`);
         const expandedYStart = cy + initialYRange + expandYRange;
         const expandedYEnd = cy - initialYRange - expandYRange;
@@ -2423,18 +2508,11 @@ system.runInterval(() => {
     // Try to use group cache if multiple players in same dimension
     const useGroupCache = dimensionPlayers.length > 1;
     
-    // For 3+ players, process them more efficiently by processing all in one tick
-    // For 1-2 players, rotate normally
-    let playersToProcess = [];
-    if (dimensionPlayers.length >= 3) {
-        // Process all players in dimension when 3+ players
-        playersToProcess = dimensionPlayers;
-    } else {
-        // Process one player per tick (rotate within dimension) for 1-2 players
-        const playerIndex = Math.floor(playerRotationIndex / dimensions.length) % dimensionPlayers.length;
-        const player = dimensionPlayers[playerIndex];
-        if (player) playersToProcess = [player];
-    }
+    // Performance: Always process only 1 player per tick to spread load
+    // This prevents lag spikes from processing multiple players at once
+    const playerIndex = Math.floor(playerRotationIndex / dimensions.length) % dimensionPlayers.length;
+    const player = dimensionPlayers[playerIndex];
+    const playersToProcess = player ? [player] : [];
     
     if (playersToProcess.length === 0) return;
     

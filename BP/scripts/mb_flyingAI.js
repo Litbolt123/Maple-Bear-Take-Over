@@ -28,6 +28,10 @@ const CEILING_PUSH_FORCE = 0.12;
 const HORIZONTAL_BUMP_FORCE = 0.04;
 const PASSIVE_WANDER_TICKS = 2400; // 2 minutes without seeing target = passive wandering
 
+// Performance: Distance-based culling constants
+const MAX_PROCESSING_DISTANCE = 64; // Only process entities within 64 blocks of any player
+const MAX_PROCESSING_DISTANCE_SQ = MAX_PROCESSING_DISTANCE * MAX_PROCESSING_DISTANCE;
+
 const AIR_BLOCKS = new Set([
     "minecraft:air",
     "minecraft:cave_air",
@@ -205,6 +209,20 @@ function resolveCeilingCollision(entity) {
 system.runInterval(() => {
     const tick = system.currentTick;
     const seenIds = new Set();
+    
+    // Performance: Get all players once and cache their positions for distance culling
+    const playerPositions = new Map(); // Map<dimensionId, positions[]>
+    for (const player of world.getPlayers()) {
+        try {
+            const dimId = player.dimension.id;
+            if (!playerPositions.has(dimId)) {
+                playerPositions.set(dimId, []);
+            }
+            playerPositions.get(dimId).push(player.location);
+        } catch {
+            // Skip invalid players
+        }
+    }
 
     for (const dimId of DIMENSION_IDS) {
         let dimension;
@@ -215,6 +233,10 @@ system.runInterval(() => {
         }
         if (!dimension) continue;
 
+        // Performance: Distance-based culling - only process entities near players
+        const dimPlayerPositions = playerPositions.get(dimId) || [];
+        if (dimPlayerPositions.length === 0) continue; // No players in this dimension, skip
+
         for (const config of FLYING_TYPES) {
             let entities;
             try {
@@ -223,9 +245,33 @@ system.runInterval(() => {
                 continue;
             }
             if (!entities || entities.length === 0) continue;
-
+            
+            // Performance: Distance-based culling - only process entities near players
+            const validEntities = [];
             for (const entity of entities) {
                 if (typeof entity?.isValid === "function" && !entity.isValid()) continue;
+                
+                // Check if entity is within processing distance of any player
+                const entityLoc = entity.location;
+                let withinRange = false;
+                for (const playerPos of dimPlayerPositions) {
+                    const dx = entityLoc.x - playerPos.x;
+                    const dy = entityLoc.y - playerPos.y;
+                    const dz = entityLoc.z - playerPos.z;
+                    const distSq = dx * dx + dy * dy + dz * dz;
+                    if (distSq <= MAX_PROCESSING_DISTANCE_SQ) {
+                        withinRange = true;
+                        break;
+                    }
+                }
+                if (withinRange) {
+                    validEntities.push(entity);
+                }
+            }
+            
+            if (validEntities.length === 0) continue;
+
+            for (const entity of validEntities) {
                 seenIds.add(entity.id);
                 const profile = getFlightProfile(entity, config);
                 const groundY = probeGroundHeight(entity);

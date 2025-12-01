@@ -561,9 +561,9 @@ export function showCodexBook(player, context) {
     } catch { }
 
         // Variant unlock checks are handled when mobs are killed, not when opening codex
-        function maskTitle(title, known) {
-            return known ? title : "?".repeat(title.length);
-        }
+    function maskTitle(title, known) {
+        return known ? title : "?".repeat(title.length);
+    }
         
         // Get settings with defaults
         function getSettings() {
@@ -1994,7 +1994,8 @@ export function showCodexBook(player, context) {
             { label: "§fReset My Codex", action: () => triggerDebugCommand("reset_codex") },
             { label: "§fReset World Day to 1", action: () => triggerDebugCommand("reset_day") },
             { label: "§fSet Day...", action: () => promptSetDay() },
-            { label: "§fSpawn Difficulty", action: () => openSpawnDifficultyMenu() }
+            { label: "§fSpawn Difficulty", action: () => openSpawnDifficultyMenu() },
+            { label: "§bDebug Menu", action: () => openDebugMenu() }
         ];
 
         const form = new ActionFormData().title("§cDeveloper Tools");
@@ -2158,6 +2159,238 @@ export function showCodexBook(player, context) {
 
             triggerDebugCommand("set_day", [String(dayNumber)]);
         });
+    }
+
+    // Debug Settings Management
+    // Use exported functions (defined at module level)
+    function saveDebugSettingsInternal(settings) {
+        saveDebugSettings(player, settings);
+    }
+
+    function toggleDebugFlag(category, flag) {
+        const settings = getDebugSettings(player);
+        if (settings[category] && settings[category][flag] !== undefined) {
+            settings[category][flag] = !settings[category][flag];
+            // If "all" is toggled, update all flags in that category
+            if (flag === "all") {
+                for (const key in settings[category]) {
+                    if (key !== "all") {
+                        settings[category][key] = settings[category].all;
+                    }
+                }
+            } else {
+                // If any individual flag is toggled, check if all are on/off
+                const allFlags = Object.keys(settings[category]).filter(k => k !== "all");
+                settings[category].all = allFlags.every(k => settings[category][k]);
+            }
+            saveDebugSettingsInternal(settings);
+            // Notify AI scripts to update their debug flags
+            updateDebugFlags();
+            return settings[category][flag];
+        }
+        return false;
+    }
+
+    function updateDebugFlags() {
+        // This will be called by AI scripts to get updated debug flags
+        // We'll use a global event or direct function calls
+        try {
+            if (typeof globalThis?.mbUpdateDebugFlags === "function") {
+                globalThis.mbUpdateDebugFlags(player, getDebugSettings(player));
+            }
+        } catch (error) {
+            console.warn("[DEBUG MENU] Error updating debug flags:", error);
+        }
+    }
+
+    function openDebugMenu() {
+        const settings = getDebugSettings(player);
+        
+        const form = new ActionFormData().title("§bDebug Menu");
+        form.body("§7Toggle debug logging for different AI systems:\n\n§8Select a category to configure:");
+        
+        form.button("§fMining AI");
+        form.button("§fTorpedo AI");
+        form.button("§fFlying AI");
+        form.button("§fSpawn Controller");
+        form.button("§fMain Script");
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openDeveloperTools();
+            }
+
+            if (res.selection === 5) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openDeveloperTools();
+            }
+
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            switch (res.selection) {
+                case 0: return openMiningDebugMenu(settings);
+                case 1: return openTorpedoDebugMenu(settings);
+                case 2: return openFlyingDebugMenu(settings);
+                case 3: return openSpawnDebugMenu(settings);
+                case 4: return openMainDebugMenu(settings);
+                default: return openDebugMenu();
+            }
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openMiningDebugMenu(settings) {
+        const mining = settings.mining || {};
+        const form = new ActionFormData().title("§bMining AI Debug");
+        form.body(`§7Toggle debug logging for Mining Bears:\n\n§8Current settings:\n§7• Pitfall: ${mining.pitfall ? "§aON" : "§cOFF"}\n§7• General: ${mining.general ? "§aON" : "§cOFF"}\n§7• Target: ${mining.target ? "§aON" : "§cOFF"}\n§7• Pathfinding: ${mining.pathfinding ? "§aON" : "§cOFF"}\n§7• Mining: ${mining.mining ? "§aON" : "§cOFF"}\n§7• Movement: ${mining.movement ? "§aON" : "§cOFF"}\n§7• Stair Creation: ${mining.stairCreation ? "§aON" : "§cOFF"}`);
+        
+        form.button(`§${mining.pitfall ? "a" : "c"}Pitfall Debug`);
+        form.button(`§${mining.general ? "a" : "c"}General Logging`);
+        form.button(`§${mining.target ? "a" : "c"}Target Detection`);
+        form.button(`§${mining.pathfinding ? "a" : "c"}Pathfinding`);
+        form.button(`§${mining.mining ? "a" : "c"}Block Mining`);
+        form.button(`§${mining.movement ? "a" : "c"}Movement`);
+        form.button(`§${mining.stairCreation ? "a" : "c"}Stair Creation`);
+        form.button(`§${mining.all ? "a" : "c"}Toggle All`);
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 8) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openDebugMenu();
+            }
+
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            const flags = ["pitfall", "general", "target", "pathfinding", "mining", "movement", "stairCreation", "all"];
+            if (res.selection < flags.length) {
+                const newState = toggleDebugFlag("mining", flags[res.selection]);
+                const stateText = newState ? "§aON" : "§cOFF";
+                player.sendMessage(`§7[DEBUG] Mining AI ${flags[res.selection]} debug: ${stateText}`);
+                // Log to console for confirmation
+                console.warn(`[DEBUG MENU] Mining AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+            }
+                return openMiningDebugMenu(getDebugSettings(player));
+        }).catch(() => openDebugMenu());
+    }
+
+    function openTorpedoDebugMenu(settings) {
+        const torpedo = settings.torpedo || {};
+        const form = new ActionFormData().title("§bTorpedo AI Debug");
+        form.body(`§7Toggle debug logging for Torpedo Bears:\n\n§8Current settings:\n§7• General: ${torpedo.general ? "§aON" : "§cOFF"}\n§7• Targeting: ${torpedo.targeting ? "§aON" : "§cOFF"}\n§7• Diving: ${torpedo.diving ? "§aON" : "§cOFF"}\n§7• Block Breaking: ${torpedo.blockBreaking ? "§aON" : "§cOFF"}`);
+        
+        form.button(`§${torpedo.general ? "a" : "c"}General Logging`);
+        form.button(`§${torpedo.targeting ? "a" : "c"}Targeting`);
+        form.button(`§${torpedo.diving ? "a" : "c"}Diving Mechanics`);
+        form.button(`§${torpedo.blockBreaking ? "a" : "c"}Block Breaking`);
+        form.button(`§${torpedo.all ? "a" : "c"}Toggle All`);
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 5) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openDebugMenu();
+            }
+
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            const flags = ["general", "targeting", "diving", "blockBreaking", "all"];
+            if (res.selection < flags.length) {
+                const newState = toggleDebugFlag("torpedo", flags[res.selection]);
+                const stateText = newState ? "§aON" : "§cOFF";
+                player.sendMessage(`§7[DEBUG] Torpedo AI ${flags[res.selection]} debug: ${stateText}`);
+                // Log to console for confirmation
+                console.warn(`[DEBUG MENU] Torpedo AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+            }
+                return openTorpedoDebugMenu(getDebugSettings(player));
+        }).catch(() => openDebugMenu());
+    }
+
+    function openFlyingDebugMenu(settings) {
+        const flying = settings.flying || {};
+        const form = new ActionFormData().title("§bFlying AI Debug");
+        form.body(`§7Toggle debug logging for Flying Bears:\n\n§8Current settings:\n§7• General: ${flying.general ? "§aON" : "§cOFF"}\n§7• Targeting: ${flying.targeting ? "§aON" : "§cOFF"}\n§7• Pathfinding: ${flying.pathfinding ? "§aON" : "§cOFF"}`);
+        
+        form.button(`§${flying.general ? "a" : "c"}General Logging`);
+        form.button(`§${flying.targeting ? "a" : "c"}Targeting`);
+        form.button(`§${flying.pathfinding ? "a" : "c"}Pathfinding`);
+        form.button(`§${flying.all ? "a" : "c"}Toggle All`);
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 4) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openDebugMenu();
+            }
+
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            const flags = ["general", "targeting", "pathfinding", "all"];
+            if (res.selection < flags.length) {
+                const newState = toggleDebugFlag("flying", flags[res.selection]);
+                const stateText = newState ? "§aON" : "§cOFF";
+                player.sendMessage(`§7[DEBUG] Flying AI ${flags[res.selection]} debug: ${stateText}`);
+                // Log to console for confirmation
+                console.warn(`[DEBUG MENU] Flying AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+            }
+                return openFlyingDebugMenu(getDebugSettings(player));
+        }).catch(() => openDebugMenu());
+    }
+
+    function openSpawnDebugMenu(settings) {
+        const spawn = settings.spawn || {};
+        const form = new ActionFormData().title("§bSpawn Controller Debug");
+        form.body(`§7Toggle debug logging for Spawn Controller:\n\n§8Current settings:\n§7• General: ${spawn.general ? "§aON" : "§cOFF"}\n§7• Tile Scanning: ${spawn.tileScanning ? "§aON" : "§cOFF"}`);
+        
+        form.button(`§${spawn.general ? "a" : "c"}General Logging`);
+        form.button(`§${spawn.tileScanning ? "a" : "c"}Tile Scanning`);
+        form.button(`§${spawn.all ? "a" : "c"}Toggle All`);
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 3) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openDebugMenu();
+            }
+
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            const flags = ["general", "tileScanning", "all"];
+            if (res.selection < flags.length) {
+                const newState = toggleDebugFlag("spawn", flags[res.selection]);
+                const stateText = newState ? "§aON" : "§cOFF";
+                player.sendMessage(`§7[DEBUG] Spawn Controller ${flags[res.selection]} debug: ${stateText}`);
+                // Log to console for confirmation
+                console.warn(`[DEBUG MENU] Spawn Controller ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+            }
+                return openSpawnDebugMenu(getDebugSettings(player));
+        }).catch(() => openDebugMenu());
+    }
+
+    function openMainDebugMenu(settings) {
+        const main = settings.main || {};
+        const form = new ActionFormData().title("§bMain Script Debug");
+        form.body(`§7Toggle debug logging for Main Script:\n\n§8Current settings:\n§7• Death Events: ${main.death ? "§aON" : "§cOFF"}\n§7• Mob Conversion: ${main.conversion ? "§aON" : "§cOFF"}\n§7• Infection: ${main.infection ? "§aON" : "§cOFF"}`);
+        
+        form.button(`§${main.death ? "a" : "c"}Death Events`);
+        form.button(`§${main.conversion ? "a" : "c"}Mob Conversion`);
+        form.button(`§${main.infection ? "a" : "c"}Infection`);
+        form.button(`§${main.all ? "a" : "c"}Toggle All`);
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 4) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                return openDebugMenu();
+            }
+
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            const flags = ["death", "conversion", "infection", "all"];
+            if (res.selection < flags.length) {
+                const newState = toggleDebugFlag("main", flags[res.selection]);
+                const stateText = newState ? "§aON" : "§cOFF";
+                player.sendMessage(`§7[DEBUG] Main Script ${flags[res.selection]} debug: ${stateText}`);
+                // Log to console for confirmation
+                console.warn(`[DEBUG MENU] Main Script ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+            }
+                return openMainDebugMenu(getDebugSettings(player));
+        }).catch(() => openDebugMenu());
     }
 
     function openSettings() {
@@ -2325,4 +2558,109 @@ export function showCodexBook(player, context) {
     }
 
     try { openMain(); } catch { }
+}
+
+// Cache for combined debug state across all players
+// This avoids iterating through all players on every isDebugEnabled() call
+let debugStateCache = null;
+
+function invalidateDebugCache() {
+    debugStateCache = null;
+}
+
+// Export debug settings functions for AI scripts
+// NOTE: Debug settings ARE persisted across sessions via dynamic properties
+export function getDebugSettings(player) {
+    try {
+        const settingsStr = player.getDynamicProperty("mb_debug_settings");
+        if (settingsStr) {
+            return JSON.parse(settingsStr);
+        }
+    } catch (error) {
+        console.warn(`[DEBUG] Error loading debug settings for ${player.name}:`, error);
+    }
+    // Default debug settings (all disabled) - only used if no saved settings exist
+    const defaultSettings = {
+        mining: {
+            pitfall: false,
+            general: false,
+            target: false,
+            pathfinding: false,
+            mining: false,
+            movement: false,
+            stairCreation: false,
+            all: false
+        },
+        torpedo: {
+            general: false,
+            targeting: false,
+            diving: false,
+            blockBreaking: false,
+            all: false
+        },
+        flying: {
+            general: false,
+            targeting: false,
+            pathfinding: false,
+            all: false
+        },
+        spawn: {
+            general: false,
+            tileScanning: false,
+            all: false
+        },
+        main: {
+            death: false,
+            conversion: false,
+            infection: false,
+            all: false
+        }
+    };
+    // Save defaults so they persist
+    saveDebugSettings(player, defaultSettings);
+    return defaultSettings;
+}
+
+export function saveDebugSettings(player, settings) {
+    try {
+        player.setDynamicProperty("mb_debug_settings", JSON.stringify(settings));
+        // Invalidate cache when settings change
+        invalidateDebugCache();
+    } catch (error) {
+        console.warn(`[DEBUG] Error saving debug settings for ${player.name}:`, error);
+    }
+}
+
+// Helper function to check if any player has a specific debug flag enabled
+// Performance: Uses caching to avoid iterating all players on every call
+export function isDebugEnabled(category, flag) {
+    // Return cached result if available
+    if (debugStateCache && debugStateCache[category]?.[flag]) {
+        return true;
+    }
+    
+    try {
+        const allPlayers = world.getAllPlayers();
+        if (!debugStateCache) {
+            debugStateCache = {};
+        }
+        
+        for (const player of allPlayers) {
+            const settings = getDebugSettings(player);
+            if (settings[category] && settings[category][flag]) {
+                if (!debugStateCache[category]) debugStateCache[category] = {};
+                debugStateCache[category][flag] = true;
+                return true;
+            }
+            // Check "all" flag
+            if (settings[category] && settings[category].all) {
+                if (!debugStateCache[category]) debugStateCache[category] = {};
+                debugStateCache[category][flag] = true;
+                return true;
+            }
+        }
+    } catch (error) {
+        // Silent fail - debug is optional
+    }
+    return false;
 }

@@ -1,11 +1,15 @@
 import { system, world, ItemStack } from "@minecraft/server";
 import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
 import { getCurrentDay } from "./mb_dayTracker.js";
+import { isDebugEnabled } from "./mb_codex.js";
+
+// Basic debug to verify script is loaded
+// console.warn("[MINING AI] Script loaded successfully");
 
 const DIMENSION_IDS = ["overworld", "nether", "the_end"];
 const MINING_BEAR_TYPES = [
-    { id: "mb:mining_mb", tunnelHeight: 2 },
-    { id: "mb:mining_mb_day20", tunnelHeight: 3 }
+    { id: "mb:mining_mb", tunnelHeight: 2 }, // Standard 1x2 tunnel (1 wide, 2 tall)
+    { id: "mb:mining_mb_day20", tunnelHeight: 2 } // Standard 1x2 tunnel (1 wide, 2 tall)
 ];
 
 const AIR_BLOCKS = new Set([
@@ -48,9 +52,70 @@ const BUILD_FORWARD_DEPTH = 2;
 const LEADER_FORWARD_DEPTH = 1;
 const ACCESS_CHECK_STEPS = 4;
 const BUILD_PRIORITY_BLOCK_BUDGET = 4;
-const TARGET_MEMORY_TICKS = 400;
+const TARGET_MEMORY_TICKS = 6000; // Match entity JSON must_see_forget_duration (5 minutes)
 const MAX_PLAN_STEPS = 64;
 const PASSIVE_WANDER_TICKS = 2400; // 2 minutes without seeing target = passive wandering
+
+// Intelligence system constants
+const OPTIMAL_ATTACK_DISTANCE = 6; // Best horizontal distance to attack from (for pitfall creation)
+const MOVE_CLOSER_THRESHOLD = 12; // Move closer first if farther than this (blocks)
+const IDLE_EXPLORATION_DELAY = 100; // Ticks before idle exploration starts (5 seconds)
+const EXPLORATION_TUNNEL_LENGTH = 8; // How long to dig exploration tunnels (blocks)
+const STRATEGY_RECALCULATE_INTERVAL = 20; // Recalculate strategy every second
+const EXPLORATION_CHECK_TARGET_INTERVAL = 40; // Check for targets while exploring every 2 seconds
+
+// Path creation for smaller bears (maple thralls and tiny MBs can use tunnels, but not huge buff ones)
+const PATH_HEIGHT_FOR_SMALL_BEARS = 2; // Ensure 2 blocks of headroom for smaller bears (tunnels are 1 block wide, 2 blocks tall)
+
+// Cave mining constants
+const CAVE_DETECTION_RADIUS = 5; // Check 5 blocks around to detect if in cave
+const CAVE_BLOCK_THRESHOLD = 8; // Need at least 8 solid blocks around to be considered "in cave"
+const CAVE_Y_THRESHOLD = 50; // Below Y=50 is considered underground/cave area
+
+// Performance optimization constants
+const AI_TICK_INTERVAL = 2; // Run AI every 2 ticks instead of every tick (50% reduction)
+const TARGET_CACHE_TICKS = 5; // Cache target lookups for 5 ticks
+const MAX_PROCESSING_DISTANCE = 64; // Only process entities within 64 blocks of any player
+const MAX_PROCESSING_DISTANCE_SQ = MAX_PROCESSING_DISTANCE * MAX_PROCESSING_DISTANCE;
+
+// Debug flags - now controlled via Debug Menu in Journal
+// (isDebugEnabled is imported at the top of the file)
+
+// Helper functions to check debug flags dynamically
+function getDebugPitfall() {
+    return isDebugEnabled("mining", "pitfall") || isDebugEnabled("mining", "all");
+}
+
+function getDebugGeneral() {
+    return isDebugEnabled("mining", "general") || isDebugEnabled("mining", "all");
+}
+
+function getDebugTarget() {
+    return isDebugEnabled("mining", "target") || isDebugEnabled("mining", "all");
+}
+
+function getDebugPathfinding() {
+    return isDebugEnabled("mining", "pathfinding") || isDebugEnabled("mining", "all");
+}
+
+function getDebugMining() {
+    return isDebugEnabled("mining", "mining") || isDebugEnabled("mining", "all");
+}
+
+function getDebugMovement() {
+    return isDebugEnabled("mining", "movement") || isDebugEnabled("mining", "all");
+}
+
+function getDebugStairCreation() {
+    return isDebugEnabled("mining", "stairCreation") || isDebugEnabled("mining", "all");
+}
+
+// Legacy constants for backwards compatibility (now use functions above)
+const DEBUG_PITFALL = false; // Use getDebugPitfall() instead
+const DEBUG_LOGS = false; // Use getDebugGeneral() instead
+
+// ALWAYS log basic script execution (even if DEBUG_PITFALL is false)
+// console.warn("[MINING AI] DEBUG_PITFALL is", DEBUG_PITFALL);
 
 const BREAK_SOUND_DEFAULT = "dig.stone";
 const BREAK_SOUND_RULES = [
@@ -70,13 +135,28 @@ const buildQueues = new Map();
 const reservedNodes = new Map();
 const buildModeState = new Map();
 
+// Performance: Cache target lookups to avoid querying all players/mobs every tick
+const targetCache = new Map(); // Map<entityId, {target: targetInfo, tick: number}>
+
 const leaderTrails = new Map();
 
 // Track collected blocks per mining bear entity
 export const collectedBlocks = new Map(); // Map<entityId, Map<itemTypeId, count>>
 
+// Intelligence system state tracking
+const entityStrategies = new Map(); // Map<entityId, {strategy: string, lastCalculated: tick, optimalPosition: {x,y,z}}>
+const idleExplorationState = new Map(); // Map<entityId, {startTick: number, direction: {x,z}, tunnelLength: number}>
+const lastTargetSeenTick = new Map(); // Map<entityId, tick> - when target was last seen (for idle detection)
+
 // Track recently created stairs/ramps to prevent breaking them (counter-productive)
 const recentStairBlocks = new Map(); // Map<"x,y,z", tick> - blocks that are part of stairs/ramps
+// Track target position when stairs were created to allow breaking if target moves significantly
+const stairCreationTargetPos = new Map(); // Map<entityId, {x, y, z, tick}> - target position when stairs were created
+
+// Track active stair work to coordinate multiple bears working on stairs simultaneously
+// Map: "x,y,z" -> { entityId, tick } - tracks which bear is working on which stair block
+const activeStairWork = new Map();
+const STAIR_WORK_LOCK_TICKS = 40; // Lock stair blocks for 2 seconds (40 ticks) to prevent conflicts between multiple bears
 
 // Convert block type ID to item type ID (most are the same, but some differ)
 function blockToItemType(blockTypeId) {
@@ -198,8 +278,8 @@ function isBreakableBlock(block) {
     return true;
 }
 
-// Player reach distance in Minecraft (typically 4.5 blocks)
-const PLAYER_REACH_DISTANCE = 4.5;
+// Mining bear reach distance (5-6 blocks)
+const PLAYER_REACH_DISTANCE = 6;
 
 // Check if a block is within player reach distance from entity
 function isBlockWithinReach(entity, blockX, blockY, blockZ) {
@@ -216,7 +296,9 @@ function isBlockWithinReach(entity, blockX, blockY, blockZ) {
 
 // Check if entity has line of sight to a block (can see it)
 // Similar to player reach - allows breaking blocks that are visible
-function canSeeBlock(entity, blockX, blockY, blockZ) {
+// More permissive: allows seeing through multiple blocks (heat-seeking vision)
+// Performance: Optimized raycast with adaptive step size
+function canSeeBlock(entity, blockX, blockY, blockZ, targetInfo = null) {
     if (!entity || !entity.location) return false;
     const dimension = entity.dimension;
     if (!dimension) return false;
@@ -237,15 +319,33 @@ function canSeeBlock(entity, blockX, blockY, blockZ) {
     
     if (dist < 0.5) return true; // Very close, assume visible
     
+    // Special case: If this block is underneath a target (pitfall creation), be more permissive
+    let isUnderTarget = false;
+    if (targetInfo && targetInfo.entity?.location) {
+        const targetLoc = targetInfo.entity.location;
+        const blockUnderTarget = Math.floor(targetLoc.x) === blockX && 
+                                Math.floor(targetLoc.y) > blockY && 
+                                Math.floor(targetLoc.z) === blockZ;
+        // Also check if block is within 2 blocks horizontally of target and below them
+        const horizDist = Math.hypot(targetLoc.x - targetX, targetLoc.z - targetZ);
+        const vertDist = targetLoc.y - blockY;
+        if (horizDist <= 2 && vertDist > 0 && vertDist <= 5) {
+            isUnderTarget = true;
+        }
+    }
+    
     // Raycast from entity eye position to block center
-    // Use smaller step size for more accurate checking
-    const steps = Math.max(3, Math.ceil(dist * 3)); // Sample at ~0.33 block intervals
+    // Performance: Use adaptive step size - fewer steps for longer distances
+    // Sample at ~0.5 block intervals (reduced from 0.33 for better performance)
+    const steps = Math.max(2, Math.ceil(dist * 2)); // Reduced from dist * 3
     const stepX = dx / steps;
     const stepY = dy / steps;
     const stepZ = dz / steps;
     
     let solidBlockCount = 0;
-    const maxSolidBlocks = 1; // Allow seeing through up to 1 solid block (like glass or partial occlusion)
+    // More permissive: allow seeing through up to 5 breakable blocks (heat-seeking vision)
+    // If block is under target (pitfall), be even more permissive
+    const maxSolidBlocks = isUnderTarget ? 8 : 5;
     
     // Check line of sight - raycast from eye to block
     for (let i = 1; i < steps; i++) {
@@ -308,53 +408,109 @@ function playBreakSound(dimension, x, y, z, typeId) {
     const location = { x: x + 0.5, y: y + 0.5, z: z + 0.5 };
     const volume = 0.4 + Math.random() * 0.2;
     const pitch = 0.9 + Math.random() * 0.2;
-    if (typeof world.playSound === "function") {
-        try {
-            world.playSound(soundId, location, { volume, pitch });
+    
+    // Try dimension.playSound first (most reliable)
+    try {
+        if (dimension.playSound) {
+            dimension.playSound(soundId, location, { volume, pitch });
             return;
-        } catch {
-            // fall through to command fallback
         }
+    } catch {
+        // fall through to other methods
     }
+    
+    // Fallback to command-based sound (most compatible)
     try {
         const px = location.x.toFixed(1);
         const py = location.y.toFixed(1);
         const pz = location.z.toFixed(1);
-        dimension.runCommandAsync?.(
+        dimension.runCommandAsync(
             `playsound ${soundId} @a[x=${px},y=${py},z=${pz},r=${SOUND_RADIUS}] ${px} ${py} ${pz} ${volume.toFixed(2)} ${pitch.toFixed(2)}`
         );
     } catch {
-        // ignore
+        // ignore errors
     }
 }
 
-function clearBlock(dimension, x, y, z, digContext, entity = null) {
-    if (digContext && digContext.cleared >= digContext.max) return false;
+function clearBlock(dimension, x, y, z, digContext, entity = null, targetInfo = null) {
+    if (digContext && digContext.cleared >= digContext.max) {
+        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] clearBlock: Budget exhausted ${digContext.cleared}/${digContext.max} at (${x}, ${y}, ${z})`);
+        return false;
+    }
     const block = getBlock(dimension, x, y, z);
-    if (!isBreakableBlock(block)) return false;
+    if (!isBreakableBlock(block)) {
+        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] clearBlock: Block not breakable at (${x}, ${y}, ${z}): ${block?.typeId || 'null'}, isAir=${block?.isAir}, isLiquid=${block?.isLiquid}`);
+        return false;
+    }
     
     // Don't break blocks that are part of recently created stairs/ramps (counter-productive)
+    // UNLESS the target has moved significantly (e.g., target moved below, making stairs unnecessary)
     const blockKey = `${x},${y},${z}`;
     const currentTick = system.currentTick;
     const stairTick = recentStairBlocks.get(blockKey);
     if (stairTick !== undefined && (currentTick - stairTick) < 200) { // Protect for 10 seconds (200 ticks)
-        return false; // This is a stair/ramp block, don't break it
+        // Check if target position has changed significantly (allow breaking if target moved below)
+        if (entity && targetInfo) {
+            const entityId = entity.id;
+            const storedTargetPos = stairCreationTargetPos.get(entityId);
+            if (storedTargetPos) {
+                const targetLoc = targetInfo.entity?.location;
+                if (targetLoc) {
+                    const storedY = storedTargetPos.y;
+                    const currentY = targetLoc.y;
+                    const dy = currentY - storedY;
+                    
+                    // If target moved significantly below (more than 2 blocks), allow breaking stairs
+                    if (dy < -2) {
+                        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] clearBlock: Allowing stair break - target moved below (dy=${dy.toFixed(1)})`);
+                        // Remove protection for this block since target changed position
+                        recentStairBlocks.delete(blockKey);
+                        // Continue to break the block
+                    } else {
+                        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] clearBlock: Block is protected stair/ramp at (${x}, ${y}, ${z})`);
+                        return false; // This is a stair/ramp block, don't break it
+                    }
+                } else {
+                    // No current target, but stairs were created - still protect
+                    if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] clearBlock: Block is protected stair/ramp at (${x}, ${y}, ${z})`);
+                    return false;
+                }
+            } else {
+                // No stored target position, protect normally
+                if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] clearBlock: Block is protected stair/ramp at (${x}, ${y}, ${z})`);
+                return false;
+            }
+        } else {
+            // No entity or target info, protect normally
+            if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] clearBlock: Block is protected stair/ramp at (${x}, ${y}, ${z})`);
+            return false;
+        }
     }
     
-    // NEW: Only break blocks that are within reach distance (like player reach)
+    // Only break blocks that are within reach distance (like player reach)
     if (entity) {
-        if (!isBlockWithinReach(entity, x, y, z)) {
+        const withinReach = isBlockWithinReach(entity, x, y, z);
+        if (!withinReach) {
+            if (getDebugPitfall()) {
+                const loc = entity.location;
+                const dist = Math.hypot((x + 0.5) - loc.x, (y + 0.5) - loc.y, (z + 0.5) - loc.z);
+                console.warn(`[PITFALL DEBUG] clearBlock: Block too far at (${x}, ${y}, ${z}), distance: ${dist.toFixed(1)}, reach: ${PLAYER_REACH_DISTANCE}`);
+            }
             return false; // Block is too far away
         }
         
-        // NEW: Only break blocks that the entity can see (line of sight check)
-        if (!canSeeBlock(entity, x, y, z)) {
+        // Only break blocks that the entity can see (line of sight check)
+        // Pass targetInfo to allow more permissive vision for blocks under targets (pitfall creation)
+        const canSee = canSeeBlock(entity, x, y, z, targetInfo);
+        if (!canSee) {
+            if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] clearBlock: Cannot see block at (${x}, ${y}, ${z}) - line of sight blocked`);
             return false; // Block is not visible (line of sight blocked)
         }
     }
     
     const originalType = block.typeId;
     try {
+        // console.warn(`[MINING AI] clearBlock: ATTEMPTING to break ${originalType} at (${x}, ${y}, ${z}), entity=${entity?.id?.substring(0, 8) || 'null'}`);
         block.setType("minecraft:air");
         playBreakSound(dimension, x, y, z, originalType);
         
@@ -367,14 +523,16 @@ function clearBlock(dimension, x, y, z, digContext, entity = null) {
             digContext.lastBroken = { x, y, z };
             digContext.cleared++;
         }
+        // console.warn(`[MINING AI] clearBlock: SUCCESS - Broke ${originalType} at (${x}, ${y}, ${z}), cleared: ${digContext?.cleared || 0}/${digContext?.max || 0}`);
         return true;
     } catch (error) {
-        console.warn(`[MBI] Mining bear failed to clear ${block?.typeId} at ${x},${y},${z}:`, error);
+        // console.error(`[MINING AI] clearBlock: ERROR - Failed to break ${block?.typeId} at ${x},${y},${z}:`, error);
+        // console.error(`[MINING AI] clearBlock: Error stack:`, error.stack);
         return false;
     }
 }
 
-function clearVerticalColumn(entity, tunnelHeight, extraHeight, digContext, shouldTunnelDown = false) {
+function clearVerticalColumn(entity, tunnelHeight, extraHeight, digContext, shouldTunnelDown = false, targetInfo = null) {
     const dimension = entity?.dimension;
     if (!dimension) return;
     const loc = entity.location;
@@ -389,7 +547,7 @@ function clearVerticalColumn(entity, tunnelHeight, extraHeight, digContext, shou
         // Only break if it's a solid block that would block movement
         if (feetBlock && isBreakableBlock(feetBlock) && !AIR_BLOCKS.has(feetBlock.typeId)) {
             if (digContext.cleared >= digContext.max) return;
-            clearBlock(dimension, x, startY - 1, z, digContext, entity);
+            clearBlock(dimension, x, startY - 1, z, digContext, entity, targetInfo);
         }
     }
     // Removed automatic headroom breaking - only break above when actually needed (in clearForwardTunnel, carveStair, etc.)
@@ -444,24 +602,67 @@ function updateLastKnownTarget(entity, targetInfo) {
 function getStoredTargetInfo(entity) {
     const entry = lastKnownTargets.get(entity.id);
     if (!entry) return null;
-    if (system.currentTick - entry.tick > TARGET_MEMORY_TICKS) {
-        lastKnownTargets.delete(entity.id);
-        return null;
+    
+    // Mining bears never forget their target (until it dies)
+    // Check if target is still valid (not dead)
+    if (entry.targetId) {
+        try {
+            // Try to find the target entity to verify it's still alive
+            const dimension = entity.dimension;
+            if (dimension) {
+                // Check if it's a player
+                for (const player of world.getPlayers()) {
+                    if (player.id === entry.targetId && player.dimension.id === dimension.id) {
+                        // Target is still alive - update position and return                        const loc = entity.location;
+                        const targetLoc = player.location;
+                        const vector = {
+                            x: targetLoc.x - loc.x,
+                            y: targetLoc.y - loc.y,
+                            z: targetLoc.z - loc.z
+                        };
+                        // Update stored position
+                        entry.position = { x: targetLoc.x, y: targetLoc.y, z: targetLoc.z };
+                        entry.tick = system.currentTick;
+                        return {
+                            entity: player,
+                            vector,
+                            distanceSq: vector.x * vector.x + vector.y * vector.y + vector.z * vector.z
+                        };
+                    }
+                }
+                // Check if it's a mob
+                const mobs = dimension.getEntities({ location: entity.location, maxDistance: 64 });
+                for (const mob of mobs) {
+                    if (mob.id === entry.targetId) {
+                        // Target is still alive - update position and return
+                        const loc = entity.location;
+                        const targetLoc = mob.location;
+                        const vector = {
+                            x: targetLoc.x - loc.x,
+                            y: targetLoc.y - loc.y,
+                            z: targetLoc.z - loc.z
+                        };
+                        // Update stored position
+                        entry.position = { x: targetLoc.x, y: targetLoc.y, z: targetLoc.z };
+                        entry.tick = system.currentTick;
+                        return {
+                            entity: mob,
+                            vector,
+                            distanceSq: vector.x * vector.x + vector.y * vector.y + vector.z * vector.z
+                        };
+                    }
+                }
+            }
+        } catch {
+            // Error checking target - assume it's dead, clear memory
+            lastKnownTargets.delete(entity.id);
+            return null;
+        }
     }
-    const loc = entity.location;
-    const vector = {
-        x: entry.position.x - loc.x,
-        y: entry.position.y - loc.y,
-        z: entry.position.z - loc.z
-    };
-    return {
-        entity: {
-            id: entry.targetId ?? `memory-${entity.id}`,
-            location: entry.position
-        },
-        vector,
-        distanceSq: vector.x * vector.x + vector.y * vector.y + vector.z * vector.z
-    };
+    
+    // If we can't find the target, it's probably dead - clear memory
+    lastKnownTargets.delete(entity.id);
+    return null;
 }
 
 function distanceSq3(loc, node) {
@@ -692,19 +893,38 @@ function canReachTargetByWalking(entity, targetInfo, tunnelHeight) {
     const distance = Math.hypot(dx, dy, dz);
     
     // If very close (within attack range ~3 blocks), assume reachable
-    if (distance <= 3.5) {
+    // Exception: If target is significantly above (more than 3 blocks), we can't reach them even if close
+    if (distance <= 3.5 && dy <= 3) {
         return true; // Close enough to attack, no mining needed
     }
     
-    // Check if there's a walkable path to the target
-    // Sample points along the path to see if it's clear
+    // If target is significantly above (more than 4 blocks), we can't walk to them - need to mine
+    // But allow walking if the path is otherwise clear (they can jump/climb)
+    // Only prevent walking if target is VERY high (more than 4 blocks up)
+    if (dy > 4) {
+        if (getDebugPitfall()) {
+            console.warn(`[PITFALL DEBUG] canReachTargetByWalking: Target too high (dy=${dy.toFixed(1)}), need to mine`);
+        }
+        return false; // Target is very high above, need to mine (pitfall creation)
+    }
+    
+    // If target is significantly below (more than 3 blocks), check if we can walk down to them
+    // If target is significantly below (more than 3 blocks), check if we can walk down to them
+    // If there's a clear path down, allow walking
+    if (dy < -3) {
+        // TODO: Implement downward path checking or remove this block
+        // Currently falling through to the general path check below
+    }    // Sample points along the path to see if it's clear
+    // This determines if normal mining (tunneling, breaking walls) is needed
     const steps = Math.ceil(distance);
     const stepX = dx / steps;
     const stepY = dy / steps;
     const stepZ = dz / steps;
     
     let blockedCount = 0;
-    const maxBlockedSteps = Math.max(2, Math.floor(steps * 0.3)); // Allow up to 30% of path to be blocked
+    // Be more strict - only walk if path is mostly clear
+    // Reduce tolerance to prevent unnecessary mining when walking is possible
+    const maxBlockedSteps = Math.max(1, Math.floor(steps * 0.15)); // Allow up to 15% of path to be blocked (stricter)
     
     for (let i = 1; i < steps && i < 12; i++) { // Check up to 12 steps ahead
         const checkX = Math.floor(loc.x + stepX * i);
@@ -719,8 +939,16 @@ function canReachTargetByWalking(entity, targetInfo, tunnelHeight) {
             try {
                 const block = dimension.getBlock({ x: checkX, y: checkY + h, z: checkZ });
                 if (block && isSolidBlock(block) && !AIR_BLOCKS.has(block.typeId)) {
-                    isBlocked = true;
-                    break;
+                    // If it's a breakable block in the way, we need to mine
+                    if (isBreakableBlock(block)) {
+                        isBlocked = true;
+                        break;
+                    }
+                    // Unbreakable blocks also block the path
+                    if (UNBREAKABLE_BLOCKS.has(block.typeId)) {
+                        isBlocked = true;
+                        break;
+                    }
                 }
             } catch {
                 isBlocked = true;
@@ -729,19 +957,35 @@ function canReachTargetByWalking(entity, targetInfo, tunnelHeight) {
         }
         
         // Check if there's a floor to walk on (unless we're going down)
+        // For erratic terrain, be more tolerant of small gaps
         if (!isBlocked && dy >= -1) { // Only check floor if not going significantly down
             try {
                 const floorBlock = dimension.getBlock({ x: checkX, y: checkY - 1, z: checkZ });
                 if (!floorBlock || AIR_BLOCKS.has(floorBlock.typeId)) {
-                    // No floor - but this might be okay if we can jump or if it's a small gap
-                    // Only count as blocked if it's a significant gap
-                    if (i > 1) { // Don't count first step as blocked (might be jumping)
+                    // No floor - check if there's a floor nearby (within 1 block) to handle erratic terrain
+                    let hasNearbyFloor = false;
+                    for (const offset of [{x:0,z:0}, {x:1,z:0}, {x:-1,z:0}, {x:0,z:1}, {x:0,z:-1}]) {
+                        try {
+                            const nearbyFloor = dimension.getBlock({ x: checkX + offset.x, y: checkY - 1, z: checkZ + offset.z });
+                            if (nearbyFloor && !AIR_BLOCKS.has(nearbyFloor.typeId)) {
+                                hasNearbyFloor = true;
+                                break;
+                            }
+                        } catch {
+                            // Continue checking
+                        }
+                    }
+                    // Only count as blocked if there's no floor nearby and it's not the first step
+                    if (!hasNearbyFloor && i > 2) { // Allow more tolerance for erratic terrain (i > 2 instead of i > 1)
                         isBlocked = true;
                     }
                 }
             } catch {
-                // Error checking floor, assume blocked
-                isBlocked = true;
+                // Error checking floor - for erratic terrain, don't immediately assume blocked
+                // Only count as blocked if we've checked multiple steps
+                if (i > 3) {
+                    isBlocked = true;
+                }
             }
         }
         
@@ -755,7 +999,7 @@ function canReachTargetByWalking(entity, targetInfo, tunnelHeight) {
     }
     
     // If we got here, path is mostly clear (or only slightly blocked)
-    // Allow walking if less than 30% of path is blocked
+    // Allow walking if less than 15% of path is blocked
     return blockedCount <= maxBlockedSteps;
 }
 
@@ -864,9 +1108,12 @@ function distanceSq(a, b) {
     return dx * dx + dy * dy + dz * dz;
 }
 
-function clearForwardTunnel(entity, tunnelHeight, extraHeight, startOffset, digContext, ascending, depth = 1, directionOverride = null, shouldTunnelDown = false) {
+function clearForwardTunnel(entity, tunnelHeight, extraHeight, startOffset, digContext, ascending, depth = 1, directionOverride = null, shouldTunnelDown = false, targetInfo = null) {
     const dimension = entity?.dimension;
-    if (!dimension) return;
+    if (!dimension) {
+        // console.warn(`[MINING AI] clearForwardTunnel: No dimension`);
+        return;
+    }
 
     const loc = entity.location;
     const baseX = Math.floor(loc.x);
@@ -874,7 +1121,12 @@ function clearForwardTunnel(entity, tunnelHeight, extraHeight, startOffset, digC
     const baseZ = Math.floor(loc.z);
     const { x: dirX, z: dirZ } = resolveDirection(entity, directionOverride);
 
-    if (dirX === 0 && dirZ === 0) return;
+    if (dirX === 0 && dirZ === 0) {
+        // console.warn(`[MINING AI] clearForwardTunnel: No direction (dirX=${dirX}, dirZ=${dirZ})`);
+        return;
+    }
+    
+    // console.warn(`[MINING AI] clearForwardTunnel: entity=${entity.id.substring(0, 8)}, dir=(${dirX}, ${dirZ}), depth=${depth}, cleared=${digContext.cleared}/${digContext.max}`);
 
     const height = tunnelHeight + extraHeight;
 
@@ -889,16 +1141,23 @@ function clearForwardTunnel(entity, tunnelHeight, extraHeight, startOffset, digC
         }
 
         // Break blocks above only if they're blocking the path forward (not automatically)
+        // For tough/erratic terrain, check more thoroughly
         for (let h = start; h < height + 1; h++) { // +1 to break one block above tunnel height
-            if (digContext.cleared >= digContext.max) return;
+            if (digContext.cleared >= digContext.max) {
+                return;
+            }
             const targetY = baseY + h;
             const block = getBlock(dimension, targetX, targetY, targetZ);
             // Only break if it's actually blocking the path
             if (isBreakableBlock(block) && isSolidBlock(block)) {
-                clearBlock(dimension, targetX, targetY, targetZ, digContext, entity);
+                // Pass targetInfo to allow more permissive vision for blocks in the way
+                clearBlock(dimension, targetX, targetY, targetZ, digContext, entity, targetInfo);
                 return;
             }
         }
+        
+        // REMOVED: Side block clearing that was creating star patterns
+        // Only break blocks directly in the forward path, not side blocks
         
         // Break block below ONLY if tunneling down (target is below)
         // Do NOT break below just because floor is blocked - only when actually descending
@@ -907,14 +1166,14 @@ function clearForwardTunnel(entity, tunnelHeight, extraHeight, startOffset, digC
             // Only break if it's a solid block that would block movement
             if (floorBlock && isBreakableBlock(floorBlock) && !AIR_BLOCKS.has(floorBlock.typeId)) {
                 if (digContext.cleared >= digContext.max) return;
-                clearBlock(dimension, targetX, baseY - 1, targetZ, digContext, entity);
+                clearBlock(dimension, targetX, baseY - 1, targetZ, digContext, entity, targetInfo);
                 return;
             }
         }
     }
 }
 
-function carveStair(entity, tunnelHeight, digContext, directionOverride = null) {
+function carveStair(entity, tunnelHeight, digContext, directionOverride = null, targetInfo = null) {
     const dimension = entity?.dimension;
     if (!dimension) return;
 
@@ -925,34 +1184,143 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null) 
     const { x: dirX, z: dirZ } = resolveDirection(entity, directionOverride);
     if (dirX === 0 && dirZ === 0) return;
 
+    const entityId = entity.id;
+    const currentTick = system.currentTick;
     const stepX = baseX + dirX;
     const stepZ = baseZ + dirZ;
-    // Remove the block on top of the step to create headroom.
-    for (let h = 0; h < tunnelHeight; h++) {
+    
+    // Coordinate with other bears: Check if another bear is already working on this stair location
+    const stepKey = `${stepX},${baseY},${stepZ}`;
+    // Define landingKey early so it's always available for protection marking
+    const landingX = stepX + dirX;
+    const landingZ = stepZ + dirZ;
+    const landingKey = `${landingX},${baseY + 1},${landingZ}`;
+    
+    // Helper function to mark both stair locations as protected
+    const markStairProtected = () => {
+        recentStairBlocks.set(stepKey, currentTick);
+        recentStairBlocks.set(landingKey, currentTick);
+    };
+    
+    const existingWork = activeStairWork.get(stepKey);
+    if (existingWork && existingWork.entityId !== entityId) {
+        const ticksSinceWork = currentTick - existingWork.tick;
+        if (ticksSinceWork < STAIR_WORK_LOCK_TICKS) {
+            // Another bear is working on this stair - skip it and try a different location
+            // Try landing area or look for alternative path
+            const landingWork = activeStairWork.get(landingKey);
+            if (!landingWork || landingWork.entityId === entityId || (currentTick - landingWork.tick) >= STAIR_WORK_LOCK_TICKS) {
+                // Landing area is available - work on that instead
+                for (let h = 0; h < tunnelHeight + 1; h++) { // +1 extra headroom for tough terrain
+                    if (digContext.cleared >= digContext.max) return;
+                    const targetY = baseY + 1 + h;
+                    const block = getBlock(dimension, landingX, targetY, landingZ);
+                    if (!isBreakableBlock(block)) continue;
+                    activeStairWork.set(landingKey, { entityId, tick: currentTick });
+                    clearBlock(dimension, landingX, targetY, landingZ, digContext, entity);
+                    markStairProtected();
+                    return;
+                }
+            }
+            // Both areas are being worked on - skip this tick
+            return;
+        }
+        // Lock expired - this bear can work on it now
+    }
+    
+    // For upward stairs, we need to:
+    // 1. Break the block at the step location (baseY) to create the step the bear can walk onto
+    // 2. Break blocks above the step (baseY + 1) to create headroom
+    // 3. Break blocks at the landing area (baseY + 1, one block forward) for the next step
+    // 4. Clear obstacles in adjacent blocks that might block movement
+    
+    // FIRST: Break the block at the step location (the actual stair step)
+    if (digContext.cleared < digContext.max) {
+        const stepBlock = getBlock(dimension, stepX, baseY, stepZ);
+        if (isBreakableBlock(stepBlock)) {
+            // Claim this stair location
+            activeStairWork.set(stepKey, { entityId, tick: currentTick });
+            clearBlock(dimension, stepX, baseY, stepZ, digContext, entity);
+            // Mark as protected
+            markStairProtected();
+            return; // Break one block at a time
+        }
+    }
+    
+    // SECOND: Remove blocks on top of the step to create headroom (with extra clearance for tough terrain)
+    for (let h = 0; h < tunnelHeight + 1; h++) { // +1 extra headroom for erratic terrain
         if (digContext.cleared >= digContext.max) return;
         const targetY = baseY + 1 + h;
         const block = getBlock(dimension, stepX, targetY, stepZ);
         if (!isBreakableBlock(block)) continue;
+        // Claim this stair location
+        if (!activeStairWork.has(stepKey)) {
+            activeStairWork.set(stepKey, { entityId, tick: currentTick });
+        }
         clearBlock(dimension, stepX, targetY, stepZ, digContext, entity);
-        return;
-    }
-
-    // Ensure landing area beyond the step is clear.
-    const landingX = stepX + dirX;
-    const landingZ = stepZ + dirZ;
-    for (let h = 0; h < tunnelHeight; h++) {
-        if (digContext.cleared >= digContext.max) return;
-        const targetY = baseY + 1 + h;
-        const block = getBlock(dimension, landingX, targetY, landingZ);
-        if (!isBreakableBlock(block)) continue;
-        clearBlock(dimension, landingX, targetY, landingZ, digContext, entity);
-        return;
+        markStairProtected();
+        return; // Break one block at a time
     }
     
-    // Mark the step location as a stair block (protect it from being broken)
-    const currentTick = system.currentTick;
-    recentStairBlocks.set(`${stepX},${baseY},${stepZ}`, currentTick);
-    recentStairBlocks.set(`${landingX},${baseY + 1},${landingZ}`, currentTick);
+    // REMOVED: Side block clearing that was creating star patterns
+    // Only break blocks directly in the forward path, not side blocks
+
+    // THIRD: Ensure landing area one block up and forward is clear (for the next step up).
+    const landingWork = activeStairWork.get(landingKey);
+    if (landingWork && landingWork.entityId !== entityId) {
+        const ticksSinceWork = currentTick - landingWork.tick;
+        if (ticksSinceWork < STAIR_WORK_LOCK_TICKS) {
+            // Another bear is working on landing area - skip it for now
+            return;
+        }
+    }
+    
+    // Break the block at the landing location (the next step up)
+    if (digContext.cleared < digContext.max) {
+        const landingBlock = getBlock(dimension, landingX, baseY + 1, landingZ);
+        if (isBreakableBlock(landingBlock)) {
+            // Claim this landing location
+            activeStairWork.set(landingKey, { entityId, tick: currentTick });
+            clearBlock(dimension, landingX, baseY + 1, landingZ, digContext, entity);
+            // Mark as protected
+            markStairProtected();
+            return; // Break one block at a time
+        }
+    }
+    
+    // FOURTH: Ensure headroom above the landing area (with extra clearance for tough terrain)
+    for (let h = 0; h < tunnelHeight + 1; h++) { // +1 extra headroom for erratic terrain
+        if (digContext.cleared >= digContext.max) return;
+        const targetY = baseY + 2 + h; // +2 because landing is at baseY + 1
+        const block = getBlock(dimension, landingX, targetY, landingZ);
+        if (!isBreakableBlock(block)) continue;
+        // Claim this landing location
+        if (!activeStairWork.has(landingKey)) {
+            activeStairWork.set(landingKey, { entityId, tick: currentTick });
+        }
+        clearBlock(dimension, landingX, targetY, landingZ, digContext, entity);
+        markStairProtected();
+        return; // Break one block at a time
+    }
+    
+    // FIFTH: For erratic terrain, also check and clear blocks that might be above the current position
+    // This helps with unpredictable terrain variations
+    if (digContext.cleared < digContext.max) {
+        for (let h = 0; h < tunnelHeight; h++) {
+            if (digContext.cleared >= digContext.max) break;
+            const targetY = baseY + h;
+            const block = getBlock(dimension, baseX, targetY, baseZ);
+            // If there's a block directly above the entity that's blocking, clear it
+            if (h > 0 && isBreakableBlock(block) && isSolidBlock(block)) {
+                clearBlock(dimension, baseX, targetY, baseZ, digContext, entity);
+                markStairProtected();
+                return;
+            }
+        }
+    }
+    
+    // All stairs are cleared - mark locations as protected
+    markStairProtected();
 }
 
 function carveSupportCorridor(entity, tunnelHeight, digContext, directionHint = 0, directionOverride = null) {
@@ -990,7 +1358,7 @@ function carveSupportCorridor(entity, tunnelHeight, digContext, directionHint = 
     }
 }
 
-function carveRampDown(entity, tunnelHeight, digContext, directionOverride = null) {
+function carveRampDown(entity, tunnelHeight, digContext, directionOverride = null, targetInfo = null) {
     const dimension = entity?.dimension;
     if (!dimension) return;
     const loc = entity.location;
@@ -1120,13 +1488,25 @@ function canSeeTargetThroughBlocks(entity, targetInfo, maxBlocks = 3) {
 }
 
 // Break blocks under an elevated target (like a pillar) when close enough
+// Also breaks blocks under targets for pitfall creation
 function breakBlocksUnderTarget(entity, targetInfo, digContext) {
-    if (!targetInfo || !digContext || digContext.cleared >= digContext.max) return;
+            if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Called for entity ${entity.id.substring(0, 8)}`);
+    
+    if (!targetInfo || !digContext || digContext.cleared >= digContext.max) {
+        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Early return - targetInfo: ${!!targetInfo}, digContext: ${!!digContext}, cleared: ${digContext?.cleared}, max: ${digContext?.max}`);
+        return;
+    }
     const dimension = entity?.dimension;
-    if (!dimension) return;
+    if (!dimension) {
+        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: No dimension`);
+        return;
+    }
     
     const targetLoc = targetInfo.entity?.location;
-    if (!targetLoc) return;
+    if (!targetLoc) {
+        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: No target location`);
+        return;
+    }
     
     const loc = entity.location;
     const dx = targetLoc.x - loc.x;
@@ -1134,43 +1514,110 @@ function breakBlocksUnderTarget(entity, targetInfo, digContext) {
     const dz = targetLoc.z - loc.z;
     const distance = Math.hypot(dx, dz);
     
+            if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Entity at (${loc.x.toFixed(1)}, ${loc.y.toFixed(1)}, ${loc.z.toFixed(1)}), Target at (${targetLoc.x.toFixed(1)}, ${targetLoc.y.toFixed(1)}, ${targetLoc.z.toFixed(1)}), Distance: ${distance.toFixed(1)}, dy: ${dy.toFixed(1)}`);
+    
+    // Break blocks under target for pitfall creation (when target is above or at same level)
+    // This allows mining bears to create pitfalls by breaking blocks underneath players
+    const targetX = Math.floor(targetLoc.x);
+    const targetY = Math.floor(targetLoc.y);
+    const targetZ = Math.floor(targetLoc.z);
+    
+            if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: distance=${distance.toFixed(1)}, dy=${dy.toFixed(1)}, targetX=${targetX}, targetY=${targetY}, targetZ=${targetZ}`);
+    
+    // Check if we should break blocks under target (pitfall creation)
+    // Break if: within 6 blocks horizontally AND target is at same level or above
+    if (distance <= 6 && dy >= -1) {
+        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Conditions met! distance: ${distance.toFixed(1)} <= 6, dy: ${dy.toFixed(1)} >= -1`);
+        // Break blocks from the target's feet down to a reasonable depth
+        const startY = targetY - 1; // Start at the block under the target's feet
+        const endY = Math.max(targetY - 5, Math.floor(loc.y) - 2); // Break down to a reasonable depth
+        
+        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Checking Y range: ${startY} to ${endY}`);
+        
+        for (let y = startY; y >= endY; y--) {
+            if (digContext.cleared >= digContext.max) {
+                if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Budget exhausted: ${digContext.cleared}/${digContext.max}`);
+                return;
+            }
+            const block = getBlock(dimension, targetX, y, targetZ);
+            if (isBreakableBlock(block)) {
+                if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Found breakable block at (${targetX}, ${y}, ${targetZ}): ${block?.typeId}, attempting to break...`);
+                // Pass targetInfo to allow more permissive vision for pitfall creation
+                const result = clearBlock(dimension, targetX, y, targetZ, digContext, entity, targetInfo);
+                if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: clearBlock returned: ${result}, cleared=${digContext.cleared}/${digContext.max}`);
+                return; // Break one block at a time
+            } else {
+                if (y === startY && getDebugPitfall()) {
+                    console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Block at (${targetX}, ${y}, ${targetZ}) is not breakable: ${block?.typeId || 'null'}`);
+                }
+            }
+        }
+        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: No breakable blocks found in Y range ${startY} to ${endY}`);
+    } else {
+        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Conditions NOT met: distance: ${distance.toFixed(1)} ${distance > 6 ? '> 6' : 'OK'}, dy: ${dy.toFixed(1)} ${dy < -1 ? '< -1' : 'OK'}`);
+    }
+    
+    // Also handle elevated targets (pillars) - original behavior
     // Only break blocks under target if:
     // 1. Target is above us (elevation intent is "up")
     // 2. We're close enough (within 6 blocks horizontally)
     // 3. Target is significantly above us (at least 2 blocks)
     const elevationIntent = getElevationIntent(entity, targetInfo);
-    if (elevationIntent !== "up") return; // Target not above us
-    if (distance > 6) return; // Too far away - come closer first
-    if (dy < 2) return; // Target not high enough above us
-    
-    // Break blocks directly under the target to collapse the pillar
-    const targetX = Math.floor(targetLoc.x);
-    const targetY = Math.floor(targetLoc.y);
-    const targetZ = Math.floor(targetLoc.z);
-    
-    // Break blocks from the target's feet down to ground level (or a few blocks below)
-    const startY = targetY - 1; // Start at the block under the target's feet
-    const endY = Math.max(targetY - 5, Math.floor(loc.y) - 2); // Break down to a reasonable depth
-    
-    for (let y = startY; y >= endY; y--) {
-        if (digContext.cleared >= digContext.max) return;
-        const block = getBlock(dimension, targetX, y, targetZ);
-        if (isBreakableBlock(block)) {
-            clearBlock(dimension, targetX, y, targetZ, digContext, entity);
-            return; // Break one block at a time
+    if (elevationIntent === "up" && distance <= 6 && dy >= 2) {
+        const startY = targetY - 1;
+        const endY = Math.max(targetY - 5, Math.floor(loc.y) - 2);
+        
+        for (let y = startY; y >= endY; y--) {
+            if (digContext.cleared >= digContext.max) return;
+            const block = getBlock(dimension, targetX, y, targetZ);
+            if (isBreakableBlock(block)) {
+                clearBlock(dimension, targetX, y, targetZ, digContext, entity, targetInfo);
+                return;
+            }
         }
     }
 }
 
-function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS) {
+function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS, useCache = true) {
     const dimension = entity?.dimension;
     if (!dimension) return null;
+    const entityId = entity.id;
+    const currentTick = system.currentTick;
+    
+    // Check cache first (performance optimization)
+    if (useCache) {
+        const cached = targetCache.get(entityId);
+        if (cached && (currentTick - cached.tick) < TARGET_CACHE_TICKS) {
+            // Validate cached target is still valid
+            try {
+                if (cached.target?.entity?.isValid && cached.target.entity.isValid()) {
+                    const origin = entity.location;
+                    const targetLoc = cached.target.entity.location;
+                    const dx = targetLoc.x - origin.x;
+                    const dy = targetLoc.y - origin.y;
+                    const dz = targetLoc.z - origin.z;
+                    const distSq = dx * dx + dy * dy + dz * dz;
+                    if (distSq <= maxDistance * maxDistance) {
+                        // Update vector and distance
+                        cached.target.vector = { x: dx, y: dy, z: dz };
+                        cached.target.distanceSq = distSq;
+                        return cached.target;
+                    }
+                }
+            } catch {
+                // Target invalid, fall through to fresh lookup
+            }
+        }
+    }
+    
     const origin = entity.location;
     const maxDistSq = maxDistance * maxDistance;
     let best = null;
     let bestDistSq = maxDistSq;
+    let bestPlayer = null;
+    let bestPlayerDistSq = maxDistSq;
 
-    // Prioritize players (with see-through vision)
+    // FIRST PASS: Find the closest player (ALWAYS prioritize players over mobs)
     for (const player of world.getPlayers()) {
         if (player.dimension !== dimension) continue;
         // Skip creative mode players
@@ -1181,7 +1628,7 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS) {
         const dy = player.location.y - origin.y;
         const dz = player.location.z - origin.z;
         const distSq = dx * dx + dy * dy + dz * dz;
-        if (distSq < bestDistSq) {
+        if (distSq < bestPlayerDistSq) {
             // Heat-seeking: Check if we can see this target through blocks (up to 3 blocks)
             const targetInfo = {
                 entity: player,
@@ -1189,15 +1636,19 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS) {
                 vector: { x: dx, y: dy, z: dz }
             };
             // Allow targeting through up to 3 breakable blocks (heat-seeking vision)
-            if (canSeeTargetThroughBlocks(entity, targetInfo, 3) || !best) {
-                best = player;
-                bestDistSq = distSq;
+            if (canSeeTargetThroughBlocks(entity, targetInfo, 3)) {
+                bestPlayer = player;
+                bestPlayerDistSq = distSq;
             }
         }
     }
-
-    // Also target mobs if no players nearby (with see-through vision)
-    if (!best) {
+    
+    // If we found a player, use it (players always take priority)
+    if (bestPlayer) {
+        best = bestPlayer;
+        bestDistSq = bestPlayerDistSq;
+    } else {
+        // Only look for mobs if NO players found (with see-through vision)
         const mobs = dimension.getEntities({
             maxDistance,
             location: origin,
@@ -1225,8 +1676,15 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS) {
         }
     }
 
-    if (!best) return null;
-    return {
+    if (!best) {
+        // Cache null result too (no target found)
+        if (useCache) {
+            targetCache.set(entityId, { target: null, tick: currentTick });
+        }
+        return null;
+    }
+    
+    const result = {
         entity: best,
         distanceSq: bestDistSq,
         vector: {
@@ -1235,6 +1693,13 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS) {
             z: best.location.z - origin.z
         }
     };
+    
+    // Cache the result
+    if (useCache) {
+        targetCache.set(entityId, { target: result, tick: currentTick });
+    }
+    
+    return result;
 }
 
 function breakWallAhead(entity, tunnelHeight, digContext, targetInfo, directionOverride = null) {
@@ -1293,7 +1758,8 @@ function breakWallAhead(entity, tunnelHeight, digContext, targetInfo, directionO
             const targetY = baseY + h;
             const block = getBlock(dimension, targetX, targetY, targetZ);
             if (!isBreakableBlock(block)) continue;
-            clearBlock(dimension, targetX, targetY, targetZ, digContext, entity);
+            // Pass targetInfo to allow more permissive vision for blocks in the way
+            clearBlock(dimension, targetX, targetY, targetZ, digContext, entity, targetInfo);
             return;
         }
     }
@@ -1476,6 +1942,260 @@ function hasActiveQueue(queue) {
     return !!(queue && queue.steps && queue.index < queue.steps.length);
 }
 
+// ============================================
+// INTELLIGENCE SYSTEM FUNCTIONS
+// ============================================
+
+// Calculate optimal attack position - where the bear should be to best attack the target
+function calculateOptimalAttackPosition(entity, targetInfo) {
+    if (!targetInfo || !targetInfo.entity?.location) return null;
+    
+    const loc = entity.location;
+    const targetLoc = targetInfo.entity.location;
+    const dx = targetLoc.x - loc.x;
+    const dy = targetLoc.y - loc.y;
+    const dz = targetLoc.z - loc.z;
+    const horizontalDist = Math.hypot(dx, dz);
+    
+    // If target is above (for pitfall creation), optimal position is directly under them
+    if (dy > 2) {
+        return {
+            x: targetLoc.x,
+            y: Math.floor(targetLoc.y) - 2, // 2 blocks below target
+            z: targetLoc.z
+        };
+    }
+    
+    // Otherwise, optimal position is at OPTIMAL_ATTACK_DISTANCE from target
+    if (horizontalDist > OPTIMAL_ATTACK_DISTANCE) {
+        const angle = Math.atan2(dz, dx);
+        return {
+            x: targetLoc.x - Math.cos(angle) * OPTIMAL_ATTACK_DISTANCE,
+            y: loc.y, // Keep same Y level
+            z: targetLoc.z - Math.sin(angle) * OPTIMAL_ATTACK_DISTANCE
+        };
+    }
+    
+    // Already at optimal distance
+    return null;
+}
+
+// Determine mining strategy based on target position and distance
+function determineMiningStrategy(entity, targetInfo, tick) {
+    if (!targetInfo || !targetInfo.entity?.location) return "idle";
+    
+    const entityId = entity.id;
+    const cached = entityStrategies.get(entityId);
+    
+    // Reuse cached strategy if recent (within STRATEGY_RECALCULATE_INTERVAL)
+    if (cached && (tick - cached.lastCalculated) < STRATEGY_RECALCULATE_INTERVAL) {
+        return cached.strategy;
+    }
+    
+    const loc = entity.location;
+    const targetLoc = targetInfo.entity.location;
+    const dx = targetLoc.x - loc.x;
+    const dy = targetLoc.y - loc.y;
+    const dz = targetLoc.z - loc.z;
+    const horizontalDist = Math.hypot(dx, dz);
+    const totalDist = Math.hypot(dx, dy, dz);
+    
+    let strategy = "direct";
+    let optimalPosition = null;
+    
+    // Strategy decision logic
+    if (horizontalDist > MOVE_CLOSER_THRESHOLD) {
+        // Far away - move closer first
+        strategy = "move_closer";
+        optimalPosition = calculateOptimalAttackPosition(entity, targetInfo);
+    } else if (dy > 3 && horizontalDist <= OPTIMAL_ATTACK_DISTANCE) {
+        // Target is above and we're close - pitfall strategy
+        strategy = "pitfall";
+        optimalPosition = { x: targetLoc.x, y: Math.floor(targetLoc.y) - 2, z: targetLoc.z };
+    } else if (dy > 3) {
+        // Target is above but we're not close - move closer then pitfall
+        strategy = "hybrid_pitfall";
+        optimalPosition = calculateOptimalAttackPosition(entity, targetInfo);
+    } else if (horizontalDist > 6) {
+        // Medium distance - tunnel approach
+        strategy = "tunnel";
+    } else {
+        // Close - direct path or tunnel if blocked
+        strategy = "direct";
+    }
+    
+    // Cache the strategy
+    entityStrategies.set(entityId, {
+        strategy,
+        lastCalculated: tick,
+        optimalPosition
+    });
+    
+    return strategy;
+}
+
+// Check if bear should move closer before mining
+function shouldMoveCloserFirst(entity, targetInfo) {
+    if (!targetInfo || !targetInfo.entity?.location) return false;
+    
+    const loc = entity.location;
+    const targetLoc = targetInfo.entity.location;
+    const dx = targetLoc.x - loc.x;
+    const dz = targetLoc.z - loc.z;
+    const horizontalDist = Math.hypot(dx, dz);
+    
+    // Move closer if farther than threshold
+    return horizontalDist > MOVE_CLOSER_THRESHOLD;
+}
+
+// Create exploratory tunnel when idle
+function createExploratoryTunnel(entity, config, digContext, tick) {
+    const entityId = entity.id;
+    let exploration = idleExplorationState.get(entityId);
+    
+    if (!exploration) {
+        // Start new exploration
+        const directions = [
+            { x: 1, z: 0 }, { x: -1, z: 0 },
+            { x: 0, z: 1 }, { x: 0, z: -1 },
+            { x: 1, z: 1 }, { x: -1, z: -1 },
+            { x: 1, z: -1 }, { x: -1, z: 1 }
+        ];
+        const dir = directions[Math.floor(Math.random() * directions.length)];
+        exploration = {
+            startTick: tick,
+            direction: dir,
+            tunnelLength: 0
+        };
+        idleExplorationState.set(entityId, exploration);
+    }
+    
+    // Check if we should continue this tunnel or start a new one
+    if (exploration.tunnelLength >= EXPLORATION_TUNNEL_LENGTH) {
+        // Tunnel complete, start new direction
+        idleExplorationState.delete(entityId);
+        return false; // Don't mine this tick, will start new tunnel next tick
+    }
+    
+    // Continue digging tunnel in chosen direction
+    const loc = entity.location;
+    const baseX = Math.floor(loc.x);
+    const baseY = Math.floor(loc.y);
+    const baseZ = Math.floor(loc.z);
+    
+    // Dig forward in the exploration direction
+    const forwardX = baseX + exploration.direction.x;
+    const forwardZ = baseZ + exploration.direction.z;
+    
+    // Check if we're in a cave - if so, prefer cave exploration
+    const inCave = isInCave(entity);
+    
+    // Clear tunnel forward (height of tunnelHeight)
+    for (let h = 0; h < config.tunnelHeight; h++) {
+        if (digContext.cleared >= digContext.max) break;
+        const block = getBlock(entity.dimension, forwardX, baseY + h, forwardZ);
+        if (isBreakableBlock(block)) {
+            clearBlock(entity.dimension, forwardX, baseY + h, forwardZ, digContext, entity);
+            exploration.tunnelLength++;
+            return true;
+        }
+    }
+    
+    // In caves, also check ceiling and walls for exploration
+    if (inCave && digContext.cleared < digContext.max) {
+        // Check ceiling
+        const ceilingBlock = getBlock(entity.dimension, forwardX, baseY + config.tunnelHeight, forwardZ);
+        if (isBreakableBlock(ceilingBlock)) {
+            clearBlock(entity.dimension, forwardX, baseY + config.tunnelHeight, forwardZ, digContext, entity);
+            exploration.tunnelLength++;
+            return true;
+        }
+    }
+    
+    // Also check floor if needed
+    const floorBlock = getBlock(entity.dimension, forwardX, baseY - 1, forwardZ);
+    if (AIR_BLOCKS.has(floorBlock?.typeId)) {
+        // Fill gap in floor
+        // Don't fill, just mark as explored
+    }
+    
+    return false;
+}
+
+// ============================================
+// CAVE MINING FUNCTIONS
+// ============================================
+
+// Detect if entity is in a cave (underground, surrounded by stone/deepslate)
+function isInCave(entity) {
+    const dimension = entity?.dimension;
+    if (!dimension) return false;
+    
+    const loc = entity.location;
+    const baseX = Math.floor(loc.x);
+    const baseY = Math.floor(loc.y);
+    const baseZ = Math.floor(loc.z);
+    
+    // Check if we're below the cave threshold
+    if (baseY > CAVE_Y_THRESHOLD) return false;
+    
+    // Count solid blocks around the entity
+    let solidBlockCount = 0;
+    const checkRadius = CAVE_DETECTION_RADIUS;
+    
+    for (let dx = -checkRadius; dx <= checkRadius; dx++) {
+        for (let dy = -checkRadius; dy <= checkRadius; dy++) {
+            for (let dz = -checkRadius; dz <= checkRadius; dz++) {
+                // Skip the center (where entity is)
+                if (dx === 0 && dy === 0 && dz === 0) continue;
+                
+                // Skip blocks too far away
+                const dist = Math.hypot(dx, dy, dz);
+                if (dist > checkRadius) continue;
+                
+                try {
+                    const block = getBlock(dimension, baseX + dx, baseY + dy, baseZ + dz);
+                    if (block && isSolidBlock(block) && !AIR_BLOCKS.has(block.typeId)) {
+                        solidBlockCount++;
+                    }
+                } catch {
+                    // Error checking block, skip
+                }
+            }
+        }
+    }
+    
+    // Consider it a cave if there are enough solid blocks around
+    return solidBlockCount >= CAVE_BLOCK_THRESHOLD;
+}
+
+// ============================================
+// PATH ACCESSIBILITY FOR SMALLER BEARS
+// ============================================
+
+// Ensure tunnel has proper headroom for smaller bears (maple thralls, tiny MBs)
+// Tunnels are 1 block wide, 2 blocks tall - not sized for huge buff bears
+function ensurePathAccessibility(entity, tunnelHeight, digContext, directionOverride = null, tick) {
+    // Ensure proper headroom for smaller bears (2 blocks is enough for maple thralls and tiny MBs)
+    const dimension = entity?.dimension;
+    if (!dimension) return;
+    
+    const loc = entity.location;
+    const baseX = Math.floor(loc.x);
+    const baseY = Math.floor(loc.y);
+    const baseZ = Math.floor(loc.z);
+    
+    // Check headroom above - ensure at least PATH_HEIGHT_FOR_SMALL_BEARS blocks
+    for (let h = tunnelHeight; h < PATH_HEIGHT_FOR_SMALL_BEARS; h++) {
+        if (digContext.cleared >= digContext.max) return;
+        const block = getBlock(dimension, baseX, baseY + h, baseZ);
+        if (isBreakableBlock(block) && isSolidBlock(block)) {
+            clearBlock(dimension, baseX, baseY + h, baseZ, digContext, entity);
+            return; // Break one block at a time
+        }
+    }
+}
+
 function processContext(ctx, config, tick, leaderSummaryById) {
     const { entity, targetInfo, elevationIntent, role, leaderId } = ctx;
     let ascending = ctx.ascending;
@@ -1527,6 +2247,11 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                 ? MAX_BLOCKS_PER_ENTITY
                 : 0));
     const digContext = { cleared: 0, max: digBudget, lastBroken: null };
+    
+    if (getDebugPitfall() && digBudget > 0) {
+        console.warn(`[PITFALL DEBUG] processContext: digBudget=${digBudget} (role=${role}, buildPriority=${buildPriority}, hasTarget=${hasTarget}, MAX_BLOCKS_PER_ENTITY=${MAX_BLOCKS_PER_ENTITY})`);
+    }
+    
     const startOffset = ascending ? 1 : 0;
     const forwardDepth = buildPriority ? BUILD_FORWARD_DEPTH : (role === "leader" ? LEADER_FORWARD_DEPTH : 1);
 
@@ -1550,85 +2275,537 @@ function processContext(ctx, config, tick, leaderSummaryById) {
         followLeader(entity, waypoint);
     }
     
-    // Idle wandering when no target
+    // Idle behavior: exploration or wandering
     if (!hasTarget) {
-        idleWander(entity, tick);
+        // Check if we should start idle exploration (after IDLE_EXPLORATION_DELAY ticks without target)
+        const lastSeen = lastTargetSeenTick.get(entity.id) || tick;
+        const ticksSinceTarget = tick - lastSeen;
+        
+        if (ticksSinceTarget >= IDLE_EXPLORATION_DELAY && digBudget > 0 && role !== "follower") {
+            // Create exploratory tunnels
+            if (createExploratoryTunnel(entity, config, digContext, tick)) {
+                // Tunnel created, continue
+            } else {
+                // Fall back to normal wandering
+                idleWander(entity, tick);
+            }
+        } else {
+            // Normal wandering
+            idleWander(entity, tick);
+        }
+    } else {
+        // Update last seen tick when we have a target
+        lastTargetSeenTick.set(entity.id, tick);
+        // Clear exploration state when we get a target
+        idleExplorationState.delete(entity.id);
     }
 
     // Only mine if we have a target (path creation only when pursuing target)
     // Followers should not mine - they just follow the leader's path
     // IMPORTANT: Only mine if there's no other way to reach the target (can't walk to it)
+    if (getDebugMining() && tick % 20 === 0) {
+        console.warn(`[MINING AI] Mining decision: digContext.max=${digContext.max}, hasTarget=${hasTarget}, role=${role}, willMine=${(digContext.max > 0 && hasTarget && role !== "follower")}`);
+    }
+    
     if (digContext.max > 0 && hasTarget && role !== "follower") {
+        // Determine strategy for this entity
+        const strategy = determineMiningStrategy(entity, targetInfo, tick);
+        const strategyData = entityStrategies.get(entity.id);
+        const optimalPosition = strategyData?.optimalPosition;
+        
         // Check if we can reach the target by walking - if so, don't mine at all
         const canReachByWalking = canReachTargetByWalking(entity, targetInfo, config.tunnelHeight + extraHeight);
         
-        if (!canReachByWalking) {
-            // Can't reach by walking - mining is needed
-            // Determine if we should tunnel down - ONLY if target is actually below us
-            const shouldTunnelDown = elevationIntent === "down";
+        // Smart positioning: If strategy is "move_closer" or "hybrid_pitfall", prioritize moving toward optimal position
+        const shouldMoveCloser = shouldMoveCloserFirst(entity, targetInfo);
+        
+        if (getDebugPitfall()) {
+            const loc = entity.location;
+            const targetLoc = targetInfo?.entity?.location;
+            const dy = targetLoc ? (targetLoc.y - loc.y) : 0;
+            const dist = targetLoc ? Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z) : 0;
+            console.warn(`[PITFALL DEBUG] Mining check: entity=${entity.id.substring(0, 8)}, strategy=${strategy}, digBudget=${digContext.max}, canReachByWalking=${canReachByWalking}, shouldMoveCloser=${shouldMoveCloser}, dy=${dy.toFixed(1)}, dist=${dist.toFixed(1)}, hasTarget=${hasTarget}, role=${role}`);
+        }
+        
+        // If we should move closer first, apply movement impulse toward optimal position
+        if (shouldMoveCloser && optimalPosition && strategy !== "direct") {
+            const loc = entity.location;
+            const dx = optimalPosition.x - loc.x;
+            const dz = optimalPosition.z - loc.z;
+            const dist = Math.hypot(dx, dz);
             
-            // Only break blocks below if target is below (not just because we have budget)
-            clearVerticalColumn(entity, config.tunnelHeight, extraHeight, digContext, shouldTunnelDown);
-            clearForwardTunnel(entity, config.tunnelHeight, extraHeight + (buildPriority && ascendGoal ? 1 : 0), startOffset, digContext, ascending, forwardDepth, directionOverride, shouldTunnelDown);
+            if (dist > 1) {
+                // Move toward optimal position
+                const impulse = 0.02;
+                try {
+                    entity.applyImpulse({
+                        x: (dx / dist) * impulse,
+                        y: 0,
+                        z: (dz / dist) * impulse
+                    });
+                } catch { }
+                
+                // Still allow some mining while moving (for tunneling through obstacles)
+                // But prioritize movement
+            }
+        }
+        
+        // IMPORTANT: Priority is WALKING, not mining
+        // Only mine if we CAN'T reach by walking
+        // If canReachByWalking is true, don't mine at all - just let them walk
+        const loc = entity.location;
+        const targetLoc = targetInfo?.entity?.location;
+        const dy = targetLoc ? (targetLoc.y - loc.y) : 0;
+        const horizontalDist = targetLoc ? Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z) : 0;
+        
+        if (getDebugPitfall() || getDebugMining()) {
+            console.warn(`[MINING AI] Mining decision: canReachByWalking=${canReachByWalking}, strategy=${strategy}, dy=${dy.toFixed(1)}, horizontalDist=${horizontalDist.toFixed(1)}`);
+        }
+        
+        // Only mine if we CAN'T reach by walking - prioritize walking over mining
+        if (!canReachByWalking) {
+            if (getDebugMining()) console.warn(`[MINING AI] NEEDS mining (canReachByWalking=${canReachByWalking}, strategy=${strategy}) - attempting to mine`);
+            // Can't reach by walking - mining is needed
+            // Determine if we should tunnel down - ONLY if target is SIGNIFICANTLY below (more than 2 blocks)
+            // Don't dig down if we're already at or below the target level
+            const loc = entity.location;
+            const targetLoc = targetInfo?.entity?.location;
+            const dy = targetLoc ? (targetLoc.y - loc.y) : 0;
+            // Only tunnel down if target is SIGNIFICANTLY below (more than 2 blocks)
+            // Don't dig down if we're at or below the target level (dy >= 0 means target is at or above us)
+            // This prevents digging down when at or below player level
+            const shouldTunnelDown = elevationIntent === "down" && dy < -2 && dy < 0;
+            
+            if (getDebugMining()) console.warn(`[MINING AI] processContext: role=${role}, hasTarget=${hasTarget}, canReachByWalking=${canReachByWalking}, digBudget=${digBudget}, strategy=${strategy}, shouldTunnelDown=${shouldTunnelDown}, shouldMoveCloser=${shouldMoveCloser}, dy=${dy.toFixed(1)}`);
+            
+            // Smart mining based on strategy
+            // Only do heavy mining if we're close enough OR if strategy requires it
+            if (!shouldMoveCloser || strategy === "pitfall" || strategy === "hybrid_pitfall") {
+                // IMPORTANT: PRIORITY - Break forward blocks BEFORE digging down
+                // Check if there are blocks directly in front blocking movement
+                // Reuse loc and targetLoc from above
+                const dimension = entity?.dimension;
+                const baseX = Math.floor(loc.x);
+                const baseY = Math.floor(loc.y);
+                const baseZ = Math.floor(loc.z);
+                const { x: dirX, z: dirZ } = resolveDirection(entity, directionOverride);
+                
+                let hasForwardBlock = false;
+                if (dimension && (dirX !== 0 || dirZ !== 0)) {
+                    // Check if there's a block directly in front blocking movement (first 2 blocks ahead)
+                    for (let step = 1; step <= 2; step++) {
+                        const forwardX = baseX + dirX * step;
+                        const forwardZ = baseZ + dirZ * step;
+                        for (let h = 0; h < config.tunnelHeight + extraHeight; h++) {
+                            const block = getBlock(dimension, forwardX, baseY + h, forwardZ);
+                            if (block && isBreakableBlock(block) && isSolidBlock(block)) {
+                                hasForwardBlock = true;
+                                break;
+                            }
+                        }
+                        if (hasForwardBlock) break;
+                    }
+                }
+                
+                if (getDebugGeneral()) console.warn(`[MINING AI] Block check: hasForwardBlock=${hasForwardBlock}, shouldTunnelDown=${shouldTunnelDown}`);
+                
+                // ALWAYS try to break forward path first (walls blocking movement)
+                // This prevents digging down when blocked by walls
+                clearForwardTunnel(entity, config.tunnelHeight, extraHeight + (buildPriority && ascendGoal ? 1 : 0), startOffset, digContext, ascending, forwardDepth, directionOverride, false, targetInfo); // Don't tunnel down in forward tunnel
+                if (getDebugGeneral()) console.warn(`[MINING AI] After clearForwardTunnel: cleared=${digContext.cleared}/${digContext.max}`);
+                
+                // Re-check if forward path is clear after breaking blocks
+                let forwardStillBlocked = false;
+                if (dimension && (dirX !== 0 || dirZ !== 0) && digContext.cleared < digContext.max) {
+                    const forwardX = baseX + dirX;
+                    const forwardZ = baseZ + dirZ;
+                    for (let h = 0; h < config.tunnelHeight + extraHeight; h++) {
+                        const block = getBlock(dimension, forwardX, baseY + h, forwardZ);
+                        if (block && isBreakableBlock(block) && isSolidBlock(block)) {
+                            forwardStillBlocked = true;
+                            break;
+                        }
+                    }
+                }
+                
+                // ONLY dig down if:
+                // 1. Target is actually below (shouldTunnelDown is true)
+                // 2. AND forward path is clear (no walls blocking forward movement)
+                // This prevents digging down when blocked by walls - always break walls first
+                if (shouldTunnelDown && !forwardStillBlocked && !hasForwardBlock) {
+                    if (getDebugMining()) console.warn(`[MINING AI] Calling clearVerticalColumn (forward path is clear)`);
+                    clearVerticalColumn(entity, config.tunnelHeight, extraHeight, digContext, shouldTunnelDown, targetInfo);
+                    if (getDebugMining()) console.warn(`[MINING AI] After clearVerticalColumn: cleared=${digContext.cleared}/${digContext.max}`);
+                } else {
+                    if (getDebugMining()) console.warn(`[MINING AI] Skipping clearVerticalColumn - forward path blocked (hasForwardBlock=${hasForwardBlock}, forwardStillBlocked=${forwardStillBlocked}, shouldTunnelDown=${shouldTunnelDown})`);
+                }
+            } else {
+                if (getDebugMining()) console.warn(`[MINING AI] Skipping clearVerticalColumn/clearForwardTunnel (shouldMoveCloser=${shouldMoveCloser}, strategy=${strategy})`);
+            }
+            
+            // Cave mining: If in a cave, allow more aggressive mining through cave walls/ceilings
+            const inCave = isInCave(entity);
+            if (inCave && digContext.cleared < digContext.max) {
+                // In cave - allow mining through walls and ceilings more aggressively
+                const loc = entity.location;
+                const baseX = Math.floor(loc.x);
+                const baseY = Math.floor(loc.y);
+                const baseZ = Math.floor(loc.z);
+                const { x: dirX, z: dirZ } = resolveDirection(entity, directionOverride);
+                
+                if (dirX !== 0 || dirZ !== 0) {
+                    // Check for blocks blocking path in cave
+                    for (let step = 1; step <= 2; step++) {
+                        if (digContext.cleared >= digContext.max) break;
+                        const checkX = baseX + dirX * step;
+                        const checkZ = baseZ + dirZ * step;
+                        
+                        // Check ceiling and walls in cave
+                        for (let h = 0; h < config.tunnelHeight + 1; h++) {
+                            if (digContext.cleared >= digContext.max) break;
+                            const block = getBlock(entity.dimension, checkX, baseY + h, checkZ);
+                            if (isBreakableBlock(block) && isSolidBlock(block)) {
+                                clearBlock(entity.dimension, checkX, baseY + h, checkZ, digContext, entity, targetInfo);
+                                break; // Break one block at a time
+                            }
+                        }
+                    }
+                }
+            }
+            
             if (role === "leader" && targetInfo) {
-                breakWallAhead(entity, config.tunnelHeight, digContext, targetInfo, directionOverride);
-                branchTunnel(entity, config.tunnelHeight, digContext, tick, directionOverride);
-                // Break blocks under elevated targets (like pillars) when close enough
-                breakBlocksUnderTarget(entity, targetInfo, digContext);
+                if (getDebugGeneral()) console.warn(`[MINING AI] Leader with target: Calling breakBlocksUnderTarget, strategy=${strategy}`);
+                
+                // Only break walls and branch if not moving closer
+                if (!shouldMoveCloser || strategy === "tunnel") {
+                    if (getDebugGeneral()) console.warn(`[MINING AI] Calling breakWallAhead and branchTunnel`);
+                    breakWallAhead(entity, config.tunnelHeight, digContext, targetInfo, directionOverride);
+                    branchTunnel(entity, config.tunnelHeight, digContext, tick, directionOverride);
+                    if (getDebugGeneral()) console.warn(`[MINING AI] After breakWallAhead/branchTunnel: cleared=${digContext.cleared}/${digContext.max}`);
+                } else {
+                    if (getDebugGeneral()) console.warn(`[MINING AI] Skipping breakWallAhead/branchTunnel (shouldMoveCloser=${shouldMoveCloser}, strategy=${strategy})`);
+                }
+                
+                // Ensure path is accessible for smaller bears (maple thralls and tiny MBs can use tunnels)
+                // Note: Not sized for huge buff bears
+                ensurePathAccessibility(entity, config.tunnelHeight + extraHeight, digContext, directionOverride, tick);
+                
+                // Break blocks under target for pitfall creation - ONLY when very close and target is clearly above
+                // Reduce pitfall priority - focus on getting to target first
+                const loc = entity.location;
+                const targetLoc = targetInfo.entity.location;
+                const horizontalDist = Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z);
+                const dy = targetLoc.y - loc.y;
+                
+                if (getDebugPitfall()) console.warn(`[MINING AI] Pitfall check: strategy=${strategy}, horizontalDist=${horizontalDist.toFixed(1)}, dy=${dy.toFixed(1)}, OPTIMAL_ATTACK_DISTANCE=${OPTIMAL_ATTACK_DISTANCE}, shouldMoveCloser=${shouldMoveCloser}`);
+                
+                // Only create pitfalls when:
+                // 1. Very close (within 4 blocks horizontally)
+                // 2. Target is significantly above (dy > 3)
+                // 3. NOT moving closer (we're in position)
+                // 4. Strategy explicitly requires pitfall (not hybrid_pitfall which should prioritize movement)
+                if (!shouldMoveCloser && horizontalDist <= 4 && dy > 3 && strategy === "pitfall") {
+                    if (getDebugPitfall()) console.warn(`[MINING AI] Calling breakBlocksUnderTarget (pitfall creation)`);
+                    breakBlocksUnderTarget(entity, targetInfo, digContext);
+                    if (getDebugPitfall()) console.warn(`[MINING AI] After breakBlocksUnderTarget: cleared=${digContext.cleared}/${digContext.max}`);
+                } else {
+                    if (getDebugPitfall()) console.warn(`[MINING AI] NOT calling breakBlocksUnderTarget (shouldMoveCloser=${shouldMoveCloser}, horizontalDist=${horizontalDist.toFixed(1)}, dy=${dy.toFixed(1)}, strategy=${strategy})`);
+                }
+            } else {
+                if (getDebugPitfall()) {
+                    console.warn(`[PITFALL DEBUG] processContext: NOT calling breakBlocksUnderTarget - role=${role}, hasTarget=${!!targetInfo}`);
+                }
             }
-            if (ascending || ascendGoal) {
-                carveStair(entity, config.tunnelHeight, digContext, directionOverride);
+            // Only carve stairs if we're actually mining (not just moving closer)
+            // AND only if there's something actually blocking upward movement
+            if ((ascending || ascendGoal) && !shouldMoveCloser && digContext.cleared < digContext.max) {
+                if (getDebugGeneral()) console.warn(`[MINING AI] Calling carveStair (ascending=${ascending}, ascendGoal=${ascendGoal}, shouldMoveCloser=${shouldMoveCloser})`);
+                carveStair(entity, config.tunnelHeight, digContext, directionOverride, targetInfo);
+                if (getDebugGeneral()) console.warn(`[MINING AI] After carveStair: cleared=${digContext.cleared}/${digContext.max}`);
+                // Store target position when stairs were created (to allow breaking if target moves)
+                if (targetInfo?.entity?.location) {
+                    const targetLoc = targetInfo.entity.location;
+                    stairCreationTargetPos.set(entity.id, {
+                        x: targetLoc.x,
+                        y: targetLoc.y,
+                        z: targetLoc.z,
+                        tick: system.currentTick
+                    });
+                }
             }
-            // Only create ramps down if target is actually below
+            // Only create ramps down if target is SIGNIFICANTLY below (more than 2 blocks)
+            // Don't dig down if we're already at or below the target level
             if (descendGoal && shouldTunnelDown) {
-                carveRampDown(entity, config.tunnelHeight, digContext, directionOverride);
+                const loc = entity.location;
+                const targetLoc = targetInfo?.entity?.location;
+                const dy = targetLoc ? (targetLoc.y - loc.y) : 0;
+                // Only create ramps if target is significantly below (more than 2 blocks)
+                if (dy < -2) {
+                    if (getDebugGeneral()) console.warn(`[MINING AI] Calling carveRampDown (descendGoal=${descendGoal}, shouldTunnelDown=${shouldTunnelDown}, dy=${dy.toFixed(1)})`);
+                    carveRampDown(entity, config.tunnelHeight, digContext, directionOverride, targetInfo);
+                    if (getDebugGeneral()) console.warn(`[MINING AI] After carveRampDown: cleared=${digContext.cleared}/${digContext.max}`);
+                    // Store target position when ramp was created (to allow breaking if target moves)
+                    if (targetInfo?.entity?.location) {
+                        const targetLoc = targetInfo.entity.location;
+                        stairCreationTargetPos.set(entity.id, {
+                            x: targetLoc.x,
+                            y: targetLoc.y,
+                            z: targetLoc.z,
+                            tick: system.currentTick
+                        });
+                    }
+                } else {
+                    if (getDebugGeneral()) console.warn(`[MINING AI] Skipping carveRampDown - target not significantly below (dy=${dy.toFixed(1)}, need < -2)`);
+                }
             }
             if (planState) {
                 advanceBuildPlan(entity.id, digContext.lastBroken);
             }
+        } else {
+            // If canReachByWalking is true, don't mine at all - just let the entity walk/attack normally
+            if (canReachByWalking && tick % 40 === 0) {
+                if (getDebugPathfinding()) console.warn(`[MINING AI] Entity ${entity.id.substring(0, 8)} can reach target by walking - NOT mining, using entity AI to walk/attack`);
+            }
         }
-        // If canReachByWalking is true, don't mine at all - just let the entity walk/attack normally
     }
 
     const rescueContext = digContext.max > 0 ? digContext : { cleared: 0, max: FOLLOWER_BLOCK_BUDGET, lastBroken: digContext.lastBroken };
     liftIfBuried(entity, config.tunnelHeight, rescueContext);
 }
 
-system.runInterval(() => {
-    const tick = system.currentTick;
-    const activeLeaderIdsThisTick = new Set();
-    const activeWorkerIds = new Set();
+// Initialize mining AI with delay to ensure world is ready
+let miningAIIntervalId = null;
+let initializationAttempts = 0;
+const MAX_INIT_ATTEMPTS = 10;
+const INIT_DELAY_TICKS = 40; // 2 second delay (40 ticks = 2 seconds)
+const STARTUP_DEBUG_TICKS = 200; // Log more frequently for first 200 ticks (10 seconds) to debug startup
 
+function initializeMiningAI() {
+    // Prevent multiple initializations
+    if (miningAIIntervalId !== null) {
+        console.warn("[MINING AI] AI loop already initialized, skipping duplicate initialization");
+        return;
+    }
+    
+    initializationAttempts++;
+    
+    // Check if system and world are ready
+    if (typeof system?.runInterval !== "function") {
+        console.warn(`[MINING AI] System not ready (attempt ${initializationAttempts}/${MAX_INIT_ATTEMPTS}), retrying...`);
+        if (initializationAttempts < MAX_INIT_ATTEMPTS) {
+            system.runTimeout(() => initializeMiningAI(), INIT_DELAY_TICKS);
+        } else {
+            console.error("[MINING AI] ERROR: Failed to initialize after max attempts. System.runInterval is not available.");
+        }
+        return;
+    }
+    
+    // Check if world is ready (try to get players or a dimension)
+    try {
+        const players = world.getAllPlayers();
+        const overworld = world.getDimension("minecraft:overworld");
+        if (!overworld) {
+            console.warn(`[MINING AI] World not ready (attempt ${initializationAttempts}/${MAX_INIT_ATTEMPTS}), retrying...`);
+            if (initializationAttempts < MAX_INIT_ATTEMPTS) {
+                system.runTimeout(() => initializeMiningAI(), INIT_DELAY_TICKS);
+            } else {
+                console.error("[MINING AI] ERROR: Failed to initialize after max attempts. World dimensions not available.");
+            }
+            return;
+        }
+    } catch (error) {
+        console.warn(`[MINING AI] World check failed (attempt ${initializationAttempts}/${MAX_INIT_ATTEMPTS}):`, error);
+        if (initializationAttempts < MAX_INIT_ATTEMPTS) {
+            system.runTimeout(() => initializeMiningAI(), INIT_DELAY_TICKS);
+        } else {
+            console.error("[MINING AI] ERROR: Failed to initialize after max attempts.");
+        }
+        return;
+    }
+    
+    // Everything is ready - start the AI loop
+    if (getDebugGeneral()) {
+        console.warn(`[MINING AI] Initialization successful (attempt ${initializationAttempts}), starting AI loop...`);
+    }
+    
+    // Capture the initial tick when the AI loop starts
+    const aiLoopStartTick = system.currentTick;
+    if (getDebugGeneral()) {
+        console.warn(`[MINING AI] AI loop starting at world tick ${aiLoopStartTick}`);
+    }
+    
+    // Starting AI loop
+    miningAIIntervalId = system.runInterval(() => {
+        try {
+            const tick = system.currentTick;
+            const ticksSinceStart = tick - aiLoopStartTick;
+            const isStartupPhase = ticksSinceStart <= STARTUP_DEBUG_TICKS;
+            
+            // Log very frequently during startup to verify script is running (only if debug enabled)
+            if (getDebugGeneral()) {
+                if (isStartupPhase && (ticksSinceStart <= 10 || ticksSinceStart % 20 === 0)) {
+                    console.warn(`[MINING AI] Script running at world tick ${tick} (${ticksSinceStart} ticks since AI loop start)`);
+                } else if (!isStartupPhase && tick % 200 === 0) {
+                    console.warn(`[MINING AI] Script running at world tick ${tick}`);
+                }
+            }
+            
+            // Note: system.runInterval already handles the interval, so we don't need to check tick % AI_TICK_INTERVAL
+            // The interval callback is only called every AI_TICK_INTERVAL ticks automatically
+            
+            // Log when we actually process AI (only if debug enabled)
+            if (getDebugGeneral() && (isStartupPhase || tick % 40 === 0)) {
+                console.warn(`[MINING AI] Processing AI at tick ${tick} (${ticksSinceStart} ticks since start, interval: ${AI_TICK_INTERVAL} ticks)`);
+            }
+    
+            // AI processing (runs every AI_TICK_INTERVAL ticks)
+            const activeLeaderIdsThisTick = new Set();
+            const activeWorkerIds = new Set();
+            
+            // Performance: Get all players once and cache their positions for distance culling
+            const allPlayers = world.getAllPlayers();
+            
+            // Log player count more frequently during startup (only if debug enabled)
+            if (getDebugGeneral() && (isStartupPhase || tick % 40 === 0)) {
+                if (allPlayers.length === 0) {
+                    console.warn(`[MINING AI] No players found at tick ${tick} (${ticksSinceStart} ticks since start)`);
+                } else {
+                    console.warn(`[MINING AI] Found ${allPlayers.length} player(s) at tick ${tick} (${ticksSinceStart} ticks since start)`);
+                }
+            }
+    const playerPositions = new Map(); // Map<dimensionId, positions[]>
+    for (const player of allPlayers) {
+        try {
+            const dimId = player.dimension.id;
+            // Normalize dimension ID (minecraft:overworld -> overworld, minecraft:nether -> nether, minecraft:the_end -> the_end)
+            const normalizedDimId = dimId.replace('minecraft:', '');
+            if (!playerPositions.has(normalizedDimId)) {
+                playerPositions.set(normalizedDimId, []);
+            }
+            playerPositions.get(normalizedDimId).push(player.location);
+            
+            // Player position cached (only log occasionally for debugging)
+        } catch (error) {
+            console.error(`[MINING AI] Error processing player:`, error);
+        }
+    }
+    
+    // Player positions cached (only log if no players for debugging)
+
+    // Process all dimensions
     for (const dimId of DIMENSION_IDS) {
         let dimension;
         try {
             dimension = world.getDimension(dimId);
-        } catch {
+        } catch (error) {
+            console.error(`[MINING AI] Error getting dimension ${dimId}:`, error);
             continue;
         }
         if (!dimension) continue;
 
+        // Process each mining bear type
         for (const config of MINING_BEAR_TYPES) {
             let entities;
             try {
                 entities = dimension.getEntities({ type: config.id });
-            } catch {
+            } catch (error) {
+                console.error(`[MINING AI] Error getting entities for ${config.id}:`, error);
                 continue;
             }
-            if (!entities || entities.length === 0) continue;
-
-            const contexts = [];
-
+            // Log entity discovery (more frequently during startup) - only if debug enabled
+            if (!entities || entities.length === 0) {
+                if (getDebugGeneral() && isStartupPhase && ticksSinceStart % 40 === 0) {
+                    console.warn(`[MINING AI] No ${config.id} entities found in ${dimId} at tick ${tick}`);
+                }
+                continue;
+            }
+            
+            if (getDebugGeneral() && (isStartupPhase || tick % 40 === 0)) {
+                console.warn(`[MINING AI] Found ${entities.length} ${config.id} entities in ${dimId} at tick ${tick}`);
+            }
+            
+            // Performance: Distance-based culling - only process entities near players
+            // Check both normalized and full dimension ID
+            const dimPlayerPositions = playerPositions.get(dimId) || playerPositions.get(`minecraft:${dimId}`) || [];
+            if (dimPlayerPositions.length === 0) {
+                if (getDebugGeneral() && (isStartupPhase || tick % 40 === 0)) {
+                    console.warn(`[MINING AI] No players in ${dimId} (checked: ${dimId} and minecraft:${dimId}), available: ${Array.from(playerPositions.keys()).join(', ')}, skipping`);
+                }
+                continue; // No players in this dimension, skip
+            }
+            
+            if (getDebugGeneral() && (isStartupPhase || tick % 40 === 0)) {
+                console.warn(`[MINING AI] Found ${dimPlayerPositions.length} player positions in ${dimId}`);
+            }
+            
+            const validEntities = [];
             for (const entity of entities) {
                 if (typeof entity?.isValid === "function" && !entity.isValid()) continue;
+                
+                // Check if entity is within processing distance of any player
+                const entityLoc = entity.location;
+                let withinRange = false;
+                for (const playerPos of dimPlayerPositions) {
+                    const dx = entityLoc.x - playerPos.x;
+                    const dy = entityLoc.y - playerPos.y;
+                    const dz = entityLoc.z - playerPos.z;
+                    const distSq = dx * dx + dy * dy + dz * dz;
+                    if (distSq <= MAX_PROCESSING_DISTANCE_SQ) {
+                        withinRange = true;
+                        break;
+                    }
+                }
+                if (withinRange) {
+                    validEntities.push(entity);
+                }
+            }
+            
+            if (validEntities.length === 0) {
+                // Log more frequently during startup or occasionally (only if debug enabled)
+                if (getDebugGeneral()) {
+                    const isStartup = tick <= STARTUP_DEBUG_TICKS;
+                    if (isStartup || tick % 40 === 0) {
+                        console.warn(`[MINING AI] No valid entities within range for ${config.id} in ${dimId} (checked ${entities.length} entities)`);
+                    }
+                }
+                continue;
+            }
+            
+            // Log when we find entities (more frequently during startup) - only if debug enabled
+            if (getDebugGeneral()) {
+                const isStartup = tick <= STARTUP_DEBUG_TICKS;
+                if (isStartup || tick % 40 === 0) {
+                    console.warn(`[MINING AI] Processing ${validEntities.length} ${config.id} entities in ${dimId}`);
+                }
+            }
+            
+            const contexts = [];
+
+            for (const entity of validEntities) {
                 activeWorkerIds.add(entity.id);
                 
-                const liveTarget = findNearestTarget(entity);
+                // Performance: Use cached target lookup (only refreshes every TARGET_CACHE_TICKS)
+                const liveTarget = findNearestTarget(entity, TARGET_SCAN_RADIUS, true);
                 if (liveTarget) {
                     updateLastKnownTarget(entity, liveTarget);
                 }
                 const storedTarget = getStoredTargetInfo(entity);
                 const targetInfo = liveTarget || storedTarget;
+                
+                // Log target detection when debug is enabled
+                if (getDebugTarget() && tick % 20 === 0) {
+                    console.warn(`[MINING AI] Entity ${entity.id.substring(0, 8)}: liveTarget=${!!liveTarget}, storedTarget=${!!storedTarget}, hasTarget=${!!targetInfo}`);
+                    if (targetInfo && targetInfo.entity?.location) {
+                        const loc = entity.location;
+                        const targetLoc = targetInfo.entity.location;
+                        const dy = targetLoc.y - loc.y;
+                        const dist = Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z);
+                        console.warn(`[MINING AI] Target info: dist=${dist.toFixed(1)}, dy=${dy.toFixed(1)}, targetType=${targetInfo.entity?.typeId || 'unknown'}`);
+                    } else if (!targetInfo) {
+                        console.warn(`[MINING AI] Entity ${entity.id.substring(0, 8)}: NO TARGET FOUND!`);
+                    }
+                }
+                
                 const elevationIntent = getElevationIntent(entity, targetInfo);
                 const ascending = elevationIntent === "up" ? true : isAscending(entity);
                 contexts.push({
@@ -1712,12 +2889,22 @@ system.runInterval(() => {
             // Get dynamic mining interval based on current day
             const miningInterval = getMiningInterval();
             
+            if (getDebugPitfall() && leaderQueue.length > 0 && tick % 20 === 0) {
+                console.warn(`[PITFALL DEBUG] ${leaderQueue.length} leaders in queue, miningInterval=${miningInterval}`);
+            }
+            
             for (const ctx of leaderQueue) {
                 // Check if enough time has passed since last mining action for this entity
                 const lastTick = lastMiningTick.get(ctx.entity.id) || 0;
-                if (tick - lastTick >= miningInterval) {
+                const ticksSinceLastMining = tick - lastTick;
+                if (ticksSinceLastMining >= miningInterval) {
+                    if (DEBUG_PITFALL && tick % 20 === 0) {
+                        console.warn(`[PITFALL DEBUG] Processing leader ${ctx.entity.id.substring(0, 8)}, hasTarget=${!!ctx.targetInfo}, role=${ctx.role}`);
+                    }
                     processContext(ctx, config, tick, leaderSummaryById);
                     lastMiningTick.set(ctx.entity.id, tick);
+                } else if (DEBUG_PITFALL && tick % 40 === 0) {
+                    console.warn(`[PITFALL DEBUG] Leader ${ctx.entity.id.substring(0, 8)} waiting: ${ticksSinceLastMining}/${miningInterval} ticks`);
                 }
             }
             for (const ctx of followerQueue) {
@@ -1774,13 +2961,56 @@ system.runInterval(() => {
         }
     }
     
-    // Clean up old stair block protections (older than 10 seconds / 200 ticks)
+    // Performance: Clean up target cache for inactive entities
+    for (const [entityId] of targetCache.entries()) {
+        if (!activeWorkerIds.has(entityId)) {
+            targetCache.delete(entityId);
+        }
+    }
+    
+    // Clean up old stair work locks (expired or from inactive entities)
     const currentTick = system.currentTick;
+    for (const [blockKey, work] of activeStairWork.entries()) {
+        const ticksSinceWork = currentTick - work.tick;
+        if (!activeWorkerIds.has(work.entityId) || ticksSinceWork >= STAIR_WORK_LOCK_TICKS * 3) {
+            // Remove if entity is inactive or lock expired long ago (3x lock duration)
+            activeStairWork.delete(blockKey);
+        }
+    }
+    
+    // Clean up stair creation target positions for inactive entities
+    for (const [entityId] of stairCreationTargetPos.entries()) {
+        if (!activeWorkerIds.has(entityId)) {
+            stairCreationTargetPos.delete(entityId);
+        }
+    }
+    
+    // Clean up old stair block protections (older than 10 seconds / 200 ticks)
     for (const [blockKey, tick] of recentStairBlocks.entries()) {
         if (currentTick - tick > 200) {
             recentStairBlocks.delete(blockKey);
         }
     }
-}, 1); // Run every tick, but only process mining when interval has passed
+        } catch (error) {
+            // Log errors to help debug
+            console.error(`[MINING AI] ERROR in runInterval at tick ${system.currentTick}:`, error);
+            console.error(`[MINING AI] Error stack:`, error.stack);
+        }
+    }, AI_TICK_INTERVAL); // Run every AI_TICK_INTERVAL ticks (reduced frequency for performance)
+    
+    if (miningAIIntervalId !== null) {
+        if (getDebugGeneral()) {
+            console.warn(`[MINING AI] AI loop started successfully with interval ${AI_TICK_INTERVAL} ticks`);
+        }
+    } else {
+        console.error("[MINING AI] ERROR: Failed to start AI loop interval");
+    }
+}
 
-
+// Start initialization with a delay to ensure world is ready
+if (getDebugGeneral()) {
+    console.warn("[MINING AI] Script loaded, starting delayed initialization...");
+}
+system.runTimeout(() => {
+    initializeMiningAI();
+}, INIT_DELAY_TICKS);

@@ -1,5 +1,23 @@
-import { system, world } from "@minecraft/server";
+import { system, world, Player } from "@minecraft/server";
 import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
+import { isDebugEnabled } from "./mb_codex.js";
+
+// Debug helper functions
+function getDebugGeneral() {
+    return isDebugEnabled("torpedo", "general") || isDebugEnabled("torpedo", "all");
+}
+
+function getDebugTargeting() {
+    return isDebugEnabled("torpedo", "targeting") || isDebugEnabled("torpedo", "all");
+}
+
+function getDebugDiving() {
+    return isDebugEnabled("torpedo", "diving") || isDebugEnabled("torpedo", "all");
+}
+
+function getDebugBlockBreaking() {
+    return isDebugEnabled("torpedo", "blockBreaking") || isDebugEnabled("torpedo", "all");
+}
 
 const DIMENSION_IDS = ["overworld", "nether", "the_end"];
 const TORPEDO_TYPES = [
@@ -10,7 +28,7 @@ const DRIFT_FORCE = 0.03; // Reduced for straighter movement
 const ALTITUDE_CORRECTION_FORCE = 0.5; // Increased for aggressive sky staying
 const DIVE_BOOST_MULTIPLIER = 2.5; // High speed diving multiplier
 const DIVE_COOLDOWN_TICKS = 40; // Cooldown between dives (2 seconds)
-const MAX_DIVE_DEPTH = 10; // Maximum blocks below cruise altitude before forced back up
+const MAX_DIVE_DEPTH = 50; // Maximum blocks below cruise altitude before forced back up (high for maximum dive compatibility - allows diving all the way to ground)
 const STATE_MAP = new Map();
 const BREAK_COUNT_MAP = new Map(); // Track total blocks broken per entity
 const SEE_THROUGH_BREAK_COUNT = 3; // Break this many blocks before backing off
@@ -26,7 +44,7 @@ const BREAK_SOUND_RULES = [
 ];
 const SOUND_RADIUS = 16;
 const MIN_STRUCTURE_Y = 60; // Minimum Y level - torpedos never go below this
-const PASSIVE_WANDER_TICKS = 2400; // 2 minutes without seeing target = passive wandering
+const PASSIVE_WANDER_TICKS = 6000; // 5 minutes without seeing target = passive wandering
 
 // UNBREAKABLE_BLOCKS is imported from mb_miningBlockList.js
 // All blocks are breakable by default except those in UNBREAKABLE_BLOCKS
@@ -283,8 +301,8 @@ function findTarget(entity, maxDistance) {
         try {
             if (player.getGameMode() === "creative") continue;
         } catch { }
-        // Skip players below minimum Y (torpedos stay in sky)
-        if (player.location.y < minY) continue;
+        // Torpedo bears can target players at any Y level - they stay in sky and dive down to attack
+        // No Y level restriction for targeting
         
         const dx = player.location.x - origin.x;
         const dy = player.location.y - origin.y;
@@ -305,6 +323,7 @@ function findTarget(entity, maxDistance) {
     }
 
     // Also target mobs if no players nearby (heat-seeking enabled)
+    // Allow targeting mobs at any Y level (including ground mobs)
     if (!best) {
         const mobs = dimension.getEntities({
             location: origin,
@@ -313,8 +332,7 @@ function findTarget(entity, maxDistance) {
         });
         for (const mob of mobs) {
             if (mob === entity) continue;
-            // Skip mobs below minimum Y
-            if (mob.location.y < minY) continue;
+            // Allow targeting mobs at any Y level - torpedo bears can dive to attack them
             
             const dx = mob.location.x - origin.x;
             const dy = mob.location.y - origin.y;
@@ -336,6 +354,10 @@ function findTarget(entity, maxDistance) {
     }
 
     if (!best) return null;
+    
+    // Mark if target is a player (for priority diving)
+    const isPlayer = best instanceof Player || best.typeId === "minecraft:player";
+    
     return {
         entity: best,
         location: best.location,
@@ -343,7 +365,8 @@ function findTarget(entity, maxDistance) {
             x: best.location.x - origin.x,
             y: best.location.y - origin.y,
             z: best.location.z - origin.z
-        }
+        },
+        isPlayer: isPlayer // Track if target is a player for dive priority
     };
 }
 
@@ -438,7 +461,8 @@ function breakBlocksInPath(entity, direction, config) {
     const entityZ = Math.floor(loc.z);
     const minY = config.minY || MIN_STRUCTURE_Y;
     const norm = Math.hypot(direction.x, direction.z) || 1;
-    const breakLimit = Math.max(1, config.breaksPerTick ?? 15);
+    // Limit to 3 blocks per tick to prevent excessive destruction (3x3x3 area = 26 blocks, but we only break 3 per tick)
+    const breakLimit = Math.max(1, config.breaksPerTick ?? 3);
     let broken = 0;
     
     // Break blocks ALL AROUND the entity (ravager-style) - 3x3x3 area centered on entity
@@ -514,34 +538,64 @@ function adjustAltitude(entity, config) {
     const minY = config.minY || MIN_STRUCTURE_Y;
     const state = getState(entity);
     
+    // If in dive mode and below cruise altitude, check if we should return to cruise
+    if (state.mode === "dive" && loc.y < config.cruiseMin) {
+        const depthBelowCruise = config.cruiseMin - loc.y;
+        
+        // If we've dived too deep OR dive cooldown is active, force return to cruise
+        if (depthBelowCruise > MAX_DIVE_DEPTH || state.diveCooldown > 0) {
+            // Force return to cruise altitude
+            try {
+                const pushForce = Math.min(ALTITUDE_CORRECTION_FORCE * 2.5, 0.8);
+                entity.applyImpulse({ x: 0, y: pushForce, z: 0 });
+                if (getDebugDiving()) {
+                    console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} returning to cruise: depth=${depthBelowCruise.toFixed(1)}, cooldown=${state.diveCooldown}, Y=${loc.y.toFixed(1)}`);
+                }
+            } catch { }
+            
+            // If we're close to cruise altitude, switch back to cruise mode
+            if (loc.y >= config.cruiseMin - 2) {
+                state.mode = "cruise";
+                if (getDebugDiving()) {
+                    console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} switched to cruise mode at Y=${loc.y.toFixed(1)}`);
+                }
+            }
+        }
+    }
+    
     // Never go below minimum Y - aggressively push up
     if (loc.y < minY) {
         try {
             const pushForce = Math.min(ALTITUDE_CORRECTION_FORCE * 3, 0.7); // Very strong upward push
             entity.applyImpulse({ x: 0, y: pushForce, z: 0 });
+            if (getDebugDiving()) {
+                console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} below minY (${loc.y.toFixed(1)} < ${minY}), forcing up`);
+            }
         } catch { }
-    } else if (loc.y < config.cruiseMin) {
-        // Below cruise altitude - push up, but allow occasional dives
+    } else if (loc.y < config.cruiseMin && state.mode === "cruise") {
+        // Below cruise altitude in cruise mode - push up
         const depthBelowCruise = config.cruiseMin - loc.y;
         if (depthBelowCruise > MAX_DIVE_DEPTH) {
             // Too far below cruise - force back up immediately
             try {
                 entity.applyImpulse({ x: 0, y: ALTITUDE_CORRECTION_FORCE * 2, z: 0 });
-            } catch { }
-        } else if (state.diveCooldown === 0) {
-            // Can dive, but will be limited
-            try {
-                entity.applyImpulse({ x: 0, y: ALTITUDE_CORRECTION_FORCE * 0.3, z: 0 });
+                if (getDebugDiving()) {
+                    console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} too far below cruise (${depthBelowCruise.toFixed(1)} blocks), forcing up`);
+                }
             } catch { }
         } else {
-            // Dive on cooldown - push up
+            // Gently push up to cruise altitude
             try {
-                entity.applyImpulse({ x: 0, y: ALTITUDE_CORRECTION_FORCE, z: 0 });
+                entity.applyImpulse({ x: 0, y: ALTITUDE_CORRECTION_FORCE * 0.5, z: 0 });
             } catch { }
         }
     } else if (loc.y > config.cruiseMax) {
+        // Above cruise altitude - push down
         try {
             entity.applyImpulse({ x: 0, y: -ALTITUDE_CORRECTION_FORCE * 0.5, z: 0 });
+            if (getDebugDiving() && state.mode === "cruise") {
+                console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} above cruise max (${loc.y.toFixed(1)} > ${config.cruiseMax}), pushing down`);
+            }
         } catch { }
     }
 }
@@ -603,6 +657,12 @@ function diveTowardsTarget(entity, targetInfo, config, state) {
     const dy = targetInfo.vector.y;
     const dz = targetInfo.vector.z;
     const horizMag = Math.hypot(dx, dz) || 1;
+    const entityY = entity.location.y;
+    const targetY = targetInfo.location.y;
+    
+    if (getDebugDiving()) {
+        console.warn(`[TORPEDO AI] diveTowardsTarget: entityY=${entityY.toFixed(1)}, targetY=${targetY.toFixed(1)}, dy=${dy.toFixed(1)}, horizDist=${horizMag.toFixed(1)}, backoffTicks=${state.backoffTicks}`);
+    }
     
     // Check if we're in backoff mode (see-through behavior)
     if (state.backoffTicks > 0) {
@@ -615,6 +675,9 @@ function diveTowardsTarget(entity, targetInfo, config, state) {
                 z: (-dz / horizMag) * config.forwardForce * 0.5 
             });
         } catch { }
+        if (getDebugDiving()) {
+            console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} in backoff mode, backing away`);
+        }
         return; // Don't break blocks while backing off
     }
     
@@ -625,10 +688,16 @@ function diveTowardsTarget(entity, targetInfo, config, state) {
         const broken = breakBlocksInPath(entity, { x: dx, z: dz }, config);
         if (broken > 0) {
             state.breakCount = (state.breakCount || 0) + broken;
+            if (getDebugBlockBreaking()) {
+                console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} breaking blocks to see target: broken=${broken}, total=${state.breakCount}`);
+            }
             // After breaking a few blocks, back off
             if (state.breakCount >= SEE_THROUGH_BREAK_COUNT) {
                 state.backoffTicks = SEE_THROUGH_BACKOFF_TICKS;
                 state.breakCount = 0;
+                if (getDebugDiving()) {
+                    console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} entering backoff mode after breaking ${SEE_THROUGH_BREAK_COUNT} blocks`);
+                }
             }
         }
     } else {
@@ -641,9 +710,6 @@ function diveTowardsTarget(entity, targetInfo, config, state) {
     const forwardX = (dx / horizMag) * diveForce;
     const forwardZ = (dz / horizMag) * diveForce;
     
-    const entityY = entity.location.y;
-    const targetY = targetInfo.location.y;
-    
     // Check if stuck below sky base - if entity is below target by more than 5 blocks, prioritize rising
     const minY = config.minY || MIN_STRUCTURE_Y;
     let verticalForce = 0;
@@ -655,9 +721,12 @@ function diveTowardsTarget(entity, targetInfo, config, state) {
     } else if (dy < -8 && entityY < minY + 10) {
         // Stuck below sky base - rise aggressively
         verticalForce = 0.3;
-    } else if (dy < -5 && targetY >= minY && entityY >= minY) {
-        // Target is significantly below but still above minY, dive slightly (boosted) - only if we're above minY
-        verticalForce = -0.1 * DIVE_BOOST_MULTIPLIER;
+    } else if (dy < -0.5) {
+        // Target is below - dive down to attack (can dive all the way to ground)
+        // Apply stronger dive force for ground targets (more negative = stronger dive)
+        // Even small negative dy values should trigger a dive
+        const diveStrength = dy < -5 ? -0.2 * DIVE_BOOST_MULTIPLIER : -0.15 * DIVE_BOOST_MULTIPLIER;
+        verticalForce = diveStrength;
     } else if (dy > 5) {
         // Target is above, rise more aggressively (boosted)
         verticalForce = 0.2 * DIVE_BOOST_MULTIPLIER;
@@ -670,44 +739,386 @@ function diveTowardsTarget(entity, targetInfo, config, state) {
         entity.applyImpulse({ x: forwardX, y: verticalForce, z: forwardZ });
     } catch { }
     
-    // If we have a target location, break structure blocks around it
-    if (targetInfo.location && state.mode === "dive") {
-            const minY = config.minY || MIN_STRUCTURE_Y;
-            const structureBlocks = findStructureBlocks(
-            entity.dimension,
-            targetInfo.location,
-            config.structureScanRadius,
-            minY
-        );
-        if (structureBlocks.length > 0) {
-            breakStructureBlocks(entity.dimension, structureBlocks, config.breaksPerTick, entity, config);
-        }
+    if (getDebugDiving()) {
+        console.warn(`[TORPEDO AI] diveTowardsTarget applied impulse: forwardX=${forwardX.toFixed(3)}, verticalForce=${verticalForce.toFixed(3)}, forwardZ=${forwardZ.toFixed(3)}`);
     }
+    
+    // Torpedo bears only break blocks they're ramming through (handled by breakBlocksInPath)
+    // They don't break blocks around the target - only blocks in their immediate path
+    // This prevents them from destroying entire bases from a distance
 }
 
-system.runInterval(() => {
-    const seen = new Set();
-    for (const dimId of DIMENSION_IDS) {
+// Performance: Distance-based culling constants
+const MAX_PROCESSING_DISTANCE = 64; // Only process entities within 64 blocks of any player
+const MAX_PROCESSING_DISTANCE_SQ = MAX_PROCESSING_DISTANCE * MAX_PROCESSING_DISTANCE;
+
+// Initialize torpedo AI with delay to ensure world is ready (similar to mining AI)
+let torpedoAIIntervalId = null;
+let torpedoInitAttempts = 0;
+const MAX_TORPEDO_INIT_ATTEMPTS = 10;
+const TORPEDO_INIT_DELAY_TICKS = 40; // 2 second delay
+
+function initializeTorpedoAI() {
+    if (getDebugGeneral()) {
+        console.warn(`[TORPEDO AI] ====== INITIALIZATION ATTEMPT ${torpedoInitAttempts + 1}/${MAX_TORPEDO_INIT_ATTEMPTS} ======`);
+        console.warn(`[TORPEDO AI] Current tick: ${system.currentTick}`);
+    }
+    
+    // Prevent multiple initializations
+    if (torpedoAIIntervalId !== null) {
+        console.warn("[TORPEDO AI] WARNING: AI loop already initialized, skipping duplicate initialization");
+        console.warn(`[TORPEDO AI] Interval ID: ${torpedoAIIntervalId}`);
+        return;
+    }
+    
+    torpedoInitAttempts++;
+    
+    // Check if system and world are ready
+    if (typeof system?.runInterval !== "function") {
+        console.warn(`[TORPEDO AI] ERROR: System not ready (attempt ${torpedoInitAttempts}/${MAX_TORPEDO_INIT_ATTEMPTS})`);
+        console.warn(`[TORPEDO AI] system.runInterval type: ${typeof system?.runInterval}`);
+        if (torpedoInitAttempts < MAX_TORPEDO_INIT_ATTEMPTS) {
+            console.warn(`[TORPEDO AI] Retrying in ${TORPEDO_INIT_DELAY_TICKS} ticks...`);
+            system.runTimeout(() => initializeTorpedoAI(), TORPEDO_INIT_DELAY_TICKS);
+        } else {
+            console.error("[TORPEDO AI] FATAL ERROR: Failed to initialize after max attempts. System not available.");
+        }
+        return;
+    }
+    
+    // Check if world is ready
+    try {
+        const overworld = world.getDimension("minecraft:overworld");
+        if (!overworld) {
+            console.warn(`[TORPEDO AI] World not ready (attempt ${torpedoInitAttempts}/${MAX_TORPEDO_INIT_ATTEMPTS}), retrying...`);
+            if (torpedoInitAttempts < MAX_TORPEDO_INIT_ATTEMPTS) {
+                system.runTimeout(() => initializeTorpedoAI(), TORPEDO_INIT_DELAY_TICKS);
+            } else {
+                console.error("[TORPEDO AI] ERROR: Failed to initialize after max attempts. World dimensions not available.");
+            }
+            return;
+        }
+    } catch (error) {
+        console.warn(`[TORPEDO AI] World check failed (attempt ${torpedoInitAttempts}/${MAX_TORPEDO_INIT_ATTEMPTS}):`, error);
+        if (torpedoInitAttempts < MAX_TORPEDO_INIT_ATTEMPTS) {
+            system.runTimeout(() => initializeTorpedoAI(), TORPEDO_INIT_DELAY_TICKS);
+        } else {
+            console.error("[TORPEDO AI] ERROR: Failed to initialize after max attempts.");
+        }
+        return;
+    }
+    
+    // Everything is ready - start the AI loop
+    const aiLoopStartTick = system.currentTick;
+    if (getDebugGeneral()) {
+        console.warn(`[TORPEDO AI] ====== INITIALIZATION SUCCESSFUL ======`);
+        console.warn(`[TORPEDO AI] Attempt: ${torpedoInitAttempts}/${MAX_TORPEDO_INIT_ATTEMPTS}`);
+        console.warn(`[TORPEDO AI] AI loop starting at tick ${aiLoopStartTick}`);
+        console.warn(`[TORPEDO AI] Processing ${TORPEDO_TYPES.length} torpedo types: ${TORPEDO_TYPES.map(t => t.id).join(", ")}`);
+        console.warn(`[TORPEDO AI] Dimensions to check: ${DIMENSION_IDS.join(", ")}`);
+        console.warn(`[TORPEDO AI] Max processing distance: ${MAX_PROCESSING_DISTANCE} blocks`);
+    }
+    
+    // Check debug flags after initialization (when players might have joined)
+    const allPlayers = world.getAllPlayers();
+    if (getDebugGeneral()) {
+        console.warn(`[TORPEDO AI] Players online: ${allPlayers.length}`);
+        if (allPlayers.length > 0) {
+            console.warn(`[TORPEDO AI] Checking debug flags from ${allPlayers.length} player(s)...`);
+            const generalDebug = getDebugGeneral();
+            const targetingDebug = getDebugTargeting();
+            const divingDebug = getDebugDiving();
+            const blockBreakingDebug = getDebugBlockBreaking();
+            console.warn(`[TORPEDO AI] Debug flags - General: ${generalDebug}, Targeting: ${targetingDebug}, Diving: ${divingDebug}, BlockBreaking: ${blockBreakingDebug}`);
+            if (generalDebug) {
+                console.warn(`[TORPEDO AI] ✓ General logging is ON`);
+            }
+            if (targetingDebug) {
+                console.warn(`[TORPEDO AI] ✓ Targeting logging is ON`);
+            }
+            if (divingDebug) {
+                console.warn(`[TORPEDO AI] ✓ Diving logging is ON`);
+            }
+            if (blockBreakingDebug) {
+                console.warn(`[TORPEDO AI] ✓ Block breaking logging is ON`);
+            }
+        } else {
+            console.warn(`[TORPEDO AI] No players online yet - debug flags will be checked when players join`);
+        }
+    }
+    
+    torpedoAIIntervalId = system.runInterval(() => {
+        const seen = new Set();
+        const currentTick = system.currentTick;
+        const ticksSinceStart = currentTick - aiLoopStartTick;
+        
+        // Always log when debug is enabled (frequently to confirm it's working)
+        if (getDebugGeneral()) {
+            // Log very frequently in first 20 ticks, then every 50 ticks (only when debug enabled)
+            if (getDebugGeneral() && (ticksSinceStart <= 20 || ticksSinceStart % 50 === 0)) {
+                console.warn(`[TORPEDO AI] AI loop running at tick ${currentTick} (${ticksSinceStart} ticks since start) - DEBUG ENABLED`);
+            }
+        }
+        
+        // Performance: Get all players once and cache their positions for distance culling
+        // Try both getAllPlayers() and getPlayers() to see which works
+        let allPlayers = [];
+        try {
+            allPlayers = world.getAllPlayers();
+        } catch (err) {
+            console.warn(`[TORPEDO AI] world.getAllPlayers() failed:`, err);
+            try {
+                allPlayers = Array.from(world.getPlayers());
+            } catch (err2) {
+                console.warn(`[TORPEDO AI] world.getPlayers() also failed:`, err2);
+            }
+        }
+        
+        // Log player count for troubleshooting (only when debug enabled)
+        if (getDebugGeneral() && (ticksSinceStart <= 20 || currentTick % 50 === 0)) {
+            console.warn(`[TORPEDO AI] Player detection: found ${allPlayers.length} player(s)`);
+            if (allPlayers.length > 0) {
+                for (const player of allPlayers) {
+                    try {
+                        const dimId = player.dimension?.id || 'unknown';
+                        const isValid = typeof player.isValid === "function" ? player.isValid() : 'unknown';
+                        console.warn(`[TORPEDO AI]   Player: ${player.name}, dimension: ${dimId}, valid: ${isValid}`);
+                    } catch (err) {
+                        console.warn(`[TORPEDO AI]   Player: ${player.name}, error getting info:`, err);
+                    }
+                }
+            }
+        }
+        
+        const playerPositions = new Map(); // Map<dimensionId, positions[]>
+        for (const player of allPlayers) {
+            try {
+                if (typeof player.isValid === "function" && !player.isValid()) {
+                    if (getDebugGeneral() && (ticksSinceStart <= 20 || currentTick % 50 === 0)) {
+                        console.warn(`[TORPEDO AI] Skipping invalid player: ${player.name}`);
+                    }
+                    continue;
+                }
+                const dimId = player.dimension?.id;
+                if (!dimId) {
+                    if (getDebugGeneral() && (ticksSinceStart <= 20 || currentTick % 50 === 0)) {
+                        console.warn(`[TORPEDO AI] Player ${player.name} has no dimension ID`);
+                    }
+                    continue;
+                }
+                // Normalize dimension ID (handle both "overworld" and "minecraft:overworld")
+                const normalizedDimId = dimId.startsWith("minecraft:") ? dimId.substring(10) : dimId;
+                if (!playerPositions.has(normalizedDimId)) {
+                    playerPositions.set(normalizedDimId, []);
+                }
+                playerPositions.get(normalizedDimId).push(player.location);
+                if (getDebugGeneral() && (ticksSinceStart <= 20 || currentTick % 50 === 0)) {
+                    console.warn(`[TORPEDO AI] Added player ${player.name} at (${player.location.x.toFixed(1)}, ${player.location.y.toFixed(1)}, ${player.location.z.toFixed(1)}) in ${normalizedDimId}`);
+                }
+            } catch (err) {
+                if (getDebugGeneral()) {
+                    console.warn(`[TORPEDO AI] Error processing player ${player.name}:`, err);
+                }
+            }
+        }
+        
+        if (getDebugGeneral() && (ticksSinceStart <= 20 || currentTick % 50 === 0)) {
+            console.warn(`[TORPEDO AI] Player positions cached: ${playerPositions.size} dimension(s) with players`);
+            for (const [dimId, positions] of playerPositions.entries()) {
+                console.warn(`[TORPEDO AI]   ${dimId}: ${positions.length} player position(s)`);
+            }
+        }
+        
+        for (const dimId of DIMENSION_IDS) {
         let dimension;
         try {
             dimension = world.getDimension(dimId);
         } catch {
+            if (ticksSinceStart <= 20 || currentTick % 200 === 0) {
+                console.warn(`[TORPEDO AI] Failed to get dimension ${dimId}`);
+            }
             continue;
         }
-        if (!dimension) continue;
+        if (!dimension) {
+            if (getDebugGeneral() && (ticksSinceStart <= 20 || currentTick % 200 === 0)) {
+                console.warn(`[TORPEDO AI] Dimension ${dimId} is null`);
+            }
+            continue;
+        }
+
+        // Performance: Distance-based culling - only process entities near players
+        // Check both normalized and full dimension ID (like mining AI does)
+        const dimPlayerPositions = playerPositions.get(dimId) || playerPositions.get(`minecraft:${dimId}`) || [];
+        if (dimPlayerPositions.length === 0) {
+            // Log when skipping dimension due to no players (only when debug enabled)
+            if (getDebugGeneral() && (ticksSinceStart <= 20 || currentTick % 200 === 0)) {
+                console.warn(`[TORPEDO AI] Skipping ${dimId} - no players in this dimension (${allPlayers.length} total players online, cached positions: ${playerPositions.size} dimensions)`);
+            }
+            continue; // No players in this dimension, skip
+        }
+        
+        // Log when we have players in a dimension and will query entities (only when debug enabled)
+        if (getDebugGeneral() && (ticksSinceStart <= 20 || currentTick % 200 === 0)) {
+            console.warn(`[TORPEDO AI] Processing ${dimId} - ${dimPlayerPositions.length} player(s) in this dimension`);
+        }
 
         for (const config of TORPEDO_TYPES) {
             let entities;
             try {
                 entities = dimension.getEntities({ type: config.id });
-            } catch {
+                // Log entity query results (only when debug enabled)
+                if (getDebugGeneral() && (ticksSinceStart <= 20 || currentTick % 50 === 0)) {
+                    console.warn(`[TORPEDO AI] Entity query for ${config.id} in ${dimId}: ${entities?.length || 0} entities found`);
+                }
+            } catch (err) {
+                console.warn(`[TORPEDO AI] ERROR querying entities for ${config.id} in ${dimId}:`, err);
                 continue;
             }
-            if (!entities || entities.length === 0) continue;
-
+            if (!entities || entities.length === 0) {
+                // Log when no entities found (only when debug enabled)
+                if (getDebugGeneral() && (ticksSinceStart <= 20 || currentTick % 100 === 0)) {
+                    console.warn(`[TORPEDO AI] No ${config.id} entities found in ${dimId} at tick ${currentTick}`);
+                }
+                continue;
+            }
+            
+            // Log when entities are found (only when debug enabled)
+            if (getDebugGeneral()) {
+                console.warn(`[TORPEDO AI] ====== FOUND ${entities.length} ${config.id} ENTITIES ======`);
+                console.warn(`[TORPEDO AI] Dimension: ${dimId}, Tick: ${currentTick}`);
+                if (entities.length > 0) {
+                    const firstEntity = entities[0];
+                    if (firstEntity && typeof firstEntity.isValid === "function" && firstEntity.isValid()) {
+                        const loc = firstEntity.location;
+                        console.warn(`[TORPEDO AI] First entity position: (${loc.x.toFixed(1)}, ${loc.y.toFixed(1)}, ${loc.z.toFixed(1)})`);
+                        if (dimPlayerPositions.length > 0) {
+                            let minDist = Infinity;
+                            for (const playerPos of dimPlayerPositions) {
+                                const dx = loc.x - playerPos.x;
+                                const dy = loc.y - playerPos.y;
+                                const dz = loc.z - playerPos.z;
+                                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                                if (dist < minDist) minDist = dist;
+                            }
+                            console.warn(`[TORPEDO AI] Distance to nearest player: ${minDist.toFixed(1)} blocks (max processing: ${MAX_PROCESSING_DISTANCE})`);
+                        }
+                    }
+                }
+            }
+            
+            // Performance: Distance-based culling - only process entities near players
+            const validEntities = [];
             for (const entity of entities) {
                 if (typeof entity?.isValid === "function" && !entity.isValid()) continue;
+                
+                // Check if entity is within processing distance of any player
+                const entityLoc = entity.location;
+                let withinRange = false;
+                for (const playerPos of dimPlayerPositions) {
+                    const dx = entityLoc.x - playerPos.x;
+                    const dy = entityLoc.y - playerPos.y;
+                    const dz = entityLoc.z - playerPos.z;
+                    const distSq = dx * dx + dy * dy + dz * dz;
+                    if (distSq <= MAX_PROCESSING_DISTANCE_SQ) {
+                        withinRange = true;
+                        break;
+                    }
+                }
+                if (withinRange) {
+                    validEntities.push(entity);
+                }
+            }
+            
+            if (validEntities.length === 0) {
+                // Log when entities are out of range (only when debug enabled)
+                if (getDebugGeneral() && entities.length > 0 && (ticksSinceStart <= 20 || currentTick % 50 === 0)) {
+                    console.warn(`[TORPEDO AI] ====== ENTITIES OUT OF RANGE ======`);
+                    console.warn(`[TORPEDO AI] Found ${entities.length} ${config.id} entities in ${dimId}, but ALL are out of range (>${MAX_PROCESSING_DISTANCE} blocks from players)`);
+                    // Log distances to nearest player for debugging
+                    if (dimPlayerPositions.length > 0 && entities.length > 0) {
+                        const firstEntity = entities[0];
+                        if (firstEntity && typeof firstEntity.isValid === "function" && firstEntity.isValid()) {
+                            const entityLoc = firstEntity.location;
+                            let minDist = Infinity;
+                            let nearestPlayerPos = null;
+                            for (const playerPos of dimPlayerPositions) {
+                                const dx = entityLoc.x - playerPos.x;
+                                const dy = entityLoc.y - playerPos.y;
+                                const dz = entityLoc.z - playerPos.z;
+                                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    nearestPlayerPos = playerPos;
+                                }
+                            }
+                            console.warn(`[TORPEDO AI] Nearest entity at (${entityLoc.x.toFixed(1)}, ${entityLoc.y.toFixed(1)}, ${entityLoc.z.toFixed(1)})`);
+                            if (nearestPlayerPos) {
+                                console.warn(`[TORPEDO AI] Nearest player at (${nearestPlayerPos.x.toFixed(1)}, ${nearestPlayerPos.y.toFixed(1)}, ${nearestPlayerPos.z.toFixed(1)})`);
+                            }
+                            console.warn(`[TORPEDO AI] Distance: ${minDist.toFixed(1)} blocks (max processing: ${MAX_PROCESSING_DISTANCE} blocks)`);
+                            console.warn(`[TORPEDO AI] Entity is ${(minDist - MAX_PROCESSING_DISTANCE).toFixed(1)} blocks too far away`);
+                        }
+                    }
+                }
+                continue;
+            }
+            
+            // Log when we have valid entities to process (only when debug enabled)
+            if (getDebugGeneral()) {
+                console.warn(`[TORPEDO AI] ====== PROCESSING ${validEntities.length} VALID ENTITIES ======`);
+                console.warn(`[TORPEDO AI] ${entities.length} total found, ${validEntities.length} within ${MAX_PROCESSING_DISTANCE} blocks of players`);
+            }
+
+            // Debug: Log when processing entities (more frequently when debug enabled)
+            if (getDebugGeneral()) {
+                // Log every 50 ticks when debug is enabled (more frequent)
+                const tick = system.currentTick;
+                if (ticksSinceStart <= 20 || tick % 50 === 0) {
+                    console.warn(`[TORPEDO AI] ====== PROCESSING ENTITIES ======`);
+                    console.warn(`[TORPEDO AI] Dimension: ${dimId}, Type: ${config.id}`);
+                    console.warn(`[TORPEDO AI] Found ${entities.length} total entities, ${validEntities.length} within range (${MAX_PROCESSING_DISTANCE} blocks)`);
+                    console.warn(`[TORPEDO AI] Players in dimension: ${dimPlayerPositions.length}`);
+                    if (validEntities.length > 0) {
+                        const firstEntity = validEntities[0];
+                        if (firstEntity && typeof firstEntity.isValid === "function" && firstEntity.isValid()) {
+                            const loc = firstEntity.location;
+                            console.warn(`[TORPEDO AI] First entity position: (${loc.x.toFixed(1)}, ${loc.y.toFixed(1)}, ${loc.z.toFixed(1)})`);
+                        }
+                    }
+                }
+            }
+
+            for (const entity of validEntities) {
                 seen.add(entity.id);
+                
+                const state = getState(entity);
+                const loc = entity.location;
+                
+                // Log first processing of each entity (once per entity, using state to track, only when debug enabled)
+                if (!state.activationLogged) {
+                    state.activationLogged = true;
+                    if (getDebugGeneral()) {
+                        const entityId = entity.id.substring(0, 8);
+                        console.warn(`[TORPEDO AI] ====== ENTITY ACTIVATED ======`);
+                        console.warn(`[TORPEDO AI] Entity ID: ${entityId}...`);
+                        console.warn(`[TORPEDO AI] Type: ${entity.typeId}`);
+                        console.warn(`[TORPEDO AI] Position: (${loc.x.toFixed(1)}, ${loc.y.toFixed(1)}, ${loc.z.toFixed(1)})`);
+                        console.warn(`[TORPEDO AI] Initial state: mode=${state.mode}, cooldown=${state.cooldown}, diveCooldown=${state.diveCooldown}`);
+                        console.warn(`[TORPEDO AI] Config: cruiseMin=${config.cruiseMin}, cruiseMax=${config.cruiseMax}, minY=${config.minY}, diveRange=${config.diveRange}`);
+                    }
+                }
+                
+                if (getDebugGeneral()) {
+                    // Log entity processing more frequently when debug enabled
+                    const tick = system.currentTick;
+                    if (ticksSinceStart <= 20 || tick % 50 === 0) {
+                        const entityId = entity.id.substring(0, 8);
+                        const entityY = entity.location.y;
+                        const vel = entity.getVelocity?.();
+                        const speed = vel ? Math.hypot(vel.x, vel.y, vel.z) : 0;
+                        console.warn(`[TORPEDO AI] Entity ${entityId}: Y=${entityY.toFixed(1)}, mode=${state.mode}, speed=${speed.toFixed(2)}, cooldown=${state.cooldown}, diveCooldown=${state.diveCooldown}`);
+                    }
+                }
                 
                 // Prevent targeting creative players (entity JSON behavior can't filter this)
                 // Check if entity is moving towards a creative player and stop it
@@ -754,18 +1165,33 @@ system.runInterval(() => {
                     }
                 } catch { }
                 
-                const state = getState(entity);
+                // State already declared above, just update cooldowns
                 if (state.cooldown > 0) state.cooldown--;
                 if (state.diveCooldown > 0) state.diveCooldown--;
                 
                 const minY = config.minY || MIN_STRUCTURE_Y;
                 
                 // Always maintain altitude (enforce minimum Y) - do this BEFORE other logic
+                const altitudeBefore = entity.location.y;
                 adjustAltitude(entity, config);
+                const altitudeAfter = entity.location.y;
+                
+                if (getDebugDiving()) {
+                    if (Math.abs(altitudeAfter - altitudeBefore) > 0.1) {
+                        console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} altitude adjusted: ${altitudeBefore.toFixed(1)} -> ${altitudeAfter.toFixed(1)}, mode=${state.mode}, cruiseMin=${config.cruiseMin}, cruiseMax=${config.cruiseMax}`);
+                    }
+                    // Always log altitude status when in dive mode or above cruise
+                    if (state.mode === "dive" || altitudeAfter > config.cruiseMax) {
+                        console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} altitude check: Y=${altitudeAfter.toFixed(1)}, mode=${state.mode}, cruiseMin=${config.cruiseMin}, cruiseMax=${config.cruiseMax}, minY=${minY}`);
+                    }
+                }
                 
                 // If entity is below minY, force it up and prevent diving
                 if (entity.location.y < minY) {
                     state.diveCooldown = DIVE_COOLDOWN_TICKS; // Prevent diving when too low
+                    if (getDebugDiving()) {
+                        console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} below minY (${entity.location.y.toFixed(1)} < ${minY}), preventing dive`);
+                    }
                 }
                 
                 // Check exhaustion first
@@ -774,48 +1200,163 @@ system.runInterval(() => {
                 // Always break blocks around the entity (ravager-style) - even when stationary
                 // This ensures blocks above and below are broken
                 const vel = entity.getVelocity?.();
+                let blocksBroken = 0;
                 if (vel) {
                     const speed = Math.hypot(vel.x, vel.y, vel.z);
                     if (speed > 0.01) {
                         // Moving - break blocks all around
-                        breakBlocksInPath(entity, { x: vel.x, z: vel.z }, config);
+                        blocksBroken = breakBlocksInPath(entity, { x: vel.x, z: vel.z }, config);
                     } else {
                         // Not moving much - still break blocks directly above and below
-                        breakBlocksInPath(entity, { x: 0, z: 0 }, config);
+                        blocksBroken = breakBlocksInPath(entity, { x: 0, z: 0 }, config);
                     }
                 } else {
                     // No velocity - still break blocks directly above and below
-                    breakBlocksInPath(entity, { x: 0, z: 0 }, config);
+                    blocksBroken = breakBlocksInPath(entity, { x: 0, z: 0 }, config);
+                }
+                
+                if (getDebugBlockBreaking() && blocksBroken > 0) {
+                    console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} broke ${blocksBroken} blocks, total=${getBreakCount(entity)}, mode=${state.mode}`);
                 }
                 
                 const targetInfo = findTarget(entity, 64);
                 const currentTick = system.currentTick;
 
                 if (targetInfo) {
-                    // Ignore targets below minimum Y (torpedos stay in sky)
-                    if (targetInfo.location.y < minY) {
-                        // Target too low - just cruise
-                        applyCruiseDrift(entity);
-                        state.mode = "cruise";
-                        continue;
-                    }
+                    // Torpedo bears can attack targets at any Y level - they dive down from the sky
+                    // Priority: Ground players get almost guaranteed dive, mobs have less chance
                     
                     // Update last seen tick
                     if (!state.lastSeenTick) state.lastSeenTick = 0;
                     state.lastSeenTick = currentTick;
                     
                     const horizDist = Math.hypot(targetInfo.vector.x, targetInfo.vector.z);
+                    const isPlayer = targetInfo.isPlayer || false;
+                    const entityY = entity.location.y;
+                    const targetY = targetInfo.location.y;
+                    const dy = targetY - entityY;
                     
-                    // Dive if within range and target is at reasonable altitude (sky base)
-                    // Only allow diving if not on dive cooldown and entity is above minY
-                    const canDive = state.diveCooldown === 0 && entity.location.y >= minY;
-                    if (horizDist < config.diveRange && targetInfo.location.y >= minY && state.cooldown === 0 && canDive) {
-                        diveTowardsTarget(entity, targetInfo, config, state);
-                        state.mode = "dive";
-                        state.lastTarget = targetInfo.location;
-                        state.cooldown = 8;
-                        state.diveCooldown = DIVE_COOLDOWN_TICKS; // Set dive cooldown
-                        state.lastDiveTick = currentTick;
+                    if (getDebugTargeting()) {
+                        console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} found target: type=${targetInfo.entity?.typeId || 'unknown'}, isPlayer=${isPlayer}, horizDist=${horizDist.toFixed(1)}, dy=${dy.toFixed(1)}, mode=${state.mode}, cooldown=${state.cooldown}, diveCooldown=${state.diveCooldown} - TARGETING DEBUG`);
+                    }
+                    
+                    // If in dive mode, check if we should continue diving or return to cruise
+                    if (state.mode === "dive") {
+                        // Continue diving if:
+                        // 1. Still within dive range
+                        // 2. Target is still below us (or we haven't passed it)
+                        // 3. Not too far below cruise altitude
+                        const shouldContinueDive = horizDist < config.diveRange * 1.5 && 
+                                                   (dy < 5 || entityY < config.cruiseMin - MAX_DIVE_DEPTH) &&
+                                                   entityY >= minY;
+                        
+                        if (getDebugDiving()) {
+                            console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} in DIVE mode - checking continuation:`);
+                            console.warn(`[TORPEDO AI]   horizDist=${horizDist.toFixed(1)} < ${(config.diveRange * 1.5).toFixed(1)}? ${horizDist < config.diveRange * 1.5}`);
+                            console.warn(`[TORPEDO AI]   dy=${dy.toFixed(1)}, entityY=${entityY.toFixed(1)}, cruiseMin=${config.cruiseMin}, MAX_DIVE_DEPTH=${MAX_DIVE_DEPTH}`);
+                            console.warn(`[TORPEDO AI]   entityY >= minY? ${entityY >= minY} (${entityY.toFixed(1)} >= ${minY})`);
+                            console.warn(`[TORPEDO AI]   shouldContinueDive: ${shouldContinueDive}`);
+                        }
+                        
+                        if (shouldContinueDive) {
+                            // Continue diving
+                            diveTowardsTarget(entity, targetInfo, config, state);
+                            if (getDebugDiving()) {
+                                console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} CONTINUING DIVE: Y=${entityY.toFixed(1)}, targetY=${targetY.toFixed(1)}, horizDist=${horizDist.toFixed(1)}`);
+                            }
+                        } else {
+                            // Return to cruise mode
+                            const oldMode = state.mode;
+                            state.mode = "cruise";
+                            if (getDebugDiving()) {
+                                console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} MODE CHANGE: ${oldMode} -> ${state.mode}`);
+                                console.warn(`[TORPEDO AI]   Reason: Ending dive, returning to cruise`);
+                                console.warn(`[TORPEDO AI]   Y=${entityY.toFixed(1)}, horizDist=${horizDist.toFixed(1)}, targetY=${targetY.toFixed(1)}`);
+                            }
+                        }
+                    }
+                    
+                    // Dive priority system:
+                    // - Players on ground: almost guaranteed dive (95% chance)
+                    // - Other mobs: less likely dive (30% chance)
+                    // Allow diving even with diveCooldown if target is very close (within 5 blocks)
+                    const veryClose = horizDist < 5;
+                    const shouldDive = horizDist < config.diveRange && state.cooldown === 0 && 
+                                      (state.diveCooldown === 0 || veryClose) && entity.location.y >= minY &&
+                                      state.mode === "cruise"; // Only dive if in cruise mode
+                    
+                    if (shouldDive) {
+                        // Ground players get almost guaranteed dive
+                        if (isPlayer) {
+                            const diveChance = 0.95; // 95% chance to dive on ground players
+                            const diveRoll = Math.random();
+                            if (diveRoll < diveChance) {
+                                const oldMode = state.mode;
+                                state.mode = "dive";
+                                state.lastTarget = targetInfo.location;
+                                state.cooldown = 8;
+                                state.diveCooldown = DIVE_COOLDOWN_TICKS;
+                                state.lastDiveTick = currentTick;
+                                if (getDebugDiving()) {
+                                    console.warn(`[TORPEDO AI] ====== DIVE INITIATED ======`);
+                                    console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} MODE CHANGE: ${oldMode} -> ${state.mode}`);
+                                    console.warn(`[TORPEDO AI] Target: ${targetInfo.entity?.typeId || 'unknown'} (isPlayer: ${isPlayer})`);
+                                    console.warn(`[TORPEDO AI] Entity Y: ${entityY.toFixed(1)}, Target Y: ${targetY.toFixed(1)}, dy: ${dy.toFixed(1)}`);
+                                    console.warn(`[TORPEDO AI] Horizontal distance: ${horizDist.toFixed(1)} blocks`);
+                                    console.warn(`[TORPEDO AI] Dive chance: 95% (player), Roll: ${(diveRoll * 100).toFixed(1)}%, Result: DIVE`);
+                                }
+                                diveTowardsTarget(entity, targetInfo, config, state);
+                                if (getDebugDiving()) {
+                                    console.warn(`[TORPEDO AI] diveTowardsTarget() called`);
+                                }
+                            } else {
+                                // 5% chance to cruise instead
+                                try {
+                                    const moveForce = config.forwardForce * 0.6;
+                                    entity.applyImpulse({
+                                        x: (targetInfo.vector.x / (horizDist || 1)) * moveForce,
+                                        y: 0,
+                                        z: (targetInfo.vector.z / (horizDist || 1)) * moveForce
+                                    });
+                                } catch { }
+                                state.mode = "cruise";
+                            }
+                        } else {
+                            // Mobs get less likely dive (30% chance)
+                            const diveChance = 0.30; // 30% chance to dive on mobs
+                            const diveRoll = Math.random();
+                            if (diveRoll < diveChance) {
+                                const oldMode = state.mode;
+                                state.mode = "dive";
+                                state.lastTarget = targetInfo.location;
+                                state.cooldown = 8;
+                                state.diveCooldown = DIVE_COOLDOWN_TICKS;
+                                state.lastDiveTick = currentTick;
+                                if (getDebugDiving()) {
+                                    console.warn(`[TORPEDO AI] ====== DIVE INITIATED ======`);
+                                    console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} MODE CHANGE: ${oldMode} -> ${state.mode}`);
+                                    console.warn(`[TORPEDO AI] Target: ${targetInfo.entity?.typeId || 'unknown'} (isPlayer: ${isPlayer})`);
+                                    console.warn(`[TORPEDO AI] Entity Y: ${entityY.toFixed(1)}, Target Y: ${targetY.toFixed(1)}, dy: ${dy.toFixed(1)}`);
+                                    console.warn(`[TORPEDO AI] Horizontal distance: ${horizDist.toFixed(1)} blocks`);
+                                    console.warn(`[TORPEDO AI] Dive chance: 30% (mob), Roll: ${(diveRoll * 100).toFixed(1)}%, Result: DIVE`);
+                                }
+                                diveTowardsTarget(entity, targetInfo, config, state);
+                                if (getDebugDiving()) {
+                                    console.warn(`[TORPEDO AI] diveTowardsTarget() called`);
+                                }
+                            } else {
+                                // 70% chance to cruise instead
+                                try {
+                                    const moveForce = config.forwardForce * 0.6;
+                                    entity.applyImpulse({
+                                        x: (targetInfo.vector.x / (horizDist || 1)) * moveForce,
+                                        y: 0,
+                                        z: (targetInfo.vector.z / (horizDist || 1)) * moveForce
+                                    });
+                                } catch { }
+                                state.mode = "cruise";
+                            }
+                        }
                     } else {
                         // Straighter line movement: Direct movement toward target (no random drift)
                         try {
@@ -829,20 +1370,89 @@ system.runInterval(() => {
                         state.mode = "cruise";
                     }
                 } else {
-                    // Check if should enter passive wandering (2 minutes without seeing target)
+                    // Check if should enter passive wandering (5 minutes without seeing target)
                     const lastSeen = state.lastSeenTick || 0;
                     const timeSinceSeen = currentTick - lastSeen;
+                    
                     if (timeSinceSeen > PASSIVE_WANDER_TICKS) {
                         // Force passive wandering - clear tracking
-                        state.lastSeenTick = 0;
                         state.lastTarget = null;
+                        state.lastSeenTick = 0;
+                        applyCruiseDrift(entity);
+                        state.mode = "cruise";
+                    } else if (state.lastTarget) {
+                        // Still within memory window - try to find the target entity to verify it's still alive
+                        const dimension = entity.dimension;
+                        if (dimension) {
+                            let targetFound = false;
+                            // Check if it's a player
+                            for (const player of world.getPlayers()) {
+                                if (player.dimension === dimension) {
+                                    const dx = player.location.x - state.lastTarget.x;
+                                    const dz = player.location.z - state.lastTarget.z;
+                                    // If player is within 5 blocks of last known position, assume it's the same target
+                                    if (dx * dx + dz * dz < 25) {
+                                        targetFound = true;
+                                        // Update target location
+                                        state.lastTarget = player.location;
+                                        // Continue pursuing
+                                        const entityLoc = entity.location;
+                                        const targetVec = {
+                                            x: player.location.x - entityLoc.x,
+                                            y: player.location.y - entityLoc.y,
+                                            z: player.location.z - entityLoc.z
+                                        };
+                                        const horizDist = Math.hypot(targetVec.x, targetVec.z);
+                                        if (horizDist > 0) {
+                                            try {
+                                                const moveForce = config.forwardForce * 0.6;
+                                                entity.applyImpulse({
+                                                    x: (targetVec.x / horizDist) * moveForce,
+                                                    y: 0,
+                                                    z: (targetVec.z / horizDist) * moveForce
+                                                });
+                                            } catch { }
+                                        }
+                                        state.mode = "cruise";
+                                        break;
+                                    }
+                                }
+                            }
+                            // If target not found, it's probably dead - clear memory
+                            if (!targetFound) {
+                                state.lastTarget = null;
+                                state.lastSeenTick = 0;
+                                applyCruiseDrift(entity);
+                                state.mode = "cruise";
+                            }
+                        } else {
+                            // No dimension - clear target
+                            state.lastTarget = null;
+                            state.lastSeenTick = 0;
+                            applyCruiseDrift(entity);
+                            state.mode = "cruise";
+                        }
+                    } else {
+                        // No target - cruise randomly
+                        applyCruiseDrift(entity);
+                        state.mode = "cruise";
                     }
-                    // No target - cruise randomly
-                    applyCruiseDrift(entity);
-                    state.mode = "cruise";
                 }
             }
         }
     }
     cleanupStates(seen);
-}, 5);
+    }, 5);
+}
+
+// Start initialization with a delay to ensure world is ready
+// Only log script load if debug is enabled (will be checked when players join)
+if (getDebugGeneral()) {
+    console.warn("[TORPEDO AI] ====== SCRIPT LOADED ======");
+    console.warn(`[TORPEDO AI] Script file loaded at tick ${system.currentTick}`);
+    console.warn(`[TORPEDO AI] Note: Debug flags are checked dynamically when players join`);
+    console.warn(`[TORPEDO AI] Starting delayed initialization in ${TORPEDO_INIT_DELAY_TICKS} ticks...`);
+}
+system.runTimeout(() => {
+    initializeTorpedoAI();
+}, TORPEDO_INIT_DELAY_TICKS);

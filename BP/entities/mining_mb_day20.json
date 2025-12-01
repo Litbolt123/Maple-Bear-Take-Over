@@ -89,7 +89,7 @@
 					"set_persistent": true,
 					"target_search_height": 28,
 					"target_invisible_multiplier": 2,
-					"must_see_forget_duration": 300,
+					"must_see_forget_duration": 6000,
 					"within_radius": 32,
 					"target_sneak_visibility_multiplier": 1
 				}

@@ -1,6 +1,6 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
-import { getCodex, getDefaultCodex, markCodex, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge } from "./mb_codex.js";
+import { getCodex, getDefaultCodex, markCodex, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock } from "./mb_spawnController.js";
 import "./mb_spawnController.js";
@@ -2122,12 +2122,29 @@ function handleMobConversion(entity, killer) {
     const currentDay = getCurrentDay();
     const conversionRate = getInfectionRate(currentDay);
     
-    // Check if killer is a Maple Bear or infected pig
-    if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID || killerType === MAPLE_BEAR_DAY20_ID || killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === INFECTED_BEAR_DAY13_ID || killerType === INFECTED_BEAR_DAY20_ID || killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY13_ID || killerType === BUFF_BEAR_DAY20_ID || killerType === INFECTED_PIG_ID) {
+    // Check if killer is a Maple Bear (including all variants: tiny, infected, buff, flying, mining, torpedo)
+    const mapleBearKillerTypes = [
+        MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
+        INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
+        BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+        FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
+        MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
+        TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
+        INFECTED_PIG_ID, INFECTED_COW_ID
+    ];
+    
+    if (mapleBearKillerTypes.includes(killerType)) {
         
         // PREVENT BEAR-TO-BEAR CONVERSION: Don't convert Maple Bears or infected creatures
-        const isVictimABear = entityType === MAPLE_BEAR_ID || entityType === MAPLE_BEAR_DAY4_ID || entityType === MAPLE_BEAR_DAY8_ID || entityType === MAPLE_BEAR_DAY13_ID || entityType === MAPLE_BEAR_DAY20_ID ||
-                              entityType === INFECTED_BEAR_ID || entityType === INFECTED_BEAR_DAY8_ID || entityType === INFECTED_BEAR_DAY13_ID || entityType === INFECTED_BEAR_DAY20_ID || entityType === BUFF_BEAR_ID || entityType === BUFF_BEAR_DAY13_ID || entityType === BUFF_BEAR_DAY20_ID;
+        const allMapleBearTypes = [
+            MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
+            INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
+            BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+            FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
+            MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
+            TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID
+        ];
+        const isVictimABear = allMapleBearTypes.includes(entityType);
         const isVictimInfected = entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID;
         
         if (isVictimABear || isVictimInfected) {
@@ -2501,10 +2518,49 @@ function spreadDustedDirt(location, dimension, killerType, victimType) {
 }
 
 // Handle infected player death
-function handleInfectedPlayerDeath(player) {
-    // Note: Infected player death handling removed - using unified infection system
-    // Remove infection tag on death (will also be removed on respawn)
-    player.removeTag(INFECTED_TAG);
+function handleInfectedPlayerDeath(player, source) {
+    // Check if player was killed by a Maple Bear
+    if (!source || !source.damagingEntity) return;
+    
+    const killer = source.damagingEntity;
+    const killerType = killer?.typeId;
+    
+    // Check if killer is any type of Maple Bear
+    const mapleBearTypes = [
+        MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
+        INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
+        BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+        FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
+        MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
+        TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
+        INFECTED_PIG_ID, INFECTED_COW_ID
+    ];
+    
+    if (!mapleBearTypes.includes(killerType)) return;
+    
+    // Transform player into a Maple Bear
+    try {
+        const currentDay = getCurrentDay();
+        let infectedBearType = INFECTED_BEAR_ID; // Default to original
+        
+        // Choose appropriate infected bear variant based on current day
+        if (currentDay >= 20) {
+            infectedBearType = INFECTED_BEAR_DAY20_ID;
+        } else if (currentDay >= 13) {
+            infectedBearType = INFECTED_BEAR_DAY13_ID;
+        } else if (currentDay >= 8) {
+            infectedBearType = INFECTED_BEAR_DAY8_ID;
+        }
+        
+        const bear = player.dimension.spawnEntity(infectedBearType, player.location);
+        if (bear) {
+            bear.nameTag = `§4! ${player.name}'s Infected Form`;
+            bear.setDynamicProperty("infected_by", player.id);
+        }
+        player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} was transformed into a Maple Bear!"}]}`);
+    } catch (error) {
+        console.warn(`[TRANSFORMATION] Error transforming ${player.name}:`, error);
+    }
 }
 
 // Main entity death handler
@@ -2512,10 +2568,10 @@ world.afterEvents.entityDie.subscribe((event) => {
     const entity = event.deadEntity;
     const source = event.damageSource;
     
-    // Handle player death - clear infection data
+    // Handle player death - clear infection data and transform if killed by Maple Bear
     if (entity instanceof Player) {
+        handleInfectedPlayerDeath(entity, source); // Check for transformation BEFORE clearing data
         handlePlayerDeath(entity);
-        handleInfectedPlayerDeath(entity);
         return; // Exit early for player deaths
     }
     
@@ -2534,10 +2590,16 @@ world.afterEvents.entityDie.subscribe((event) => {
         const killer = source.damagingEntity;
         const killerType = killer.typeId;
 
-        // Check if killer is a Maple Bear type
-        const mapleBearTypes = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
+        // Check if killer is a Maple Bear type (including all variants)
+        const mapleBearTypes = [
+            MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
             INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-            BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID, INFECTED_PIG_ID, INFECTED_COW_ID];
+            BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+            FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
+            MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
+            TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
+            INFECTED_PIG_ID, INFECTED_COW_ID
+        ];
 
         if (mapleBearTypes.includes(killerType)) {
             // Store location and dimension immediately before entity might become invalid
@@ -2664,12 +2726,51 @@ world.afterEvents.entityDie.subscribe((event) => {
             const loc = entity.location;
             const dimension = entity.dimension;
             
-            // Create explosion effect
-            dimension.runCommand(`particle minecraft:explosion ${loc.x} ${loc.y} ${loc.z} 0.5 0.5 0.5 0.1 10`);
-            dimension.runCommand(`particle minecraft:explosion_emitter ${loc.x} ${loc.y} ${loc.z} 1 1 1 0.2 20`);
+            // Only log death events if debug is enabled
+            if (isDebugEnabled("main", "death")) {
+                console.warn(`[TORPEDO DEATH] ====== TORPEDO BEAR DEATH ======`);
+                console.warn(`[TORPEDO DEATH] Entity type: ${entity.typeId}`);
+                console.warn(`[TORPEDO DEATH] Death location: (${loc.x.toFixed(1)}, ${loc.y.toFixed(1)}, ${loc.z.toFixed(1)})`);
+                console.warn(`[TORPEDO DEATH] Dimension: ${dimension.id}`);
+                console.warn(`[TORPEDO DEATH] Triggering explosion effects...`);
+            }
             
-            // Play explosion sound
-            dimension.runCommand(`playsound mob.tnt.explode @a ${loc.x} ${loc.y} ${loc.z} 1 1`);
+            // Create explosion effect - use Bedrock Edition particle command syntax
+            try {
+                const x = Math.floor(loc.x);
+                const y = Math.floor(loc.y);
+                const z = Math.floor(loc.z);
+                
+                // Bedrock Edition particle command: /particle <effect> <x> <y> <z>
+                // Try simplest format first (no count parameter)
+                try {
+                    dimension.runCommand(`particle minecraft:explosion ${x} ${y} ${z}`);
+                } catch (err) {
+                    if (isDebugEnabled("main", "death")) {
+                        console.warn(`[TORPEDO DEATH] Particle command failed:`, err);
+                    }
+                }
+                try {
+                    dimension.runCommand(`particle minecraft:explosion_emitter ${x} ${y} ${z}`);
+                } catch (err) {
+                    if (isDebugEnabled("main", "death")) {
+                        console.warn(`[TORPEDO DEATH] Explosion emitter command failed:`, err);
+                    }
+                }
+                
+                // Play explosion sound
+                try {
+                    dimension.runCommand(`playsound mob.tnt.explode @a ${x} ${y} ${z} 1 1`);
+                } catch (err) {
+                    if (isDebugEnabled("main", "death")) {
+                        console.warn(`[TORPEDO DEATH] Sound command failed:`, err);
+                    }
+                }
+            } catch (error) {
+                if (isDebugEnabled("main", "death")) {
+                    console.warn(`[TORPEDO DEATH] Error executing explosion commands:`, error);
+                }
+            }
             
             // Place snow layers on blocks nearby (5 block radius) - only if there are nearby blocks
             const explosionRadius = 5;
@@ -2734,8 +2835,20 @@ world.afterEvents.entityDie.subscribe((event) => {
                         }
                         
                         // Place snow - replace grass blocks, otherwise place on top
+                        // First check if there's already a snow layer at the placement location
                         if (topSolidY !== null && topSolidBlock) {
                             try {
+                                // Check if there's already a snow layer above the solid block
+                                const snowCheckY = topSolidY + 1;
+                                const existingSnowBlock = dimension.getBlock({ x: checkX, y: snowCheckY, z: checkZ });
+                                if (existingSnowBlock) {
+                                    const existingType = existingSnowBlock.typeId;
+                                    if (existingType === "mb:snow_layer" || existingType === "minecraft:snow_layer") {
+                                        // Already has snow layer, skip placement
+                                        continue;
+                                    }
+                                }
+                                
                                 const blockType = topSolidBlock.typeId;
                                 // If it's any ground foliage (grass, flowers, desert plants, etc.), replace it with snow
                                 if (blockType === "minecraft:grass_block" || blockType === "minecraft:grass" || 
@@ -2760,6 +2873,15 @@ world.afterEvents.entityDie.subscribe((event) => {
                                     blockType === "minecraft:sea_pickle" || blockType === "minecraft:kelp" ||
                                     blockType === "minecraft:seagrass" || blockType === "minecraft:tall_seagrass" ||
                                     blockType === "minecraft:waterlily" || blockType === "minecraft:lily_pad") {
+                                    // Check if there's already snow at this location before replacing
+                                    const existingSnowCheck = dimension.getBlock({ x: checkX, y: topSolidY, z: checkZ });
+                                    if (existingSnowCheck) {
+                                        const existingType = existingSnowCheck.typeId;
+                                        if (existingType === "mb:snow_layer" || existingType === "minecraft:snow_layer") {
+                                            // Already has snow, skip placement
+                                            continue;
+                                        }
+                                    }
                                     try {
                                         topSolidBlock.setType("mb:snow_layer");
                                     } catch {
@@ -2769,17 +2891,20 @@ world.afterEvents.entityDie.subscribe((event) => {
                                     // Otherwise, place snow in the air above
                                     const snowY = topSolidY + 1;
                                     const snowBlock = dimension.getBlock({ x: checkX, y: snowY, z: checkZ });
-                                    if (snowBlock && snowBlock.isAir !== undefined && snowBlock.isAir) {
+                                    if (snowBlock) {
                                         // Check if it's already a snow layer - don't stack them
                                         const snowBlockType = snowBlock.typeId;
                                         if (snowBlockType === "mb:snow_layer" || snowBlockType === "minecraft:snow_layer") {
                                             continue; // Already has snow, skip
                                         }
-                                        // Use custom snow layer if available, otherwise vanilla
-                                        try {
-                                            snowBlock.setType("mb:snow_layer");
-                                        } catch {
-                                            snowBlock.setType(SNOW_LAYER_BLOCK);
+                                        // Only place if it's air
+                                        if (snowBlock.isAir !== undefined && snowBlock.isAir) {
+                                            // Use custom snow layer if available, otherwise vanilla
+                                            try {
+                                                snowBlock.setType("mb:snow_layer");
+                                            } catch {
+                                                snowBlock.setType(SNOW_LAYER_BLOCK);
+                                            }
                                         }
                                     }
                                 }
@@ -3528,6 +3653,72 @@ system.runInterval(() => {
         }
     } catch { }
 }, 20); // check every second
+
+// --- Snow Layer Falling/Breaking System ---
+// Make snow layers fall or break when there's no solid block beneath them (like vanilla snow layers)
+system.runInterval(() => {
+    try {
+        // Only check snow layers near players for performance
+        const allPlayers = world.getAllPlayers();
+        if (allPlayers.length === 0) return;
+        
+        const checkedSnowBlocks = new Set(); // Track checked blocks to avoid duplicates
+        const SNOW_CHECK_RADIUS = 32; // Check within 32 blocks of players
+        
+        for (const player of allPlayers) {
+            try {
+                const dimension = player.dimension;
+                const playerLoc = player.location;
+                const checkRange = SNOW_CHECK_RADIUS;
+                
+                // Check a grid around the player
+                for (let dx = -checkRange; dx <= checkRange; dx += 4) {
+                    for (let dz = -checkRange; dz <= checkRange; dz += 4) {
+                        for (let dy = -8; dy <= 8; dy += 2) {
+                            const checkX = Math.floor(playerLoc.x) + dx;
+                            const checkY = Math.floor(playerLoc.y) + dy;
+                            const checkZ = Math.floor(playerLoc.z) + dz;
+                            
+                            // Skip if already checked
+                            const blockKey = `${checkX},${checkY},${checkZ}`;
+                            if (checkedSnowBlocks.has(blockKey)) continue;
+                            checkedSnowBlocks.add(blockKey);
+                            
+                            try {
+                                const block = dimension.getBlock({ x: checkX, y: checkY, z: checkZ });
+                                if (!block) continue;
+                                
+                                const blockType = block.typeId;
+                                // Check if it's a snow layer
+                                if (blockType !== "mb:snow_layer" && blockType !== "minecraft:snow_layer") {
+                                    continue;
+                                }
+                                
+                                // Check block beneath the snow layer
+                                const belowBlock = dimension.getBlock({ x: checkX, y: checkY - 1, z: checkZ });
+                                
+                                // If there's no block beneath, or it's air/liquid, the snow should fall/break
+                                if (!belowBlock || belowBlock.isAir || belowBlock.isLiquid || 
+                                    belowBlock.typeId === "minecraft:air" || 
+                                    belowBlock.typeId === "minecraft:cave_air" ||
+                                    belowBlock.typeId === "minecraft:void_air") {
+                                    // Snow layer is floating - break it (set to air)
+                                    block.setType("minecraft:air");
+                                }
+                            } catch {
+                                // Skip errors for individual blocks
+                            }
+                        }
+                    }
+                }
+            } catch {
+                // Skip errors for individual players
+            }
+        }
+    } catch {
+        // Skip errors in the main loop
+    }
+}, 40); // Check every 2 seconds
 
 // --- Monitor infected pig porkchop collection ---
 world.afterEvents.itemCompleteUse.subscribe((event) => {
