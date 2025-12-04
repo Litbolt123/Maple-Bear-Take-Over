@@ -98,6 +98,7 @@
 
 ### 🎨 Content & Polish
 - [ ] Additional bear variants and special types
+  - [ ] **Raptor Flying Bear Variant** - Super rare flying maple bear that can grab players out of the sky (velociraptor-style aerial attack)
 - [ ] Custom sounds and ambient audio
 - [ ] Enhanced particle effects for infections and cures
 - [ ] Custom items, tools, and equipment
