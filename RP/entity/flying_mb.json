@@ -4,13 +4,13 @@
 		"description": {
 			"identifier": "mb:flying_mb",
 			"materials": {
-				"default": "enderman"
+				"default": "entity_alphatest"
 			},
 			"textures": {
-				"default": "textures/entity/infected_day13"
+				"default": "textures/entity/flying_mb_texture"
 			},
 			"geometry": {
-				"default": "geometry.infected"
+				"default": "geometry.flying_mb"
 			},
 			"particle_effects": {
 				"death_dust": "mb:white_dust_particale"
@@ -24,27 +24,11 @@
 			},
 			"animations": {
 				"look_at_target": "animation.humanoid.look_at_target.default",
-				"idle": "animation.infected.idle",
-				"idle2": "animation.infected.idle2",
-				"idle3": "animation.infected.idle3",
-				"idle4": "animation.infected.idle4",
-				"idle5": "animation.infected.idle5",
-				"walk": "animation.infected.walk",
-				"walk2": "animation.infected.walk2",
-				"walk3": "animation.infected.walk3",
-				"walk4": "animation.infected.walk4",
-				"walk5": "animation.infected.walk5",
-				"falling": "animation.infected.falling",
-				"falling2": "animation.infected.falling2",
-				"falling3": "animation.infected.falling3",
-				"falling4": "animation.infected.falling4",
-				"falling5": "animation.infected.falling5",
-				"attack": "animation.infected.attack",
-				"attack2": "animation.infected.attack2",
-				"attack3": "animation.infected.attack3",
-				"infected_controller": "controller.animation.infected_mb_variant_0",
-				"attack_controller": "controller.animation.infected_mb_attack",
-				"death_particles": "animation.mb.death_particles"
+				"death_particles": "animation.mb.death_particles",
+				"idle1flying": "animation.flyingmb.idle1flying",
+				"idle2flying": "animation.flyingmb.idle2flying",
+				"idle3flying": "animation.flyingmb.idle3flying",
+				"flying_mb_animation_controller": "controller.animation.flying_mb_animation_controller"
 			},
 			"scripts": {
 				"animate": [
@@ -52,13 +36,10 @@
 						"look_at_target": true
 					},
 					{
-						"infected_controller": true
-					},
-					{
-						"attack_controller": true
-					},
-					{
 						"death_particles": "!query.is_alive"
+					},
+					{
+						"flying_mb_animation_controller": true
 					}
 				]
 			}

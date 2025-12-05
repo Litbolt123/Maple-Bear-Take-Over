@@ -178,11 +178,11 @@
 			},
 			"minecraft:collision_box": {
 				"width": 0.5,
-				"height": 1.9
+				"height": 1.4
 			},
-		"minecraft:attack": {
-			"damage": 4
-		},
+			"minecraft:attack": {
+				"damage": 4
+			},
 			"minecraft:movement": {
 				"value": 0.48
 			},
