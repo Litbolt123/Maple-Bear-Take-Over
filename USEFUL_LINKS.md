@@ -22,7 +22,16 @@ This file contains helpful links for Minecraft Bedrock development, Scripting AP
 
 ## Official Documentation
 
-### Minecraft Bedrock Documentation
+### Primary Documentation Sites
+- **[Microsoft Learn - Minecraft Creator Docs](https://learn.microsoft.com/en-us/minecraft/creator/?view=minecraft-bedrock-stable)** - Official Microsoft documentation with tutorials and references
+- **[Bedrock.dev](https://bedrock.dev/)** - Comprehensive reference documentation for all Bedrock Edition features
+- **[Bedrock Wiki](https://wiki.bedrock.dev/)** - Community-maintained tutorials and guides
+- **[Bedrock.dev Packs](https://bedrock.dev/packs)** - Vanilla template packs for all versions
+
+### Comprehensive Documentation Index
+- **[DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)** - Complete index of all documentation pages organized by topic
+
+### Quick Links
 - [Bedrock.dev Wiki](https://wiki.bedrock.dev/)
 - [Minecraft Scripting API Reference](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/scriptapi/)
 - [Behavior Pack Documentation](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/blockcomponents/minecraft_block_custom_components)
