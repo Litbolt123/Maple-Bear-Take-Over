@@ -1,9 +1,20 @@
 MapleBear TakeOver
 Don't do drugs kids...
 
-## Resources
+## 📚 Documentation
 
-- **[USEFUL_LINKS.md](USEFUL_LINKS.md)** - Collection of helpful links for Minecraft Bedrock development, Scripting API references, and community resources
-- **[DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)** - Comprehensive index of all official and community documentation sites with organized links by topic
-- **[INDEXING_URLS.md](INDEXING_URLS.md)** - Complete list of specific URLs to index (⚠️ verify URLs first - many may be outdated)
-- **[INDEXING_URLS_VERIFIED.md](INDEXING_URLS_VERIFIED.md)** - Safer approach: verified base URLs and verification methods
+All documentation is organized in the [`docs/`](docs/) folder. See [`docs/README.md`](docs/README.md) for a complete index.
+
+### Quick Links
+
+- **[Design Vision](docs/design/DESIGN_VISION.md)** - **Start here!** Core design philosophy, intentions, and vision for the addon
+- **[TODO List](TODO.md)** - Current task list and project status
+- **[Mechanics Summary](docs/development/MECHANICS_SUMMARY.md)** - Summary of currently implemented game mechanics
+- **[Feature Ideas](docs/development/IDEA_BRAINSTORM.md)** - 100+ feature ideas for future development
+
+### Documentation Categories
+
+- **Design & Vision** (`docs/design/`) - Design philosophy, safe biomes analysis
+- **Development** (`docs/development/`) - Mechanics, planning, feature ideas
+- **Reference** (`docs/reference/`) - External documentation resources and links
+- **AI Context** (`docs/ai/`) - AI assistant understanding and context

@@ -1,0 +1,18 @@
+## Maple Bear Takeover – Context Summaries
+
+This file is where I will write human-readable summaries of my current understanding of the project and recent changes, so you can verify I'm not missing key information.
+
+---
+
+### Snapshot – Current Understanding (created by AI)
+- **Addon Focus**: Apocalypse-style Minecraft Bedrock addon where evolving Maple Bears spread a mysterious white powdery infection across any world, with progressive day milestones (2,4,8,13,20,25 and a planned 100-day arc that has both an achievement and a lore payoff).
+- **Core Systems**: Unified infection system (snow + bear hits), tiered snow mechanics (6 tiers, from mild relief to Black Void), player transformation into named infected bears on death, cure/immunity loop (weakness + enchanted golden apple, temporary immunity broken by snow), Codex/journal UI, and a day tracker driving escalation and late-game lore.
+- **Bear Ecosystem**: Tiny, Infected, Buff, Flying, Mining, Torpedo, and infected livestock, with day-based variants; buff bears are mini-bosses with limited spawn counts and snow-heavy loot; flying bear health has been tuned to sit between tiny and infected bears; mining/torpedo/flying AI have custom scripts and optional debug logging via the Codex.
+- **Dimensions & Biomes**: Infection currently focuses on the overworld, with a custom `mb:infected_biome` that replaces a wide range of vanilla biomes at low densities; long-term, Maple Bears will also reach the Nether (including fire-/lava-proof variants) and the End (more flying/torpedo presence), with corruption "evolving" into those dimensions over time. Some overworld biomes remain relatively safer because the infected biome doesn't target them - **Mushroom Fields** appears to be the safest (see `../design/SAFE_BIOMES.md` for complete list).
+- **Atmosphere & Tone**: Drug/addiction metaphor for the powder (kept ambiguous), slow-burn horror that gets darker as players go deeper (higher snow tiers, later days), themes of memory/counting/world observing players; journal is gameplay-only, not lore.
+- **Player Transformation Details**: When infected players die—either by infection timer or killed by any Maple Bear—they do **not** control a new form; instead an infected Maple Bear spawns at their death location with a red nametag like `! <player>'s Infected Form`, currently using normal infected bear stats/variants chosen by day, and multiple deaths can leave multiple such bears in the world.
+- **Co-op & Infection Spread**: Designed for both solo and multiplayer but co-op is a core use case; codex/knowledge can already be shared between nearby players, and long-term design includes always-on player-to-player infection at high infection stages (with a dev-tools toggle).
+- **Enemy Roles Over Time**: Early game is planned to be plague-agent heavy (roughly 60% spreaders / 40% killers) so new areas get corrupted, while late game flips toward 60% killers / 40% spreaders to keep established bases under constant threat; wave days and milestone spikes (e.g., 50/75/100) will sit on top of the existing linear ramp.
+- **Known Gaps / Future Work**: Buff/smarter player-infected forms, better rewards and unstuck behaviors for buff bears, Raptor Flying Bear implementation, Nether/End spawn/biome integration, more explicit 100-day "ending" structure with post-credits world state, player-to-player infection (always on, toggle in dev tools), curing & "scarred but special" animals (both mechanical buffs and cosmetic), building bear variants (bridges/structures - combo of functional but natural-ish, testing needed), and expanded docs (onboarding, troubleshooting, API usage) plus ongoing lore-accurate feature implementation from `../development/IDEA_BRAINSTORM.md`.
+
+

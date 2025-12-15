@@ -1,6 +1,15 @@
 # Maple Bear Takeover - 100 Feature Ideas
 
-Based on existing lore: white powder/dust infection, Maple Bears (Tiny, Infected, Buff, Flying, Mining, Torpedo), day progression system, Powdery Journal, infected biome, victory at Day 25, and the mysterious nature of the infection.
+Based on existing lore: white powder/dust infection (mysterious white powdery substance), Maple Bears (Tiny, Infected, Buff, Flying, Mining, Torpedo), day progression system, Powdery Journal (gameplay mechanic), infected biome, victory at Day 25 (potential 100-day endgame), and evolving bear variants.
+
+**Key Context:**
+- The powder is a "mysterious white powdery substance" (drug metaphor - "Don't do drugs kids...")
+- Bears evolve over time (explains variants)
+- Journal is gameplay-only, no lore needed
+- Current victory at Day 25, potential 100-day endgame goal
+- **Player Transformation**: When infected players die (from infection timer OR killed by any Maple Bear), they spawn an infected bear with nametag `§4! ${player.name}'s Infected Form`. Multiple deaths = multiple infected forms. Currently spawn as normal infected bears (not buffed) - **needs enhancement to be smarter/buffed**.
+- **Snow Mechanics**: Tier-based system (1-6 tiers) with progressive effects. First consumption starts infection. While infected: Tier 1-2 slows/neutral, Tier 3+ accelerates. Effects get darker at higher tiers (paranoia, withdrawals, cravings).
+- **Buff Bears**: Mini-bosses that drop snow (3-18). Need better rewards and AI fixes (they get stuck easily).
 
 ---
 
@@ -71,8 +80,8 @@ Based on existing lore: white powder/dust infection, Maple Bears (Tiny, Infected
 
 ## 📖 Lore & Story Expansion (15 ideas)
 
-51. **Origin Story Entries** - Unlock lore about where the white powder came from
-52. **Journal Anomaly Investigation** - Questline to discover why the journal is "anomalous"
+51. **Origin Story Entries** - Unlock lore about where the mysterious white powder came from (keep it mysterious, don't explicitly name it)
+52. ~~**Journal Anomaly Investigation**~~ - REMOVED (Journal is gameplay-only, no lore)
 53. **Pre-Infection World Memories** - Lore entries about the world before Day 1
 54. **Bear Intelligence Research** - Unlock information about what guides the bears
 55. **The Patient One** - Lore about the entity that "keeps count" (from Tiny Vanguard)
@@ -81,7 +90,7 @@ Based on existing lore: white powder/dust infection, Maple Bears (Tiny, Infected
 58. **Infection Timeline** - Detailed history of how the infection spread
 59. **The First Bear** - Lore about the original Maple Bear that started it all
 60. **Dust Prophecies** - Cryptic predictions found in dust patterns
-61. **Journal's True Nature** - Reveal what the Powdery Journal really is
+61. ~~**Journal's True Nature**~~ - REMOVED (Journal is gameplay-only, no lore)
 62. **The Counting** - Expand on "whatever guides them now is patient, and it keeps count"
 63. **World's Revenge** - Lore about why the world is "keeping score"
 64. **Post-Victory Lore** - New lore entries that unlock after Day 25
@@ -128,37 +137,41 @@ Based on existing lore: white powder/dust infection, Maple Bears (Tiny, Infected
 
 91. **Infection Network** - System where bears share information about players
 92. **Dust Memory System** - Areas "remember" player actions and react accordingly
-93. **Bear Evolution Tree** - Bears evolve based on player strategies
+93. **Bear Evolution Tree** - Bears evolve based on player strategies and time progression
 94. **Infection Simulation** - Predict where infection will spread next
 95. **Adaptive Bear AI** - Bears learn from player tactics and adapt
 96. **Dust Ecosystem** - Dust affects other mobs, creating infected variants
 97. **Infection Waves** - Periodic waves of increased bear activity
 98. **Memory-Based Spawning** - Bears spawn based on "memories" of player locations
 99. **Dust Weather System** - Dust affects weather patterns
-100. **The Counting System** - Bears track player actions and adjust behavior
+100. **100-Day Endgame Goal** - Ultimate challenge: survive 100 days for true victory
 
 ---
 
 ## 💡 Bonus: Meta/Experimental Ideas
 
-- **Journal Sentience** - The journal becomes more "aware" as player progresses
-- **Player Transformation** - Option to become a bear instead of dying
+- **100-Day Milestone Rewards** - Special rewards/achievements for reaching Day 100
+- **Enhanced Player-Infected Forms** - Player-infected bears should be buffed/smarter than normal infected bears (they were players after all)
 - **Time Loop Mechanics** - Use "memories" to change past actions
-- **Dust Consciousness** - The dust itself is alive/sentient
+- **Dust Consciousness** - The dust itself is alive/sentient (fits "World Memory" lore)
 - **Parallel Dimensions** - Infected dimension that players can access
-- **Bear Civilization** - Bears are building their own society
-- **The Patient One Reveal** - Encounter the entity that guides the bears
-- **Journal Origin Quest** - Discover who/what created the anomalous journal
-- **Infection Reversal** - Endgame goal to reverse the infection
+- **Bear Civilization** - Bears are building their own society (Day 50+ evolution)
+- **The Patient One Reveal** - Encounter the entity that guides the bears (Day 75+)
+- **Evolution Milestones** - Bears reach new evolution stages at Day 50, 75, 100
+- **Infection Reversal** - Endgame goal to reverse the infection (Day 100+)
 - **World Reset Option** - Use memories to "reset" parts of the world
 
 ---
 
 ## 📝 Notes
 
-- All ideas should fit the existing lore about white powder, bears, infection, and the mysterious nature of the outbreak
-- Consider the day progression system (Days 2, 4, 8, 13, 20, 25+)
+- All ideas should fit the existing lore about the mysterious white powdery substance, evolving bears, infection, and the mysterious nature of the outbreak
+- Consider the day progression system (Days 2, 4, 8, 13, 20, 25+) with potential 100-day endgame
+- Bears evolve over time - this explains variants and should be incorporated into new bear ideas
+- The powder is a "mysterious white powdery substance" - keep it mysterious, don't explicitly name what it is
+- Journal is gameplay-only (codex system) - no lore needed for it
 - Maintain the atmospheric tone: mysterious, unsettling, with hints of something greater controlling events
 - The "counting" and "memory" themes from late lore should be incorporated where possible
 - Ideas should enhance the survival horror/apocalypse feel
+- The addiction metaphor (snow tiers, progressive effects) should be maintained
 

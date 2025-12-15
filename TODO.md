@@ -61,7 +61,7 @@
 - ✅ Infection symptoms (visual effects, random events) - Random effects system with severity-based symptoms
 - [ ] Infection resistance items/armor
 - [ ] Quarantine zones or safe areas
-- [ ] Infection spread mechanics between players
+- [ ] Infection spread mechanics between players (always on in survival by default, with a toggle available in Developer Tools)
 - [ ] Advanced cure recipes and brewing system
 - [ ] Infection prevention items and strategies
 
@@ -108,6 +108,16 @@
 - ✅ Achievement system with rewards - Day 25 victory achievement, max days survived tracking, post-victory milestones displayed in codex
 - [ ] Seasonal events and special encounters
 
+### 🌌 Dimension & Endgame Expansion
+- [ ] Extend Maple Bear spawning into the Nether (mix of normal variants plus fire-/lava-proof variants; tied into world corruption progression over time)
+- [ ] Extend Maple Bear spawning into the End (increased flying/torpedo bear presence over the void, mixed with existing variants)
+- [ ] Add configuration hooks so certain peaceful or secluded overworld biomes remain low-pressure “safer” zones (no natural Maple Bear spawns or much lower rates)
+- [ ] Design and implement a 100-day endgame structure with milestone spikes (50, 75, 100) and at least one "canon" outcome plus branching outcomes based on player behavior (e.g., heavy dust use vs minimal, how much of the world is corrupted)
+  - [ ] Post-credits world state: World continues after Day 100 with altered rules
+- [ ] Implement wave-day logic on top of the existing linear ramp (short intense bursts AND mini-waves), respecting the global spawn difficulty slider
+- [ ] Implement role ratios over time: early game plague-agent heavy (≈60% spreaders / 40% killers), late game killer heavy (≈60% killers / 40% spreaders), integrated with spawn controller
+- [ ] Implement curing of infected animals into "scarred but special" variants with both mechanical buffs (more health, better drops) and cosmetic changes (corruption scars)
+
 ## 🐛 Known Issues & Resolved
 - ✅ Chat event handler not available in API 2.0.0 (replaced with item-based debug system)
 - ✅ Animation controller errors (non-critical, handled gracefully)
@@ -146,11 +156,12 @@
 - Debug flag: Set `DEBUG_SNOW_MECHANICS = true` in main.js to enable verbose logging (legacy)
 
 ### 📚 Documentation & Project Organization
-- ✅ Comprehensive documentation index created (DOCUMENTATION_INDEX.md)
-- ✅ URL indexing guides created (INDEXING_URLS.md and INDEXING_URLS_VERIFIED.md)
-- ✅ Updated USEFUL_LINKS.md with official documentation resources
+- ✅ Comprehensive documentation index created (`docs/reference/DOCUMENTATION_INDEX.md`)
+- ✅ URL indexing guides created (`docs/reference/INDEXING_URLS.md` and `docs/reference/INDEXING_URLS_VERIFIED.md`)
+- ✅ Updated `docs/reference/USEFUL_LINKS.md` with official documentation resources
 - ✅ Updated README.md with documentation references
 - ✅ Organized documentation resources for AI assistant indexing
+- ✅ Organized all markdown files into `docs/` folder structure (design/, development/, reference/, ai/)
 - [ ] Verify and test documentation URL indexing
 - [ ] Create developer onboarding guide
 - [ ] Document API usage patterns and best practices

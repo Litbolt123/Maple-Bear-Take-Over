@@ -29,7 +29,7 @@ This file contains helpful links for Minecraft Bedrock development, Scripting AP
 - **[Bedrock.dev Packs](https://bedrock.dev/packs)** - Vanilla template packs for all versions
 
 ### Comprehensive Documentation Index
-- **[DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)** - Complete index of all documentation pages organized by topic
+- **[DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)** - Complete index of all documentation pages organized by topic (in same directory)
 
 ### Quick Links
 - [Bedrock.dev Wiki](https://wiki.bedrock.dev/)
