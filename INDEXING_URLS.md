@@ -1,13 +1,18 @@
 # URLs to Index for AI Assistant
 
-This file contains all the specific URLs you should index in your AI assistant settings. Copy these URLs into your indexing configuration.
+⚠️ **WARNING**: Many URLs in this file may return 404 errors. URLs change frequently.
+
+**See [INDEXING_URLS_VERIFIED.md](INDEXING_URLS_VERIFIED.md) for a safer approach.**
+
+This file contains all the specific URLs you should index in your AI assistant settings. **VERIFY EACH URL BEFORE INDEXING** - many may be outdated or incorrect.
 
 ## ⚠️ Important Notes
 
-- **Base URLs alone don't work** - You need to index specific page URLs
-- **Index by category** - Group related pages together for better organization
-- **Update regularly** - Add new pages as documentation is updated
-- **Test indexing** - Verify that pages are actually indexed after adding them
+- **VERIFY URLs FIRST** - Many links may return 404 errors
+- **Start with base URLs** - Index main landing pages first
+- **Test each URL** - Don't index URLs that return 404
+- **Use web search as alternative** - I can search these sites dynamically instead
+- **Update regularly** - URLs change frequently
 
 ---
 
