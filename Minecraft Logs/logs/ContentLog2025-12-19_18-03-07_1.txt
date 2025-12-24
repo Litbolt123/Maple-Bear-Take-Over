@@ -1,0 +1,134 @@
+18:03:13[Texture][inform]-TextureSet (textures/items/copper_golem) | Specified image could not be found
+
+18:06:42[Scripting][verbose]-Plugin Discovered [MapleBear TakeOver] PackId [064b6f9c-349b-4ab1-80d3-c95f732db577_1.0.2] ModuleId [68f5a9b0-5aac-47cc-961d-3b87ba331a0b]
+
+18:06:42[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server] from [2.3.0] to [2.4.0] requested by [MapleBear TakeOver - 1.0.0].
+
+18:06:42[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server] from [2.0.0] to [2.4.0] requested by [@minecraft/server-ui-bindings - 2.0.0].
+
+18:06:42[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server-bindings] from [2.3.0] to [2.4.0] requested by [@minecraft/server - 2.3.0].
+
+18:06:42[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server-bindings] from [2.0.0] to [2.4.0] requested by [@minecraft/server - 2.0.0].
+
+18:06:42[Scripting][inform]-📜 Maple Bear Day Tracker script loaded
+
+18:06:42[Scripting][warning]-[SPAWN] Maple Bear spawn controller initialized.
+
+18:06:42[Scripting][inform]-World initialized, setting up event listeners...
+
+18:06:43[Scripting][inform]-Day tracking already initialized
+
+18:06:43[Scripting][inform]-🌍 First player joined, initializing day tracker
+
+18:06:43[Scripting][inform]-Day cycle loop not running, starting it now
+
+18:06:43[Scripting][inform]-Starting day cycle loop
+
+18:06:43[Scripting][inform]-Day cycle loop started successfully
+
+18:06:43[Texture][inform]-TextureSet (textures/items/copper_golem) | Specified image could not be found
+
+18:06:45[Json][inform]-mb:flying_mb | minecraft:behavior.nearest_attackable_target | mb:flying_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-mb:flying_mb | minecraft:behavior.nearest_attackable_target | mb:flying_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-mb:infected_day13 | minecraft:behavior.nearest_attackable_target | mb:infected_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-mb:mb_day13 | minecraft:behavior.nearest_attackable_target | mb:mb_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-mb:infected_pig | minecraft:behavior.nearest_attackable_target | mb:infected_pig | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-mb:flying_mb | minecraft:behavior.nearest_attackable_target | mb:flying_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-mb:mb_day13 | minecraft:behavior.nearest_attackable_target | mb:mb_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-mb:infected_pig | minecraft:behavior.nearest_attackable_target | mb:infected_pig | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-mb:mb_day13 | minecraft:behavior.nearest_attackable_target | mb:mb_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-mb:mb_day13 | minecraft:behavior.nearest_attackable_target | mb:mb_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-mb:infected_day13 | minecraft:behavior.nearest_attackable_target | mb:infected_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-mb:infected_day13 | minecraft:behavior.nearest_attackable_target | mb:infected_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-mb:infected_pig | minecraft:behavior.nearest_attackable_target | mb:infected_pig | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:45[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:46[Scripting][inform]-[LOAD] Loaded active infection for litbolt123: {"ticksLeft":119240,"cured":false,"hitCount":3,"snowCount":0.5,"lastActiveTick":12200,"lastDecayTick":11480}
+
+18:06:46[Scripting][inform]-[LOAD] Loaded first-time message state for litbolt123: {"hasBeenHit":true,"hasBeenInfected":true,"snowTier":0}
+
+18:06:46[Scripting][inform]-[LOAD] Loaded max snow level for litbolt123: {"maxLevel":2,"achievedAt":1766173524266}
+
+18:06:47[Scripting][inform]-[JOIN] Player litbolt123 joined, infection data will be loaded by main.js
+
+18:06:48[Json][inform]-mb:flying_mb | minecraft:behavior.nearest_attackable_target | mb:flying_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:48[Json][inform]-mb:mb_day13 | minecraft:behavior.nearest_attackable_target | mb:mb_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:48[Json][inform]-mb:infected_day13 | minecraft:behavior.nearest_attackable_target | mb:infected_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:50[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:06:50[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:03[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:04[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:08[Json][inform]-mb:flying_mb | minecraft:behavior.nearest_attackable_target | mb:flying_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:08[Json][inform]-mb:mb_day13 | minecraft:behavior.nearest_attackable_target | mb:mb_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:08[Json][inform]-mb:infected_day13 | minecraft:behavior.nearest_attackable_target | mb:infected_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:09[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:11[Json][inform]-mb:infected_day13 | minecraft:behavior.nearest_attackable_target | mb:infected_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:12[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:13[Json][inform]-mb:buff_mb_day13 | minecraft:behavior.nearest_attackable_target | mb:buff_mb_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:16[Json][inform]-mb:infected_cow | minecraft:behavior.nearest_attackable_target | mb:infected_cow | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:22[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:26[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:27[Json][inform]-mb:infected_pig | minecraft:behavior.nearest_attackable_target | mb:infected_pig | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:28[Json][inform]-mb:flying_mb | minecraft:behavior.nearest_attackable_target | mb:flying_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:30[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:35[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:38[Json][inform]-mb:mb_day13 | minecraft:behavior.nearest_attackable_target | mb:mb_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:39[Json][inform]-mb:flying_mb | minecraft:behavior.nearest_attackable_target | mb:flying_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:40[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:44[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:44[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:45[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:45[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:48[Json][inform]-mb:flying_mb | minecraft:behavior.nearest_attackable_target | mb:flying_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:51[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+18:07:58[Texture][inform]-TextureSet (textures/items/copper_golem) | Specified image could not be found
+

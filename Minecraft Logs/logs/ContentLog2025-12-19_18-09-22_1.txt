@@ -1,0 +1,2 @@
+18:09:24[Texture][inform]-TextureSet (textures/items/copper_golem) | Specified image could not be found
+

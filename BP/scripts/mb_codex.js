@@ -46,7 +46,7 @@ export function getDefaultCodex() {
         },
         // Aggregated metadata by effect id
         symptomsMeta: {},
-        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, dustedDirtSeen: false, bookCraftMessageShown: false },
+        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, dustedDirtSeen: false, bookCraftMessageShown: false, goldenAppleSeen: false, enchantedGoldenAppleSeen: false, goldenAppleInfectionReductionDiscovered: false },
         mobs: { 
             mapleBearSeen: false, 
             infectedBearSeen: false, 
@@ -710,9 +710,10 @@ export function showCodexBook(player, context) {
         }
 
         const hasDebugOptions = (player.hasTag && player.hasTag("mb_cheats")) || Boolean(system?.isEnableCheats?.());
-        const debugActions = [];
 
         if (hasDebugOptions) {
+            buttons.push("§bDebug Menu");
+            buttonActions.push(() => openDebugMenu());
             buttons.push("§cDeveloper Tools");
             buttonActions.push(() => openDeveloperTools());
         }
@@ -916,9 +917,6 @@ export function showCodexBook(player, context) {
 
             // Play page turn sound
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
-
-            // Play page turn sound
-            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
             
             // If no symptoms available, just go back
             if (entries.length === 0) {
@@ -989,9 +987,6 @@ export function showCodexBook(player, context) {
         }
         form.show(player).then((res) => {
             if (!res || res.canceled) return openSymptoms();
-
-            // Play page turn sound
-            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
 
             // Play page turn sound
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
@@ -1493,8 +1488,27 @@ export function showCodexBook(player, context) {
                             body = "§ePotions\n§7Alchemical concoctions that can alter biological processes. Some may have applications in treating infections.\n\n§7Basic Information:\n§7• Can be brewed using a brewing stand\n§7• Various effects available\n§7• May have therapeutic applications\n\n§8Note: Specific applications require further research.";
                         }
                     } else if (e.key === "goldenAppleSeen") {
-                        // Golden apple information
-                        body = "§eGolden Apple\n§7A rare fruit with powerful healing properties. Its golden nature suggests it contains concentrated life energy.\n\n§7Properties:\n§7• Provides significant healing\n§7• Contains concentrated life energy\n§7• May have applications in infection treatment\n\n§7Research Notes:\n§7• Golden apples are rare and valuable\n§7• Their healing properties are well-documented\n§7• May be useful in combination with other treatments\n\n§eThis fruit shows potential in medical applications.";
+                        // Golden apple information with unlockable infection reduction info
+                        const hasDiscoveredReduction = codex.items.goldenAppleInfectionReductionDiscovered;
+                        
+                        body = "§eGolden Apple\n§7A rare fruit with powerful healing properties. Its golden nature suggests it contains concentrated life energy.\n\n§7Properties:\n§7• Provides significant healing\n§7• Contains concentrated life energy";
+                        
+                        if (hasDiscoveredReduction) {
+                            body += "\n§7• Reduces infection severity when consumed while infected\n§7• Provides temporary relief from infection symptoms";
+                            body += "\n\n§6Infection Reduction:\n§7• Consuming a golden apple while infected reduces the infection's hold\n§7• The effect is subtle but noticeable\n§7• Does not cure the infection, only reduces its severity\n§7• Multiple apples can provide cumulative relief\n§7• The relief is temporary - the infection continues to progress";
+                        } else {
+                            body += "\n§7• May have applications in infection treatment";
+                        }
+                        
+                        body += "\n\n§7Research Notes:\n§7• Golden apples are rare and valuable\n§7• Their healing properties are well-documented";
+                        
+                        if (hasDiscoveredReduction) {
+                            body += "\n§7• Has been observed to reduce infection severity\n§7• Not a cure, but provides valuable relief";
+                        } else {
+                            body += "\n§7• May be useful in combination with other treatments";
+                        }
+                        
+                        body += "\n\n§eThis fruit shows potential in medical applications.";
                     } else if (e.key === "enchantedGoldenAppleSeen") {
                         // Enchanted golden apple information with subtle hints
                         let hintText = "";
@@ -1847,8 +1861,8 @@ export function showCodexBook(player, context) {
         const milestones = [
             { day: 2, name: "Tiny Maple Bears emerge", reached: currentDay >= 2 },
             { day: 4, name: "Infected variants appear", reached: currentDay >= 4 },
-            { day: 8, name: "Buff Bears arrive", reached: currentDay >= 8 },
-            { day: 13, name: "Advanced variants spawn", reached: currentDay >= 13 },
+            { day: 8, name: "Flying Bears arrive", reached: currentDay >= 8 },
+            { day: 13, name: "Buff Bears arrive", reached: currentDay >= 13 },
             { day: 20, name: "Escalation begins", reached: currentDay >= 20 },
             { day: 25, name: "Victory threshold", reached: currentDay >= 25, isVictory: true }
         ];
@@ -1887,10 +1901,11 @@ export function showCodexBook(player, context) {
             { range: "Days 0-2", label: "Safe", color: "§a", maxDay: 2 },
             { range: "Days 3-5", label: "Caution", color: "§2", maxDay: 5 },
             { range: "Days 6-7", label: "Warning", color: "§e", maxDay: 7 },
-            { range: "Days 8-10", label: "Danger", color: "§6", maxDay: 10 },
-            { range: "Days 11-13", label: "High Danger", color: "§6", maxDay: 13 },
-            { range: "Days 14-17", label: "Critical", color: "§c", maxDay: 17 },
-            { range: "Days 18-24", label: "Extreme", color: "§4", maxDay: 24 },
+            { range: "Days 8-10", label: "High Danger", color: "§c", maxDay: 10 }, // Milestone day 8: Flying bears
+            { range: "Days 11-12", label: "Danger", color: "§6", maxDay: 12 },
+            { range: "Days 13-15", label: "Critical", color: "§c", maxDay: 15 }, // Milestone days 13, 15: Buff bears, Mining bears
+            { range: "Days 16-17", label: "Extreme", color: "§4", maxDay: 17 }, // Milestone day 17: Torpedo bears
+            { range: "Days 18-24", label: "Maximum", color: "§4", maxDay: 24 }, // Milestone day 20: Major escalation
             { range: "Day 25", label: "Victory", color: "§a", maxDay: 25, isVictory: true }
         ];
         
@@ -1910,10 +1925,17 @@ export function showCodexBook(player, context) {
         // Post-victory progression - only show if victory achieved
         if (currentDay > 25) {
             const postVictoryRanges = [
-                { range: "Days 26-30", label: "Escalating", color: "§c", maxDay: 30 },
-                { range: "Days 31-35", label: "Intensifying", color: "§4", maxDay: 35 },
-                { range: "Days 36-45", label: "Extreme", color: "§5", maxDay: 45 },
-                { range: "Days 46+", label: "Maximum Danger", color: "§0", maxDay: Infinity }
+                { range: "Days 26-33", label: "Escalating", color: "§c", maxDay: 33 },
+                { range: "Days 34-41", label: "Intensifying", color: "§4", maxDay: 41 },
+                { range: "Days 42-49", label: "Extreme", color: "§5", maxDay: 49 },
+                { range: "Day 50", label: "Milestone", color: "§5", maxDay: 50, isMilestone: true },
+                { range: "Days 51-62", label: "Deepening", color: "§5", maxDay: 62 },
+                { range: "Days 63-74", label: "Darkening", color: "§5", maxDay: 74 },
+                { range: "Day 75", label: "Milestone", color: "§5", maxDay: 75, isMilestone: true },
+                { range: "Days 76-87", label: "Void Approaching", color: "§0", maxDay: 87 },
+                { range: "Days 88-99", label: "The End Nears", color: "§0", maxDay: 99 },
+                { range: "Day 100", label: "Final Milestone", color: "§0", maxDay: 100, isMilestone: true },
+                { range: "Days 101+", label: "Beyond", color: "§0", maxDay: Infinity }
             ];
             
             for (const range of postVictoryRanges) {
@@ -1985,7 +2007,7 @@ export function showCodexBook(player, context) {
                 return openMain();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
-            openMain();
+            return openMain();
         }).catch(() => { openMain(); });
     }
 
@@ -1994,8 +2016,7 @@ export function showCodexBook(player, context) {
             { label: "§fReset My Codex", action: () => triggerDebugCommand("reset_codex") },
             { label: "§fReset World Day to 1", action: () => triggerDebugCommand("reset_day") },
             { label: "§fSet Day...", action: () => promptSetDay() },
-            { label: "§fSpawn Difficulty", action: () => openSpawnDifficultyMenu() },
-            { label: "§bDebug Menu", action: () => openDebugMenu() }
+            { label: "§fSpawn Difficulty", action: () => openSpawnDifficultyMenu() }
         ];
 
         const form = new ActionFormData().title("§cDeveloper Tools");
@@ -2143,7 +2164,7 @@ export function showCodexBook(player, context) {
 
     function promptSetDay() {
         const modal = new ModalFormData().title("§cSet Day")
-            .textField("Enter new day number", "20");
+            .textField("Enter new day number", "Set day");
 
         modal.show(player).then((res) => {
             if (!res || res.canceled) {
@@ -2169,26 +2190,39 @@ export function showCodexBook(player, context) {
 
     function toggleDebugFlag(category, flag) {
         const settings = getDebugSettings(player);
-        if (settings[category] && settings[category][flag] !== undefined) {
-            settings[category][flag] = !settings[category][flag];
-            // If "all" is toggled, update all flags in that category
-            if (flag === "all") {
-                for (const key in settings[category]) {
-                    if (key !== "all") {
-                        settings[category][key] = settings[category].all;
-                    }
-                }
-            } else {
-                // If any individual flag is toggled, check if all are on/off
-                const allFlags = Object.keys(settings[category]).filter(k => k !== "all");
-                settings[category].all = allFlags.every(k => settings[category][k]);
-            }
-            saveDebugSettingsInternal(settings);
-            // Notify AI scripts to update their debug flags
-            updateDebugFlags();
-            return settings[category][flag];
+        // Ensure category exists
+        if (!settings[category]) {
+            settings[category] = {};
         }
-        return false;
+        // Initialize flag if it doesn't exist (default to false)
+        if (settings[category][flag] === undefined) {
+            settings[category][flag] = false;
+        }
+        
+        settings[category][flag] = !settings[category][flag];
+        
+        // If "all" is toggled, update all flags in that category
+        if (flag === "all") {
+            // Get all possible flags for this category (from defaults to ensure we get new ones)
+            const defaultSettings = getDefaultDebugSettings();
+            const allFlags = defaultSettings[category] ? Object.keys(defaultSettings[category]).filter(k => k !== "all") : Object.keys(settings[category] || {}).filter(k => k !== "all");
+            
+            // Ensure all flags exist and set them
+            for (const key of allFlags) {
+                if (settings[category][key] === undefined) {
+                    settings[category][key] = false;
+                }
+                settings[category][key] = settings[category].all;
+            }
+        } else {
+            // If any individual flag is toggled, check if all are on/off
+            const allFlags = Object.keys(settings[category]).filter(k => k !== "all");
+            settings[category].all = allFlags.length > 0 && allFlags.every(k => settings[category][k] === true);
+        }
+        saveDebugSettingsInternal(settings);
+        // Notify AI scripts to update their debug flags
+        updateDebugFlags();
+        return settings[category][flag];
     }
 
     function updateDebugFlags() {
@@ -2219,12 +2253,12 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
-                return openDeveloperTools();
+                return openMain();
             }
 
             if (res.selection === 5) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
-                return openDeveloperTools();
+                return openMain();
             }
 
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
@@ -2236,18 +2270,19 @@ export function showCodexBook(player, context) {
                 case 4: return openMainDebugMenu(settings);
                 default: return openDebugMenu();
             }
-        }).catch(() => openDeveloperTools());
+        }).catch(() => openMain());
     }
 
     function openMiningDebugMenu(settings) {
         const mining = settings.mining || {};
         const form = new ActionFormData().title("§bMining AI Debug");
-        form.body(`§7Toggle debug logging for Mining Bears:\n\n§8Current settings:\n§7• Pitfall: ${mining.pitfall ? "§aON" : "§cOFF"}\n§7• General: ${mining.general ? "§aON" : "§cOFF"}\n§7• Target: ${mining.target ? "§aON" : "§cOFF"}\n§7• Pathfinding: ${mining.pathfinding ? "§aON" : "§cOFF"}\n§7• Mining: ${mining.mining ? "§aON" : "§cOFF"}\n§7• Movement: ${mining.movement ? "§aON" : "§cOFF"}\n§7• Stair Creation: ${mining.stairCreation ? "§aON" : "§cOFF"}`);
+        form.body(`§7Toggle debug logging for Mining Bears:\n\n§8Current settings:\n§7• Pitfall: ${mining.pitfall ? "§aON" : "§cOFF"}\n§7• General: ${mining.general ? "§aON" : "§cOFF"}\n§7• Target: ${mining.target ? "§aON" : "§cOFF"}\n§7• Pathfinding: ${mining.pathfinding ? "§aON" : "§cOFF"}\n§7• Vertical: ${mining.vertical ? "§aON" : "§cOFF"}\n§7• Mining: ${mining.mining ? "§aON" : "§cOFF"}\n§7• Movement: ${mining.movement ? "§aON" : "§cOFF"}\n§7• Stair Creation: ${mining.stairCreation ? "§aON" : "§cOFF"}`);
         
         form.button(`§${mining.pitfall ? "a" : "c"}Pitfall Debug`);
         form.button(`§${mining.general ? "a" : "c"}General Logging`);
         form.button(`§${mining.target ? "a" : "c"}Target Detection`);
         form.button(`§${mining.pathfinding ? "a" : "c"}Pathfinding`);
+        form.button(`§${mining.vertical ? "a" : "c"}Vertical Mining`);
         form.button(`§${mining.mining ? "a" : "c"}Block Mining`);
         form.button(`§${mining.movement ? "a" : "c"}Movement`);
         form.button(`§${mining.stairCreation ? "a" : "c"}Stair Creation`);
@@ -2255,13 +2290,13 @@ export function showCodexBook(player, context) {
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 8) {
+            if (!res || res.canceled || res.selection === 9) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
                 return openDebugMenu();
             }
 
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
-            const flags = ["pitfall", "general", "target", "pathfinding", "mining", "movement", "stairCreation", "all"];
+            const flags = ["pitfall", "general", "target", "pathfinding", "vertical", "mining", "movement", "stairCreation", "all"];
             if (res.selection < flags.length) {
                 const newState = toggleDebugFlag("mining", flags[res.selection]);
                 const stateText = newState ? "§aON" : "§cOFF";
@@ -2331,33 +2366,40 @@ export function showCodexBook(player, context) {
                 console.warn(`[DEBUG MENU] Flying AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
             }
                 return openFlyingDebugMenu(getDebugSettings(player));
-        }).catch(() => openDebugMenu());
+        }).catch(() => openMain());
     }
 
     function openSpawnDebugMenu(settings) {
         const spawn = settings.spawn || {};
         const form = new ActionFormData().title("§bSpawn Controller Debug");
-        form.body(`§7Toggle debug logging for Spawn Controller:\n\n§8Current settings:\n§7• General: ${spawn.general ? "§aON" : "§cOFF"}\n§7• Tile Scanning: ${spawn.tileScanning ? "§aON" : "§cOFF"}`);
+        form.body(`§7Toggle debug logging for Spawn Controller:\n\n§8Current settings:\n§7• General: ${spawn.general ? "§aON" : "§cOFF"}\n§7• Tile Scanning: ${spawn.tileScanning ? "§aON" : "§cOFF"}\n§7• Cache: ${spawn.cache ? "§aON" : "§cOFF"}\n§7• Validation: ${spawn.validation ? "§aON" : "§cOFF"}\n§7• Distance: ${spawn.distance ? "§aON" : "§cOFF"}\n§7• Spacing: ${spawn.spacing ? "§aON" : "§cOFF"}`);
         
         form.button(`§${spawn.general ? "a" : "c"}General Logging`);
         form.button(`§${spawn.tileScanning ? "a" : "c"}Tile Scanning`);
+        form.button(`§${spawn.cache ? "a" : "c"}Cache`);
+        form.button(`§${spawn.validation ? "a" : "c"}Validation`);
+        form.button(`§${spawn.distance ? "a" : "c"}Distance`);
+        form.button(`§${spawn.spacing ? "a" : "c"}Spacing`);
         form.button(`§${spawn.all ? "a" : "c"}Toggle All`);
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 3) {
+            if (!res || res.canceled || res.selection === 7) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
                 return openDebugMenu();
             }
 
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
-            const flags = ["general", "tileScanning", "all"];
+            const flags = ["general", "tileScanning", "cache", "validation", "distance", "spacing", "all"];
             if (res.selection < flags.length) {
-                const newState = toggleDebugFlag("spawn", flags[res.selection]);
+                const flagName = flags[res.selection];
+                const newState = toggleDebugFlag("spawn", flagName);
                 const stateText = newState ? "§aON" : "§cOFF";
-                player.sendMessage(`§7[DEBUG] Spawn Controller ${flags[res.selection]} debug: ${stateText}`);
+                player.sendMessage(`§7[DEBUG] Spawn Controller ${flagName} debug: ${stateText}`);
                 // Log to console for confirmation
-                console.warn(`[DEBUG MENU] Spawn Controller ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+                console.warn(`[DEBUG MENU] Spawn Controller ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+                // Invalidate cache to ensure changes take effect immediately
+                invalidateDebugCache();
             }
                 return openSpawnDebugMenu(getDebugSettings(player));
         }).catch(() => openDebugMenu());
@@ -2469,7 +2511,6 @@ export function showCodexBook(player, context) {
             
             const searchTerm = (res.formValues[0] || "").toLowerCase().trim();
             if (!searchTerm) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
                 return openMain();
             }
             
@@ -2568,19 +2609,9 @@ function invalidateDebugCache() {
     debugStateCache = null;
 }
 
-// Export debug settings functions for AI scripts
-// NOTE: Debug settings ARE persisted across sessions via dynamic properties
-export function getDebugSettings(player) {
-    try {
-        const settingsStr = player.getDynamicProperty("mb_debug_settings");
-        if (settingsStr) {
-            return JSON.parse(settingsStr);
-        }
-    } catch (error) {
-        console.warn(`[DEBUG] Error loading debug settings for ${player.name}:`, error);
-    }
-    // Default debug settings (all disabled) - only used if no saved settings exist
-    const defaultSettings = {
+// Helper function to get default debug settings (used for toggle all)
+function getDefaultDebugSettings() {
+    return {
         mining: {
             pitfall: false,
             general: false,
@@ -2607,6 +2638,10 @@ export function getDebugSettings(player) {
         spawn: {
             general: false,
             tileScanning: false,
+            cache: false,
+            validation: false,
+            distance: false,
+            spacing: false,
             all: false
         },
         main: {
@@ -2616,6 +2651,32 @@ export function getDebugSettings(player) {
             all: false
         }
     };
+}
+
+// Export debug settings functions for AI scripts
+// NOTE: Debug settings ARE persisted across sessions via dynamic properties
+export function getDebugSettings(player) {
+    try {
+        const settingsStr = player.getDynamicProperty("mb_debug_settings");
+        if (settingsStr) {
+            const parsed = JSON.parse(settingsStr);
+            // Merge with defaults to ensure new flags exist
+            const defaults = getDefaultDebugSettings();
+            for (const category in defaults) {
+                if (!parsed[category]) parsed[category] = {};
+                for (const flag in defaults[category]) {
+                    if (parsed[category][flag] === undefined) {
+                        parsed[category][flag] = defaults[category][flag];
+                    }
+                }
+            }
+            return parsed;
+        }
+    } catch (error) {
+        console.warn(`[DEBUG] Error loading debug settings for ${player.name}:`, error);
+    }
+    // Default debug settings (all disabled) - only used if no saved settings exist
+    const defaultSettings = getDefaultDebugSettings();
     // Save defaults so they persist
     saveDebugSettings(player, defaultSettings);
     return defaultSettings;

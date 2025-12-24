@@ -1,10 +1,19 @@
+// ============================================================================
+// MAPLE BEAR SPAWN CONTROLLER
+// ============================================================================
+// Main spawn system for Maple Bear entities. Handles tile collection, caching,
+// spawn location calculation, and entity spawning based on day progression.
+// ============================================================================
+
 import { system, world } from "@minecraft/server";
 import { getCurrentDay, isMilestoneDay } from "./mb_dayTracker.js";
+import { isDebugEnabled } from "./mb_codex.js";
 
-// Debug flags - set to true to enable detailed logging
-const DEBUG_SPAWNING = false; // Enable detailed spawn debugging
-const DEBUG_CACHE = false; // Enable cache debugging
-const DEBUG_GROUPS = false; // Enable player group debugging
+// ============================================================================
+// SECTION 1: DEBUG AND ERROR LOGGING
+// ============================================================================
+
+// Debug flags - now uses codex debug system
 const ERROR_LOGGING = true; // Always log errors (recommended: true)
 
 // Error tracking to prevent spam
@@ -12,14 +21,43 @@ const errorLogCounts = new Map(); // Track error frequency
 const ERROR_LOG_COOLDOWN = 6000; // Only log same error every 100 seconds (6000 ticks)
 const MAX_ERROR_LOGS = 10; // Max times to log the same error
 
-// Helper function for conditional debug logging
+// Helper function for conditional debug logging (now uses codex debug system)
 function debugLog(category, message, ...args) {
-    if (category === 'spawn' && DEBUG_SPAWNING) {
-        console.warn(`[SPAWN DEBUG] ${message}`, ...args);
-    } else if (category === 'cache' && DEBUG_CACHE) {
-        console.warn(`[CACHE DEBUG] ${message}`, ...args);
-    } else if (category === 'groups' && DEBUG_GROUPS) {
-        console.warn(`[GROUP DEBUG] ${message}`, ...args);
+    if (category === 'spawn') {
+        // Check codex debug settings for spawn debug
+        if (isDebugEnabled('spawn', 'general') || isDebugEnabled('spawn', 'all')) {
+            console.warn(`[SPAWN DEBUG] ${message}`, ...args);
+        }
+        // Tile scanning is a separate flag
+        if ((isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) && (message.includes('tile') || message.includes('Tile') || message.includes('scan'))) {
+            console.warn(`[SPAWN DEBUG] ${message}`, ...args);
+        }
+        // Cache debug
+        if ((isDebugEnabled('spawn', 'cache') || isDebugEnabled('spawn', 'all')) && (message.includes('cache') || message.includes('Cache'))) {
+            console.warn(`[SPAWN DEBUG] ${message}`, ...args);
+        }
+        // Validation debug
+        if ((isDebugEnabled('spawn', 'validation') || isDebugEnabled('spawn', 'all')) && (message.includes('valid') || message.includes('Valid') || message.includes('invalid'))) {
+            console.warn(`[SPAWN DEBUG] ${message}`, ...args);
+        }
+        // Distance debug
+        if ((isDebugEnabled('spawn', 'distance') || isDebugEnabled('spawn', 'all')) && (message.includes('distance') || message.includes('Distance') || message.includes('dist'))) {
+            console.warn(`[SPAWN DEBUG] ${message}`, ...args);
+        }
+        // Spacing debug
+        if ((isDebugEnabled('spawn', 'spacing') || isDebugEnabled('spawn', 'all')) && (message.includes('spacing') || message.includes('Spacing') || message.includes('spaced'))) {
+            console.warn(`[SPAWN DEBUG] ${message}`, ...args);
+        }
+    } else if (category === 'cache') {
+        // Cache debug
+        if (isDebugEnabled('spawn', 'cache') || isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+            console.warn(`[CACHE DEBUG] ${message}`, ...args);
+        }
+    } else if (category === 'groups') {
+        // Groups debug can use spawn general
+        if (isDebugEnabled('spawn', 'general') || isDebugEnabled('spawn', 'all')) {
+            console.warn(`[GROUP DEBUG] ${message}`, ...args);
+        }
     }
 }
 
@@ -57,6 +95,10 @@ function errorLog(message, error = null, context = {}) {
     }
 }
 
+// ============================================================================
+// SECTION 2: ENTITY TYPE CONSTANTS
+// ============================================================================
+
 const TINY_BEAR_ID = "mb:mb";
 const DAY4_BEAR_ID = "mb:mb_day4";
 const DAY8_BEAR_ID = "mb:mb_day8";
@@ -78,7 +120,18 @@ const TORPEDO_BEAR_ID = "mb:torpedo_mb";
 const TORPEDO_BEAR_DAY20_ID = "mb:torpedo_mb_day20";
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
+// ============================================================================
+// SECTION 3: BLOCK TYPE CONSTANTS AND HELPERS
+// ============================================================================
+
 const TARGET_BLOCK = "mb:dusted_dirt";
+const TARGET_BLOCK_2 = "mb:snow_layer"; // Also check for snow layers
+
+// Helper function to check if a block is a valid target block
+function isValidTargetBlock(typeId) {
+    return typeId === TARGET_BLOCK || typeId === TARGET_BLOCK_2;
+}
+
 const AIR_BLOCKS = new Set([
     "minecraft:air",
     "minecraft:cave_air",
@@ -93,10 +146,18 @@ const FLYING_SPAWN_SETTINGS = {
     [TORPEDO_BEAR_DAY20_ID]: { minAbsoluteY: 88, offset: 12, maxLift: 14, skyClearance: 12 }
 };
 
+// ============================================================================
+// SECTION 4: SPAWN SETTINGS AND CONFIGURATION
+// ============================================================================
+
 const MINING_SPAWN_SETTINGS = {
     [MINING_BEAR_ID]: { maxAbsoluteY: 55, roofProbe: 6, requiredRoofBlocks: 2, clearance: 3, allowSurface: false },
     [MINING_BEAR_DAY20_ID]: { maxAbsoluteY: 320, roofProbe: 7, requiredRoofBlocks: 2, clearance: 4, allowSurface: true }
 };
+
+// ============================================================================
+// SECTION 5: BLOCK UTILITY FUNCTIONS
+// ============================================================================
 
 function getBlockSafe(dimension, x, y, z) {
     try {
@@ -142,6 +203,10 @@ function hasRoof(dimension, x, z, startY, probe, requiredSolid) {
     }
     return false;
 }
+
+// ============================================================================
+// SECTION 6: SPAWN LOCATION FUNCTIONS
+// ============================================================================
 
 // Generate air spawn tiles for flying/torpedo bears (air gets more infected over time)
 function generateAirSpawnTiles(dimension, playerPos, minAbsoluteY, maxAbsoluteY, count = 15) {
@@ -270,8 +335,8 @@ function getMiningSpawnLocation(settings, dimension, tile) {
         return null;
     }
     
-    // If tile doesn't have dusted_dirt, check if it has stone/deepslate (for cave spawning)
-    if (!tileBlock || tileBlock.typeId !== TARGET_BLOCK) {
+    // If tile doesn't have dusted_dirt or snow_layer, check if it has stone/deepslate (for cave spawning)
+    if (!tileBlock || !isValidTargetBlock(tileBlock.typeId)) {
         // Check if it's a valid mining spawn block (stone/deepslate)
         if (tileBlock && isValidMiningSpawnBlock(tileBlock.typeId)) {
             // Only allow if it's in a cave (has roof) - don't spawn on surface stone
@@ -287,9 +352,9 @@ function getMiningSpawnLocation(settings, dimension, tile) {
                     if (dx === 0 && dz === 0) continue;
                     try {
                         const nearbyBlock = dimension.getBlock({ x: baseX + dx, y: tile.y, z: baseZ + dz });
-                        if (nearbyBlock && (nearbyBlock.typeId === TARGET_BLOCK || isValidMiningSpawnBlock(nearbyBlock.typeId))) {
+                        if (nearbyBlock && (isValidTargetBlock(nearbyBlock.typeId) || isValidMiningSpawnBlock(nearbyBlock.typeId))) {
                             // Check if it's in a cave (for stone/deepslate)
-                            if (nearbyBlock.typeId !== TARGET_BLOCK && !hasRoof(dimension, baseX + dx, baseZ + dz, clearanceTop + 1, settings.roofProbe, settings.requiredRoofBlocks)) {
+                            if (!isValidTargetBlock(nearbyBlock.typeId) && !hasRoof(dimension, baseX + dx, baseZ + dz, clearanceTop + 1, settings.roofProbe, settings.requiredRoofBlocks)) {
                                 continue; // Not in cave, skip
                             }
                             // Found valid block nearby - adjust spawn position
@@ -322,7 +387,7 @@ function getMiningSpawnLocation(settings, dimension, tile) {
         // Check if this is dusted_dirt (surface spawn allowed) or stone/deepslate (must be in cave)
         try {
             const checkBlock = dimension.getBlock({ x: baseX, y: tile.y, z: baseZ });
-            if (checkBlock && checkBlock.typeId === TARGET_BLOCK) {
+            if (checkBlock && isValidTargetBlock(checkBlock.typeId)) {
                 // Surface spawns allowed for dusted_dirt - just need clearance
                 return { x: baseX + 0.5, y: spawnY, z: baseZ + 0.5 };
             } else if (checkBlock && isValidMiningSpawnBlock(checkBlock.typeId)) {
@@ -345,13 +410,19 @@ function getMiningSpawnLocation(settings, dimension, tile) {
     return { x: baseX + 0.5, y: spawnY, z: baseZ + 0.5 };
 }
 
-const SPAWN_ATTEMPTS = 18; // Increased from 12 for more spawns per cycle
-const MIN_SPAWN_DISTANCE = 15;
-const MAX_SPAWN_DISTANCE = 48;
+// ============================================================================
+// SECTION 7: SPAWN SYSTEM CONSTANTS
+// ============================================================================
+
+const SPAWN_ATTEMPTS = 25; // Increased from 18 for more spawns per cycle
+// Spawn distance ranges
+const MIN_SPAWN_DISTANCE = 15; // Minimum distance from player (15 blocks)
+const MAX_SPAWN_DISTANCE = 45; // Maximum distance from player (45 blocks)
 const BASE_MIN_TILE_SPACING = 2.5; // blocks between spawn tiles (reduced from 3 for better coverage on day 20+)
 const SCAN_INTERVAL = 60; // ticks (~3 seconds) - reduced for more frequent smaller scans
 const BLOCK_SCAN_COOLDOWN = SCAN_INTERVAL * 2; // Only scan blocks every 2 intervals (~6 seconds)
 const MAX_BLOCK_QUERIES_PER_SCAN = 6000; // Limit block queries per scan (smaller batches, more frequent)
+const MAX_BLOCK_QUERIES_SINGLE_PLAYER = 12000; // Double the limit for single player (more thorough scanning)
 // Total queries over time: 6000 every 60 ticks = ~100 queries/tick average (same as 12000 every 120 ticks)
 
 const SUNRISE_BOOST_DURATION = 200; // ticks
@@ -393,11 +464,17 @@ function getSpawnDifficultyState() {
     };
 }
 
+// ============================================================================
+// SECTION 8: SPAWN CONFIGURATIONS
+// ============================================================================
+// Defines spawn behavior for each bear type based on day progression
+// ============================================================================
+
 const SPAWN_CONFIGS = [
     {
         id: TINY_BEAR_ID,
         startDay: 2,
-        endDay: 3,
+        endDay: Infinity, // Continues indefinitely - highest variant (DAY20_BEAR_ID) takes over at day 20
         baseChance: 0.14, // Increased from 0.12
         chancePerDay: 0.018, // Increased from 0.015
         maxChance: 0.65, // Increased from 0.6
@@ -411,7 +488,7 @@ const SPAWN_CONFIGS = [
     {
         id: DAY4_BEAR_ID,
         startDay: 4,
-        endDay: 7,
+        endDay: Infinity, // Continues indefinitely - highest variant (DAY20_BEAR_ID) takes over at day 20
         baseChance: 0.34, // Increased from 0.3
         chancePerDay: 0.022, // Increased from 0.02
         maxChance: 0.56, // Increased from 0.5
@@ -425,7 +502,7 @@ const SPAWN_CONFIGS = [
     {
         id: INFECTED_BEAR_ID,
         startDay: 4,
-        endDay: 7,
+        endDay: Infinity, // Continues indefinitely - highest variant (INFECTED_BEAR_DAY20_ID) takes over at day 20
         baseChance: 0.14, // Increased from 0.12
         chancePerDay: 0.018, // Increased from 0.015
         maxChance: 0.38, // Increased from 0.32
@@ -439,7 +516,7 @@ const SPAWN_CONFIGS = [
     {
         id: DAY8_BEAR_ID,
         startDay: 8,
-        endDay: 12,
+        endDay: Infinity, // Continues indefinitely - highest variant (DAY20_BEAR_ID) takes over at day 20
         baseChance: 0.38, // Increased from 0.34
         chancePerDay: 0.022, // Increased from 0.02
         maxChance: 0.62, // Increased from 0.56
@@ -453,7 +530,7 @@ const SPAWN_CONFIGS = [
     {
         id: INFECTED_BEAR_DAY8_ID,
         startDay: 8,
-        endDay: 12,
+        endDay: Infinity, // Continues indefinitely - highest variant (INFECTED_BEAR_DAY20_ID) takes over at day 20
         baseChance: 0.18, // Increased from 0.16
         chancePerDay: 0.018, // Increased from 0.015
         maxChance: 0.46, // Increased from 0.4
@@ -466,8 +543,8 @@ const SPAWN_CONFIGS = [
     },
     {
         id: FLYING_BEAR_ID,
-        startDay: 11,
-        endDay: 14,
+        startDay: 8, // Swapped: Now starts on day 8 (was day 11, where buff bears used to start)
+        endDay: Infinity, // Continues indefinitely - highest variant (FLYING_BEAR_DAY20_ID) takes over at day 20
         baseChance: 0.12,
         chancePerDay: 0.015,
         maxChance: 0.38,
@@ -481,7 +558,7 @@ const SPAWN_CONFIGS = [
     {
         id: DAY13_BEAR_ID,
         startDay: 13,
-        endDay: 19,
+        endDay: Infinity, // Continues indefinitely - highest variant (DAY20_BEAR_ID) takes over at day 20
         baseChance: 0.42, // Increased from 0.38
         chancePerDay: 0.028, // Increased from 0.025
         maxChance: 0.68, // Increased from 0.62
@@ -495,7 +572,7 @@ const SPAWN_CONFIGS = [
     {
         id: INFECTED_BEAR_DAY13_ID,
         startDay: 13,
-        endDay: 19,
+        endDay: Infinity, // Continues indefinitely - highest variant (INFECTED_BEAR_DAY20_ID) takes over at day 20
         baseChance: 0.24, // Increased from 0.2
         chancePerDay: 0.018, // Increased from 0.015
         maxChance: 0.52, // Increased from 0.46
@@ -509,7 +586,7 @@ const SPAWN_CONFIGS = [
     {
         id: FLYING_BEAR_DAY15_ID,
         startDay: 15,
-        endDay: 19,
+        endDay: Infinity, // Continues indefinitely - highest variant (FLYING_BEAR_DAY20_ID) takes over at day 20
         baseChance: 0.16,
         chancePerDay: 0.015,
         maxChance: 0.42,
@@ -523,7 +600,7 @@ const SPAWN_CONFIGS = [
     {
         id: MINING_BEAR_ID,
         startDay: 15,
-        endDay: 19,
+        endDay: Infinity, // Continues indefinitely - highest variant (MINING_BEAR_DAY20_ID) takes over at day 20
         baseChance: 0.14,
         chancePerDay: 0.015,
         maxChance: 0.38,
@@ -536,26 +613,26 @@ const SPAWN_CONFIGS = [
     },
     {
         id: BUFF_BEAR_ID,
-        startDay: 8,
-        endDay: 12,
-        baseChance: 0.032,
-        chancePerDay: 0.0025,
-        maxChance: 0.06,
+        startDay: 13, // Swapped: Now starts on day 13 (was day 8, where flying bears used to start)
+        endDay: Infinity, // Continues indefinitely - highest variant (BUFF_BEAR_DAY20_ID) takes over at day 20
+        baseChance: 0.020, // Reduced from 0.032 (37.5% reduction)
+        chancePerDay: 0.0015, // Reduced from 0.0025 (40% reduction)
+        maxChance: 0.04, // Reduced from 0.06 (33% reduction)
         baseMaxCount: 1,
         maxCountCap: 1,
-        delayTicks: 900,
+        delayTicks: 1200, // Increased from 900 (slower spawn rate)
         spreadRadius: 30
     },
     {
         id: BUFF_BEAR_DAY13_ID,
-        startDay: 13,
-        endDay: 19,
-        baseChance: 0.028,
-        chancePerDay: 0.002,
-        maxChance: 0.07,
+        startDay: 20, // Adjusted: Now starts on day 20 (was day 13, since buff_bear now takes that slot)
+        endDay: Infinity, // Adjusted: Continues indefinitely (was day 19)
+        baseChance: 0.018, // Reduced from 0.028 (36% reduction)
+        chancePerDay: 0.0012, // Reduced from 0.002 (40% reduction)
+        maxChance: 0.05, // Reduced from 0.07 (29% reduction)
         baseMaxCount: 1,
         maxCountCap: 2,
-        delayTicks: 1200,
+        delayTicks: 1500, // Increased from 1200 (slower spawn rate)
         spreadRadius: 32
     },
     {
@@ -606,17 +683,17 @@ const SPAWN_CONFIGS = [
         id: BUFF_BEAR_DAY20_ID,
         startDay: 20,
         endDay: Infinity,
-        baseChance: 0.035,
-        chancePerDay: 0.0015,
-        maxChance: 0.065,
+        baseChance: 0.022, // Reduced from 0.035 (37% reduction)
+        chancePerDay: 0.001, // Reduced from 0.0015 (33% reduction)
+        maxChance: 0.045, // Reduced from 0.065 (31% reduction)
         baseMaxCount: 1,
         maxCountCap: 2,
-        delayTicks: 1400,
+        delayTicks: 1800, // Increased from 1400 (slower spawn rate)
         spreadRadius: 34,
         lateRamp: {
             tierSpan: 8,
-            chanceStep: 0.025,
-            maxChance: 0.08,
+            chanceStep: 0.015, // Reduced from 0.025 (40% reduction)
+            maxChance: 0.06, // Reduced from 0.08 (25% reduction)
             capStep: 0,
             capBonusMax: 0,
             maxCountCap: 2
@@ -669,7 +746,7 @@ const SPAWN_CONFIGS = [
     {
         id: TORPEDO_BEAR_ID,
         startDay: 17,
-        endDay: 21,
+        endDay: Infinity, // Continues indefinitely - highest variant (TORPEDO_BEAR_DAY20_ID) takes over at day 22
         baseChance: 0.03, // Super rare - reduced from 0.10
         chancePerDay: 0.005, // Reduced from 0.018
         maxChance: 0.08, // Reduced from 0.34
@@ -710,11 +787,114 @@ let sunriseBoostTicks = 0;
 const playerTileCache = new Map();
 const entityCountCache = new Map(); // Cache entity counts per player
 const ENTITY_COUNT_CACHE_TTL = SCAN_INTERVAL * 2; // Refresh entity counts every 2 scan intervals
-const MAX_SPAWNS_PER_TICK_PER_PLAYER_BASE = 3; // Base spawn limit (day 2) - increased from 2
-const MAX_SPAWNS_PER_TICK_PER_PLAYER_MAX = 12; // Maximum spawn limit (day 20+) - increased from 8
+const MAX_SPAWNS_PER_TICK_PER_PLAYER_BASE = 4; // Base spawn limit (day 2) - increased from 3
+const MAX_SPAWNS_PER_TICK_PER_PLAYER_MAX = 16; // Maximum spawn limit (day 20+) - increased from 12
 const PLAYER_PROCESSING_ROTATION = []; // Rotate which players to process
 let playerRotationIndex = 0;
 let lastBlockScanTick = 0; // Track when we last did expensive block scans
+
+// Weather detection cache (dimension -> weather state)
+const weatherCache = new Map(); // Map<dimensionId, {weather: string, tick: number}>
+const WEATHER_CACHE_TTL = 200; // Check weather every 10 seconds (200 ticks)
+const WEATHER_MULTIPLIERS = {
+    clear: 1.0,        // Normal spawns
+    rain: 0.7,         // 30% reduction
+    snow: 0.7,         // 30% reduction
+    thunder: 1.0       // No reduction (thunderstorms don't reduce spawns)
+};
+
+/**
+ * Get weather multiplier for a dimension
+ * Uses command-based detection since Script API doesn't support weather directly
+ * @param {Dimension} dimension The dimension to check
+ * @returns {number} Weather multiplier (0.7 for rain/snow, 1.0 for clear/thunder)
+ */
+function getWeatherMultiplier(dimension) {
+    try {
+        const dimId = dimension.id;
+        const cached = weatherCache.get(dimId);
+        const currentTick = system.currentTick;
+        
+        // Return cached value if still valid
+        if (cached && (currentTick - cached.tick) < WEATHER_CACHE_TTL) {
+            return WEATHER_MULTIPLIERS[cached.weather] || 1.0;
+        }
+        
+        // Default to clear weather if not cached
+        if (!cached) {
+            weatherCache.set(dimId, { weather: 'clear', tick: currentTick });
+            return 1.0;
+        }
+        
+        return WEATHER_MULTIPLIERS[cached.weather] || 1.0;
+    } catch (error) {
+        // On error, default to no weather effect
+        return 1.0;
+    }
+}
+
+/**
+ * Update weather cache for a dimension using command detection
+ * This runs asynchronously and updates the cache
+ * @param {Dimension} dimension The dimension to check
+ */
+function updateWeatherCache(dimension) {
+    // Get dimId first, before any try/catch blocks to ensure it's always defined
+    if (!dimension) return;
+    const dimId = dimension.id;
+    if (!dimId) return;
+    
+    try {
+        const currentTick = system.currentTick;
+        const cached = weatherCache.get(dimId);
+        
+        // Only update if cache is stale
+        if (cached && (currentTick - cached.tick) < WEATHER_CACHE_TTL) {
+            return; // Cache still valid
+        }
+        
+        // Use command to query weather
+        // We'll use /weather query and parse the result
+        // Since this is async, we'll trigger it and update cache when result comes back
+        dimension.runCommandAsync("weather query").then((result) => {
+            try {
+                let weather = 'clear'; // Default
+                
+                // Parse command result to determine weather
+                // Command output format: "Weather is now: [clear|rain|thunder]"
+                const output = result.successCount > 0 ? result.statusMessage || '' : '';
+                
+                if (output.includes('rain') && !output.includes('thunder')) {
+                    weather = 'rain';
+                } else if (output.includes('thunder') || output.includes('storm')) {
+                    weather = 'thunder';
+                } else if (output.includes('snow')) {
+                    weather = 'snow';
+                } else {
+                    weather = 'clear';
+                }
+                
+                // Update cache
+                weatherCache.set(dimId, { weather: weather, tick: system.currentTick });
+            } catch (error) {
+                // On error, keep existing cache or set to clear
+                if (!weatherCache.has(dimId)) {
+                    weatherCache.set(dimId, { weather: 'clear', tick: system.currentTick });
+                }
+            }
+        }).catch((error) => {
+            // Command failed - keep existing cache or set to clear
+            if (!weatherCache.has(dimId)) {
+                weatherCache.set(dimId, { weather: 'clear', tick: system.currentTick });
+            }
+        });
+    } catch (error) {
+        // On error, keep existing cache or set to clear
+        if (!weatherCache.has(dimId)) {
+            weatherCache.set(dimId, { weather: 'clear', tick: system.currentTick });
+        }
+    }
+}
 
 // Player grouping system for overlapping spawn rectangles
 const PLAYER_GROUP_OVERLAP_DISTANCE = MAX_SPAWN_DISTANCE * 2; // Players within this distance have overlapping rectangles (96 blocks)
@@ -729,42 +909,156 @@ const loggedMaintainedGroupsThisTick = new Set(); // Track which groups have bee
 
 // Calculate dynamic spawn limit based on current day
 function getMaxSpawnsPerTick(day) {
-    if (day < 2) return 1;
-    if (day < 4) return 2; // Day 2-3: 2 spawns
-    if (day < 8) return 3; // Day 4-7: 3 spawns
-    if (day < 13) return 4; // Day 8-12: 4 spawns
-    if (day < 20) return 5; // Day 13-19: 5 spawns
-    // Day 20+: Scale from 6 to 8 based on how far past day 20
-    return Math.min(MAX_SPAWNS_PER_TICK_PER_PLAYER_MAX, 6 + Math.floor((day - 20) / 5));
+    if (day < 2) return 2;
+    if (day < 4) return 3; // Day 2-3: 3 spawns (increased from 2)
+    if (day < 8) return 4; // Day 4-7: 4 spawns (increased from 3)
+    if (day < 13) return 6; // Day 8-12: 6 spawns (increased from 4)
+    if (day < 20) return 8; // Day 13-19: 8 spawns (increased from 5)
+    // Day 20+: Scale from 10 to 16 based on how far past day 20
+    return Math.min(MAX_SPAWNS_PER_TICK_PER_PLAYER_MAX, 10 + Math.floor((day - 20) / 5));
 }
 
+// Spatial chunking system for dusted_dirt cache
+// Divides world into chunks and only uses cache for active chunks (player is nearby)
+// Inactive chunks are kept but not used, allowing cache to persist when player returns
+const CHUNK_SIZE = 128; // World divided into 128x128 block chunks
+const CHUNK_ACTIVATION_RADIUS = 1; // Activate chunks within 1 chunk of player (3x3 grid = 9 chunks, 384 block radius)
+const CHUNK_TRIM_AGE = 72000; // Trim chunks not visited in 1 hour (72000 ticks = 1 hour)
+const CHUNK_TRIM_INTERVAL = SCAN_INTERVAL * 20; // Check for chunks to trim every 20 scan intervals (~100 seconds)
+
+// ============================================================================
+// SECTION 9: CACHE SYSTEM
+// ============================================================================
+// Spatial chunking cache for dusted_dirt and snow_layer blocks
+// ============================================================================
+
 // Global cache for dusted_dirt block positions
-const dustedDirtCache = new Map(); // key: "x,y,z" -> { x, y, z, tick, dimension }
-const DUSTED_DIRT_CACHE_TTL = SCAN_INTERVAL * 10; // Keep cache entries for 10 scan intervals (~50 seconds)
-const MAX_CACHE_SIZE = 5000; // Maximum cached positions
+// key: "x,y,z" -> { x, y, z, tick, dimension, chunkKey }
+const dustedDirtCache = new Map();
+// Track active chunks (chunks player is currently near)
+// key: "chunkX,chunkZ" -> lastVisitTick
+const activeChunks = new Map();
+// Track all chunks and their last visit time
+// key: "chunkX,chunkZ" -> lastVisitTick
+const chunkLastVisit = new Map();
+let lastChunkTrimTick = 0;
+
 const CACHE_CHECK_RADIUS = 100; // Only check cached blocks within 100 blocks of player (performance optimization)
 const CACHE_VALIDATION_INTERVAL = SCAN_INTERVAL * 3; // Validate cache every 3 scan intervals (~15 seconds)
 const CACHE_VALIDATION_SAMPLE_SIZE = 50; // Validate up to 50 blocks per validation cycle
 let lastCacheValidationTick = 0;
 
+// Helper: Get chunk key from world coordinates
+function getChunkKey(x, z) {
+    const chunkX = Math.floor(x / CHUNK_SIZE);
+    const chunkZ = Math.floor(z / CHUNK_SIZE);
+    return `${chunkX},${chunkZ}`;
+}
+
+// Helper: Get all chunk keys within activation radius of a position
+function getActiveChunkKeys(centerX, centerZ) {
+    const centerChunkX = Math.floor(centerX / CHUNK_SIZE);
+    const centerChunkZ = Math.floor(centerZ / CHUNK_SIZE);
+    const activeKeys = new Set();
+    
+    for (let dx = -CHUNK_ACTIVATION_RADIUS; dx <= CHUNK_ACTIVATION_RADIUS; dx++) {
+        for (let dz = -CHUNK_ACTIVATION_RADIUS; dz <= CHUNK_ACTIVATION_RADIUS; dz++) {
+            const chunkX = centerChunkX + dx;
+            const chunkZ = centerChunkZ + dz;
+            const key = `${chunkX},${chunkZ}`;
+            activeKeys.add(key);
+        }
+    }
+    
+    return activeKeys;
+}
+
+// Update active chunks based on player position
+function updateActiveChunks(centerX, centerZ) {
+    const now = system.currentTick;
+    const newActiveKeys = getActiveChunkKeys(centerX, centerZ);
+    
+    // Update last visit time for newly active chunks
+    for (const key of newActiveKeys) {
+        if (!activeChunks.has(key)) {
+            // Player entered this chunk - reactivate it
+            activeChunks.set(key, now);
+            chunkLastVisit.set(key, now);
+        } else {
+            // Update last visit time
+            chunkLastVisit.set(key, now);
+        }
+    }
+    
+    // Deactivate chunks that are no longer near player
+    for (const [key] of activeChunks) {
+        if (!newActiveKeys.has(key)) {
+            activeChunks.delete(key);
+            // Keep in chunkLastVisit for future reactivation
+        }
+    }
+}
+
+// Trim old chunks that haven't been visited in a long time
+function trimOldChunks() {
+    const now = system.currentTick;
+    if (now - lastChunkTrimTick < CHUNK_TRIM_INTERVAL) {
+        return; // Don't trim too frequently
+    }
+    lastChunkTrimTick = now;
+    
+    const chunksToRemove = [];
+    for (const [chunkKey, lastVisit] of chunkLastVisit.entries()) {
+        if (now - lastVisit > CHUNK_TRIM_AGE) {
+            chunksToRemove.push(chunkKey);
+        }
+    }
+    
+    if (chunksToRemove.length === 0) return;
+    
+    // Remove cache entries for old chunks
+    let removedCount = 0;
+    for (const [key, value] of dustedDirtCache.entries()) {
+        if (value.chunkKey && chunksToRemove.includes(value.chunkKey)) {
+            dustedDirtCache.delete(key);
+            removedCount++;
+        }
+    }
+    
+    // Remove chunk tracking entries
+    for (const chunkKey of chunksToRemove) {
+        chunkLastVisit.delete(chunkKey);
+        activeChunks.delete(chunkKey);
+    }
+    
+    if (isDebugEnabled('spawn', 'cache') || isDebugEnabled('spawn', 'all')) {
+        console.warn(`[SPAWN DEBUG] Trimmed ${chunksToRemove.length} old chunks, removed ${removedCount} cache entries`);
+    }
+}
+
 // Export functions for main.js to register dusted_dirt blocks
 export function registerDustedDirtBlock(x, y, z, dimension = null) {
     const key = `${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`;
-    dustedDirtCache.set(key, { 
+    const chunkKey = getChunkKey(x, z);
+    const entry = { 
         x: Math.floor(x), 
-        y: Math.floor(y), 
+        y: Math.floor(y),
         z: Math.floor(z), 
         tick: system.currentTick,
-        dimension: dimension ? dimension.id : null
-    });
+        dimension: dimension ? dimension.id : null,
+        chunkKey: chunkKey
+    };
+    dustedDirtCache.set(key, entry);
     
-    // Trim cache if it gets too large
-    if (dustedDirtCache.size > MAX_CACHE_SIZE) {
-        const entries = Array.from(dustedDirtCache.entries());
-        entries.sort((a, b) => a[1].tick - b[1].tick); // Sort by age
-        const toRemove = entries.slice(0, Math.floor(MAX_CACHE_SIZE * 0.2)); // Remove oldest 20%
-        for (const [key] of toRemove) {
-            dustedDirtCache.delete(key);
+    // Track chunk (even if not currently active)
+    if (!chunkLastVisit.has(chunkKey)) {
+        chunkLastVisit.set(chunkKey, system.currentTick);
+    }
+    
+    // Debug: Log registration if debug enabled
+    if (isDebugEnabled('spawn', 'cache') || isDebugEnabled('spawn', 'all')) {
+        if (dustedDirtCache.size <= 10 || dustedDirtCache.size % 50 === 0) {
+            console.warn(`[SPAWN DEBUG] Registered dusted_dirt at (${entry.x}, ${entry.y}, ${entry.z}), cache size: ${dustedDirtCache.size}, chunk: ${chunkKey}, active chunks: ${activeChunks.size}`);
         }
     }
 }
@@ -774,17 +1068,32 @@ export function unregisterDustedDirtBlock(x, y, z) {
     dustedDirtCache.delete(key);
 }
 
-function cleanupDustedDirtCache() {
-    const now = system.currentTick;
-    const toRemove = [];
-    for (const [key, value] of dustedDirtCache.entries()) {
-        if (now - value.tick > DUSTED_DIRT_CACHE_TTL) {
-            toRemove.push(key);
+// Export function to manually test a block position (for debugging)
+export function testBlockAtPosition(dimension, x, y, z) {
+    try {
+        const block = dimension.getBlock({ x, y, z });
+        if (!block) {
+            console.warn(`[SPAWN DEBUG] Block at (${x}, ${y}, ${z}): null or undefined`);
+            return;
         }
+        const typeId = block.typeId;
+        const isTarget = isValidTargetBlock(typeId);
+        console.warn(`[SPAWN DEBUG] Manual test - Block at (${x}, ${y}, ${z}):`);
+        console.warn(`[SPAWN DEBUG]   typeId: "${typeId}"`);
+        console.warn(`[SPAWN DEBUG]   TARGET_BLOCK: "${TARGET_BLOCK}" or "${TARGET_BLOCK_2}"`);
+        console.warn(`[SPAWN DEBUG]   Match: ${isTarget}`);
+        if (block.permutation) {
+            console.warn(`[SPAWN DEBUG]   permutation.type.id: "${block.permutation.type?.id || 'N/A'}"`);
+        }
+    } catch (error) {
+        console.warn(`[SPAWN DEBUG] Error testing block at (${x}, ${y}, ${z}):`, error);
     }
-    for (const key of toRemove) {
-        dustedDirtCache.delete(key);
-    }
+}
+
+function cleanupDustedDirtCache() {
+    // Chunk-based trimming handles cleanup now
+    // This function is kept for compatibility but now just trims old chunks
+    trimOldChunks();
 }
 
 // Validate cached blocks - check if they still exist and are still dusted_dirt
@@ -795,9 +1104,13 @@ function validateDustedDirtCache(dimension) {
     }
     lastCacheValidationTick = now;
     
-    // Get a sample of cached blocks to validate (prioritize older entries)
+    // Get a sample of cached blocks to validate (prioritize older entries from active chunks)
     const entries = Array.from(dustedDirtCache.entries())
         .filter(([key, value]) => {
+            // Only validate blocks from active chunks
+            if (value.chunkKey && !activeChunks.has(value.chunkKey)) {
+                return false;
+            }
             // Only validate blocks in the same dimension if dimension is provided
             if (dimension && value.dimension && value.dimension !== dimension.id) {
                 return false;
@@ -822,7 +1135,7 @@ function validateDustedDirtCache(dimension) {
                 const checkDim = dimension || (value.dimension ? world.getDimension(value.dimension) : null);
                 if (checkDim) {
                     const block = checkDim.getBlock({ x: value.x, y: value.y, z: value.z });
-                    if (!block || block.typeId !== TARGET_BLOCK) {
+                    if (!block || !isValidTargetBlock(block.typeId)) {
                         // Block no longer exists or changed type, remove from cache
                         toRemove.push(key);
                         debugLog('cache', `Removed invalid cache entry: ${key} (block: ${block?.typeId || 'null'})`);
@@ -863,11 +1176,11 @@ function isAir(block) {
 }
 
 function scanAroundDustedDirt(dimension, centerX, centerY, centerZ, seen, candidates, blockQueryCount, limit) {
-    // When we find a dusted_dirt block, check nearby blocks (3x3 area) for more patches
-    // This helps find clusters of dusted_dirt without much performance cost
-    const scanRadius = 2; // Check 2 blocks in each direction (5x5 area total)
+    // When we find a dusted_dirt or snow_layer block, check nearby blocks (10x10 area) for more patches
+    // This helps find clusters of both dusted_dirt and snow_layer blocks without much performance cost
+    const scanRadius = 5; // Check 5 blocks in each direction (10x10 area total)
     let localQueries = 0;
-    const maxLocalQueries = 25; // Limit local scan queries (5x5 = 25 blocks max)
+    const maxLocalQueries = 100; // Limit local scan queries (10x10 = 100 blocks max)
     
     for (let dx = -scanRadius; dx <= scanRadius && localQueries < maxLocalQueries; dx++) {
         for (let dz = -scanRadius; dz <= scanRadius && localQueries < maxLocalQueries; dz++) {
@@ -891,7 +1204,7 @@ function scanAroundDustedDirt(dimension, centerX, centerY, centerZ, seen, candid
                     localQueries++;
                     if (!block) continue;
                     
-                    if (block.typeId === TARGET_BLOCK) {
+                    if (isValidTargetBlock(block.typeId)) {
                         const blockAbove = dimension.getBlock({ x, y: y + 1, z });
                         localQueries++;
                         if (localQueries < maxLocalQueries) {
@@ -929,8 +1242,14 @@ function scanAroundDustedDirt(dimension, centerX, centerY, centerZ, seen, candid
     return localQueries;
 }
 
+// ============================================================================
+// SECTION 10: TILE COLLECTION FUNCTIONS
+// ============================================================================
+// Functions for finding and collecting valid spawn tiles (dusted_dirt, snow_layer, etc.)
+// ============================================================================
+
 // Collect tiles for mining bear spawning (includes dusted_dirt AND stone/deepslate in caves)
-function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, limit = MAX_CANDIDATES_PER_SCAN) {
+function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, limit = MAX_CANDIDATES_PER_SCAN, isSinglePlayer = false) {
     const cx = Math.floor(center.x);
     const cy = Math.floor(center.y);
     const cz = Math.floor(center.z);
@@ -939,15 +1258,34 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
     const candidates = [];
     const seen = new Set();
     
+    // Single player: Use higher query limit for more thorough scanning
+    const queryLimit = isSinglePlayer ? MAX_BLOCK_QUERIES_SINGLE_PLAYER : MAX_BLOCK_QUERIES_PER_SCAN;
+    
     // Track total query budget across both phases
     // Allocate 60% for dusted_dirt, 40% for stone/deepslate
-    const dustedBudget = Math.floor(MAX_BLOCK_QUERIES_PER_SCAN * 0.6);
-    const stoneBudget = Math.floor(MAX_BLOCK_QUERIES_PER_SCAN * 0.4);
+    const dustedBudget = Math.floor(queryLimit * 0.6);
+    const stoneBudget = Math.floor(queryLimit * 0.4);
+    
+    // Debug: Log scan start (before initialYRange is defined)
+    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+        console.warn(`[SPAWN DEBUG] Starting tile collection: Center (${cx}, ${cy}, ${cz}), Range: ${minDistance}-${maxDistance}, Limit: ${limit}${isSinglePlayer ? ' [SINGLE PLAYER MODE - Enhanced Scanning]' : ''}`);
+        console.warn(`[SPAWN DEBUG] Player position: (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)})`);
+        console.warn(`[SPAWN DEBUG] TARGET_BLOCK constants: "${TARGET_BLOCK}" and "${TARGET_BLOCK_2}"`);
+        console.warn(`[SPAWN DEBUG] IMPORTANT: Blocks closer than ${minDistance} blocks or farther than ${maxDistance} blocks will be SKIPPED`);
+        if (isSinglePlayer) {
+            console.warn(`[SPAWN DEBUG] Single player detected: Using ${queryLimit} queries (2x normal) and adaptive Y range for more thorough scanning`);
+        }
+    }
     
     // First, get dusted_dirt tiles (reuse existing function)
     // Note: collectDustedTiles has its own internal query budget management
     // We can't directly track its usage, but we allocate the budget here for clarity
-    const dustedTiles = collectDustedTiles(dimension, center, minDistance, maxDistance, Math.floor(limit * 0.6)); // 60% from dusted_dirt
+    const dustedTiles = collectDustedTiles(dimension, center, minDistance, maxDistance, Math.floor(limit * 0.6), isSinglePlayer); // 60% from dusted_dirt
+    
+    // Debug: Log dusted tiles found
+    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+        console.warn(`[SPAWN DEBUG] Found ${dustedTiles.length} dusted_dirt tiles`);
+    }
     candidates.push(...dustedTiles);
     dustedTiles.forEach(t => seen.add(`${t.x},${t.y},${t.z}`));
     
@@ -1037,7 +1375,7 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
     return candidates.slice(0, limit);
 }
 
-function collectDustedTiles(dimension, center, minDistance, maxDistance, limit = MAX_CANDIDATES_PER_SCAN) {
+function collectDustedTiles(dimension, center, minDistance, maxDistance, limit = MAX_CANDIDATES_PER_SCAN, isSinglePlayer = false) {
     const cx = Math.floor(center.x);
     const cy = Math.floor(center.y);
     const cz = Math.floor(center.z);
@@ -1046,23 +1384,64 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     const candidates = [];
     const seen = new Set();
     let blockQueryCount = 0;
+    
+    // Single player: Use higher query limit for more thorough scanning
+    const queryLimit = isSinglePlayer ? MAX_BLOCK_QUERIES_SINGLE_PLAYER : MAX_BLOCK_QUERIES_PER_SCAN;
 
+    // Update active chunks based on player position
+    updateActiveChunks(center.x, center.z);
+    
+    // Trim old chunks periodically
+    trimOldChunks();
+    
     // Validate cache periodically
     validateDustedDirtCache(dimension);
 
-    // First, check cached dusted_dirt positions
+    // First, check cached dusted_dirt positions (only from active chunks)
     const cachedTiles = [];
     const now = system.currentTick;
-    const cacheMaxDistance = 45; // Stricter limit for cached blocks (45 instead of 48)
+    // Cache validation uses the same distance range as spawn scanning (15-45 blocks)
+    const cacheMaxDistance = maxDistance; // Use maxDistance (45 blocks) for cache validation
     const cacheMaxSq = cacheMaxDistance * cacheMaxDistance;
     const cacheCheckRadiusSq = CACHE_CHECK_RADIUS * CACHE_CHECK_RADIUS; // Only check blocks within this radius
     const dimensionId = dimension.id;
     
+    // Debug: Log cache size
+    if (isDebugEnabled('spawn', 'cache') || isDebugEnabled('spawn', 'all')) {
+        const totalCacheSize = dustedDirtCache.size;
+        const dimensionCacheSize = Array.from(dustedDirtCache.values()).filter(v => !v.dimension || v.dimension === dimensionId).length;
+        const activeCacheSize = Array.from(dustedDirtCache.values()).filter(v => v.chunkKey && activeChunks.has(v.chunkKey)).length;
+        console.warn(`[SPAWN DEBUG] Cache check: Total cache size: ${totalCacheSize}, Dimension cache: ${dimensionCacheSize}, Active chunks: ${activeChunks.size}, Active cache: ${activeCacheSize}, Center: (${cx}, ${cy}, ${cz})`);
+    }
+    
+    let cacheChecked = 0;
+    let cacheExpired = 0;
+    let cacheWrongDimension = 0;
+    let cacheTooFar = 0;
+    let cacheOutsideRange = 0;
+    let cacheTooFarVertically = 0;
+    let cacheValidated = 0;
+    
     for (const [key, value] of dustedDirtCache.entries()) {
-        if (now - value.tick > DUSTED_DIRT_CACHE_TTL) continue; // Skip expired entries
+        cacheChecked++;
+        
+        // Only check cache entries from active chunks (chunks player is currently near)
+        // Legacy entries without chunkKey are still checked (for backwards compatibility)
+        if (value.chunkKey && !activeChunks.has(value.chunkKey)) {
+            continue; // Skip inactive chunks - they're saved but not used
+        }
+        
+        // For legacy entries without chunkKey, assign one now
+        if (!value.chunkKey) {
+            value.chunkKey = getChunkKey(value.x, value.z);
+            // Don't activate the chunk automatically - let updateActiveChunks handle it
+        }
         
         // Skip entries from different dimensions
-        if (value.dimension && value.dimension !== dimensionId) continue;
+        if (value.dimension && value.dimension !== dimensionId) {
+            cacheWrongDimension++;
+            continue;
+        }
         
         // Quick distance check: Skip cached blocks that are too far from player
         // This prevents checking thousands of cached blocks on the other side of the world
@@ -1070,37 +1449,72 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         const dz = value.z + 0.5 - center.z;
         const dy = value.y - center.y;
         const distSq = dx * dx + dz * dz;
+        const dist = Math.sqrt(distSq);
         
         // Skip if too far from player (performance optimization)
-        if (distSq > cacheCheckRadiusSq) continue;
+        if (distSq > cacheCheckRadiusSq) {
+            cacheTooFar++;
+            if (isDebugEnabled('spawn', 'distance') || isDebugEnabled('spawn', 'all')) {
+                if (cacheTooFar <= 3) { // Only log first few to avoid spam
+                    console.warn(`[SPAWN DEBUG] Cache entry ${key}: Too far from center (dist: ${dist.toFixed(1)}, max: ${Math.sqrt(cacheCheckRadiusSq).toFixed(1)})`);
+                }
+            }
+            continue;
+        }
         
         // Filter: Only use cached blocks within valid spawn distance range (15-45 blocks)
         // Skip blocks that are too close (< 15 blocks) or too far (> 45 blocks)
-        if (distSq < minSq || distSq > cacheMaxSq) continue; // Outside valid range
-        if (Math.abs(dy) > 30) continue; // Too far vertically
+        if (distSq < minSq || distSq > cacheMaxSq) {
+            cacheOutsideRange++;
+            if (isDebugEnabled('spawn', 'distance') || isDebugEnabled('spawn', 'all')) {
+                if (cacheOutsideRange <= 3) { // Only log first few to avoid spam
+                    console.warn(`[SPAWN DEBUG] Cache entry ${key}: Outside spawn range (dist: ${dist.toFixed(1)}, range: ${minDistance}-${cacheMaxDistance})`);
+                }
+            }
+            continue; // Outside valid range
+        }
+        if (Math.abs(dy) > 30) {
+            cacheTooFarVertically++;
+            continue; // Too far vertically
+        }
         
         // Verify block still exists and is valid spawn location
         try {
             const block = dimension.getBlock({ x: value.x, y: value.y, z: value.z });
             blockQueryCount++;
-            if (block && block.typeId === TARGET_BLOCK) {
+            if (block && isValidTargetBlock(block.typeId)) {
                 const blockAbove = dimension.getBlock({ x: value.x, y: value.y + 1, z: value.z });
                 blockQueryCount++;
-                if (blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN) {
+                if (blockQueryCount < queryLimit) {
                     const blockTwoAbove = dimension.getBlock({ x: value.x, y: value.y + 2, z: value.z });
                     blockQueryCount++;
-                    if (isAir(blockAbove) && isAir(blockTwoAbove)) {
-                        const tileKey = `${value.x},${value.y},${value.z}`;
-                        if (!seen.has(tileKey)) {
-                            seen.add(tileKey);
-                            cachedTiles.push({ x: value.x, y: value.y, z: value.z });
+                    if (blockQueryCount < queryLimit) {
+                        if (isAir(blockAbove) && isAir(blockTwoAbove)) {
+                            const tileKey = `${value.x},${value.y},${value.z}`;
+                            if (!seen.has(tileKey)) {
+                                seen.add(tileKey);
+                                cachedTiles.push({ x: value.x, y: value.y, z: value.z });
+                                cacheValidated++;
+                                if (isDebugEnabled('spawn', 'cache') || isDebugEnabled('spawn', 'all')) {
+                                    if (cacheValidated <= 5) { // Only log first few to avoid spam
+                                        console.warn(`[SPAWN DEBUG] Cache entry ${key}: Valid tile at (${value.x}, ${value.y}, ${value.z}), dist: ${dist.toFixed(1)}`);
+                                    }
+                                }
+                            }
+                        } else {
+                            if (isDebugEnabled('spawn', 'validation') || isDebugEnabled('spawn', 'all')) {
+                                console.warn(`[SPAWN DEBUG] Cache entry ${key}: No air above (${value.x}, ${value.y}, ${value.z}), blockAbove: ${blockAbove?.typeId || 'null'}, blockTwoAbove: ${blockTwoAbove?.typeId || 'null'}`);
+                            }
                         }
                     }
                 }
-            } else if (!block || block.typeId !== TARGET_BLOCK) {
+            } else if (!block || !isValidTargetBlock(block.typeId)) {
                 // Block no longer exists or changed, remove from cache
                 unregisterDustedDirtBlock(value.x, value.y, value.z);
                 debugLog('cache', `Removed invalid block from cache: ${value.x},${value.y},${value.z} (type: ${block?.typeId || 'null'})`);
+                if (isDebugEnabled('spawn', 'validation') || isDebugEnabled('spawn', 'all')) {
+                    console.warn(`[SPAWN DEBUG] Cache entry ${key}: Block changed or missing (expected: ${TARGET_BLOCK}, got: ${block?.typeId || 'null'})`);
+                }
             }
         } catch (error) {
             // Chunk not loaded or error, skip (but don't remove from cache - might just be unloaded)
@@ -1111,7 +1525,27 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         }
     }
     
-    // console.warn(`[SPAWN DEBUG] Found ${cachedTiles.length} valid tiles from cache (filtered by distance: ${minDistance}-${cacheMaxDistance} blocks), used ${blockQueryCount} queries`);
+    // Debug: Log cache statistics (always show if cache debug enabled, even if cache is empty)
+    if (isDebugEnabled('spawn', 'cache') || isDebugEnabled('spawn', 'all')) {
+        console.warn(`[SPAWN DEBUG] Cache stats: Checked: ${cacheChecked}, Expired: ${cacheExpired}, Wrong dimension: ${cacheWrongDimension}, Too far: ${cacheTooFar}, Outside range: ${cacheOutsideRange}, Too far vertically: ${cacheTooFarVertically}, Valid tiles: ${cacheValidated}/${cachedTiles.length}`);
+    }
+    
+    // Debug: Log validation info even if cache is empty (to show validation debug is working)
+    if ((isDebugEnabled('spawn', 'validation') || isDebugEnabled('spawn', 'all')) && cacheChecked === 0) {
+        console.warn(`[SPAWN DEBUG] Validation: Cache is empty (${dustedDirtCache.size} total entries), no blocks to validate`);
+    }
+    
+    // Debug: Log distance info even if cache is empty (to show distance debug is working)
+    if ((isDebugEnabled('spawn', 'distance') || isDebugEnabled('spawn', 'all')) && cacheChecked === 0) {
+        console.warn(`[SPAWN DEBUG] Distance: No cache entries to check distances for (cache size: ${dustedDirtCache.size})`);
+    }
+    
+    // Always log cache results if cache debug is enabled (not just if message contains "cache")
+    if (isDebugEnabled('spawn', 'cache') || isDebugEnabled('spawn', 'all')) {
+        console.warn(`[SPAWN DEBUG] Found ${cachedTiles.length} valid tiles from cache (filtered by distance: ${minDistance}-${cacheMaxDistance} blocks), used ${blockQueryCount} queries`);
+    } else {
+        debugLog('spawn', `Found ${cachedTiles.length} valid tiles from cache (filtered by distance: ${minDistance}-${cacheMaxDistance} blocks), used ${blockQueryCount} queries`);
+    }
     candidates.push(...cachedTiles);
     
     // Strategy: Prioritize cached tiles and scan around them first
@@ -1121,22 +1555,26 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     
     // If we have enough tiles from cache, skip expensive scan entirely
     if (cachedTiles.length >= limit) {
-        // console.warn(`[SPAWN DEBUG] Using cached tiles only (${cachedTiles.length} tiles), skipping block scan`);
+        if (isDebugEnabled('spawn', 'cache') || isDebugEnabled('spawn', 'all')) {
+            console.warn(`[SPAWN DEBUG] Using cached tiles only (${cachedTiles.length} tiles), skipping block scan`);
+        } else {
+            debugLog('spawn', `Using cached tiles only (${cachedTiles.length} tiles), skipping block scan`);
+        }
         return candidates.slice(0, limit);
     }
     
     // If we have some cached tiles, scan around them first (much more efficient)
-    if (cachedTiles.length >= MIN_CACHED_TILES_FOR_FULL_SCAN && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN) {
+    if (cachedTiles.length >= MIN_CACHED_TILES_FOR_FULL_SCAN && blockQueryCount < queryLimit) {
         // Scan around each cached tile to find nearby spawn locations
         // This is much more efficient than scanning the entire area
         const tilesToScanAround = cachedTiles.slice(0, Math.min(10, cachedTiles.length)); // Limit to 10 tiles to avoid too many queries
         for (const cachedTile of tilesToScanAround) {
-            if (candidates.length >= limit || blockQueryCount >= MAX_BLOCK_QUERIES_PER_SCAN) break;
+            if (candidates.length >= limit || blockQueryCount >= queryLimit) break;
             
             // Scan in a small box around this cached tile
             const scanRadius = CACHE_SCAN_RADIUS;
-            for (let dx = -scanRadius; dx <= scanRadius && candidates.length < limit && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN; dx++) {
-                for (let dz = -scanRadius; dz <= scanRadius && candidates.length < limit && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN; dz++) {
+            for (let dx = -scanRadius; dx <= scanRadius && candidates.length < limit && blockQueryCount < queryLimit; dx++) {
+                for (let dz = -scanRadius; dz <= scanRadius && candidates.length < limit && blockQueryCount < queryLimit; dz++) {
                     // Skip the center (we already have this tile)
                     if (dx === 0 && dz === 0) continue;
                     
@@ -1151,7 +1589,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     const checkYStart = Math.min(cachedTile.y + 5, 320);
                     const checkYEnd = Math.max(cachedTile.y - 5, -64);
                     
-                    for (let checkY = checkYStart; checkY >= checkYEnd && candidates.length < limit && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN; checkY--) {
+                    for (let checkY = checkYStart; checkY >= checkYEnd && candidates.length < limit && blockQueryCount < queryLimit; checkY--) {
                         if (checkY < -64 || checkY > 320) continue;
                         
                         const tileKey = `${checkX},${checkY},${checkZ}`;
@@ -1166,10 +1604,10 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                         }
                         if (!block) continue;
                         
-                        if (block.typeId === TARGET_BLOCK) {
+                        if (isValidTargetBlock(block.typeId)) {
                             const blockAbove = dimension.getBlock({ x: checkX, y: checkY + 1, z: checkZ });
                             blockQueryCount++;
-                            if (blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN) {
+                            if (blockQueryCount < queryLimit) {
                                 const blockTwoAbove = dimension.getBlock({ x: checkX, y: checkY + 2, z: checkZ });
                                 blockQueryCount++;
                                 if (isAir(blockAbove) && isAir(blockTwoAbove)) {
@@ -1202,6 +1640,11 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     
     // Only do full area scan if we have very few cached tiles
     // This is the expensive operation, so we avoid it when possible
+    // If cache is empty or very small, we MUST do a full scan to find blocks
+    
+    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+        console.warn(`[SPAWN DEBUG] Starting full area scan: Cache had ${cachedTiles.length} tiles, candidates so far: ${candidates.length}`);
+    }
 
     // Conceptualize as a rectangular cuboid:
     // - XZ: Square area from -maxDistance to +maxDistance around player (48 blocks = 97x97 = 9,409 XZ positions)
@@ -1210,47 +1653,300 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     // - Math: 6,530 XZ × 20 Y = 130,600 potential blocks, but we break early on solid blocks
     // - With 30,000 query limit, we check ~23% of potential area, which is reasonable
     
-    const initialYRange = 10; // Blocks above and below player
-    const expandYRange = 15; // Additional blocks to check if initial scan finds few tiles
-    
-    // Calculate theoretical max blocks
-    const xzArea = (maxDistance * 2 + 1) * (maxDistance * 2 + 1); // 97 x 97 = 9,409
-    const ringArea = Math.PI * (maxDistance * maxDistance - minDistance * minDistance); // π * (48² - 15²) ≈ 6,530
-    const theoreticalMaxBlocks = Math.floor(ringArea) * (initialYRange * 2 + 1); // ~6,530 × 20 ≈ 130,600
-    
-    // First pass: Check rectangular cuboid (XZ square, Y ± initialYRange)
+    // First pass: Check cube ring (XZ ring 15-45 blocks, Y adaptive range)
     const xStart = cx - maxDistance;
     const xEnd = cx + maxDistance;
     const zStart = cz - maxDistance;
     const zEnd = cz + maxDistance;
-    const yStart = cy + initialYRange;
-    const yEnd = cy - initialYRange;
+    
+    // Smart Y-level detection: Sample blocks to determine if above ground or underground
+    // This helps prioritize scanning at the right Y levels
+    let surfaceYLevel = null; // Y level where grass blocks are found (surface)
+    let isAboveGround = false;
+    let isUnderground = false;
+    const maxSampleQueries = 50; // Increased to find grass more reliably
+    let sampleQueryCount = 0;
+    
+    // Sample more XZ positions to detect environment (increased from 5 to 15 for better coverage)
+    const sampleXZPositions = [];
+    const targetSampleCount = 15; // More samples = better chance of finding grass
+    const xStep = Math.max(1, Math.floor((xEnd - xStart) / Math.sqrt(targetSampleCount)));
+    const zStep = Math.max(1, Math.floor((zEnd - zStart) / Math.sqrt(targetSampleCount)));
+    
+    for (let sx = xStart; sx <= xEnd && sampleXZPositions.length < targetSampleCount; sx += xStep) {
+        for (let sz = zStart; sz <= zEnd && sampleXZPositions.length < targetSampleCount; sz += zStep) {
+            const dx = sx + 0.5 - center.x;
+            const dz = sz + 0.5 - center.z;
+            const distSq = dx * dx + dz * dz;
+            if (distSq >= minSq && distSq <= maxSq) {
+                sampleXZPositions.push({ x: sx, z: sz });
+                if (sampleXZPositions.length >= targetSampleCount) break;
+            }
+        }
+    }
+    
+    // If we didn't get enough samples, try a few random positions in the valid range
+    if (sampleXZPositions.length < targetSampleCount) {
+        const attempts = (targetSampleCount - sampleXZPositions.length) * 3;
+        for (let i = 0; i < attempts && sampleXZPositions.length < targetSampleCount; i++) {
+            const sx = xStart + Math.floor(Math.random() * (xEnd - xStart + 1));
+            const sz = zStart + Math.floor(Math.random() * (zEnd - zStart + 1));
+            const dx = sx + 0.5 - center.x;
+            const dz = sz + 0.5 - center.z;
+            const distSq = dx * dx + dz * dz;
+            if (distSq >= minSq && distSq <= maxSq) {
+                const exists = sampleXZPositions.some(p => p.x === sx && p.z === sz);
+                if (!exists) {
+                    sampleXZPositions.push({ x: sx, z: sz });
+                }
+            }
+        }
+    }
+    
+    // Check sample positions for grass (above ground) or stone/deepslate (underground)
+    // Strategy: Scan from top down to find surface blocks (more reliable than random Y sampling)
+    for (const pos of sampleXZPositions) {
+        if (sampleQueryCount >= maxSampleQueries || blockQueryCount >= queryLimit) break;
+        
+        // Scan from top down (start from player Y + 20, down to player Y - 15)
+        // This finds the first solid block (surface) which is more reliable
+        let foundSurface = false;
+        let waterDepth = 0; // Track how deep we are in water
+        for (let sy = Math.min(cy + 20, 320); sy >= Math.max(cy - 15, -64) && sampleQueryCount < maxSampleQueries && blockQueryCount < queryLimit; sy--) {
+            try {
+                const sampleBlock = dimension.getBlock({ x: pos.x, y: sy, z: pos.z });
+                sampleQueryCount++;
+                blockQueryCount++; // Count sample queries in total budget
+                if (!sampleBlock) continue;
+                
+                const typeId = sampleBlock?.typeId;
+                if (!typeId) continue;
+                
+                // Skip water - continue down to find actual land surface
+                if (typeId.includes("water")) {
+                    waterDepth++;
+                    continue; // Keep going down through water
+                }
+                
+                // Reset water depth when we find non-water
+                if (waterDepth > 0) {
+                    waterDepth = 0;
+                }
+                
+                // Check if this is a surface block (solid with air above)
+                if (!isAir(sampleBlock)) {
+                    // Found solid block - check if it's grass (surface indicator)
+                    if (typeId.includes("grass_block")) {
+                        // Found grass surface - we're above ground
+                        isAboveGround = true;
+                        if (surfaceYLevel === null || sy > surfaceYLevel) {
+                            surfaceYLevel = sy;
+                        }
+                        foundSurface = true;
+                        break; // Found surface, move to next XZ position
+                    } else if (typeId.includes("stone") || typeId.includes("deepslate")) {
+                        // Found stone/deepslate - likely underground (but only if no grass found)
+                        if (!isAboveGround) {
+                            isUnderground = true;
+                        }
+                        // Don't break - continue looking for grass above
+                    } else if (typeId.includes("dirt") || typeId.includes("sand") || typeId.includes("gravel")) {
+                        // Found dirt/sand/gravel - could be surface, check if air above
+                        try {
+                            const aboveBlock = dimension.getBlock({ x: pos.x, y: sy + 1, z: pos.z });
+                            sampleQueryCount++;
+                            blockQueryCount++;
+                            if (aboveBlock && isAir(aboveBlock)) {
+                                // Dirt/sand with air above - likely surface, but not as reliable as grass
+                                // Continue looking for grass, but remember this as potential surface
+                                if (surfaceYLevel === null || sy > surfaceYLevel) {
+                                    surfaceYLevel = sy;
+                                }
+                            }
+                        } catch {
+                            // Skip if can't check above
+                        }
+                    }
+                }
+            } catch {
+                // Chunk not loaded, skip
+            }
+        }
+    }
+    
+    // Adjust Y range based on environment detection (STRICT range if above ground)
+    let yRangeUp, yRangeDown;
+    let yStart, yEnd;
+    
+    if (isAboveGround && surfaceYLevel !== null) {
+        // Above ground: Use STRICT Y range around surface level (±8 blocks)
+        // This focuses scanning where blocks are most likely to be
+        const surfaceY = Math.floor(surfaceYLevel);
+        yRangeUp = 8; // Only 8 blocks above surface
+        yRangeDown = 8; // Only 8 blocks below surface
+        yStart = Math.min(surfaceY + yRangeUp, 320);
+        yEnd = Math.max(surfaceY - yRangeDown, -64);
+        
+        if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+            console.warn(`[SPAWN DEBUG] Environment detection: Above ground (surface Y: ${surfaceY}), using STRICT Y range: ${yEnd} to ${yStart} (±${yRangeDown} blocks from surface)`);
+        }
+    } else {
+        // Default: Fixed Y range (15 below, 30 above player)
+        yRangeUp = 30; // Always check 30 blocks above player
+        yRangeDown = 15; // Always check 15 blocks below player
+        yStart = cy + yRangeUp;
+        yEnd = cy - yRangeDown;
+        
+        if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+            if (isUnderground) {
+                console.warn(`[SPAWN DEBUG] Environment detection: Underground (player Y: ${cy}), using default Y range`);
+            } else {
+                console.warn(`[SPAWN DEBUG] Environment detection: Unknown/neutral (player Y: ${cy}, samples checked: ${sampleQueryCount}), using default Y range`);
+            }
+        }
+    }
+    
+    const initialYRange = Math.max(yRangeUp, yRangeDown); // For logging/compatibility
+    const expandYRange = isSinglePlayer ? 20 : 15; // Expansion range if needed
+    
+    // Debug: Log Y range now that it's defined
+    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+        console.warn(`[SPAWN DEBUG] Y scan range: ${yEnd} to ${yStart} (player Y: ${cy}, up: +${yRangeUp}, down: -${yRangeDown})${isSinglePlayer ? ' [SINGLE PLAYER MODE - Enhanced Scanning]' : ''}`);
+    }
+    
+    // Adjust Y scanning strategy based on environment detection
+    let yScanOrder = []; // Will be populated with Y levels in priority order
+    if (isAboveGround && surfaceYLevel !== null) {
+        // Above ground: Prioritize scanning around surface level (strict range)
+        const surfaceY = Math.floor(surfaceYLevel);
+        for (let y = surfaceY; y >= Math.max(surfaceY - yRangeDown, yEnd); y--) {
+            yScanOrder.push(y);
+        }
+        for (let y = surfaceY + 1; y <= Math.min(surfaceY + yRangeUp, yStart); y++) {
+            yScanOrder.push(y);
+        }
+        // No need to fill remaining - we're using strict range
+        if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+            console.warn(`[SPAWN DEBUG] Prioritizing surface-level scanning (Y: ${yEnd} to ${yStart})`);
+        }
+    } else if (isUnderground) {
+        // Underground: Scan more evenly, but prioritize around player Y
+        // Start near player Y, then expand outward
+        for (let offset = 0; offset <= Math.max(yRangeUp, yRangeDown); offset++) {
+            if (cy + offset <= yStart && !yScanOrder.includes(cy + offset)) {
+                yScanOrder.push(cy + offset);
+            }
+            if (cy - offset >= yEnd && !yScanOrder.includes(cy - offset)) {
+                yScanOrder.push(cy - offset);
+            }
+        }
+        // Fill in any remaining Y levels
+        for (let y = yStart; y >= yEnd; y--) {
+            if (!yScanOrder.includes(y)) {
+                yScanOrder.push(y);
+            }
+        }
+        if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+            console.warn(`[SPAWN DEBUG] Underground detected, using balanced scanning around player Y: ${cy}`);
+        }
+    } else {
+        // Unknown/neutral: Use default top-to-bottom scanning
+        for (let y = yStart; y >= yEnd; y--) {
+            yScanOrder.push(y);
+        }
+    }
+    
+    // Calculate theoretical max blocks
+    const xzArea = (maxDistance * 2 + 1) * (maxDistance * 2 + 1); // 97 x 97 = 9,409
+    const ringArea = Math.PI * (maxDistance * maxDistance - minDistance * minDistance); // π * (45² - 15²) ≈ 5,655
+    const yRangeTotal = yRangeUp + yRangeDown + 1;
+    const theoreticalMaxBlocks = Math.floor(ringArea) * yRangeTotal;
+    
+    // Debug: Log scan area
+    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+        console.warn(`[SPAWN DEBUG] Scan area: X[${xStart} to ${xEnd}], Z[${zStart} to ${zEnd}], Y[${yEnd} to ${yStart}], Player Y: ${cy}`);
+    }
     
     // console.warn(`[SPAWN DEBUG] Scanning rectangular cuboid: X[${xStart} to ${xEnd}], Z[${zStart} to ${zEnd}], Y[${yEnd} to ${yStart}]`);
     // console.warn(`[SPAWN DEBUG] Theoretical max: ${xzArea} XZ positions total, ~${Math.floor(ringArea)} valid (15-48 block ring), ×${initialYRange * 2 + 1} Y levels = ~${theoreticalMaxBlocks} blocks (but we break early on solids)`);
     
+    // Debug: Log scan start
+    let blocksChecked = 0;
+    let blocksFound = 0;
+    let chunksNotLoaded = 0;
+    let airBlocks = 0;
+    let otherBlocks = 0;
+    const blockTypeCounts = new Map(); // Track block types found for debugging
+    
+    // Check Y levels from top to bottom - define constants once outside loops
+    // Minecraft Bedrock minimum Y is -64, maximum is 320
+    const MIN_Y = -64;
+    const MAX_Y = 320;
+    const clampedYStart = Math.min(yStart, MAX_Y);
+    const clampedYEnd = Math.max(yEnd, MIN_Y);
+    
+    // TEMPORARY: Track XZ positions checked for detailed logging
+    let xzPositionsChecked = 0;
+    let xzPositionsInRange = 0;
+    let xzPositionsSkipped = 0;
+    const checkedXZPositions = []; // Store first 20 checked positions for logging
+    
     // Scan XZ rectangle, checking Y levels
     for (let x = xStart; x <= xEnd; x++) {
-        if (blockQueryCount >= MAX_BLOCK_QUERIES_PER_SCAN) break;
+        if (blockQueryCount >= queryLimit) {
+            if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                console.warn(`[SPAWN DEBUG] Scan stopped: Query limit reached (${blockQueryCount}/${queryLimit})${isSinglePlayer ? ' [SINGLE PLAYER MODE]' : ''}`);
+            }
+            break;
+        }
         
         for (let z = zStart; z <= zEnd; z++) {
-            if (blockQueryCount >= MAX_BLOCK_QUERIES_PER_SCAN) break;
+            if (blockQueryCount >= queryLimit) break;
+            
+            xzPositionsChecked++;
             
             // Check if this XZ position is within valid distance range
             const dx = x + 0.5 - center.x;
             const dz = z + 0.5 - center.z;
             const distSq = dx * dx + dz * dz;
-            if (distSq < minSq || distSq > maxSq) continue;
+            const dist = Math.sqrt(distSq);
+            if (distSq < minSq || distSq > maxSq) {
+                xzPositionsSkipped++;
+                // Debug: Log if we're skipping blocks near the boundary (but limit spam - only log first few)
+                if ((isDebugEnabled('spawn', 'distance') || isDebugEnabled('spawn', 'all')) && xzPositionsSkipped <= 10) {
+                    if (Math.abs(dist - minDistance) < 2 || Math.abs(dist - maxDistance) < 2) {
+                        console.warn(`[SPAWN DEBUG] Skipping XZ (${x}, ${z}): dist=${dist.toFixed(1)}, range=${minDistance}-${maxDistance}`);
+                    }
+                }
+                continue;
+            }
             
-            // Check Y levels from top to bottom
-            // Minecraft Bedrock minimum Y is -64, maximum is 320
-            const MIN_Y = -64;
-            const MAX_Y = 320;
-            const clampedYStart = Math.min(yStart, MAX_Y);
-            const clampedYEnd = Math.max(yEnd, MIN_Y);
+            xzPositionsInRange++;
             
-            for (let y = clampedYStart; y >= clampedYEnd; y--) {
-                if (blockQueryCount >= MAX_BLOCK_QUERIES_PER_SCAN) break;
+            // TEMPORARY: Log first 20 XZ positions being checked
+            if (checkedXZPositions.length < 20 && (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all'))) {
+                checkedXZPositions.push({ x, z, dist: dist.toFixed(1), yRange: `${clampedYEnd} to ${clampedYStart}` });
+            }
+            
+            // Debug: Log first few XZ positions being checked
+            if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                if (xzPositionsInRange <= 5) {
+                    console.warn(`[SPAWN DEBUG] Checking XZ (${x}, ${z}): dist=${dist.toFixed(1)}, Y range ${clampedYEnd} to ${clampedYStart}`);
+                }
+            }
+            
+            // Use smart Y-level scanning order (prioritizes surface if above ground, player Y if underground)
+            const yLevelsToCheck = yScanOrder.length > 0 ? yScanOrder : (() => {
+                // Fallback: default top-to-bottom if scan order not determined
+                const fallback = [];
+                for (let y = clampedYStart; y >= clampedYEnd; y--) {
+                    fallback.push(y);
+                }
+                return fallback;
+            })();
+            
+            for (const y of yLevelsToCheck) {
+                if (blockQueryCount >= queryLimit) break;
                 
                 // Skip if Y is out of world bounds
                 if (y < MIN_Y || y > MAX_Y) continue;
@@ -1259,9 +1955,11 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                 try {
                     block = dimension.getBlock({ x, y, z });
                     blockQueryCount++;
+                    blocksChecked++;
                 } catch (error) {
                     // Chunk not loaded or out of bounds - this is normal, just skip
                     if (error && (error.message?.includes('not loaded') || error.message?.includes('Chunk') || error.message?.includes('boundaries') || error.message?.includes('LocationOutOfWorld'))) {
+                        chunksNotLoaded++;
                         continue;
                     }
                     // Unexpected error - log it
@@ -1270,10 +1968,27 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                 }
                 if (!block) continue;
 
-                if (block.typeId === TARGET_BLOCK) {
+                // Debug: Log block type for first few non-air blocks to verify TARGET_BLOCK constant
+                if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                    if (blocksChecked <= 10 && !isAir(block) && block.typeId) {
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        const isTarget = isValidTargetBlock(block.typeId);
+                        console.warn(`[SPAWN DEBUG] Block at (${x}, ${y}, ${z}): typeId="${block.typeId}", TARGET_BLOCK="${TARGET_BLOCK}" or "${TARGET_BLOCK_2}", match=${isTarget}, dist: ${dist.toFixed(1)}`);
+                    }
+                }
+
+                // Check for both dusted_dirt and snow_layer blocks
+                if (block.typeId === TARGET_BLOCK || block.typeId === TARGET_BLOCK_2) {
+                    blocksFound++;
+                    // Always log when we find a target block - this is important!
+                    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        const blockType = block.typeId === TARGET_BLOCK ? "dusted_dirt" : "snow_layer";
+                        console.warn(`[SPAWN DEBUG] ✓✓✓ FOUND ${blockType} at (${x}, ${y}, ${z}), dist: ${dist.toFixed(1)}, Y diff: ${(y - cy).toFixed(1)}`);
+                    }
                     const blockAbove = dimension.getBlock({ x, y: y + 1, z });
                     blockQueryCount++;
-                    if (blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN) {
+                    if (blockQueryCount < queryLimit) {
                         const blockTwoAbove = dimension.getBlock({ x, y: y + 2, z });
                         blockQueryCount++;
                         if (isAir(blockAbove) && isAir(blockTwoAbove)) {
@@ -1284,8 +1999,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                                 // Register in cache for future use
                                 registerDustedDirtBlock(x, y, z, dimension);
                                 
-                                // Scan around this block for nearby dusted_dirt patches
-                                if (blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN - 30) { // Reserve some queries for local scan
+                                // Scan around this block for nearby dusted_dirt/snow_layer patches (10x10 area)
+                                if (blockQueryCount < queryLimit - 30) { // Reserve some queries for local scan
                                     const localQueries = scanAroundDustedDirt(dimension, x, y, z, seen, candidates, blockQueryCount, limit);
                                     blockQueryCount += localQueries;
                                 }
@@ -1300,24 +2015,110 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                 }
 
                 if (!isAir(block)) {
-                    break; // Hit solid non-target block, move to next XZ
+                    otherBlocks++;
+                    // Track block types for summary
+                    if (block.typeId) {
+                        blockTypeCounts.set(block.typeId, (blockTypeCounts.get(block.typeId) || 0) + 1);
+                    }
+                    // Debug: Log some non-air blocks to see what we're actually finding, and check if any match TARGET_BLOCK
+                    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                        if (otherBlocks <= 5 && block.typeId) { // Only log first 5 to avoid spam
+                            const dist = Math.sqrt(dx * dx + dz * dz);
+                            const isTarget = isValidTargetBlock(block.typeId);
+                            console.warn(`[SPAWN DEBUG] Found non-air block at (${x}, ${y}, ${z}): typeId="${block.typeId}", TARGET_BLOCK="${TARGET_BLOCK}" or "${TARGET_BLOCK_2}", match=${isTarget}, dist: ${dist.toFixed(1)}`);
+                        }
+                    }
+                    // Don't break - continue checking lower Y levels
+                    // Dusted_dirt could be below other blocks (e.g., below grass, below stone)
+                    // Only break if we found dusted_dirt (already handled above)
+                } else {
+                    airBlocks++;
                 }
             }
         }
     }
     
+    // Always log scan statistics (important for debugging)
+    // Sample a few blocks to see what we're actually checking
+    const sampleCount = 5;
+    const sampleBlocks = [];
+    let samplesTaken = 0;
+    
+    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+        // Try to get a few sample blocks from different positions
+        for (let sx = xStart; sx <= xEnd && samplesTaken < sampleCount; sx += Math.floor((xEnd - xStart) / sampleCount)) {
+            for (let sz = zStart; sz <= zEnd && samplesTaken < sampleCount; sz += Math.floor((zEnd - zStart) / sampleCount)) {
+                if (samplesTaken >= sampleCount) break;
+                const dx = sx + 0.5 - center.x;
+                const dz = sz + 0.5 - center.z;
+                const distSq = dx * dx + dz * dz;
+                if (distSq < minSq || distSq > maxSq) continue;
+                
+                // Check a few Y levels
+                for (let sy = yStart; sy >= yEnd && samplesTaken < sampleCount; sy -= Math.floor((yStart - yEnd) / 3)) {
+                    if (samplesTaken >= sampleCount) break;
+                    try {
+                        const sampleBlock = dimension.getBlock({ x: sx, y: sy, z: sz });
+                        if (sampleBlock) {
+                            sampleBlocks.push(`(${sx},${sy},${sz}): ${sampleBlock.typeId}`);
+                            samplesTaken++;
+                            break; // One sample per XZ
+                        }
+                    } catch { }
+                }
+            }
+        }
+    }
+    
+    // Always log scan stats (not conditional on debug)
+    console.warn(`[SPAWN DEBUG] Scan stats: Blocks checked: ${blocksChecked}, Found target blocks: ${blocksFound}, Chunks not loaded: ${chunksNotLoaded}, Air: ${airBlocks}, Other: ${otherBlocks}, Queries used: ${blockQueryCount}/${queryLimit}${isSinglePlayer ? ' [SINGLE PLAYER MODE]' : ''}`);
+    
+    // TEMPORARY: Detailed XZ position stats
+    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+        console.warn(`[SPAWN DEBUG] XZ Position stats: Checked: ${xzPositionsChecked}, In range: ${xzPositionsInRange}, Skipped: ${xzPositionsSkipped}`);
+        if (checkedXZPositions.length > 0) {
+            const xzList = checkedXZPositions.slice(0, 10).map(p => `(${p.x},${p.z}) dist=${p.dist}`).join(', ');
+            console.warn(`[SPAWN DEBUG] First ${Math.min(10, checkedXZPositions.length)} XZ positions checked: ${xzList}`);
+        }
+    }
+    
+    // Show top block types found
+    if (blockTypeCounts.size > 0 && (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all'))) {
+        const topTypes = Array.from(blockTypeCounts.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([type, count]) => `${type}:${count}`)
+            .join(', ');
+        console.warn(`[SPAWN DEBUG] Top block types found: ${topTypes}`);
+    }
+    
+    if (sampleBlocks.length > 0) {
+        console.warn(`[SPAWN DEBUG] Sample blocks checked: ${sampleBlocks.join(', ')}`);
+    }
+    
+    // Warning if no target blocks found
+    if (blocksFound === 0 && (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all'))) {
+        console.warn(`[SPAWN DEBUG] ⚠️ WARNING: No ${TARGET_BLOCK} or ${TARGET_BLOCK_2} blocks found in scan area!`);
+        console.warn(`[SPAWN DEBUG] Scan area: X[${xStart} to ${xEnd}], Z[${zStart} to ${zEnd}], Y[${clampedYEnd} to ${clampedYStart}], Player: (${cx}, ${cy}, ${cz})`);
+        console.warn(`[SPAWN DEBUG] Distance range: ${minDistance}-${maxDistance} blocks horizontally, Y range: +${yRangeUp}/-${yRangeDown} blocks from player Y ${cy}`);
+        console.warn(`[SPAWN DEBUG] Spawn ranges: minDist=${MIN_SPAWN_DISTANCE}, maxDist=${MAX_SPAWN_DISTANCE}, YRange=+${yRangeUp}/-${yRangeDown}`);
+    }
+    
     // Second pass: Expand Y range if we found few tiles and have queries left
     // Adjusted threshold for smaller scan batches (more frequent scans)
-    if (candidates.length < 8 && blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN * 0.6) {
-        // console.warn(`[SPAWN DEBUG] Found only ${candidates.length} tiles, expanding Y range by ±${expandYRange} blocks`);
-        const expandedYStart = cy + initialYRange + expandYRange;
-        const expandedYEnd = cy - initialYRange - expandYRange;
+    if (candidates.length < 8 && blockQueryCount < queryLimit * 0.6) {
+        if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+            console.warn(`[SPAWN DEBUG] Found only ${candidates.length} tiles, expanding Y range by +${expandYRange}/-${expandYRange} blocks (expanded Y: ${cy - yRangeDown - expandYRange} to ${cy + yRangeUp + expandYRange})`);
+            console.warn(`[SPAWN DEBUG] Expanded scan will check Y levels: ${cy - yRangeDown - expandYRange} to ${cy + yRangeUp + expandYRange} (total range: +${yRangeUp + expandYRange}/-${yRangeDown + expandYRange} blocks)`);
+        }
+        const expandedYStart = cy + yRangeUp + expandYRange;
+        const expandedYEnd = cy - yRangeDown - expandYRange;
         
         for (let x = xStart; x <= xEnd; x++) {
-            if (blockQueryCount >= MAX_BLOCK_QUERIES_PER_SCAN) break;
+            if (blockQueryCount >= queryLimit) break;
             
             for (let z = zStart; z <= zEnd; z++) {
-                if (blockQueryCount >= MAX_BLOCK_QUERIES_PER_SCAN) break;
+                if (blockQueryCount >= queryLimit) break;
                 
                 const dx = x + 0.5 - center.x;
                 const dz = z + 0.5 - center.z;
@@ -1333,7 +2134,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                 
                 for (let y = clampedYStart; y >= clampedYEnd; y--) {
                     if (y <= yStart && y >= yEnd) continue; // Skip already checked
-                    if (blockQueryCount >= MAX_BLOCK_QUERIES_PER_SCAN) break;
+                    if (blockQueryCount >= queryLimit) break;
                     
                     // Skip if Y is out of world bounds
                     if (y < MIN_Y || y > MAX_Y) continue;
@@ -1353,10 +2154,10 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     }
                     if (!block) continue;
 
-                    if (block.typeId === TARGET_BLOCK) {
+                    if (isValidTargetBlock(block.typeId)) {
                         const blockAbove = dimension.getBlock({ x, y: y + 1, z });
                         blockQueryCount++;
-                        if (blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN) {
+                        if (blockQueryCount < queryLimit) {
                             const blockTwoAbove = dimension.getBlock({ x, y: y + 2, z });
                             blockQueryCount++;
                             if (isAir(blockAbove) && isAir(blockTwoAbove)) {
@@ -1367,8 +2168,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                                 // Register in cache for future use
                                 registerDustedDirtBlock(x, y, z, dimension);
                                 
-                                // Scan around this block for nearby dusted_dirt patches
-                                if (blockQueryCount < MAX_BLOCK_QUERIES_PER_SCAN - 30) { // Reserve some queries for local scan
+                                // Scan around this block for nearby dusted_dirt/snow_layer patches (10x10 area)
+                                if (blockQueryCount < queryLimit - 30) { // Reserve some queries for local scan
                                     const localQueries = scanAroundDustedDirt(dimension, x, y, z, seen, candidates, blockQueryCount, limit);
                                     blockQueryCount += localQueries;
                                 }
@@ -1383,14 +2184,25 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     }
 
                     if (!isAir(block)) {
-                        break;
+                        // Don't break - continue checking lower Y levels
+                        // Dusted_dirt could be below other blocks
                     }
                 }
             }
         }
+        
+        // Debug: Log expanded scan results
+        if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+            console.warn(`[SPAWN DEBUG] Expanded scan complete: Found ${candidates.length} total tiles (${cachedTiles.length} from cache), queries used: ${blockQueryCount}/${queryLimit}${isSinglePlayer ? ' [SINGLE PLAYER MODE]' : ''}`);
+        }
     }
 
-    // console.warn(`[SPAWN DEBUG] Scanned ${blockQueryCount} blocks in rectangular cuboid, found ${candidates.length} total dusted dirt tiles (${cachedTiles.length} from cache)`);
+    // Always log scan results if tile scanning debug is enabled
+    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+        console.warn(`[SPAWN DEBUG] Scanned ${blockQueryCount} blocks in rectangular cuboid, found ${candidates.length} total dusted dirt tiles (${cachedTiles.length} from cache)`);
+    } else {
+        debugLog('spawn', `Scanned ${blockQueryCount} blocks in rectangular cuboid, found ${candidates.length} total dusted dirt tiles (${cachedTiles.length} from cache)`);
+    }
     return candidates;
 }
 
@@ -1785,6 +2597,9 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
     const playerId = player.id;
     const now = system.currentTick;
     
+    // Detect if single player (no group cache or only one player in dimension)
+    const isSinglePlayer = !useGroupCache || (groupPlayers && groupPlayers.length === 1);
+    
     // Try to use group cache if available and enabled
     let cache = null;
     let needsRescan = false;
@@ -1891,7 +2706,8 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
                             // Use full candidate limit per player since players may be far apart
                             // The limit prevents excessive scanning, but we need full coverage for each player
                             // For mining bears, also collect stone/deepslate tiles in caves
-                            const playerTiles = collectMiningSpawnTiles(dimension, pPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN);
+                            // Note: For groups, we don't use single player mode (multiple players = more load)
+                            const playerTiles = collectMiningSpawnTiles(dimension, pPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN, false);
                             
                             tilesPerPlayer.push({ name: p.name, count: playerTiles.length });
                             
@@ -1948,7 +2764,13 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
         if (!cache || !isGroupCache) {
             // console.warn(`[SPAWN DEBUG] Rescanning tiles for ${player.name} (moved: ${Math.sqrt(movedSq).toFixed(1)} blocks, cache age: ${now - (cache?.tick || 0)} ticks)`);
             // For mining bears, also collect stone/deepslate tiles in caves
-            const tiles = collectMiningSpawnTiles(dimension, playerPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN);
+            // Single player mode: Use more thorough scanning (double query limit)
+            const tiles = collectMiningSpawnTiles(dimension, playerPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN, isSinglePlayer);
+            
+            // Debug: Log tile collection results
+            if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                console.warn(`[SPAWN DEBUG] ${player.name}: Collected ${tiles.length} tiles from scan (center: ${playerPos.x.toFixed(1)}, ${playerPos.y.toFixed(1)}, ${playerPos.z.toFixed(1)})`);
+            }
             cache = {
                 tiles,
                 density: tiles.length,
@@ -1986,17 +2808,26 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
     }
     spacing = Math.max(2, spacing);
 
-    const sampled = sampleTiles(validTiles, MAX_CANDIDATES_PER_SCAN);
-    const spacedTiles = filterTilesWithSpacing(sampled, spacing, MAX_SPACED_TILES);
-    
-    // Debug: show spacing info
-    // if (spacedTiles.length > 0) {
-    //     const avgDist = calculateAverageSpacing(spacedTiles);
-    //     console.warn(`[SPAWN DEBUG] ${player.name}: ${spacedTiles.length} spaced tiles (spacing: ${spacing.toFixed(1)}, avg dist: ${avgDist.toFixed(1)} blocks, group: ${isGroupCache})`);
-    // }
+        const sampled = sampleTiles(validTiles, MAX_CANDIDATES_PER_SCAN);
+        const spacedTiles = filterTilesWithSpacing(sampled, spacing, MAX_SPACED_TILES);
+        
+        // Debug: show spacing info
+        if ((isDebugEnabled('spawn', 'spacing') || isDebugEnabled('spawn', 'all')) && spacedTiles.length > 0) {
+            const avgDist = calculateAverageSpacing(spacedTiles);
+            console.warn(`[SPAWN DEBUG] ${player.name}: ${spacedTiles.length} spaced tiles (spacing: ${spacing.toFixed(1)}, avg dist: ${avgDist.toFixed(1)} blocks, group: ${isGroupCache}), sampled: ${sampled.length}, valid: ${validTiles.length}`);
+        }
+        if ((isDebugEnabled('spawn', 'spacing') || isDebugEnabled('spawn', 'all')) && spacedTiles.length === 0 && validTiles.length > 0) {
+            console.warn(`[SPAWN DEBUG] ${player.name}: Spacing filter removed all tiles! Valid: ${validTiles.length}, Sampled: ${sampled.length}, Spacing: ${spacing.toFixed(1)}`);
+        }
 
     return { density, spacedTiles, spacing };
 }
+
+// ============================================================================
+// SECTION 11: SPAWN LOGIC FUNCTIONS
+// ============================================================================
+// Functions for calculating spawn chances, limits, and attempting spawns
+// ============================================================================
 
 function getMaxCount(config, day) {
     if (!config.maxCountStep || !config.maxCountStepDays) {
@@ -2152,7 +2983,7 @@ function getEntityCountsForPlayer(player, dimension, playerPos) {
     return cache.counts;
 }
 
-function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers = {}, entityCounts = {}, spawnCount = {}) {
+function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers = {}, entityCounts = {}, spawnCount = {}, nearbyPlayerCount = 1) {
     const currentDay = getCurrentDay();
     if (currentDay < config.startDay || currentDay > config.endDay) return false;
 
@@ -2188,13 +3019,29 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
         return false; // Too many bears total - stop spawning
     }
     
-    // Check buff bear limit - stop spawning buff bears if 5+ nearby
+    // Check buff bear limit - dynamic cap based on nearby player count
     if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
         const buffBearCount = (entityCounts[BUFF_BEAR_ID] || 0) + 
                              (entityCounts[BUFF_BEAR_DAY13_ID] || 0) + 
                              (entityCounts[BUFF_BEAR_DAY20_ID] || 0);
-        if (buffBearCount >= 5) {
-            return false; // Too many buff bears - stop spawning
+        
+        // Dynamic cap based on player count (passed as parameter):
+        // 1 player: 1 buff bear
+        // 2 players: 1 buff bear
+        // 3 players: 2 buff bears
+        // 4 players: 2 buff bears
+        // 5+ players: 3 buff bears
+        let maxBuffBears;
+        if (nearbyPlayerCount <= 2) {
+            maxBuffBears = 1;
+        } else if (nearbyPlayerCount <= 4) {
+            maxBuffBears = 2;
+        } else {
+            maxBuffBears = 3;
+        }
+        
+        if (buffBearCount >= maxBuffBears) {
+            return false; // Too many buff bears for this player count - stop spawning
         }
     }
 
@@ -2230,7 +3077,7 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     // Single player bonus: more spawn attempts to compensate for fewer tiles
     const baseAttempts = Math.max(1, SPAWN_ATTEMPTS + (modifiers.attemptBonus ?? 0));
     const isSinglePlayer = !modifiers.isGroupCache;
-    const attemptBonus = isSinglePlayer ? Math.floor(baseAttempts * 0.3) : 0; // 30% more attempts for single players
+    const attemptBonus = isSinglePlayer ? Math.floor(baseAttempts * 0.5) : 0; // 50% more attempts for single players (increased from 30%)
     const attempts = Math.min(baseAttempts + attemptBonus, pool.length);
     // console.warn(`[SPAWN DEBUG] Attempting ${config.id} for ${player.name}: ${attempts} attempts, ${pool.length} tiles, ${nearbyCount}/${maxCount} nearby (type limit: ${typeSpawnCount}/${perTypeSpawnLimit})`);
 
@@ -2388,6 +3235,12 @@ function getPerTypeSpawnLimit(day, config) {
     return 2;
 }
 
+// ============================================================================
+// SECTION 12: MAIN SPAWN LOOP
+// ============================================================================
+// Main interval loop that handles player grouping, tile collection, and spawning
+// ============================================================================
+
 // Initialize spawn controller
 if (ERROR_LOGGING) {
     console.warn("[SPAWN] Maple Bear spawn controller initialized.");
@@ -2471,13 +3324,25 @@ system.runInterval(() => {
         const playersByDimension = new Map();
         for (const player of allPlayers) {
             try {
+                if (!player || !player.dimension) {
+                    if (isDebugEnabled('spawn', 'general') || isDebugEnabled('spawn', 'all')) {
+                        console.warn(`[SPAWN DEBUG] Player ${player?.name || 'unknown'} has no dimension`);
+                    }
+                    continue;
+                }
                 const dimId = player.dimension.id;
+                if (!dimId) {
+                    if (isDebugEnabled('spawn', 'general') || isDebugEnabled('spawn', 'all')) {
+                        console.warn(`[SPAWN DEBUG] Player ${player.name} dimension ID is null/undefined`);
+                    }
+                    continue;
+                }
                 if (!playersByDimension.has(dimId)) {
                     playersByDimension.set(dimId, []);
                 }
                 playersByDimension.get(dimId).push(player);
             } catch (error) {
-                errorLog(`Error grouping player ${player.name} by dimension`, error, { player: player.name });
+                errorLog(`Error grouping player ${player?.name || 'unknown'} by dimension`, error, { player: player?.name || 'unknown' });
             }
         }
         
@@ -2501,8 +3366,22 @@ system.runInterval(() => {
     const dimensionPlayers = playersByDimension.get(dimensionId);
     if (!dimensionPlayers || dimensionPlayers.length === 0) return;
     
-    // Get dimension object
-    const dimension = dimensionPlayers[0].dimension;
+    // Get dimension object - validate it exists
+    const dimension = dimensionPlayers[0]?.dimension;
+    if (!dimension) {
+        errorLog(`Dimension is null/undefined for player ${dimensionPlayers[0]?.name || 'unknown'}`, null, { dimensionId, playerCount: dimensionPlayers.length });
+        return;
+    }
+    
+    // Validate dimension ID matches
+    try {
+        const actualDimId = dimension.id;
+        if (actualDimId !== dimensionId) {
+            errorLog(`Dimension ID mismatch: expected ${dimensionId}, got ${actualDimId}`, null, { player: dimensionPlayers[0]?.name });
+        }
+    } catch (error) {
+        errorLog(`Error getting dimension ID`, error, { dimensionId, player: dimensionPlayers[0]?.name });
+    }
     
     // Optimize for 3+ players: process all players in same dimension when grouped
     // Try to use group cache if multiple players in same dimension
@@ -2568,6 +3447,12 @@ system.runInterval(() => {
         // Check if single player (no group cache benefit)
         const isSinglePlayer = !useGroupCache || (dimensionPlayers && dimensionPlayers.length === 1);
         
+        // Update weather cache periodically (async, won't block)
+        updateWeatherCache(dimension);
+        
+        // Get weather multiplier
+        const weatherMultiplier = getWeatherMultiplier(dimension);
+        
         let chanceMultiplier = 1;
         if (currentDay >= 20) {
             chanceMultiplier *= 1 + Math.min(0.4, (currentDay - 20) * 0.02);
@@ -2589,6 +3474,7 @@ system.runInterval(() => {
             chanceMultiplier *= SUNRISE_BOOST_MULTIPLIER;
         }
         chanceMultiplier *= spawnDifficultyState.multiplier;
+        chanceMultiplier *= weatherMultiplier; // Apply weather effect
 
         let extraCount = 0;
         if (density > 140) {
@@ -2627,23 +3513,65 @@ system.runInterval(() => {
         const spawnCount = { value: 0 };
 
         // Only process configs that are active for current day
+        // Skip lower variants when higher variants are available
         let processedConfigs = 0;
         for (const config of SPAWN_CONFIGS) {
             if (currentDay < config.startDay || currentDay > config.endDay) continue;
+            
+            // Skip lower variants when higher variants are available
+            // This ensures only the highest variant of each bear type spawns
+            let shouldSkip = false;
+            if (config.id === TINY_BEAR_ID && currentDay >= 4) shouldSkip = true; // Skip if day4+ variants available
+            if (config.id === DAY4_BEAR_ID && currentDay >= 8) shouldSkip = true; // Skip if day8+ variants available
+            if (config.id === DAY8_BEAR_ID && currentDay >= 13) shouldSkip = true; // Skip if day13+ variants available
+            if (config.id === DAY13_BEAR_ID && currentDay >= 20) shouldSkip = true; // Skip if day20+ variants available
+            if (config.id === INFECTED_BEAR_ID && currentDay >= 8) shouldSkip = true; // Skip if day8+ infected variants available
+            if (config.id === INFECTED_BEAR_DAY8_ID && currentDay >= 13) shouldSkip = true; // Skip if day13+ infected variants available
+            if (config.id === INFECTED_BEAR_DAY13_ID && currentDay >= 20) shouldSkip = true; // Skip if day20+ infected variants available
+            if (config.id === FLYING_BEAR_ID && currentDay >= 15) shouldSkip = true; // Skip if day15+ flying variants available
+            if (config.id === FLYING_BEAR_DAY15_ID && currentDay >= 20) shouldSkip = true; // Skip if day20+ flying variants available
+            if (config.id === MINING_BEAR_ID && currentDay >= 20) shouldSkip = true; // Skip if day20+ mining variants available
+            if (config.id === BUFF_BEAR_ID && currentDay >= 20) shouldSkip = true; // Skip if day20+ buff variants available
+            if (config.id === BUFF_BEAR_DAY13_ID && currentDay >= 20) shouldSkip = true; // Skip if day20+ buff variants available
+            if (config.id === TORPEDO_BEAR_ID && currentDay >= 22) shouldSkip = true; // Skip if day22+ torpedo variants available
+            
+            if (shouldSkip) continue;
+            
             processedConfigs++;
             
             try {
                 const configModifiers = { ...modifiers };
                 if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
-                    configModifiers.chanceMultiplier *= 0.5;
-                    if (config.id === BUFF_BEAR_DAY20_ID) {
-                        configModifiers.chanceCap = Math.min(configModifiers.chanceCap, 0.065);
+                    // Reduced multiplayer bonus for buff bears (was 0.5x, now less reduction)
+                    // But still reduce chance when multiple players nearby
+                    const playerCount = dimensionPlayers ? dimensionPlayers.length : 1;
+                    if (playerCount > 1) {
+                        // Reduce chance multiplier less aggressively for multiple players
+                        // Original: 0.5x, New: scales from 0.7x (2 players) to 0.6x (5+ players)
+                        const multiplayerPenalty = Math.max(0.6, 0.7 - ((playerCount - 2) * 0.033));
+                        configModifiers.chanceMultiplier *= multiplayerPenalty;
                     } else {
-                        configModifiers.chanceCap = Math.min(configModifiers.chanceCap, config.id === BUFF_BEAR_ID ? 0.06 : 0.07);
+                        // Single player: keep base multiplier (no penalty)
+                        configModifiers.chanceMultiplier *= 0.7; // Slight reduction even for single player
+                    }
+                    
+                    if (config.id === BUFF_BEAR_DAY20_ID) {
+                        configModifiers.chanceCap = Math.min(configModifiers.chanceCap, 0.045); // Reduced from 0.065
+                    } else {
+                        configModifiers.chanceCap = Math.min(configModifiers.chanceCap, config.id === BUFF_BEAR_ID ? 0.04 : 0.05); // Reduced caps
                     }
                     configModifiers.extraCount = Math.min(configModifiers.extraCount, 0);
                 }
-                const spawned = attemptSpawnType(player, dimension, playerPos, spacedTiles, config, configModifiers, entityCounts, spawnCount);
+                // Get nearby player count for buff bear cap calculation
+                let nearbyPlayerCount = 1;
+                try {
+                    const nearbyPlayers = dimension.getPlayers({ location: playerPos, maxDistance: MAX_SPAWN_DISTANCE });
+                    nearbyPlayerCount = nearbyPlayers.length;
+                } catch (error) {
+                    // On error, default to 1
+                }
+                
+                const spawned = attemptSpawnType(player, dimension, playerPos, spacedTiles, config, configModifiers, entityCounts, spawnCount, nearbyPlayerCount);
                 debugLog('spawn', `Successfully spawned ${config.id} for ${player.name}`, spawned);
             } catch (error) {
                 errorLog(`Error attempting spawn for ${config.id}`, error, {

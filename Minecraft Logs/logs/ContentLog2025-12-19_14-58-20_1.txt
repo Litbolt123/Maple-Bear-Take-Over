@@ -1,0 +1,53 @@
+14:58:26[Texture][inform]-TextureSet (textures/items/copper_golem) | Specified image could not be found
+
+14:59:00[Scripting][verbose]-Plugin Discovered [MapleBear TakeOver] PackId [064b6f9c-349b-4ab1-80d3-c95f732db577_1.0.2] ModuleId [68f5a9b0-5aac-47cc-961d-3b87ba331a0b]
+
+14:59:00[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server] from [2.3.0] to [2.4.0] requested by [MapleBear TakeOver - 1.0.0].
+
+14:59:00[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server] from [2.0.0] to [2.4.0] requested by [@minecraft/server-ui-bindings - 2.0.0].
+
+14:59:00[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server-bindings] from [2.3.0] to [2.4.0] requested by [@minecraft/server - 2.3.0].
+
+14:59:00[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server-bindings] from [2.0.0] to [2.4.0] requested by [@minecraft/server - 2.0.0].
+
+14:59:00[Scripting][inform]-📜 Maple Bear Day Tracker script loaded
+
+14:59:00[Scripting][warning]-[SPAWN] Maple Bear spawn controller initialized.
+
+14:59:00[Scripting][inform]-World initialized, setting up event listeners...
+
+14:59:04[Scripting][inform]-Day tracking already initialized
+
+14:59:04[Scripting][inform]-🌍 First player joined, initializing day tracker
+
+14:59:04[Scripting][inform]-Day cycle loop not running, starting it now
+
+14:59:04[Scripting][inform]-Starting day cycle loop
+
+14:59:04[Scripting][inform]-Day cycle loop started successfully
+
+14:59:04[Texture][inform]-TextureSet (textures/items/copper_golem) | Specified image could not be found
+
+14:59:06[Json][inform]-mb:flying_mb | minecraft:behavior.nearest_attackable_target | mb:flying_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:59:06[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:59:07[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:59:07[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:59:07[Json][inform]-mb:flying_mb | minecraft:behavior.nearest_attackable_target | mb:flying_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:59:07[Json][inform]-mb:mb_day13 | minecraft:behavior.nearest_attackable_target | mb:mb_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:59:07[Json][inform]-mb:infected_day13 | minecraft:behavior.nearest_attackable_target | mb:infected_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:59:07[Json][inform]-mb:mb_day13 | minecraft:behavior.nearest_attackable_target | mb:mb_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:59:07[Json][inform]-mb:infected_day13 | minecraft:behavior.nearest_attackable_target | mb:infected_day13 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:59:07[Json][inform]-mb:infected_pig | minecraft:behavior.nearest_attackable_target | mb:infected_pig | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:59:07[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:59:07[Json][inform]-mb:flying_mb | minecraft:behavior.nearest_attackable_target | mb:fl

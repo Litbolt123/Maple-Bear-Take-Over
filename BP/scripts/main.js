@@ -618,15 +618,15 @@ function checkVariantUnlock(player, codexParam = null) {
             }
         }
         
-        // Check for day 8+ variant unlock (either by day OR by 3 kills of day 4+ variants)
+        // Check for day 8+ variant unlock (either by day OR by 3 kills of day 4+ variants, but only if day >= 8)
         if (!codex.mobs.day8VariantsUnlocked) {
-            const dayUnlock = currentDay >= 8 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen || codex.mobs.buffBearSeen);
+            const dayUnlock = currentDay >= 8 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen || codex.mobs.flyingBearSeen);
 
-            // Separate kill checks for each bear type's day 4+ variants
-            const tinyBearDay4Unlock = (codex.mobs.variantKills.tinyBear.day4 || 0) >= 3;
-            const infectedBearDay4Unlock = (codex.mobs.variantKills.infectedBear.day4 || 0) >= 3;
-            const buffBearDay4Unlock = (codex.mobs.variantKills.buffBear.day4 || 0) >= 3;
-            const otherMobDay4Unlock = (codex.mobs.variantKills.infectedPig.day4 || 0) >= 3 || (codex.mobs.variantKills.infectedCow.day4 || 0) >= 3;
+            // Separate kill checks for each bear type's day 4+ variants (only valid if day >= 8)
+            const tinyBearDay4Unlock = currentDay >= 8 && (codex.mobs.variantKills.tinyBear.day4 || 0) >= 3;
+            const infectedBearDay4Unlock = currentDay >= 8 && (codex.mobs.variantKills.infectedBear.day4 || 0) >= 3;
+            const buffBearDay4Unlock = currentDay >= 8 && (codex.mobs.variantKills.buffBear.day4 || 0) >= 3;
+            const otherMobDay4Unlock = currentDay >= 8 && ((codex.mobs.variantKills.infectedPig.day4 || 0) >= 3 || (codex.mobs.variantKills.infectedCow.day4 || 0) >= 3);
 
             const killUnlock = tinyBearDay4Unlock || infectedBearDay4Unlock || buffBearDay4Unlock || otherMobDay4Unlock;
             
@@ -654,15 +654,15 @@ function checkVariantUnlock(player, codexParam = null) {
             }
         }
         
-        // Check for day 13+ variant unlock (either by day OR by 3 kills of day 8+ variants)
+        // Check for day 13+ variant unlock (either by day OR by 3 kills of day 8+ variants, but only if day >= 13)
         if (!codex.mobs.day13VariantsUnlocked) {
-            const dayUnlock = currentDay >= 13 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen || codex.mobs.buffBearSeen);
+            const dayUnlock = currentDay >= 13 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen || codex.mobs.buffBearSeen || codex.mobs.flyingBearSeen);
 
-            // Separate kill checks for each bear type's day 8+ variants
-            const tinyBearDay8Unlock = (codex.mobs.variantKills.tinyBear.day8 || 0) >= 3;
-            const infectedBearDay8Unlock = (codex.mobs.variantKills.infectedBear.day8 || 0) >= 3;
-            const buffBearDay8Unlock = (codex.mobs.variantKills.buffBear.day8 || 0) >= 3;
-            const otherMobDay8Unlock = (codex.mobs.variantKills.infectedPig.day8 || 0) >= 3 || (codex.mobs.variantKills.infectedCow.day8 || 0) >= 3;
+            // Separate kill checks for each bear type's day 8+ variants (only valid if day >= 13)
+            const tinyBearDay8Unlock = currentDay >= 13 && (codex.mobs.variantKills.tinyBear.day8 || 0) >= 3;
+            const infectedBearDay8Unlock = currentDay >= 13 && (codex.mobs.variantKills.infectedBear.day8 || 0) >= 3;
+            const buffBearDay8Unlock = currentDay >= 13 && (codex.mobs.variantKills.buffBear.day8 || 0) >= 3;
+            const otherMobDay8Unlock = currentDay >= 13 && ((codex.mobs.variantKills.infectedPig.day8 || 0) >= 3 || (codex.mobs.variantKills.infectedCow.day8 || 0) >= 3);
 
             const killUnlock = tinyBearDay8Unlock || infectedBearDay8Unlock || buffBearDay8Unlock || otherMobDay8Unlock;
             
@@ -690,17 +690,17 @@ function checkVariantUnlock(player, codexParam = null) {
             }
         }
 
-        // Check for day 20+ variant unlock (either by day OR by 5 kills of day 13+ variants)
+        // Check for day 20+ variant unlock (either by day OR by 5 kills of day 13+ variants, but only if day >= 20)
         if (!codex.mobs.day20VariantsUnlocked) {
             const dayUnlock20 = currentDay >= 20 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen || codex.mobs.buffBearSeen);
 
-            const tinyBearDay13Unlock = (codex.mobs.variantKills.tinyBear.day13 || 0) >= 5;
-            const infectedBearDay13Unlock = (codex.mobs.variantKills.infectedBear.day13 || 0) >= 5;
-            const buffBearDay13Unlock = (codex.mobs.variantKills.buffBear.day13 || 0) >= 5;
-            const otherMobDay13Unlock = (codex.mobs.variantKills.infectedPig.day13 || 0) >= 5 || (codex.mobs.variantKills.infectedCow.day13 || 0) >= 5;
+            const tinyBearDay13Unlock = currentDay >= 20 && (codex.mobs.variantKills.tinyBear.day13 || 0) >= 5;
+            const infectedBearDay13Unlock = currentDay >= 20 && (codex.mobs.variantKills.infectedBear.day13 || 0) >= 5;
+            const buffBearDay13Unlock = currentDay >= 20 && (codex.mobs.variantKills.buffBear.day13 || 0) >= 5;
+            const otherMobDay13Unlock = currentDay >= 20 && ((codex.mobs.variantKills.infectedPig.day13 || 0) >= 5 || (codex.mobs.variantKills.infectedCow.day13 || 0) >= 5);
 
             const killUnlock20 = tinyBearDay13Unlock || infectedBearDay13Unlock || buffBearDay13Unlock || otherMobDay13Unlock;
-
+            
             if (dayUnlock20 || killUnlock20) {
                 codex.mobs.day20VariantsUnlocked = true;
                 codex.mobs.day20VariantsUnlockedTiny = dayUnlock20 || tinyBearDay13Unlock;
@@ -1074,6 +1074,19 @@ function handleInfectionExpiration(player, infectionState) {
                 bear.setDynamicProperty("infected_by", player.id); 
             }
             player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} transformed into a Maple Bear!"}]}`);
+            
+            // Record this event in daily logs for all players (reflection on next day)
+            const tomorrowDay = getCurrentDay() + 1;
+            const eventMessage = `${player.name} has been consumed by the infection and transformed into a Maple Bear.`;
+            for (const p of world.getAllPlayers()) {
+                if (p && p.isValid) {
+                    try {
+                        recordDailyEvent(p, tomorrowDay, eventMessage, "general");
+                    } catch (error) {
+                        console.warn(`[DAILY LOG] Error recording player death for ${p.name}:`, error);
+                    }
+                }
+            }
         } catch { }
             } else {
         // Infection expired while offline - just clear it
@@ -1373,10 +1386,7 @@ function convertMobToMapleBear(deadMob, killer) {
                     newBearType = BUFF_BEAR_DAY20_ID;
                     bearSize = "buff";
                 } else if (currentDay >= 13) {
-                    newBearType = BUFF_BEAR_DAY13_ID; // Day 13+ Buff Maple Bears
-                    bearSize = "buff";
-                } else if (currentDay >= 8) {
-                    newBearType = BUFF_BEAR_ID; // Day 8+ Buff Maple Bears
+                    newBearType = BUFF_BEAR_ID; // Day 13+ Buff Maple Bears (swapped from day 8)
                     bearSize = "buff";
                 } else {
                     newBearType = INFECTED_BEAR_ID; // Original normal bears
@@ -1419,7 +1429,7 @@ function getMobSize(mobType) {
         "minecraft:axolotl", "minecraft:armadillo", "minecraft:fox"
     ];
     
-    // Large/boss mobs that should spawn Buff Maple Bears (day 8+)
+    // Large/boss mobs that should spawn Buff Maple Bears (day 13+)
     const largeMobs = [
         "minecraft:warden", "minecraft:sniffer", "minecraft:ravager", "minecraft:iron_golem", "minecraft:shulker",
         "minecraft:elder_guardian", "minecraft:ender_dragon", "minecraft:wither", "minecraft:ghast"
@@ -2056,17 +2066,53 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
         handleEnchantedGoldenApple(player, item);
     }
     
-    // Handle normal golden apple consumption for hint system
+    // Handle normal golden apple consumption for hint system and infection reduction
     if (item?.typeId === "minecraft:golden_apple") {
         // Mark normal golden apple as discovered (only first time)
         try { 
             const codex = getCodex(player);
-        if (!codex.items.goldenAppleSeen) {
-            markCodex(player, "items.goldenAppleSeen"); 
-            sendDiscoveryMessage(player, codex, "interesting", "golden_apple");
-            player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-        }
+            if (!codex.items.goldenAppleSeen) {
+                markCodex(player, "items.goldenAppleSeen"); 
+                sendDiscoveryMessage(player, codex, "interesting", "golden_apple");
+                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+            }
         } catch { }
+        
+        // Reduce infection snow count if player is infected
+        const infectionState = playerInfection.get(player.id);
+        if (infectionState && !infectionState.cured && infectionState.ticksLeft > 0) {
+            const reductionAmount = 0.5; // Reduce snow count by 0.5
+            const currentSnowCount = infectionState.snowCount || 0;
+            const newSnowCount = Math.max(0, currentSnowCount - reductionAmount);
+            infectionState.snowCount = newSnowCount;
+            
+            // Update max snow level if needed
+            updateMaxSnowLevel(player, newSnowCount);
+            
+            // Show one-time narrative message and unlock codex info
+            try {
+                const codex = getCodex(player);
+                if (!codex.items.goldenAppleInfectionReductionDiscovered) {
+                    codex.items.goldenAppleInfectionReductionDiscovered = true;
+                    markCodex(player, "items.goldenAppleInfectionReductionDiscovered");
+                    
+                    // Use the standard discovery message pattern
+                    if (codex.items.snowBookCrafted) {
+                        player.sendMessage("§7Check your journal.");
+                        player.playSound("random.orb", { pitch: 1.8, volume: 0.6 });
+                    } else {
+                        player.sendMessage("§7You feel slightly better for a moment after eating the golden apple... This seems important to remember.");
+                        player.playSound("random.orb", { pitch: 1.8, volume: 0.6 });
+                    }
+                    
+                    saveCodex(player, codex);
+                }
+            } catch (error) {
+                console.warn(`[GOLDEN APPLE] Error recording discovery:`, error);
+            }
+            
+            console.log(`[GOLDEN APPLE] ${player.name} reduced infection: ${currentSnowCount.toFixed(1)} → ${newSnowCount.toFixed(1)}`);
+        }
     }
     
     // Handle snow consumption
@@ -2198,6 +2244,7 @@ function handleMobConversion(entity, killer) {
                     convertPigToInfectedPig(entity, killer);
                 });
             }
+            return; // IMPORTANT: Return early to prevent any other conversion logic from running
         } else if (entityType === "minecraft:cow") {
             // console.log(`[COW CONVERSION] Maple Bear killing cow on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
             if (Math.random() < conversionRate) {
@@ -2205,6 +2252,7 @@ function handleMobConversion(entity, killer) {
                     convertCowToInfectedCow(entity, killer);
                 });
             }
+            return; // IMPORTANT: Return early to prevent any other conversion logic from running
         } else {
             // Normal Maple Bear conversion for other mobs (pigs and cows handled above)
             if (Math.random() < conversionRate) {
@@ -2558,6 +2606,19 @@ function handleInfectedPlayerDeath(player, source) {
             bear.setDynamicProperty("infected_by", player.id);
         }
         player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} was transformed into a Maple Bear!"}]}`);
+        
+        // Record this event in daily logs for all players (reflection on next day)
+        const tomorrowDay = getCurrentDay() + 1;
+        const eventMessage = `${player.name} was transformed into a Maple Bear after being killed by the infection.`;
+        for (const p of world.getAllPlayers()) {
+            if (p && p.isValid) {
+                try {
+                    recordDailyEvent(p, tomorrowDay, eventMessage, "general");
+                } catch (error) {
+                    console.warn(`[DAILY LOG] Error recording player death for ${p.name}:`, error);
+                }
+            }
+        }
     } catch (error) {
         console.warn(`[TRANSFORMATION] Error transforming ${player.name}:`, error);
     }
@@ -4599,16 +4660,25 @@ function unlockAllContentForDay(day) {
                         milestoneMessage = "The tiny bears have evolved into more dangerous variants. You've observed infected Maple Bears that are larger and more aggressive than their predecessors. These creatures seem to have developed a taste for corruption, actively seeking out and transforming other animals. The white dust they leave behind has become more concentrated, and you've noticed it seems to affect the very ground they walk on.";
                         break;
                     case 8:
-                        milestoneMessage = "A new threat has emerged - massive Buff Maple Bears that tower over their smaller counterparts. These behemoths are incredibly dangerous and seem to possess an intelligence that the smaller variants lack. They actively hunt larger creatures and have been observed coordinating attacks. The infection has reached a critical point, with these powerful variants capable of spreading the corruption at an alarming rate.";
+                        milestoneMessage = "The sky is no longer safe. You've witnessed Maple Bears taking flight, soaring through the air with an unnatural grace. These flying variants can reach places that were once thought secure, and they seem to hunt from above with terrifying precision. The infection has learned to take to the skies.";
                         break;
                     case 13:
-                        milestoneMessage = "The infection has reached its most advanced stage. The most powerful Maple Bear variants have appeared, combining the intelligence of the Buff Bears with enhanced abilities. These creatures are no longer just spreading infection - they seem to be actively building something, creating structures from the white dust and corrupted materials. The very landscape is beginning to change under their influence, and the infection has become an unstoppable force of nature.";
+                        milestoneMessage = "A new threat has emerged - massive Buff Maple Bears that tower over their smaller counterparts. These behemoths are incredibly dangerous and seem to possess an intelligence that the smaller variants lack. They actively hunt larger creatures and have been observed coordinating attacks. The infection has reached a critical point, with these powerful variants capable of spreading the corruption at an alarming rate.";
                         break;
                     case 20:
                         milestoneMessage = "The world feels hushed, as if holding its breath. Day 20 bears walk like winter's final verdict, and the dust they shed clings to the air itself. Survivors whisper that the infection now remembers every step we've taken.";
                         break;
                     case 25:
                         milestoneMessage = "You have survived. Twenty-five days of relentless infection, of watching the world transform under the weight of white dust and corrupted creatures. You stand as proof that humanity can endure even when the very ground beneath your feet turns against you. But the infection does not rest. It will only grow stronger, more relentless. The challenge continues, but you have proven yourself a true survivor.";
+                        break;
+                    case 50:
+                        milestoneMessage = "Fifty days. The infection has become something else entirely - a force of nature that reshapes reality itself. The white dust no longer simply covers the world; it has become the world. Every surface, every breath, every moment is tainted by its presence. The bears have evolved beyond recognition, and you wonder if you're still fighting an infection, or if you're fighting the world itself.";
+                        break;
+                    case 75:
+                        milestoneMessage = "Seventy-five days. The boundary between infection and existence has blurred beyond recognition. The world remembers everything - every step, every death, every moment of hope. The bears move with a purpose that transcends mere hunger or aggression. They are architects of a new reality, and you are both witness and participant in this transformation. The question is no longer whether you can survive, but what you will become.";
+                        break;
+                    case 100:
+                        milestoneMessage = "One hundred days. You have reached a milestone that few could even imagine. The world you knew is gone, replaced by something that defies understanding. The infection has achieved a kind of perfection - a complete integration with reality itself. You stand at the threshold of something new, something that has never existed before. The journey continues, but you have proven that even in the face of absolute transformation, something of what you were remains. You are a survivor. You are a witness. You are part of the story that will be told long after the last bear has moved on.";
                         break;
                 }
             }
@@ -4655,8 +4725,11 @@ function unlockAllContentForDay(day) {
                 if (day >= 4 && !codex.mobs.infectedBearSeen) {
                     codex.mobs.infectedBearSeen = true;
                 }
-                if (day >= 8 && !codex.mobs.buffBearSeen) {
+                if (day >= 13 && !codex.mobs.buffBearSeen) {
                     codex.mobs.buffBearSeen = true;
+                }
+                if (day >= 8 && !codex.mobs.flyingBearSeen) {
+                    codex.mobs.flyingBearSeen = true;
                 }
                 
                 // Unlock variants based on day

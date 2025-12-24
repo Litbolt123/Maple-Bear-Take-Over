@@ -1,6 +1,7 @@
 import { system, world, Player } from "@minecraft/server";
 import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
 import { isDebugEnabled } from "./mb_codex.js";
+import { getCachedPlayers, getCachedMobs } from "./mb_sharedCache.js";
 
 // Debug helper functions
 function getDebugGeneral() {
@@ -287,6 +288,32 @@ function playBreakSound(dimension, x, y, z, typeId) {
 function findTarget(entity, maxDistance) {
     const dimension = entity?.dimension;
     if (!dimension) return null;
+    
+    // Performance: Use cached target if available and still valid
+    const cached = targetCache.get(entity.id);
+    const currentTick = system.currentTick;
+    if (cached && (currentTick - cached.tick) < TARGET_CACHE_TICKS) {
+        // Verify cached target still exists and is valid
+        try {
+            if (cached.target && cached.target.entity && cached.target.entity.isValid()) {
+                const origin = entity.location;
+                const targetLoc = cached.target.entity.location;
+                const dx = targetLoc.x - origin.x;
+                const dy = targetLoc.y - origin.y;
+                const dz = targetLoc.z - origin.z;
+                const distSq = dx * dx + dy * dy + dz * dz;
+                if (distSq <= maxDistance * maxDistance) {
+                    // Update vector and location for current position
+                    cached.target.vector = { x: dx, y: dy, z: dz };
+                    cached.target.location = targetLoc;
+                    return cached.target;
+                }
+            }
+        } catch {
+            // Target invalid, fall through to recalculate
+        }
+    }
+    
     const origin = entity.location;
     const maxDistSq = maxDistance * maxDistance;
     let best = null;
@@ -294,12 +321,15 @@ function findTarget(entity, maxDistance) {
     const config = TORPEDO_TYPES.find(c => c.id === entity.typeId);
     const minY = config?.minY || MIN_STRUCTURE_Y;
 
-    // Prioritize players (skip creative mode and those below minY)
-    for (const player of world.getPlayers()) {
+    // Prioritize players (skip creative and spectator mode)
+    // Use shared cache instead of querying all players again
+    const allPlayers = getCachedPlayers();
+    for (const player of allPlayers) {
         if (player.dimension !== dimension) continue;
-        // Skip creative mode players
+        // Skip creative and spectator mode players (they can't be attacked)
         try {
-            if (player.getGameMode() === "creative") continue;
+            const gameMode = player.getGameMode();
+            if (gameMode === "creative" || gameMode === "spectator") continue;
         } catch { }
         // Torpedo bears can target players at any Y level - they stay in sky and dive down to attack
         // No Y level restriction for targeting
@@ -324,12 +354,9 @@ function findTarget(entity, maxDistance) {
 
     // Also target mobs if no players nearby (heat-seeking enabled)
     // Allow targeting mobs at any Y level (including ground mobs)
+    // Use shared cache instead of per-entity query
     if (!best) {
-        const mobs = dimension.getEntities({
-            location: origin,
-            maxDistance,
-            families: ["mob"]
-        });
+        const mobs = getCachedMobs(dimension, origin, maxDistance);
         for (const mob of mobs) {
             if (mob === entity) continue;
             // Allow targeting mobs at any Y level - torpedo bears can dive to attack them
@@ -353,12 +380,16 @@ function findTarget(entity, maxDistance) {
         }
     }
 
-    if (!best) return null;
+    if (!best) {
+        // Cache null result too (no target found)
+        targetCache.set(entity.id, { target: null, tick: system.currentTick });
+        return null;
+    }
     
     // Mark if target is a player (for priority diving)
     const isPlayer = best instanceof Player || best.typeId === "minecraft:player";
     
-    return {
+    const targetInfo = {
         entity: best,
         location: best.location,
         vector: {
@@ -368,6 +399,10 @@ function findTarget(entity, maxDistance) {
         },
         isPlayer: isPlayer // Track if target is a player for dive priority
     };
+    
+    // Cache the target
+    targetCache.set(entity.id, { target: targetInfo, tick: system.currentTick });
+    return targetInfo;
 }
 
 function findStructureBlocks(dimension, center, radius, minY) {
@@ -751,6 +786,12 @@ function diveTowardsTarget(entity, targetInfo, config, state) {
 // Performance: Distance-based culling constants
 const MAX_PROCESSING_DISTANCE = 64; // Only process entities within 64 blocks of any player
 const MAX_PROCESSING_DISTANCE_SQ = MAX_PROCESSING_DISTANCE * MAX_PROCESSING_DISTANCE;
+// Performance optimization constants
+const AI_TICK_INTERVAL = 2; // Run AI every 2 ticks instead of every tick (50% reduction)
+const TARGET_CACHE_TICKS = 5; // Cache target lookups for 5 ticks
+
+// Performance: Cache target lookups to avoid querying all players/mobs every tick
+const targetCache = new Map(); // Map<entityId, {target: targetInfo, tick: number}>
 
 // Initialize torpedo AI with delay to ensure world is ready (similar to mining AI)
 let torpedoAIIntervalId = null;
@@ -852,6 +893,9 @@ function initializeTorpedoAI() {
         const currentTick = system.currentTick;
         const ticksSinceStart = currentTick - aiLoopStartTick;
         
+        // Note: system.runInterval already handles the interval, so we don't need to check tick % AI_TICK_INTERVAL
+        // The interval callback is only called every AI_TICK_INTERVAL ticks automatically
+        
         // Always log when debug is enabled (frequently to confirm it's working)
         if (getDebugGeneral()) {
             // Log very frequently in first 20 ticks, then every 50 ticks (only when debug enabled)
@@ -860,19 +904,8 @@ function initializeTorpedoAI() {
             }
         }
         
-        // Performance: Get all players once and cache their positions for distance culling
-        // Try both getAllPlayers() and getPlayers() to see which works
-        let allPlayers = [];
-        try {
-            allPlayers = world.getAllPlayers();
-        } catch (err) {
-            console.warn(`[TORPEDO AI] world.getAllPlayers() failed:`, err);
-            try {
-                allPlayers = Array.from(world.getPlayers());
-            } catch (err2) {
-                console.warn(`[TORPEDO AI] world.getPlayers() also failed:`, err2);
-            }
-        }
+        // Performance: Use shared player cache
+        const allPlayers = getCachedPlayers();
         
         // Log player count for troubleshooting (only when debug enabled)
         if (getDebugGeneral() && (ticksSinceStart <= 20 || currentTick % 50 === 0)) {
@@ -1132,7 +1165,8 @@ function initializeTorpedoAI() {
                         });
                         for (const player of nearbyPlayers) {
                             try {
-                                if (player.getGameMode() === "creative") {
+                                const gameMode = player.getGameMode();
+                                if (gameMode === "creative" || gameMode === "spectator") {
                                     const dx = player.location.x - entity.location.x;
                                     const dy = player.location.y - entity.location.y;
                                     const dz = player.location.z - entity.location.z;
@@ -1385,8 +1419,9 @@ function initializeTorpedoAI() {
                         const dimension = entity.dimension;
                         if (dimension) {
                             let targetFound = false;
-                            // Check if it's a player
-                            for (const player of world.getPlayers()) {
+                            // Check if it's a player (use shared cache)
+                            const allPlayers = getCachedPlayers();
+                            for (const player of allPlayers) {
                                 if (player.dimension === dimension) {
                                     const dx = player.location.x - state.lastTarget.x;
                                     const dz = player.location.z - state.lastTarget.z;
@@ -1441,7 +1476,23 @@ function initializeTorpedoAI() {
             }
         }
     }
-    cleanupStates(seen);
+        cleanupStates(seen);
+        
+        // Clean up target cache for entities that no longer exist
+        for (const [entityId, cached] of targetCache.entries()) {
+            try {
+                // Check if entity still exists (this is expensive, so only do it occasionally)
+                if (currentTick % 100 === 0) {
+                    // Every 5 seconds, clean up stale cache entries
+                    const entity = world.getEntity(entityId);
+                    if (!entity || !entity.isValid()) {
+                        targetCache.delete(entityId);
+                    }
+                }
+            } catch {
+                targetCache.delete(entityId);
+            }
+        }
     }, 5);
 }
 

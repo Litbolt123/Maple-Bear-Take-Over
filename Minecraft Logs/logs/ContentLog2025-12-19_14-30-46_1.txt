@@ -1,0 +1,91 @@
+14:30:50[Texture][inform]-TextureSet (textures/items/copper_golem) | Specified image could not be found
+
+14:31:02[Scripting][verbose]-Plugin Discovered [Cave Dweller Add-On] PackId [efbee398-641d-4fd6-bf36-430d780c4f8f_1.0.23] ModuleId [c5665052-7d14-4a4c-a79d-2f41a56391ba]
+
+14:31:02[Scripting][verbose]-Plugin Discovered [MapleBear TakeOver] PackId [064b6f9c-349b-4ab1-80d3-c95f732db577_1.0.2] ModuleId [68f5a9b0-5aac-47cc-961d-3b87ba331a0b]
+
+14:31:02[Scripting][verbose]-Plugin [Cave Dweller Add-On] - promoted [@minecraft/server] from [2.0.0] to [2.4.0] requested by [Cave Dweller Add-On - 0.0.1].
+
+14:31:02[Scripting][verbose]-Plugin [Cave Dweller Add-On] - promoted [@minecraft/server-bindings] from [2.0.0] to [2.4.0] requested by [@minecraft/server - 2.0.0].
+
+14:31:02[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server] from [2.3.0] to [2.4.0] requested by [MapleBear TakeOver - 1.0.0].
+
+14:31:02[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server] from [2.0.0] to [2.4.0] requested by [@minecraft/server-ui-bindings - 2.0.0].
+
+14:31:02[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server-bindings] from [2.3.0] to [2.4.0] requested by [@minecraft/server - 2.3.0].
+
+14:31:02[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server-bindings] from [2.0.0] to [2.4.0] requested by [@minecraft/server - 2.0.0].
+
+14:31:02[Scripting][inform]-📜 Maple Bear Day Tracker script loaded
+
+14:31:02[Scripting][warning]-[SPAWN] Maple Bear spawn controller initialized.
+
+14:31:02[Scripting][inform]-World initialized, setting up event listeners...
+
+14:31:06[Scripting][inform]-Day tracking already initialized
+
+14:31:06[Scripting][inform]-🌍 First player joined, initializing day tracker
+
+14:31:06[Scripting][inform]-Day cycle loop not running, starting it now
+
+14:31:06[Scripting][inform]-Starting day cycle loop
+
+14:31:06[Scripting][inform]-Day cycle loop started successfully
+
+14:31:06[Texture][inform]-TextureSet (textures/items/copper_golem) | Specified image could not be found
+
+14:31:08[Blocks][warning]-xp_cd:popped_abscess: trying to override the Geometry component with blocks.json settings for a custom block. This isn't supported. Please remove any legacy texture definition or block shape specification for this block.
+
+14:31:08[Blocks][warning]-xp_cd:clotted_tissue: trying to override the Geometry component with blocks.json settings for a custom block. This isn't supported. Please remove any legacy texture definition or block shape specification for this block.
+
+14:31:08[Blocks][warning]-xp_cd:tangled_tissue: trying to override the Geometry component with blocks.json settings for a custom block. This isn't supported. Please remove any legacy texture definition or block shape specification for this block.
+
+14:31:08[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:zombie_villager_v2 | minecraft:behavior.nearest_attackable_target | minecraft:zombie_villager_v2 | For entity zombie_villager_v2, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:zombie_villager_v2 | minecraft:behavior.nearest_attackable_target | minecraft:zombie_villager_v2 | For entity zombie_villager_v2, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:zombie_villager_v2 | minecraft:behavior.nearest_attackable_target | minecraft:zombie_villager_v2 | For entity zombie_villager_v2, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:31:08[Json][inform]-minecraft:stray | minecraft:behavior.neare

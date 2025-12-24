@@ -1,0 +1,761 @@
+14:16:21[Texture][inform]-TextureSet (textures/items/copper_golem) | Specified image could not be found
+
+14:16:52[Scripting][verbose]-Plugin Discovered [Cave Dweller Add-On] PackId [efbee398-641d-4fd6-bf36-430d780c4f8f_1.0.23] ModuleId [c5665052-7d14-4a4c-a79d-2f41a56391ba]
+
+14:16:52[Scripting][verbose]-Plugin Discovered [MapleBear TakeOver] PackId [064b6f9c-349b-4ab1-80d3-c95f732db577_1.0.2] ModuleId [68f5a9b0-5aac-47cc-961d-3b87ba331a0b]
+
+14:16:52[Scripting][verbose]-Plugin [Cave Dweller Add-On] - promoted [@minecraft/server] from [2.0.0] to [2.4.0] requested by [Cave Dweller Add-On - 0.0.1].
+
+14:16:52[Scripting][verbose]-Plugin [Cave Dweller Add-On] - promoted [@minecraft/server-bindings] from [2.0.0] to [2.4.0] requested by [@minecraft/server - 2.0.0].
+
+14:16:52[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server] from [2.3.0] to [2.4.0] requested by [MapleBear TakeOver - 1.0.0].
+
+14:16:52[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server] from [2.0.0] to [2.4.0] requested by [@minecraft/server-ui-bindings - 2.0.0].
+
+14:16:52[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server-bindings] from [2.3.0] to [2.4.0] requested by [@minecraft/server - 2.3.0].
+
+14:16:52[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server-bindings] from [2.0.0] to [2.4.0] requested by [@minecraft/server - 2.0.0].
+
+14:16:52[Scripting][inform]-📜 Maple Bear Day Tracker script loaded
+
+14:16:52[Scripting][warning]-[SPAWN] Maple Bear spawn controller initialized.
+
+14:16:52[Scripting][inform]-World initialized, setting up event listeners...
+
+14:16:53[Scripting][inform]-🌅 Initializing day tracking system...
+
+14:16:53[Scripting][inform]-Day tracking system initialized successfully
+
+14:16:53[Scripting][inform]-Starting day cycle loop
+
+14:16:53[Scripting][inform]-Day cycle loop started successfully
+
+14:16:54[Scripting][inform]-🌍 First player joined, initializing day tracker
+
+14:16:54[Texture][inform]-TextureSet (textures/items/copper_golem) | Specified image could not be found
+
+14:16:55[Blocks][warning]-xp_cd:popped_abscess: trying to override the Geometry component with blocks.json settings for a custom block. This isn't supported. Please remove any legacy texture definition or block shape specification for this block.
+
+14:16:55[Blocks][warning]-xp_cd:clotted_tissue: trying to override the Geometry component with blocks.json settings for a custom block. This isn't supported. Please remove any legacy texture definition or block shape specification for this block.
+
+14:16:55[Blocks][warning]-xp_cd:tangled_tissue: trying to override the Geometry component with blocks.json settings for a custom block. This isn't supported. Please remove any legacy texture definition or block shape specification for this block.
+
+14:16:56[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:16:56[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:16:56[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:16:58[Scripting][inform]-[JOIN] Player litbolt123 joined, infection data will be loaded by main.js
+
+14:16:58[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:16:58[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:16:58[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:16:58[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:16:58[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:17:07[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:17:57[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:18:05[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:18:10[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:18:10[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:18:10[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:18:20[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:18:20[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:18:20[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:18:33[Json][inform]-minecraft:cat | minecraft:behavior.nearest_attackable_target | minecraft:cat | For entity cat, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:18:36[Json][inform]-minecraft:iron_golem | minecraft:behavior.nearest_attackable_target | minecraft:iron_golem | For entity iron_golem, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:18:36[Json][inform]-minecraft:cat | minecraft:behavior.nearest_attackable_target | minecraft:cat | For entity cat, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:18:36[Json][inform]-minecraft:cat | minecraft:behavior.nearest_attackable_target | minecraft:cat | For entity cat, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:18:56[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:19:02[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:19:02[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:19:02[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:19:02[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:19:04[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:19:21[Json][inform]-minecraft:slime | minecraft:behavior.nearest_attackable_target | minecraft:slime | For entity slime, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:19:26[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:19:27[Json][inform]-minecraft:slime | minecraft:behavior.nearest_attackable_target | minecraft:slime | For entity slime, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:19:54[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:07[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:11[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:13[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:14[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:29[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:41[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:43[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:45[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:46[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:48[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:49[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:51[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:52[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:54[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:55[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:57[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:20:58[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:00[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:01[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:03[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:04[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:06[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:07[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:09[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:10[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:12[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:13[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:15[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:16[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:18[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:19[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:21[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:22[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:41[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:42[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:44[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:45[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:47[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:48[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:50[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:51[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:53[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:54[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:55[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:55[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:55[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:56[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:56[Scripting][inform]-[JOIN] Player BenignDuck8858 joined, infection data will be loaded by main.js
+
+14:21:57[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:57[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:57[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:59[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:21:59[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:02[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:02[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:06[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:06[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:09[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:17[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:18[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:20[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:21[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:23[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:23[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:23[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:24[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:24[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:29[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:29[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:33[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:33[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:33[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:36[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:36[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:36[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:38[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:39[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:39[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:43[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:43[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:44[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:44[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:46[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:53[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:54[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:22:59[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:23:39[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:23:39[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:23:39[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:23:53[Scripting][inform]-[MBI] Unlocked all content up to day 3 for testing, including daily logs.
+
+14:23:56[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:24:01[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:24:15[Scripting][inform]-[JOIN] Player LQuinn2013 joined, infection data will be loaded by main.js
+
+14:24:17[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:24:22[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:24:22[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:24:23[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:24:23[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:24:23[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:24:29[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:24:29[Json][inform]-minecraft:zombie_villager_v2 | minecraft:behavior.nearest_attackable_target | minecraft:zombie_villager_v2 | For entity zombie_villager_v2, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:24:40[Scripting][error]-TypeError: cannot read property 'includes' of undefined    at createDwelling (main.js)
+    at next (native)
+
+
+14:24:41[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:24:43[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:25:04[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:25:30[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:25:30[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:25:33[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:25:40[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:25:40[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:25:48[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:25:50[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:25:50[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:25:52[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:25:55[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:25:55[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:25:55[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:01[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:01[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:11[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:14[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:14[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:14[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:20[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:20[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:21[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:28[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:28[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:31[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:35[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:43[Json][inform]-minecraft:cat | minecraft:behavior.nearest_attackable_target | minecraft:cat | For entity cat, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:48[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:56[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:56[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:56[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:26:56[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:03[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:07[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:07[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:07[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:19[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:19[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:19[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:23[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:23[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:25[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:25[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:25[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:39[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:39[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:41[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:42[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:43[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:44[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:45[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:46[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:48[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:49[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:50[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:50[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:50[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:50[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:51[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:51[Json][inform]-minecraft:zombie_villager_v2 | minecraft:behavior.nearest_attackable_target | minecraft:zombie_villager_v2 | For entity zombie_villager_v2, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:51[Json][inform]-minecraft:zombie_villager_v2 | minecraft:behavior.nearest_attackable_target | minecraft:zombie_villager_v2 | For entity zombie_villager_v2, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:51[Json][inform]-minecraft:zombie_villager_v2 | minecraft:behavior.nearest_attackable_target | minecraft:zombie_villager_v2 | For entity zombie_villager_v2, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:51[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:51[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:52[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:52[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:53[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:53[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:54[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:55[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:57[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:57[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:27:59[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:00[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:00[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:02[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:03[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:03[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:03[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:05[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:05[Json][inform]-minecraft:zombie_villager_v2 | minecraft:behavior.nearest_attackable_target | minecraft:zombie_villager_v2 | For entity zombie_villager_v2, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:05[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:05[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:07[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:08[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:12[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:12[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:12[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:12[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:16[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:19[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:22[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:22[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:23[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:26[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:26[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:27[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:27[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:28[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:28[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:30[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:32[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:34[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:36[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:38[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:39[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:41[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:41[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:41[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:41[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:42[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:42[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:42[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:42[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:42[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:43[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:43[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:43[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:45[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:45[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:45[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:45[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:45[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:45[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:45[Json][inform]-minecraft:zombie_villager_v2 | minecraft:behavior.nearest_attackable_target | minecraft:zombie_villager_v2 | For entity zombie_villager_v2, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:46[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:46[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:48[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:48[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:50[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:52[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:52[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:53[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:28:56[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:00[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:01[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:01[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:02[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:03[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:04[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:07[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:07[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:07[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:08[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:10[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:10[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:10[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:10[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:13[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:14[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:14[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:14[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:17[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:18[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:18[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:23[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:24[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:25[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:25[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:25[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:25[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:25[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:27[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:27[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:27[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:30[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:32[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:35[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:35[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:36[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:37[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:37[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:39[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:40[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:41[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:42[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:43[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:44[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:44[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:44[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:45[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:45[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:47[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:48[Json][inform]-minecraft:zombie_horse | minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:48[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:48[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:50[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:53[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:53[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:56[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:56[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:57[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:57[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:29:58[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:04[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:05[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:06[Json][inform]-minecraft:polar_bear | minecraft:behavior.nearest_attackable_target | minecraft:polar_bear | For entity polar_bear, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:07[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:07[Json][inform]-minecraft:zombie_villager_v2 | minecraft:behavior.nearest_attackable_target | minecraft:zombie_villager_v2 | For entity zombie_villager_v2, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:07[Json][inform]-minecraft:zombie_villager_v2 | minecraft:behavior.nearest_attackable_target | minecraft:zombie_villager_v2 | For entity zombie_villager_v2, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:07[Json][inform]-minecraft:zombie_villager_v2 | minecraft:behavior.nearest_attackable_target | minecraft:zombie_villager_v2 | For entity zombie_villager_v2, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:08[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:08[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:08[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:09[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:09[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:11[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:13[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:14[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:14[Json][inform]-minecraft:creeper | minecraft:behavior.nearest_attackable_target | minecraft:creeper | For entity creeper, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:14[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:14[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:14[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:14[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:15[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:16[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:16[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:16[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:18[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:20[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:20[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:21[Json][inform]-minecraft:stray | minecraft:behavior.nearest_attackable_target | minecraft:stray | For entity stray, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+14:30:22[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_ta

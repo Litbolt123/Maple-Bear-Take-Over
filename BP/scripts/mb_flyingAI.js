@@ -1,4 +1,19 @@
 import { system, world } from "@minecraft/server";
+import { getCachedPlayers, getCachedPlayerPositions, getCachedMobs } from "./mb_sharedCache.js";
+import { isDebugEnabled } from "./mb_codex.js";
+
+// Debug helper functions
+function getDebugGeneral() {
+    return isDebugEnabled("flying", "general") || isDebugEnabled("flying", "all");
+}
+
+function getDebugTargeting() {
+    return isDebugEnabled("flying", "targeting") || isDebugEnabled("flying", "all");
+}
+
+function getDebugPathfinding() {
+    return isDebugEnabled("flying", "pathfinding") || isDebugEnabled("flying", "all");
+}
 
 const DIMENSION_IDS = ["overworld", "nether", "the_end"];
 const FLYING_TYPES = [
@@ -32,6 +47,9 @@ const PASSIVE_WANDER_TICKS = 2400; // 2 minutes without seeing target = passive 
 const MAX_PROCESSING_DISTANCE = 64; // Only process entities within 64 blocks of any player
 const MAX_PROCESSING_DISTANCE_SQ = MAX_PROCESSING_DISTANCE * MAX_PROCESSING_DISTANCE;
 
+// Performance: AI tick interval (reduced frequency for performance)
+const AI_TICK_INTERVAL = 2; // Run AI every 2 ticks instead of every tick (50% reduction)
+
 const AIR_BLOCKS = new Set([
     "minecraft:air",
     "minecraft:cave_air",
@@ -49,8 +67,15 @@ function findTarget(entity, maxDistance = MAX_TARGET_DISTANCE) {
     let best = null;
     let bestDistSq = maxDistSq;
 
-    for (const player of world.getPlayers()) {
+    // Use shared cache instead of querying all players
+    const allPlayers = getCachedPlayers();
+    for (const player of allPlayers) {
         if (player.dimension !== dimension) continue;
+        // Skip creative and spectator mode players (they can't be attacked)
+        try {
+            const gameMode = player.getGameMode();
+            if (gameMode === "creative" || gameMode === "spectator") continue;
+        } catch { }
         const dx = player.location.x - origin.x;
         const dy = player.location.y - origin.y;
         const dz = player.location.z - origin.z;
@@ -61,11 +86,8 @@ function findTarget(entity, maxDistance = MAX_TARGET_DISTANCE) {
         }
     }
 
-    const mobs = dimension.getEntities({
-        maxDistance,
-        location: origin,
-        families: ["mob"]
-    });
+    // Use shared cache instead of per-entity query
+    const mobs = getCachedMobs(dimension, origin, maxDistance);
     for (const mob of mobs) {
         if (mob === entity) continue;
         const dx = mob.location.x - origin.x;
@@ -206,13 +228,64 @@ function resolveCeilingCollision(entity) {
     }
 }
 
+// Performance: Cache target lookups to avoid querying all players/mobs every tick
+const targetCache = new Map(); // Map<entityId, {target: targetInfo, tick: number}>
+
+// Track AI loop start tick for debug logging
+let aiLoopStartTick = system.currentTick;
+
 system.runInterval(() => {
     const tick = system.currentTick;
+    const ticksSinceStart = tick - aiLoopStartTick;
     const seenIds = new Set();
     
-    // Performance: Get all players once and cache their positions for distance culling
-    const playerPositions = new Map(); // Map<dimensionId, positions[]>
-    for (const player of world.getPlayers()) {
+    // Note: system.runInterval already handles the interval, so we don't need to check tick % AI_TICK_INTERVAL
+    // The interval callback is only called every AI_TICK_INTERVAL ticks automatically
+    
+    // Always log when debug is enabled (frequently to confirm it's working)
+    if (getDebugGeneral()) {
+        // Log very frequently in first 20 ticks, then every 50 ticks (only when debug enabled)
+        if (getDebugGeneral() && (ticksSinceStart <= 20 || ticksSinceStart % 50 === 0)) {
+            console.warn(`[FLYING AI] AI loop running at tick ${tick} (${ticksSinceStart} ticks since start) - DEBUG ENABLED`);
+        }
+    }
+    
+    // Performance: Use shared player cache
+    const allPlayers = getCachedPlayers();
+    const playerPositions = getCachedPlayerPositions();
+    
+    // Log player count for troubleshooting (only when debug enabled)
+    if (getDebugGeneral() && (ticksSinceStart <= 20 || tick % 50 === 0)) {
+        console.warn(`[FLYING AI] Player detection: found ${allPlayers.length} player(s)`);
+        if (allPlayers.length > 0) {
+            for (const player of allPlayers) {
+                try {
+                    const dimId = player.dimension?.id || 'unknown';
+                    let isValid = 'unknown';
+                    try {
+                        const gameMode = player.getGameMode();
+                        if (gameMode === "creative" || gameMode === "spectator") {
+                            isValid = 'invalid (creative/spectator)';
+                        } else if (player.dimension) {
+                            isValid = 'valid';
+                        } else {
+                            isValid = 'invalid (no dimension)';
+                        }
+                    } catch {
+                        isValid = player.dimension ? 'valid' : 'invalid (no dimension)';
+                    }
+                    console.warn(`[FLYING AI]   Player: ${player.name}, dimension: ${dimId}, valid: ${isValid}`);
+                } catch (err) {
+                    console.warn(`[FLYING AI]   Player: ${player.name}, error getting info:`, err);
+                }
+            }
+        }
+    }
+    
+    // Build player positions map from cached data (if needed for compatibility)
+    // Note: getCachedPlayerPositions() already returns Map<dimensionId, positions[]>
+    // But we may need to iterate for other purposes, so keep the loop structure
+    for (const player of allPlayers) {
         try {
             const dimId = player.dimension.id;
             if (!playerPositions.has(dimId)) {
@@ -246,6 +319,11 @@ system.runInterval(() => {
             }
             if (!entities || entities.length === 0) continue;
             
+            // Debug logging for entity count
+            if (getDebugGeneral() && (ticksSinceStart <= 20 || tick % 50 === 0)) {
+                console.warn(`[FLYING AI] Found ${entities.length} ${config.id} entities in ${dimId}`);
+            }
+            
             // Performance: Distance-based culling - only process entities near players
             const validEntities = [];
             for (const entity of entities) {
@@ -275,9 +353,24 @@ system.runInterval(() => {
                 seenIds.add(entity.id);
                 const profile = getFlightProfile(entity, config);
                 const groundY = probeGroundHeight(entity);
+                
+                // Debug pathfinding info
+                if (getDebugPathfinding() && (ticksSinceStart <= 20 || tick % 100 === 0)) {
+                    const loc = entity.location;
+                    const altitude = loc.y - groundY;
+                    console.warn(`[FLYING AI] Entity ${entity.id.substring(0, 8)}: Y=${loc.y.toFixed(1)}, groundY=${groundY.toFixed(1)}, altitude=${altitude.toFixed(1)}, profile=${profile === config.highProfile ? 'high' : 'low'}`);
+                }
+                
                 adjustAltitude(entity, profile, groundY);
                 resolveCeilingCollision(entity);
                 const targetInfo = findTarget(entity);
+                
+                // Debug targeting info
+                if (getDebugTargeting() && targetInfo) {
+                    const dist = Math.hypot(targetInfo.vector.x, targetInfo.vector.y, targetInfo.vector.z);
+                    const targetType = targetInfo.entity?.typeId || 'unknown';
+                    console.warn(`[FLYING AI] Entity ${entity.id.substring(0, 8)}: Targeting ${targetType} at distance ${dist.toFixed(1)}`);
+                }
                 
                 // Track last seen target tick
                 if (targetInfo) {
@@ -290,6 +383,9 @@ system.runInterval(() => {
                     if (timeSinceSeen > PASSIVE_WANDER_TICKS) {
                         // Force passive wandering - clear tracking
                         lastSeenTargetTick.delete(entity.id);
+                        if (getDebugGeneral() && (ticksSinceStart <= 20 || tick % 200 === 0)) {
+                            console.warn(`[FLYING AI] Entity ${entity.id.substring(0, 8)}: Entering passive wandering (no target for ${timeSinceSeen} ticks)`);
+                        }
                     }
                     applyDrift(entity, tick, profile);
                 }
@@ -306,5 +402,21 @@ system.runInterval(() => {
             }
         }
     }
-}, 6);
+    
+    // Clean up target cache for entities that no longer exist
+    for (const [entityId, cached] of targetCache.entries()) {
+        try {
+            // Check if entity still exists (this is expensive, so only do it occasionally)
+            if (tick % 100 === 0) {
+                // Every 5 seconds, clean up stale cache entries
+                const entity = world.getEntity(entityId);
+                if (!entity || !entity.isValid()) {
+                    targetCache.delete(entityId);
+                }
+            }
+        } catch {
+            targetCache.delete(entityId);
+        }
+    }
+}, AI_TICK_INTERVAL); // Run every AI_TICK_INTERVAL ticks (reduced frequency for performance)
 

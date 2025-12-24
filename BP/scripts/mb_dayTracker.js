@@ -26,7 +26,7 @@ const INITIALIZED_FLAG = "mb_day_tracker_initialized";
 const DAY_COUNT_KEY = "mb_day_count";
 const SCOREBOARD_NAME = "mb_day_tracker";
 const DAY_SCORE_ID = "current_day";
-const MILESTONE_DAYS = [2, 4, 8, 13, 20, 25]; // Tiny Maple Bears, Infected Maple Bears, Buff Maple Bears, Day 13 variants, Day 20 escalation, Day 25 victory
+const MILESTONE_DAYS = [2, 4, 8, 11, 13, 15, 17, 20, 25, 50, 75, 100]; // Tiny Maple Bears, Infected Maple Bears, Flying Bears (day 8), Day 11 transition, Buff Bears (day 13), Mining Bears, Torpedo Bears, Day 20 escalation, Day 25 victory, Day 50 milestone, Day 75 milestone, Day 100 milestone
 
 // Scoreboard
 const SCOREBOARD_OBJECTIVE = "mb_days";
@@ -51,52 +51,124 @@ let dayCycleLoopId = null;
  * @returns {object} Object with color and symbols
  */
 export function getDayDisplayInfo(day) {
+    const isMilestone = isMilestoneDay(day);
     let color = "§a"; // light green by default
     let exclamations = 0;
 
     if (day <= 2) {
-        color = "§a"; // light green
+        // Day 1-2: Safe period
+        color = isMilestone ? "§a" : "§a"; // light green
         exclamations = 0;
     } else if (day <= 5) {
-        color = "§2"; // dark green
-        exclamations = 1;
+        // Day 3-5: Early escalation
+        color = isMilestone ? "§2" : "§2"; // dark green (milestone days are same color but will be darker in display)
+        exclamations = isMilestone ? 2 : 1;
     } else if (day <= 7) {
-        color = "§e"; // light yellow
-        exclamations = 2;
-    } else if (day <= 10) {
-        color = "§6"; // dark yellow / amber
-        exclamations = 3;
-    } else if (day <= 13) {
-        color = "§6"; // light orange tone
+        // Day 6-7: Warning period
+        color = isMilestone ? "§6" : "§e"; // milestone: amber/orange, normal: light yellow
+        exclamations = isMilestone ? 3 : 2;
+    } else if (day === 8) {
+        // Day 8: Milestone - Flying bears arrive
+        color = "§c"; // light red - milestone day (darker than normal)
         exclamations = 4;
-    } else if (day <= 15) {
-        color = "§6"; // dark orange (same palette, escalating tone)
+    } else if (day <= 10) {
+        // Day 9-10: Normal days after milestone - steadier color
+        color = "§6"; // amber - steadier than milestone, gradually darkening
+        exclamations = 3;
+    } else if (day === 11) {
+        // Day 11: Transition milestone - darker than normal days
+        color = "§c"; // light red - milestone day (darker)
+        exclamations = 4;
+    } else if (day === 12) {
+        // Day 12: Normal day - steadier color
+        color = "§6"; // amber - steadier than milestone
+        exclamations = 3;
+    } else if (day === 13) {
+        // Day 13: Milestone - Buff bears arrive
+        color = "§c"; // light red - milestone day (darker)
         exclamations = 5;
-    } else if (day <= 17) {
-        color = "§c"; // light red
+    } else if (day === 14) {
+        // Day 14: Normal day after milestone - steadier color
+        color = "§6"; // amber - steadier than milestone
+        exclamations = 4;
+    } else if (day === 15) {
+        // Day 15: Milestone - Mining bears
+        color = "§c"; // light red - milestone day (darker)
+        exclamations = 5;
+    } else if (day === 16) {
+        // Day 16: Normal day - steadier color, gradually darkening
+        color = "§6"; // amber - steadier than milestone
+        exclamations = 4;
+    } else if (day === 17) {
+        // Day 17: Milestone - Torpedo bears
+        color = "§4"; // dark red - milestone day (darker than normal)
+        exclamations = 5;
+    } else if (day < 20) {
+        // Day 18-19: Normal days - steadier color, gradually darkening toward red
+        color = "§c"; // light red - steadier than milestone, gradually darkening
+        exclamations = 4;
+    } else if (day === 20) {
+        // Day 20: Milestone - Major escalation
+        color = "§4"; // dark red - milestone day (darker than normal)
         exclamations = 5;
     } else if (day < 25) {
-        color = "§4"; // dark red
-        exclamations = 5;
+        // Day 21-24: Normal days before victory - steadier color, gradually darkening
+        color = "§c"; // light red - steadier than milestone, gradually darkening
+        exclamations = 4;
     } else if (day === 25) {
+        // Day 25: Victory milestone
         color = "§a"; // green for victory day
         exclamations = 0;
-    } else {
-        // Post-victory: Escalating danger colors
-        const daysPastVictory = day - 25;
-        if (daysPastVictory <= 5) {
-            color = "§c"; // light red - still manageable
-            exclamations = 6;
-        } else if (daysPastVictory <= 10) {
-            color = "§4"; // dark red - getting dangerous
-            exclamations = 7;
-        } else if (daysPastVictory <= 20) {
-            color = "§5"; // dark purple - extreme danger
+    } else if (day <= 50) {
+        // Day 26-50: Post-victory gradient to day 50
+        const progress = (day - 25) / 25; // 0 to 1 from day 25 to 50
+        if (isMilestone && day === 50) {
+            color = "§5"; // dark purple - milestone day 50 (darker than normal)
             exclamations = 8;
         } else {
-            color = "§0"; // black - maximum danger
-            exclamations = 9;
+            // Gradual gradient for normal days: light red → dark red → dark purple (steadier)
+            if (progress < 0.33) {
+                color = "§c"; // light red - steadier
+                exclamations = 6;
+            } else if (progress < 0.66) {
+                color = "§4"; // dark red - gradually darkening
+                exclamations = 7;
+            } else {
+                color = "§5"; // dark purple - gradually darkening
+                exclamations = 7;
+            }
         }
+    } else if (day <= 75) {
+        // Day 51-75: Gradient to day 75
+        const progress = (day - 50) / 25; // 0 to 1 from day 50 to 75
+        if (isMilestone && day === 75) {
+            color = "§0"; // black - milestone day 75 (darker than normal)
+            exclamations = 9;
+        } else {
+            // Gradual gradient for normal days: dark purple → darker (steadier)
+            color = "§5"; // dark purple - steadier than milestone
+            exclamations = Math.floor(7 + progress * 2); // 7 to 9
+        }
+    } else if (day <= 100) {
+        // Day 76-100: Gradient to day 100
+        const progress = (day - 75) / 25; // 0 to 1 from day 75 to 100
+        if (isMilestone && day === 100) {
+            color = "§0"; // black - milestone day 100 (maximum danger, darker)
+            exclamations = 10;
+        } else {
+            // Gradual gradient for normal days: dark purple → black (steadier)
+            if (progress < 0.5) {
+                color = "§5"; // dark purple - steadier than milestone
+                exclamations = 9;
+            } else {
+                color = "§0"; // black - gradually darkening
+                exclamations = 9;
+            }
+        }
+    } else {
+        // Day 100+: Maximum danger
+        color = "§0"; // black - maximum danger
+        exclamations = 10;
     }
 
     return { color, symbols: "!".repeat(exclamations) };
@@ -165,7 +237,7 @@ function getReturningPlayerWelcome(day, player) {
             };
         }
     } else {
-        // Day 8+: Buff Maple Bears have started spawning
+        // Day 8+: Flying Maple Bears have started spawning
         if (infectionKnowledge >= 2) {
             return {
                 message: "§cWelcome back! The end draws near...",
@@ -302,7 +374,7 @@ export function checkDailyEventsForAllPlayers() {
                         recordDailyEvent(player, dayToRecord, milestoneMessage, "general");
                         
                         // Play sound and send message for milestone days (like item discovery)
-                        if (dayToRecord === 2 || dayToRecord === 4 || dayToRecord === 8 || dayToRecord === 13) {
+                        if (dayToRecord === 2 || dayToRecord === 4 || dayToRecord === 8 || dayToRecord === 11 || dayToRecord === 13 || dayToRecord === 15 || dayToRecord === 17) {
                             try {
                                 // Play discovery sound
                                 player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
@@ -398,13 +470,25 @@ function getMilestoneMessage(day) {
         case 4:
             return "The tiny bears have evolved into more dangerous variants. You've observed infected Maple Bears that are larger and more aggressive than their predecessors. These creatures seem to have developed a taste for corruption, actively seeking out and transforming other animals. The white dust they leave behind has become more concentrated, and you've noticed it seems to affect the very ground they walk on.";
         case 8:
-            return "A new threat has emerged - massive Buff Maple Bears that tower over their smaller counterparts. These behemoths are incredibly dangerous and seem to possess an intelligence that the smaller variants lack. They actively hunt larger creatures and have been observed coordinating attacks. The infection has reached a critical point, with these powerful variants capable of spreading the corruption at an alarming rate.";
+            return "The sky is no longer safe. You've witnessed Maple Bears taking flight, soaring through the air with an unnatural grace. These flying variants can reach places that were once thought secure, and they seem to hunt from above with terrifying precision. The infection has learned to take to the skies.";
+        case 11:
+            return "The infection continues to evolve. More dangerous variants have appeared, and the threat grows with each passing day. The white dust spreads further, and the corrupted creatures become more aggressive.";
         case 13:
-            return "The infection has reached its most advanced stage. The most powerful Maple Bear variants have appeared, combining the intelligence of the Buff Bears with enhanced abilities. These creatures are no longer just spreading infection - they seem to be actively building something, creating structures from the white dust and corrupted materials. The very landscape is beginning to change under their influence, and the infection has become an unstoppable force of nature.";
+            return "A new threat has emerged - massive Buff Maple Bears that tower over their smaller counterparts. These behemoths are incredibly dangerous and seem to possess an intelligence that the smaller variants lack. They actively hunt larger creatures and have been observed coordinating attacks. The infection has reached a critical point, with these powerful variants capable of spreading the corruption at an alarming rate.";
+        case 15:
+            return "The ground beneath your feet is no longer safe. You've discovered Maple Bears that can dig through the earth itself, tunneling towards their targets with relentless determination. These mining variants can reach you even in the deepest underground bases, and they seem to work together, creating elaborate tunnel networks. Nowhere is truly hidden from the infection.";
+        case 17:
+            return "A new terror has emerged from the skies - torpedo-like Maple Bears that dive with devastating speed and force. These creatures strike from above with such velocity that they can break through almost any defense. They seem to target with an almost supernatural accuracy, as if they can sense your presence through walls. The infection has become a predator from every angle.";
         case 20:
             return "The world feels hushed, as if holding its breath. Day 20 bears walk like winter's final verdict, and the dust they shed clings to the air itself. Survivors whisper that the infection now remembers every step we've taken.";
         case 25:
             return "You have survived. Twenty-five days of relentless infection, of watching the world transform under the weight of white dust and corrupted creatures. You stand as proof that humanity can endure even when the very ground beneath your feet turns against you. But the infection does not rest. It will only grow stronger, more relentless. The challenge continues, but you have proven yourself a true survivor.";
+        case 50:
+            return "Fifty days. The infection has become something else entirely - a force of nature that reshapes reality itself. The white dust no longer simply covers the world; it has become the world. Every surface, every breath, every moment is tainted by its presence. The bears have evolved beyond recognition, and you wonder if you're still fighting an infection, or if you're fighting the world itself.";
+        case 75:
+            return "Seventy-five days. The boundary between infection and existence has blurred beyond recognition. The world remembers everything - every step, every death, every moment of hope. The bears move with a purpose that transcends mere hunger or aggression. They are architects of a new reality, and you are both witness and participant in this transformation. The question is no longer whether you can survive, but what you will become.";
+        case 100:
+            return "One hundred days. You have reached a milestone that few could even imagine. The world you knew is gone, replaced by something that defies understanding. The infection has achieved a kind of perfection - a complete integration with reality itself. You stand at the threshold of something new, something that has never existed before. The journey continues, but you have proven that even in the face of absolute transformation, something of what you were remains. You are a survivor. You are a witness. You are part of the story that will be told long after the last bear has moved on.";
         default:
             return `Day ${day} has passed. The infection continues to evolve, and the world grows more dangerous with each sunrise.`;
     }
@@ -802,7 +886,7 @@ function pickSpawnTypeForDay(day) {
         return ["mb:mb_day13", "mb:infected_day13", "mb:buff_mb_day13"];
     }
     if (day >= 8) {
-        return ["mb:mb_day8", "mb:infected_day8", "mb:buff_mb"]; // buff_mb_day13 not yet
+        return ["mb:mb_day8", "mb:infected_day8", "mb:flying_mb"]; // flying bears now spawn on day 8 (was buff bears)
     }
     if (day >= 4) {
         return ["mb:mb_day4", "mb:infected"]; // no buff yet

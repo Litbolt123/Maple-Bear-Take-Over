@@ -1,0 +1,338 @@
+20:44:34[Scripting][inform]-[CODEX] litbolt123 unlocked day 4+ variants
+
+20:44:34[Scripting][inform]-[CODEX] litbolt123 unlocked day 8+ variants
+
+20:44:34[Scripting][inform]-[CODEX] litbolt123 unlocked day 13+ variants
+
+20:44:34[Scripting][inform]-[CODEX] litbolt123 unlocked day 20+ variants
+
+20:44:34[Scripting][inform]-[MBI] Unlocked all content up to day 20 for testing, including daily logs.
+
+20:44:35[Json][inform]-mb:mb_day20 | minecraft:behavior.nearest_attackable_target | mb:mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:44:35[Json][inform]-mb:infected_day20 | minecraft:behavior.nearest_attackable_target | mb:infected_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:44:35[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:44:35[Json][inform]-mb:torpedo_mb | minecraft:behavior.nearest_attackable_target | mb:torpedo_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:44:35[Animation][error]-mb:torpedo_mb | Error: can't find animation falling4
+
+20:44:35[Animation][error]-mb:torpedo_mb | Error: can't find animation falling5
+
+20:44:35[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle | variable.idle_anim==1 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:44:35[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle2 | variable.idle_anim==2 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:44:35[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle3 | variable.idle_anim==3 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:44:35[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle4 | variable.idle_anim==4 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:44:35[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle5 | variable.idle_anim==5 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:44:45[Json][inform]-mb:buff_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:buff_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:44:56[Json][inform]-mb:mb_day20 | minecraft:behavior.nearest_attackable_target | mb:mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:44:56[Json][inform]-mb:infected_day20 | minecraft:behavior.nearest_attackable_target | mb:infected_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:44:56[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:08[Json][inform]-mb:infected_cow | minecraft:behavior.nearest_attackable_target | mb:infected_cow | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:11[Json][inform]-mb:torpedo_mb | minecraft:behavior.nearest_attackable_target | mb:torpedo_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:11[Animation][error]-mb:torpedo_mb | Error: can't find animation falling4
+
+20:45:11[Animation][error]-mb:torpedo_mb | Error: can't find animation falling5
+
+20:45:11[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle | variable.idle_anim==1 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:45:11[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle2 | variable.idle_anim==2 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:45:11[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle3 | variable.idle_anim==3 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:45:11[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle4 | variable.idle_anim==4 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:45:11[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle5 | variable.idle_anim==5 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:45:12[Json][inform]-mb:infected_pig | minecraft:behavior.nearest_attackable_target | mb:infected_pig | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:16[Json][inform]-mb:mb_day20 | minecraft:behavior.nearest_attackable_target | mb:mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:16[Json][inform]-mb:infected_day20 | minecraft:behavior.nearest_attackable_target | mb:infected_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:16[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:43[Json][inform]-minecraft:wolf | minecraft:behavior.nearest_attackable_target | minecraft:wolf | For entity wolf, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:50[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:53[Json][inform]-mb:mb_day20 | minecraft:behavior.nearest_attackable_target | mb:mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:53[Json][inform]-mb:infected_day20 | minecraft:behavior.nearest_attackable_target | mb:infected_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:53[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:53[Json][inform]-mb:torpedo_mb | minecraft:behavior.nearest_attackable_target | mb:torpedo_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:53[Animation][error]-mb:torpedo_mb | Error: can't find animation falling4
+
+20:45:53[Animation][error]-mb:torpedo_mb | Error: can't find animation falling5
+
+20:45:53[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle | variable.idle_anim==1 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:45:53[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle2 | variable.idle_anim==2 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:45:53[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle3 | variable.idle_anim==3 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:45:53[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle4 | variable.idle_anim==4 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:45:53[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle5 | variable.idle_anim==5 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:45:54[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:58[Json][inform]-minecraft:wolf | minecraft:behavior.nearest_attackable_target | minecraft:wolf | For entity wolf, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:58[Json][inform]-minecraft:wolf | minecraft:behavior.nearest_attackable_target | minecraft:wolf | For entity wolf, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:45:58[Json][inform]-minecraft:wolf | minecraft:behavior.nearest_attackable_target | minecraft:wolf | For entity wolf, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:15[Json][inform]-mb:mb_day20 | minecraft:behavior.nearest_attackable_target | mb:mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:15[Json][inform]-mb:infected_day20 | minecraft:behavior.nearest_attackable_target | mb:infected_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:15[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:17[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:23[Json][inform]-minecraft:drowned | minecraft:behavior.nearest_attackable_target | minecraft:drowned | For entity drowned, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:36[Json][inform]-mb:mb_day20 | minecraft:behavior.nearest_attackable_target | mb:mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:36[Json][inform]-mb:infected_day20 | minecraft:behavior.nearest_attackable_target | mb:infected_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:36[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:36[Json][inform]-mb:torpedo_mb | minecraft:behavior.nearest_attackable_target | mb:torpedo_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:36[Animation][error]-mb:torpedo_mb | Error: can't find animation falling4
+
+20:46:36[Animation][error]-mb:torpedo_mb | Error: can't find animation falling5
+
+20:46:45[Json][inform]-mb:infected_cow | minecraft:behavior.nearest_attackable_target | mb:infected_cow | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:48[Json][inform]-mb:infected_cow | minecraft:behavior.nearest_attackable_target | mb:infected_cow | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:56[Json][inform]-mb:infected_cow | minecraft:behavior.nearest_attackable_target | mb:infected_cow | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:57[Json][inform]-mb:mb_day20 | minecraft:behavior.nearest_attackable_target | mb:mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:57[Json][inform]-mb:infected_day20 | minecraft:behavior.nearest_attackable_target | mb:infected_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:46:57[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle | variable.idle_anim==1 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle2 | variable.idle_anim==2 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle3 | variable.idle_anim==3 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle4 | variable.idle_anim==4 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle5 | variable.idle_anim==5 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle | variable.idle_anim==1 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle2 | variable.idle_anim==2 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle3 | variable.idle_anim==3 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle4 | variable.idle_anim==4 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle5 | variable.idle_anim==5 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle | variable.idle_anim==1 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle2 | variable.idle_anim==2 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle3 | variable.idle_anim==3 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle4 | variable.idle_anim==4 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle5 | variable.idle_anim==5 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle | variable.idle_anim==1 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle2 | variable.idle_anim==2 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle3 | variable.idle_anim==3 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle4 | variable.idle_anim==4 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle5 | variable.idle_anim==5 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle | variable.idle_anim==1 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle2 | variable.idle_anim==2 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle3 | variable.idle_anim==3 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle4 | variable.idle_anim==4 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle5 | variable.idle_anim==5 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle | variable.idle_anim==1 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle2 | variable.idle_anim==2 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle3 | variable.idle_anim==3 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle4 | variable.idle_anim==4 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle5 | variable.idle_anim==5 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle | variable.idle_anim==1 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle2 | variable.idle_anim==2 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle3 | variable.idle_anim==3 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle4 | variable.idle_anim==4 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle5 | variable.idle_anim==5 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle | variable.idle_anim==1 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle2 | variable.idle_anim==2 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle3 | variable.idle_anim==3 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle4 | variable.idle_anim==4 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:05[Molang][error]-mb:infected_day20 | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle5 | variable.idle_anim==5 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:06[Json][inform]-mb:infected_pig | minecraft:behavior.nearest_attackable_target | mb:infected_pig | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:08[Json][inform]-mb:torpedo_mb | minecraft:behavior.nearest_attackable_target | mb:torpedo_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:08[Json][inform]-mb:infected_day20 | minecraft:behavior.nearest_attackable_target | mb:infected_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:09[Animation][error]-mb:torpedo_mb | Error: can't find animation falling4
+
+20:47:09[Animation][error]-mb:torpedo_mb | Error: can't find animation falling5
+
+20:47:12[Json][inform]-mb:infected_day20 | minecraft:behavior.nearest_attackable_target | mb:infected_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:15[Json][inform]-mb:infected_day20 | minecraft:behavior.nearest_attackable_target | mb:infected_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:18[Json][inform]-mb:mb_day20 | minecraft:behavior.nearest_attackable_target | mb:mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:18[Json][inform]-mb:infected_day20 | minecraft:behavior.nearest_attackable_target | mb:infected_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:18[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:24[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:39[Json][inform]-mb:mb_day20 | minecraft:behavior.nearest_attackable_target | mb:mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:39[Json][inform]-mb:infected_day20 | minecraft:behavior.nearest_attackable_target | mb:infected_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:39[Json][inform]-mb:buff_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:buff_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:39[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:40[Json][inform]-minecraft:wolf | minecraft:behavior.nearest_attackable_target | minecraft:wolf | For entity wolf, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:44[Json][inform]-mb:torpedo_mb | minecraft:behavior.nearest_attackable_target | mb:torpedo_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:44[Animation][error]-mb:torpedo_mb | Error: can't find animation falling4
+
+20:47:44[Animation][error]-mb:torpedo_mb | Error: can't find animation falling5
+
+20:47:44[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle | variable.idle_anim==1 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:44[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle2 | variable.idle_anim==2 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:44[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle3 | variable.idle_anim==3 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:44[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle4 | variable.idle_anim==4 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:44[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle5 | variable.idle_anim==5 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:47:45[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:46[Json][inform]-mb:mb_day20 | minecraft:behavior.nearest_attackable_target | mb:mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:46[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:46[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:47[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:53[Json][inform]-mb:infected_pig | minecraft:behavior.nearest_attackable_target | mb:infected_pig | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:53[Json][inform]-minecraft:wolf | minecraft:behavior.nearest_attackable_target | minecraft:wolf | For entity wolf, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:47:57[Json][inform]-mb:infected_pig | minecraft:behavior.nearest_attackable_target | mb:infected_pig | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:48:00[Json][inform]-mb:mb_day20 | minecraft:behavior.nearest_attackable_target | mb:mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:48:09[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:48:10[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:48:10[Json][inform]-mb:flying_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:flying_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:48:23[Json][inform]-minecraft:wolf | minecraft:behavior.nearest_attackable_target | minecraft:wolf | For entity wolf, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:49:14[Json][inform]-minecraft:skeleton | minecraft:behavior.nearest_attackable_target | minecraft:skeleton | For entity skeleton, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:49:16[Json][inform]-mb:mb_day20 | minecraft:behavior.nearest_attackable_target | mb:mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:49:16[Json][inform]-mb:infected_day20 | minecraft:behavior.nearest_attackable_target | mb:infected_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:49:16[Json][inform]-mb:torpedo_mb | minecraft:behavior.nearest_attackable_target | mb:torpedo_mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:49:16[Animation][error]-mb:torpedo_mb | Error: can't find animation falling4
+
+20:49:16[Animation][error]-mb:torpedo_mb | Error: can't find animation falling5
+
+20:49:16[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle | variable.idle_anim==1 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:49:16[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle2 | variable.idle_anim==2 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:49:16[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle3 | variable.idle_anim==3 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:49:16[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle4 | variable.idle_anim==4 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:49:16[Molang][error]-mb:torpedo_mb | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/MapleBear TakeOver RP/animation_controllers/infected_animation_controller.json | animation_controllers | controller.animation.infected_mb_variant_0 | states | idle | animations | idle5 | variable.idle_anim==5 | Error: unhandled request for unknown variable 'variable.idle_anim'
+
+20:58:44[Json][inform]-mb:infected_cow | minecraft:behavior.nearest_attackable_target | mb:infected_cow | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:58:45[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:58:45[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:58:45[Json][inform]-minecraft:zombie | minecraft:behavior.nearest_attackable_target | minecraft:zombie | For entity zombie, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:58:48[Json][inform]-mb:buff_mb_day20 | minecraft:behavior.nearest_attackable_target | mb:buff_mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:58:54[Json][inform]-mb:mb | minecraft:behavior.nearest_attackable_target | mb:mb | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:58:59[Json][inform]-mb:mb_day20 | minecraft:behavior.nearest_attackable_target | mb:mb_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:58:59[Json][inform]-mb:infected_cow | minecraft:behavior.nearest_attackable_target | mb:infected_cow | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:59:02[Json][inform]-mb:infected_pig | minecraft:behavior.nearest_attackable_target | mb:infected_pig | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:59:04[Json][inform]-mb:infected_day20 | minecraft:behavior.nearest_attackable_target | mb:infected_day20 | For entity unknown, "attack_interval" is disabled (max <= 0); goal will fall back to "scan_interval" (ticks).
+
+20:59:08[Texture][inform]-TextureSet (textures/blocks/glazed_terracotta_light_gray) | Specified image could not be found
+
+20:59:09[Texture][inform]-TextureSet (textures/items/copper_golem) | Specified image could not be found
+
+20:59:09[Texture][inform]-TextureSet (textures/vars/log_oak_var_mer) | Specified image could not be found
+
+20:59:09[Texture][inform]-TextureSet (textures/vars/log_oak_var_mer) | Specified image could not be found
+
