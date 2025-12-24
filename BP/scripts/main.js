@@ -661,10 +661,10 @@ function checkVariantUnlock(player, codexParam = null) {
             // Separate kill checks for each bear type's day 8+ variants (only valid if day >= 13)
             const tinyBearDay8Unlock = currentDay >= 13 && (codex.mobs.variantKills.tinyBear.day8 || 0) >= 3;
             const infectedBearDay8Unlock = currentDay >= 13 && (codex.mobs.variantKills.infectedBear.day8 || 0) >= 3;
-            const buffBearDay8Unlock = currentDay >= 13 && (codex.mobs.variantKills.buffBear?.day13 || 0) >= 3;
+            const buffBearDay13Unlock = currentDay >= 13 && (codex.mobs.variantKills.buffBear?.original || 0) >= 3;
             const otherMobDay8Unlock = currentDay >= 13 && ((codex.mobs.variantKills.infectedPig.day8 || 0) >= 3 || (codex.mobs.variantKills.infectedCow.day8 || 0) >= 3);
 
-            const killUnlock = tinyBearDay8Unlock || infectedBearDay8Unlock || buffBearDay8Unlock || otherMobDay8Unlock;
+            const killUnlock = tinyBearDay8Unlock || infectedBearDay8Unlock || buffBearDay13Unlock || otherMobDay8Unlock;
             
             if (dayUnlock || killUnlock) {
                 codex.mobs.day13VariantsUnlocked = true;

@@ -63,7 +63,7 @@ function findTarget(entity, maxDistance = MAX_TARGET_DISTANCE) {
     const dimension = entity?.dimension;
     if (!dimension) return null;
     
-    // Performance: Check cache first
+    // Performance: Check cache first - compute cache key before validation checks
     const entityId = entity.id;
     const currentTick = system.currentTick;
     const cached = targetCache.get(entityId);
@@ -79,7 +79,14 @@ function findTarget(entity, maxDistance = MAX_TARGET_DISTANCE) {
     // Use shared cache instead of querying all players
     const allPlayers = getCachedPlayers();
     const dimensionId = dimension?.id;
-    if (!dimensionId) return null;
+    if (!dimensionId) {
+        // Cache the negative result to avoid repeated validation within the same tick
+        // Only write null if there was no previous positive cached value
+        if (!cached || cached.target === null) {
+            targetCache.set(entityId, { target: null, tick: currentTick });
+        }
+        return null;
+    }
     for (const player of allPlayers) {
         if (!player.dimension?.id || player.dimension.id !== dimensionId) continue;
         // Skip creative and spectator mode players (they can't be attacked)

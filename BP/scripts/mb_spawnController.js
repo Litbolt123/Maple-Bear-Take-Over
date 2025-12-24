@@ -919,8 +919,10 @@ function detectWeatherAPI() {
             try {
                 // Check if weatherChanged event exists
                 if (world.afterEvents.weatherChanged) {
-                    setupWeatherEventSubscription();
-                    return 'event';
+                    if (setupWeatherEventSubscription()) {
+                        return 'event';
+                    }
+                    // Setup failed, fall through to return 'none'
                 }
             } catch (e) {
                 // Event doesn't exist
@@ -1005,11 +1007,12 @@ function detectWeatherFromAPI(dimension) {
 /**
  * Setup event subscription for weather changes (Option B - Fallback)
  * This maintains weather state via events when direct API access isn't available
+ * @returns {boolean} true if subscription succeeded, false otherwise
  */
 function setupWeatherEventSubscription() {
     try {
         if (weatherEventSubscription !== null) {
-            return; // Already subscribed
+            return true; // Already subscribed
         }
         
         if (typeof world.afterEvents !== 'undefined' && world.afterEvents.weatherChanged) {
@@ -1037,10 +1040,12 @@ function setupWeatherEventSubscription() {
                     // Silently handle errors
                 }
             });
+            return true; // Subscription succeeded
         }
+        return false; // Event not available
     } catch (error) {
-        // Event subscription failed, will default to 'none' method
-        weatherDetectionMethod = 'none';
+        // Event subscription failed, caller will decide how to handle
+        return false;
     }
 }
 

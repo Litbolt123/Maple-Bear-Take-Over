@@ -510,12 +510,11 @@ function getBlock(dimension, x, y, z) {
     const cached = blockCache.get(blockKey);
     if (cached && (currentTick - cached.tick) < BLOCK_CACHE_TICKS) {
         // Verify block is still valid (blocks can change)
-        try {
-            if (cached.block && cached.block.isValid()) {
+        if (cached.block) {
+            const isValid = typeof cached.block.isValid === "function" ? cached.block.isValid() : Boolean(cached.block.isValid);
+            if (isValid) {
                 return cached.block;
             }
-    } catch {
-            // Block invalid, fall through to re-query
         }
     }
     
@@ -3003,10 +3002,60 @@ function canSeeTargetThroughBlocks(entity, targetInfo, maxBlocks = 3) {
     return blockCount <= maxBlocks; // Can see through if maxBlocks or fewer breakable blocks
 }
 
+/**
+ * Check if a target is on a pillar or bridge (has breakable blocks underneath them)
+ * @param {Entity} entity - The entity checking
+ * @param {Object} targetInfo - Target information
+ * @returns {Object|null} - Returns info about the pillar/bridge, or null if not on one
+ */
+function isTargetOnPillarOrBridge(entity, targetInfo) {
+    if (!targetInfo || !targetInfo.entity?.location) return null;
+    
+    const dimension = entity?.dimension;
+    if (!dimension) return null;
+    
+    const targetLoc = targetInfo.entity.location;
+    const targetX = Math.floor(targetLoc.x);
+    const targetY = Math.floor(targetLoc.y);
+    const targetZ = Math.floor(targetLoc.z);
+    
+    // Check if there are breakable blocks underneath the target (indicating a pillar/bridge)
+    // Check a 3x3 area under the target to catch bridges
+    let hasBreakableBlocks = false;
+    let breakableCount = 0;
+    const checkRadius = 1; // Check 3x3 area (radius 1)
+    
+    for (let dx = -checkRadius; dx <= checkRadius; dx++) {
+        for (let dz = -checkRadius; dz <= checkRadius; dz++) {
+            // Check from target's feet down to 10 blocks below
+            for (let y = targetY - 1; y >= targetY - 10; y--) {
+                const block = getBlock(dimension, targetX + dx, y, targetZ + dz);
+                if (isBreakableBlock(block) && isSolidBlock(block)) {
+                    hasBreakableBlocks = true;
+                    breakableCount++;
+                    break; // Found one breakable block in this column, move to next
+                }
+            }
+        }
+    }
+    
+    if (hasBreakableBlocks) {
+        return {
+            isOnPillar: true,
+            breakableCount: breakableCount,
+            targetX: targetX,
+            targetY: targetY,
+            targetZ: targetZ
+        };
+    }
+    
+    return null;
+}
+
 // Break blocks under an elevated target (like a pillar) when close enough
 // Also breaks blocks under targets for pitfall creation
 function breakBlocksUnderTarget(entity, targetInfo, digContext) {
-            if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Called for entity ${entity.id.substring(0, 8)}`);
+    if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Called for entity ${entity.id.substring(0, 8)}`);
     
     if (!targetInfo || !digContext || digContext.cleared >= digContext.max) {
         if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Early return - targetInfo: ${!!targetInfo}, digContext: ${!!digContext}, cleared: ${digContext?.cleared}, max: ${digContext?.max}`);
@@ -3030,66 +3079,81 @@ function breakBlocksUnderTarget(entity, targetInfo, digContext) {
     const dz = targetLoc.z - loc.z;
     const distance = Math.hypot(dx, dz);
     
-            if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Entity at (${loc.x.toFixed(1)}, ${loc.y.toFixed(1)}, ${loc.z.toFixed(1)}), Target at (${targetLoc.x.toFixed(1)}, ${targetLoc.y.toFixed(1)}, ${targetLoc.z.toFixed(1)}), Distance: ${distance.toFixed(1)}, dy: ${dy.toFixed(1)}`);
+    if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Entity at (${loc.x.toFixed(1)}, ${loc.y.toFixed(1)}, ${loc.z.toFixed(1)}), Target at (${targetLoc.x.toFixed(1)}, ${targetLoc.y.toFixed(1)}, ${targetLoc.z.toFixed(1)}), Distance: ${distance.toFixed(1)}, dy: ${dy.toFixed(1)}`);
     
-    // Break blocks under target for pitfall creation (when target is above or at same level)
-    // This allows mining bears to create pitfalls by breaking blocks underneath players
     const targetX = Math.floor(targetLoc.x);
     const targetY = Math.floor(targetLoc.y);
     const targetZ = Math.floor(targetLoc.z);
     
-            if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: distance=${distance.toFixed(1)}, dy=${dy.toFixed(1)}, targetX=${targetX}, targetY=${targetY}, targetZ=${targetZ}`);
+    // Check if target is on a pillar/bridge
+    const pillarInfo = isTargetOnPillarOrBridge(entity, targetInfo);
+    const isOnPillar = pillarInfo !== null;
     
-    // Check if we should break blocks under target (pitfall creation)
-    // Break if: within 6 blocks horizontally AND target is at same level or above
-    if (distance <= 6 && dy >= -1) {
-        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Conditions met! distance: ${distance.toFixed(1)} <= 6, dy: ${dy.toFixed(1)} >= -1`);
+    if (getDebugPitfall()) {
+        console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: distance=${distance.toFixed(1)}, dy=${dy.toFixed(1)}, targetX=${targetX}, targetY=${targetY}, targetZ=${targetZ}, isOnPillar=${isOnPillar}`);
+    }
+    
+    // EXPANDED CONDITIONS: Break blocks under target if:
+    // 1. Target is on a pillar/bridge (regardless of distance/height) - HIGHEST PRIORITY
+    // 2. OR: within 8 blocks horizontally AND target is at same level or above (original behavior)
+    // 3. OR: target is significantly above (dy >= 2) and within 10 blocks horizontally (for high pillars)
+    const shouldBreakUnder = isOnPillar || 
+                            (distance <= 8 && dy >= -1) || 
+                            (distance <= 10 && dy >= 2);
+    
+    if (shouldBreakUnder) {
+        if (getDebugPitfall()) {
+            console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Conditions met! isOnPillar=${isOnPillar}, distance: ${distance.toFixed(1)} ${distance <= (isOnPillar ? 999 : 8) ? 'OK' : '> 8'}, dy: ${dy.toFixed(1)} ${dy >= (isOnPillar ? -999 : -1) ? 'OK' : '< -1'}`);
+        }
+        
+        // If target is on a pillar/bridge, check a wider area (3x3) to catch bridges
+        // Otherwise, just check directly under the target
+        const checkRadius = isOnPillar ? 1 : 0; // 3x3 for pillars, 1x1 for normal
+        
         // Break blocks from the target's feet down to a reasonable depth
+        // For pillars, break deeper to ensure the pillar collapses
+        const maxDepth = isOnPillar ? 15 : 5; // Break deeper for pillars
         const startY = targetY - 1; // Start at the block under the target's feet
-        const endY = Math.max(targetY - 5, Math.floor(loc.y) - 2); // Break down to a reasonable depth
+        const endY = Math.max(targetY - maxDepth, Math.floor(loc.y) - 2); // Break down to a reasonable depth
         
-        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Checking Y range: ${startY} to ${endY}`);
+        if (getDebugPitfall()) {
+            console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Checking Y range: ${startY} to ${endY}, radius: ${checkRadius} (${isOnPillar ? 'pillar/bridge' : 'normal'})`);
+        }
         
-        for (let y = startY; y >= endY; y--) {
-            if (digContext.cleared >= digContext.max) {
-                if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Budget exhausted: ${digContext.cleared}/${digContext.max}`);
-                return;
-            }
-            const block = getBlock(dimension, targetX, y, targetZ);
-            if (isBreakableBlock(block)) {
-                if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Found breakable block at (${targetX}, ${y}, ${targetZ}): ${block?.typeId}, attempting to break...`);
-                // Pass targetInfo to allow more permissive vision for pitfall creation
-                const result = clearBlock(dimension, targetX, y, targetZ, digContext, entity, targetInfo);
-                if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: clearBlock returned: ${result}, cleared=${digContext.cleared}/${digContext.max}`);
-                return; // Break one block at a time
-            } else {
-                if (y === startY && getDebugPitfall()) {
-                    console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Block at (${targetX}, ${y}, ${targetZ}) is not breakable: ${block?.typeId || 'null'}`);
+        // Check blocks in a grid (3x3 for pillars, 1x1 for normal)
+        for (let dx = -checkRadius; dx <= checkRadius; dx++) {
+            for (let dz = -checkRadius; dz <= checkRadius; dz++) {
+                if (digContext.cleared >= digContext.max) {
+                    if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Budget exhausted: ${digContext.cleared}/${digContext.max}`);
+                    return;
+                }
+                
+                // Check from top to bottom in this column
+                for (let y = startY; y >= endY; y--) {
+                    if (digContext.cleared >= digContext.max) return;
+                    
+                    const block = getBlock(dimension, targetX + dx, y, targetZ + dz);
+                    if (isBreakableBlock(block) && isSolidBlock(block)) {
+                        if (getDebugPitfall()) {
+                            console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Found breakable block at (${targetX + dx}, ${y}, ${targetZ + dz}): ${block?.typeId}, attempting to break...`);
+                        }
+                        // Pass targetInfo to allow more permissive vision for pitfall creation
+                        const result = clearBlock(dimension, targetX + dx, y, targetZ + dz, digContext, entity, targetInfo);
+                        if (getDebugPitfall()) {
+                            console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: clearBlock returned: ${result}, cleared=${digContext.cleared}/${digContext.max}`);
+                        }
+                        return; // Break one block at a time
+                    }
                 }
             }
         }
-        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: No breakable blocks found in Y range ${startY} to ${endY}`);
-    } else {
-        if (getDebugPitfall()) console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Conditions NOT met: distance: ${distance.toFixed(1)} ${distance > 6 ? '> 6' : 'OK'}, dy: ${dy.toFixed(1)} ${dy < -1 ? '< -1' : 'OK'}`);
-    }
-    
-    // Also handle elevated targets (pillars) - original behavior
-    // Only break blocks under target if:
-    // 1. Target is above us (elevation intent is "up")
-    // 2. We're close enough (within 6 blocks horizontally)
-    // 3. Target is significantly above us (at least 2 blocks)
-    const elevationIntent = getElevationIntent(entity, targetInfo);
-    if (elevationIntent === "up" && distance <= 6 && dy >= 2) {
-        const startY = targetY - 1;
-        const endY = Math.max(targetY - 5, Math.floor(loc.y) - 2);
         
-        for (let y = startY; y >= endY; y--) {
-            if (digContext.cleared >= digContext.max) return;
-            const block = getBlock(dimension, targetX, y, targetZ);
-            if (isBreakableBlock(block)) {
-                clearBlock(dimension, targetX, y, targetZ, digContext, entity, targetInfo);
-                return;
-            }
+        if (getDebugPitfall()) {
+            console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: No breakable blocks found in Y range ${startY} to ${endY}, radius: ${checkRadius}`);
+        }
+    } else {
+        if (getDebugPitfall()) {
+            console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Conditions NOT met: isOnPillar=${isOnPillar}, distance: ${distance.toFixed(1)} ${distance > 8 ? '> 8' : 'OK'}, dy: ${dy.toFixed(1)} ${dy < -1 ? '< -1' : 'OK'}`);
         }
     }
 }
@@ -3292,16 +3356,11 @@ function canBearTarget(bearId, targetId, targetEntity = null) {
     
     // Validate target is still alive if we have the entity object
     if (targetEntity) {
-        try {
-            if (!targetEntity.isValid || !targetEntity.isValid()) {
-                // Target is dead - clean it up
-                targetCoordination.delete(targetId);
-                return true; // Allow targeting (will find new target)
-            }
-        } catch {
-            // Error checking - assume dead and clean up
+        const isValid = typeof targetEntity.isValid === "function" ? targetEntity.isValid() : Boolean(targetEntity.isValid);
+        if (!isValid) {
+            // Target is dead - clean it up
             targetCoordination.delete(targetId);
-            return true;
+            return true; // Allow targeting (will find new target)
         }
     }
     
@@ -3328,66 +3387,51 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS, useCache = 
                 return null;
             }
             // Validate cached target is still valid
-            try {
-                if (cached.target?.entity) {
-                    // Check if entity is valid (if isValid is a function)
-                    let isValid = true;
-                    if (typeof cached.target.entity.isValid === "function") {
-                        try {
-                            isValid = cached.target.entity.isValid();
-                        } catch {
-                            isValid = false;
-                        }
+            if (cached.target?.entity) {
+                // Check if entity is valid (handles both function and boolean property)
+                const isValid = typeof cached.target.entity.isValid === "function" ? cached.target.entity.isValid() : Boolean(cached.target.entity.isValid);
+                // If entity is invalid, fall through to fresh lookup
+                if (!isValid) {
+                    targetCache.delete(entityId);
+                    if (getDebugTarget()) {
+                        console.warn(`[MINING AI] findNearestTarget: Cached target invalid for entity ${entityId.substring(0, 8)}`);
                     }
-                    // If entity is invalid, fall through to fresh lookup
-                    if (!isValid) {
+                } else {
+                    // Check if target is a player in creative/spectator mode - ignore them
+                    const targetEntity = cached.target.entity;
+                    if (targetEntity.typeId === "minecraft:player") {
+                        try {
+                            const gameMode = targetEntity.getGameMode();
+                            if (gameMode === "creative" || gameMode === "spectator") {
+                                // Target is in creative/spectator mode, invalidate cache and fall through
+                                targetCache.delete(entityId);
+                                return null;
+                            }
+                        } catch { }
+                    }
+                    
+                    const origin = entity.location;
+                    const targetLoc = cached.target.entity.location;
+                    const dx = targetLoc.x - origin.x;
+                    const dy = targetLoc.y - origin.y;
+                    const dz = targetLoc.z - origin.z;
+                    const distSq = dx * dx + dy * dy + dz * dz;
+                    if (distSq <= maxDistance * maxDistance) {
+                        // Update vector and distance
+                        cached.target.vector = { x: dx, y: dy, z: dz };
+                        cached.target.distanceSq = distSq;
+                        if (getDebugTarget() && currentTick % 20 === 0) {
+                            console.warn(`[MINING AI] findNearestTarget: Returning cached target for entity ${entityId.substring(0, 8)}`);
+                        }
+                        return cached.target;
+                    } else {
+                        // Target too far, invalidate cache
                         targetCache.delete(entityId);
                         if (getDebugTarget()) {
-                            console.warn(`[MINING AI] findNearestTarget: Cached target invalid for entity ${entityId.substring(0, 8)}`);
-                        }
-                    } else {
-                        // Check if target is a player in creative/spectator mode - ignore them
-                        const targetEntity = cached.target.entity;
-                        if (targetEntity.typeId === "minecraft:player") {
-                            try {
-                                const gameMode = targetEntity.getGameMode();
-                                if (gameMode === "creative" || gameMode === "spectator") {
-                                    // Target is in creative/spectator mode, invalidate cache and fall through
-                                    targetCache.delete(entityId);
-                                    return null;
-                                }
-                            } catch { }
-                        }
-                        
-                        const origin = entity.location;
-                        const targetLoc = cached.target.entity.location;
-                        const dx = targetLoc.x - origin.x;
-                        const dy = targetLoc.y - origin.y;
-                        const dz = targetLoc.z - origin.z;
-                        const distSq = dx * dx + dy * dy + dz * dz;
-                        if (distSq <= maxDistance * maxDistance) {
-                            // Update vector and distance
-                            cached.target.vector = { x: dx, y: dy, z: dz };
-                            cached.target.distanceSq = distSq;
-                            if (getDebugTarget() && currentTick % 20 === 0) {
-                                console.warn(`[MINING AI] findNearestTarget: Returning cached target for entity ${entityId.substring(0, 8)}`);
-                            }
-                            return cached.target;
-                        } else {
-                            // Target too far, invalidate cache
-                            targetCache.delete(entityId);
-                            if (getDebugTarget()) {
-                                console.warn(`[MINING AI] findNearestTarget: Cached target too far (${Math.sqrt(distSq).toFixed(1)} > ${maxDistance}) for entity ${entityId.substring(0, 8)}`);
-                            }
+                            console.warn(`[MINING AI] findNearestTarget: Cached target too far (${Math.sqrt(distSq).toFixed(1)} > ${maxDistance}) for entity ${entityId.substring(0, 8)}`);
                         }
                     }
                 }
-            } catch (e) {
-                // Target invalid, fall through to fresh lookup
-                if (getDebugTarget()) {
-                    console.warn(`[MINING AI] findNearestTarget: Error validating cached target:`, e);
-                }
-                targetCache.delete(entityId);
             }
         }
     }
@@ -3464,28 +3508,11 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS, useCache = 
         const targetId = bestPlayer.id;
         // Check if we can actively target this player (coordination check)
         // Validate target is still alive before checking coordination
-        try {
-            // Check if isValid is a function before calling it
-            if (typeof bestPlayer.isValid === "function") {
-                if (!bestPlayer.isValid()) {
-                    // Target is dead, skip it
-                    if (getDebugTarget()) {
-                        console.warn(`[MINING AI] findNearestTarget: bestPlayer ${targetId.substring(0, 8)} is invalid/dead`);
-                    }
-                    bestPlayer = null;
-                    bestPlayerDistSq = maxDistSq;
-                }
-            } else {
-                // isValid doesn't exist or isn't a function - assume valid
-                // This can happen with some entity types
-                if (getDebugTarget()) {
-                    console.warn(`[MINING AI] findNearestTarget: bestPlayer ${targetId.substring(0, 8)} isValid is not a function, assuming valid`);
-                }
-            }
-        } catch (e) {
-            // Error checking - assume dead
+        const playerIsValid = typeof bestPlayer.isValid === "function" ? bestPlayer.isValid() : Boolean(bestPlayer.isValid);
+        if (!playerIsValid) {
+            // Target is dead, skip it
             if (getDebugTarget()) {
-                console.warn(`[MINING AI] findNearestTarget: Error checking bestPlayer validity:`, e);
+                console.warn(`[MINING AI] findNearestTarget: bestPlayer ${targetId.substring(0, 8)} is invalid/dead`);
             }
             bestPlayer = null;
             bestPlayerDistSq = maxDistSq;
@@ -3582,31 +3609,18 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS, useCache = 
     // Bear can still attack like normal hostile mob, just won't mine unless registered
     const targetId = best.id;
     
-    // Validate target is still alive (only if isValid is a function)
-    if (typeof best.isValid === "function") {
-        try {
-            if (!best.isValid()) {
-                // Target is dead, return null
-                if (useCache) {
-                    targetCache.set(entityId, { target: null, tick: currentTick });
-                }
-                if (getDebugTarget()) {
-                    console.warn(`[MINING AI] findNearestTarget: Target ${targetId.substring(0, 8)} is invalid/dead`);
-                }
-                return null;
-            }
-        } catch (e) {
-            // Error checking - assume dead
-            if (useCache) {
-                targetCache.set(entityId, { target: null, tick: currentTick });
-            }
-            if (getDebugTarget()) {
-                console.warn(`[MINING AI] findNearestTarget: Error checking target validity:`, e);
-            }
-            return null;
+    // Validate target is still alive (handles both function and boolean property)
+    const bestIsValid = typeof best.isValid === "function" ? best.isValid() : Boolean(best.isValid);
+    if (!bestIsValid) {
+        // Target is dead, return null
+        if (useCache) {
+            targetCache.set(entityId, { target: null, tick: currentTick });
         }
+        if (getDebugTarget()) {
+            console.warn(`[MINING AI] findNearestTarget: Target ${targetId.substring(0, 8)} is invalid/dead`);
+        }
+        return null;
     }
-    // If isValid is not a function (like for players), assume valid
     
     const canActivelyTarget = canBearTarget(entityId, targetId, best);
     // Only log once per target every 20 ticks to reduce spam
@@ -3637,7 +3651,7 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS, useCache = 
     return result;
 }
 
-function breakWallAhead(entity, tunnelHeight, digContext, targetInfo, directionOverride = null) {
+function breakWallAhead(entity, tunnelHeight, digContext, targetInfo, directionOverride = null, tick = 0) {
     const dimension = entity?.dimension;
     if (!dimension || !targetInfo) return;
     const loc = entity.location;
@@ -3673,9 +3687,13 @@ function breakWallAhead(entity, tunnelHeight, digContext, targetInfo, directionO
         
         // Only break forward path blocks if within 8 blocks of target
         // This prevents breaking blocks when far away (stairs/ramps handle elevation changes)
-        if (distance > 8) {
+        // BUT: If bear is stuck, always allow breaking blocks regardless of distance
+        // This helps bears get unstuck even when they're close to the target
+        const isStuck = isEntityStuck(entity, tick);
+        if (distance > 8 && !isStuck) {
             return; // Too far away for forward tunneling - let stairs/ramps handle it
-    }
+            // But if stuck, always try to break blocks
+        }
 
     // FIRST: PRIORITY - Check blocks directly in front of bear (at bear's current Y level)
     // This is the most important - clear the immediate path first
@@ -3705,42 +3723,51 @@ function breakWallAhead(entity, tunnelHeight, digContext, targetInfo, directionO
     }
     
     // Check blocks along the path (prioritize closer blocks first)
-    // Use interpolated Y to check blocks at the correct height along the path
+    // IMPORTANT: When target is above, also check blocks at bear's current Y level
+    // This ensures we find blocks blocking the path even when target is high
+    const targetDy = targetLoc ? (targetLoc.y - loc.y) : 0;
+    const checkAtBearLevel = targetDy > 3; // If target is more than 3 blocks above, also check at bear's level
+    
     for (let i = 1; i <= steps && i <= 5; i++) { // Check first 5 steps (most important)
         const checkX = Math.floor(loc.x + stepX * i);
         const checkZ = Math.floor(loc.z + stepZ * i);
         const checkY = Math.floor(loc.y + stepY * i); // Interpolate Y along path to target
         
-        let hasSolid = false;
-        for (let h = 0; h < tunnelHeight; h++) {
-            const block = getBlock(dimension, checkX, checkY + h, checkZ);
-            if (isBreakableBlock(block)) {
-                hasSolid = true;
-                if (getDebugGeneral()) {
-                    console.warn(`[MINING AI] breakWallAhead: Found breakable block at step=${i}, (${checkX}, ${checkY + h}, ${checkZ}), type=${block?.typeId}`);
-                }
-                break;
-            }
-        }
-        if (!hasSolid) {
-            continue; // No blocks at this step, check next
-        }
+        // If target is high above, also check at bear's current Y level (not just interpolated)
+        const yLevelsToCheck = checkAtBearLevel ? [baseY, checkY] : [checkY];
         
-        // Found blocks at this step - break them
-        const columnFoot = getBlock(dimension, checkX, checkY, checkZ);
-        const columnFootBlocked = isBreakableBlock(columnFoot);
-        const columnStart = columnFootBlocked ? 0 : 1;
-        for (let h = columnStart; h < tunnelHeight; h++) {
-            if (digContext.cleared >= digContext.max) return;
-            const targetY = checkY + h;
-            const block = getBlock(dimension, checkX, targetY, checkZ);
-            if (!isBreakableBlock(block)) continue;
-            if (getDebugGeneral()) {
-                console.warn(`[MINING AI] breakWallAhead: Breaking block at (${checkX}, ${targetY}, ${checkZ}), type=${block?.typeId}`);
+        for (const yLevel of yLevelsToCheck) {
+            let hasSolid = false;
+            for (let h = 0; h < tunnelHeight; h++) {
+                const block = getBlock(dimension, checkX, yLevel + h, checkZ);
+                if (isBreakableBlock(block)) {
+                    hasSolid = true;
+                    if (getDebugGeneral()) {
+                        console.warn(`[MINING AI] breakWallAhead: Found breakable block at step=${i}, (${checkX}, ${yLevel + h}, ${checkZ}), type=${block?.typeId}, yLevel=${yLevel === baseY ? 'bear' : 'interpolated'}`);
+                    }
+                    break;
+                }
             }
-            // Pass targetInfo to allow breaking protected blocks if path is blocked
-            clearBlock(dimension, checkX, targetY, checkZ, digContext, entity, targetInfo);
-            return; // Break one block at a time
+            if (!hasSolid) {
+                continue; // No blocks at this Y level, check next
+            }
+            
+            // Found blocks at this step - break them
+            const columnFoot = getBlock(dimension, checkX, yLevel, checkZ);
+            const columnFootBlocked = isBreakableBlock(columnFoot);
+            const columnStart = columnFootBlocked ? 0 : 1;
+            for (let h = columnStart; h < tunnelHeight; h++) {
+                if (digContext.cleared >= digContext.max) return;
+                const targetY = yLevel + h;
+                const block = getBlock(dimension, checkX, targetY, checkZ);
+                if (!isBreakableBlock(block)) continue;
+                if (getDebugGeneral()) {
+                    console.warn(`[MINING AI] breakWallAhead: Breaking block at (${checkX}, ${targetY}, ${checkZ}), type=${block?.typeId}`);
+                }
+                // Pass targetInfo to allow breaking protected blocks if path is blocked
+                clearBlock(dimension, checkX, targetY, checkZ, digContext, entity, targetInfo);
+                return; // Break one block at a time
+            }
         }
     }
     
@@ -4023,21 +4050,43 @@ function determineMiningStrategy(entity, targetInfo, tick) {
         // Far away - move closer first
         strategy = "move_closer";
         optimalPosition = calculateOptimalAttackPosition(entity, targetInfo);
-    } else if (dy > 3 && dy <= 5 && horizontalDist <= OPTIMAL_ATTACK_DISTANCE) {
-        // Target is above at reasonable height (3-5 blocks) and we're close - pitfall strategy
-        // Pitfall is only effective when target is at reasonable height - if too high (7+ blocks), use stairs instead
-        strategy = "pitfall";
-        optimalPosition = { x: targetLoc.x, y: Math.floor(targetLoc.y) - 2, z: targetLoc.z };
-    } else if (dy > 3 && dy <= 5) {
-        // Target is above at reasonable height but we're not close - move closer then pitfall
-        strategy = "hybrid_pitfall";
-        optimalPosition = calculateOptimalAttackPosition(entity, targetInfo);
-    } else if (horizontalDist > 6) {
-        // Medium distance - tunnel approach
-        strategy = "tunnel";
     } else {
-        // Close - direct path or tunnel if blocked
-        strategy = "direct";
+        // Check if target is on a pillar/bridge - if so, prioritize pitfall strategy
+        const pillarInfo = isTargetOnPillarOrBridge(entity, targetInfo);
+        if (pillarInfo) {
+            // Target is on a pillar/bridge - use pitfall strategy regardless of height
+            // This allows bears to undermine pillars and bridges even when they're very high
+            if (horizontalDist <= 10) {
+                // Close enough - use pitfall strategy
+                strategy = "pitfall";
+                optimalPosition = { x: targetLoc.x, y: Math.floor(targetLoc.y) - 2, z: targetLoc.z };
+            } else {
+                // Not close enough - move closer then pitfall
+                strategy = "hybrid_pitfall";
+                optimalPosition = calculateOptimalAttackPosition(entity, targetInfo);
+            }
+        } else if (dy > 3 && dy <= 5 && horizontalDist <= OPTIMAL_ATTACK_DISTANCE) {
+            // Target is above at reasonable height (3-5 blocks) and we're close - pitfall strategy
+            // Pitfall is only effective when target is at reasonable height - if too high (5+ blocks), use stairs instead
+            strategy = "pitfall";
+            optimalPosition = { x: targetLoc.x, y: Math.floor(targetLoc.y) - 2, z: targetLoc.z };
+        } else if (dy > 3 && dy <= 5) {
+            // Target is above at reasonable height but we're not close - move closer then pitfall
+            strategy = "hybrid_pitfall";
+            optimalPosition = calculateOptimalAttackPosition(entity, targetInfo);
+        } else if (dy > 5) {
+            // Target is high above (5+ blocks) - prefer stairs over pitfall
+            // Stairs are more effective for high targets, pitfall is only for reasonable heights
+            // Use tunnel strategy to allow stairs to be built
+            strategy = "tunnel";
+            optimalPosition = calculateOptimalAttackPosition(entity, targetInfo);
+        } else if (horizontalDist > 6) {
+            // Medium distance - tunnel approach
+            strategy = "tunnel";
+        } else {
+            // Close - direct path or tunnel if blocked
+            strategy = "direct";
+        }
     }
     
     // Cache the strategy
@@ -4509,38 +4558,77 @@ function processContext(ctx, config, tick, leaderSummaryById) {
     }
     
     // Allow bears to attack even if not actively targeting (let native AI handle it)
-    // But only allow mining if actively registered for targeting
+    // But allow mining if blocks are blocking the path, even if not actively targeting
     if (hasTarget && !isActivelyTargeting && role !== "follower") {
-        // Bear can see target but isn't actively targeting - still apply movement impulses toward target
-        // This ensures the bear moves toward the target even if not actively mining
+        // Bear can see target but isn't actively targeting - check if blocks are blocking path
         const loc = entity.location;
         const targetLoc = targetInfo.entity.location;
         const dx = targetLoc.x - loc.x;
         const dz = targetLoc.z - loc.z;
         const dist = Math.hypot(dx, dz);
         
-        if (getDebugPathfinding() && tick % 40 === 0) {
-            console.warn(`[MINING AI] Entity ${entity.id.substring(0, 8)} can see target but not actively targeting (dist=${dist.toFixed(1)}) - applying movement impulse`);
-        }
+        // Check if path is blocked - if so, allow mining even if not actively targeting
+        // This ensures bears can clear their path to attack, even when target is "full"
+        const canReachByWalkingCheck = canReachTargetByWalking(entity, targetInfo, config.tunnelHeight + extraHeight);
         
-        // Apply movement impulse toward target to help native AI
-        if (dist > 1 && dist < 50) {
-            try {
-                entity.applyImpulse({
-                    x: (dx / dist) * 0.02,
-                    y: 0,
-                    z: (dz / dist) * 0.02
-                });
-            } catch { }
+        if (!canReachByWalkingCheck && dist <= 15) {
+            // Path is blocked and target is close - allow mining to clear path
+            // This makes bears more aggressive about clearing obstacles
+            if (getDebugPathfinding() && tick % 40 === 0) {
+                console.warn(`[MINING AI] Entity ${entity.id.substring(0, 8)} can see target but path blocked (dist=${dist.toFixed(1)}) - allowing mining to clear path`);
+            }
+            // Don't return - continue to mining section below
+        } else {
+            // Path is clear or target is far - just apply movement impulses
+            if (getDebugPathfinding() && tick % 40 === 0) {
+                console.warn(`[MINING AI] Entity ${entity.id.substring(0, 8)} can see target but not actively targeting (dist=${dist.toFixed(1)}) - applying movement impulse`);
+            }
+            
+            // Apply stronger movement impulse toward target to help native AI
+            if (dist > 1 && dist < 50) {
+                try {
+                    // Stronger impulse to ensure bear moves toward target
+                    let impulse = 0.04; // Base impulse (increased from 0.03)
+                    if (dist > 10) {
+                        impulse = 0.05; // Stronger when far
+                    } else if (dist <= 5) {
+                        impulse = 0.045; // Stronger when close
+                    }
+                    
+                    // Add upward component if target is above
+                    const dy = targetLoc.y - loc.y;
+                    let verticalImpulse = 0;
+                    if (dy > 2 && dist <= 8) {
+                        verticalImpulse = 0.015; // Increased upward push
+                    }
+                    
+                    entity.applyImpulse({
+                        x: (dx / dist) * impulse,
+                        y: verticalImpulse,
+                        z: (dz / dist) * impulse
+                    });
+                } catch { }
+            }
+            // Don't return - continue to allow native AI to work, but skip mining section
         }
-        // Don't return - continue to allow native AI to work, but skip mining section
     }
     
     if (getDebugGeneral() && tick % 20 === 0) {
         console.warn(`[MINING AI] processContext: digContext.max=${digContext.max}, hasTarget=${hasTarget}, isActivelyTargeting=${isActivelyTargeting}, role=${role}, willEnterMining=${(digContext.max > 0 && hasTarget && isActivelyTargeting && role !== "follower")}`);
     }
     
-    if (digContext.max > 0 && hasTarget && isActivelyTargeting && role !== "follower") {
+    // Allow mining if:
+    // 1. Actively targeting (normal case)
+    // 2. OR: Has target, path is blocked, and target is close (aggressive path clearing)
+    const pathBlocked = hasTarget && targetInfo && targetInfo.entity?.location && 
+                       !canReachTargetByWalking(entity, targetInfo, config.tunnelHeight + extraHeight);
+    const targetClose = hasTarget && targetInfo && targetInfo.entity?.location && 
+                       Math.hypot(targetInfo.entity.location.x - entity.location.x, 
+                                targetInfo.entity.location.z - entity.location.z) <= 15;
+    const shouldMine = digContext.max > 0 && hasTarget && role !== "follower" && 
+                      (isActivelyTargeting || (pathBlocked && targetClose));
+    
+    if (shouldMine) {
         // Determine strategy for this entity
         const strategy = determineMiningStrategy(entity, targetInfo, tick);
         const strategyData = entityStrategies.get(entity.id);
@@ -4548,8 +4636,13 @@ function processContext(ctx, config, tick, leaderSummaryById) {
         
         const loc = entity.location;
         const targetLoc = targetInfo?.entity?.location;
-        const dy = targetLoc ? (targetLoc.y - loc.y) : 0;
-        const dist = targetLoc ? Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z) : 0;
+        // Ensure dy and dist are always defined to avoid ReferenceError
+        let dy = 0;
+        let dist = 0;
+        if (targetLoc) {
+            dy = targetLoc.y - loc.y;
+            dist = Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z);
+        }
         
         // Check if we can reach the target by walking - if so, don't mine at all
         let canReachByWalking = canReachTargetByWalking(entity, targetInfo, config.tunnelHeight + extraHeight);
@@ -4630,14 +4723,28 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                 
                 if (horizontalDist > 1 && horizontalDist < 50) {
                     try {
-                        const impulse = 0.02; // Moderate impulse to help movement
+                        // Stronger impulse to ensure bear moves toward target
+                        let impulse = 0.04; // Base impulse (increased from 0.03)
+                        if (horizontalDist > 10) {
+                            impulse = 0.05; // Stronger when far
+                        } else if (horizontalDist <= 5) {
+                            impulse = 0.045; // Stronger when close
+                        }
+                        
+                        // Add upward component if target is above
+                        const dy = targetLoc.y - loc.y;
+                        let verticalImpulse = 0;
+                        if (dy > 2 && horizontalDist <= 8) {
+                            verticalImpulse = 0.015; // Increased upward push (from 0.01)
+                        }
+                        
                         entity.applyImpulse({
                             x: (dx / horizontalDist) * impulse,
-                            y: 0,
+                            y: verticalImpulse,
                             z: (dz / horizontalDist) * impulse
                         });
                         if (getDebugPathfinding() && tick % 40 === 0) {
-                            console.warn(`[MINING AI] Applied movement impulse toward target (dist=${horizontalDist.toFixed(1)}) to help native AI attack`);
+                            console.warn(`[MINING AI] Applied movement impulse toward target (dist=${horizontalDist.toFixed(1)}, dy=${dy.toFixed(1)}, impulse=${impulse.toFixed(3)}) to help native AI attack`);
                         }
                     } catch { }
                 }
@@ -4661,27 +4768,48 @@ function processContext(ctx, config, tick, leaderSummaryById) {
             } else {
                 // Bear is not stuck or is very close - apply movement impulses to help native AI
                 // Native AI might not be aggressive enough, so we help it move toward the target
+                // Get target location for movement calculations
+                const targetLocForMove = targetInfo.entity.location;
+                const dx = targetLocForMove.x - loc.x;
+                const dz = targetLocForMove.z - loc.z;
+                const horizontalDist = Math.hypot(dx, dz);
+                // dy is already defined at the top of this block (line 4612-4613), use it directly
+                
                 if (getDebugPathfinding() || getDebugGeneral() || getDebugPitfall()) {
-                    console.warn(`[MINING AI] Entity ${entity.id.substring(0, 8)} can reach by walking (canReachByWalking=true, canActuallyAttack=${canActuallyAttack}, dist=${dist.toFixed(1)}, dy=${dy.toFixed(1)}, isStuck=${isStuck}) - Applying movement impulses to help native AI`);
+                    // canActuallyAttack might not be defined in this scope, use a safe check
+                    const canAttackValue = typeof canActuallyAttack !== 'undefined' ? canActuallyAttack : false;
+                    console.warn(`[MINING AI] Entity ${entity.id.substring(0, 8)} can reach by walking (canReachByWalking=true, canActuallyAttack=${canAttackValue}, dist=${dist.toFixed(1)}, dy=${dy.toFixed(1)}, isStuck=${isStuck}) - Applying movement impulses to help native AI`);
                 }
                 
                 // Apply movement impulses toward target to help native AI
                 // This ensures the bear actually moves toward the target even if native AI is slow
-                const targetLoc = targetInfo.entity.location;
-                const dx = targetLoc.x - loc.x;
-                const dz = targetLoc.z - loc.z;
-                const horizontalDist = Math.hypot(dx, dz);
                 
                 if (horizontalDist > 1 && horizontalDist < 50) {
                     try {
-                        const impulse = 0.02; // Moderate impulse to help movement
+                        // Stronger impulse when target is far or bear is stuck
+                        let impulse = 0.04; // Base impulse (increased from 0.03)
+                        if (horizontalDist > 10) {
+                            impulse = 0.05; // Stronger when far
+                        } else if (isStuck) {
+                            impulse = 0.045; // Stronger when stuck
+                        } else if (horizontalDist <= 5) {
+                            impulse = 0.045; // Stronger when close
+                        }
+                        
+                        // Add upward component if target is above (helps climb)
+                        // dy is already defined at the top of the block, use it
+                        let verticalImpulse = 0;
+                        if (dy > 2 && horizontalDist <= 8) {
+                            verticalImpulse = 0.015; // Increased upward push (from 0.01)
+                        }
+                        
                         entity.applyImpulse({
                             x: (dx / horizontalDist) * impulse,
-                            y: 0,
+                            y: verticalImpulse,
                             z: (dz / horizontalDist) * impulse
                         });
                         if (getDebugPathfinding() && tick % 40 === 0) {
-                            console.warn(`[MINING AI] Applied movement impulse toward target (dist=${horizontalDist.toFixed(1)}) to help native AI`);
+                            console.warn(`[MINING AI] Applied movement impulse toward target (dist=${horizontalDist.toFixed(1)}, dy=${dy.toFixed(1)}, impulse=${impulse.toFixed(3)}) to help native AI`);
                         }
                     } catch { }
                 }
@@ -4748,6 +4876,12 @@ function processContext(ctx, config, tick, leaderSummaryById) {
             );
         }
         
+        // ALSO: If bear is very close horizontally (within 2 blocks), allow attacking even if target is high
+        // Native AI can handle upward attacks when the bear is right next to the target
+        if (!canActuallyAttack && horizontalDist <= 2 && hasLineOfSight) {
+            canActuallyAttack = true; // Very close - allow attacking regardless of vertical distance
+        }
+        
         // If target is too high above (dy > 4 when close, or dy > 3 when far), the bear needs to mine to get closer
         // This ensures bears mine upward when targets are above them
         // BUT: If bear can reach by walking and is close, don't require mining unless target is very high
@@ -4802,7 +4936,10 @@ function processContext(ctx, config, tick, leaderSummaryById) {
             
             if (dist > 1) {
                 // Move toward optimal position
-                const impulse = 0.02;
+                let impulse = 0.03; // Base impulse (increased from 0.02)
+                if (dist > 10) {
+                    impulse = 0.04; // Stronger when far
+                }
                 try {
                     entity.applyImpulse({
                         x: (dx / dist) * impulse,
@@ -4828,11 +4965,18 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                 // Apply movement impulse toward target
                 // Use a moderate impulse to guide movement without fighting native AI too much
                 // If target is above, add upward component to help climb stairs
-                const horizontalImpulse = 0.015; // Slightly weaker than shouldMoveCloser impulse
+                let horizontalImpulse = 0.025; // Increased from 0.015
+                if (dist > 10) {
+                    horizontalImpulse = 0.03; // Stronger when far
+                } else if (dist <= 5) {
+                    horizontalImpulse = 0.03; // Stronger when close
+                }
                 const dy = targetLoc.y - loc.y;
-                // Don't add upward impulse here - it causes flying when combined with stair impulses
-                // Let the bear walk naturally and use stairs properly
-                const verticalImpulse = 0; // Removed upward component to prevent flying
+                // Small upward component to help climb, but not too much
+                let verticalImpulse = 0;
+                if (dy > 2 && dist <= 8) {
+                    verticalImpulse = 0.01; // Small upward push
+                }
                 
                 try {
                     entity.applyImpulse({
@@ -5215,7 +5359,7 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                     if (getDebugGeneral() || getDebugMining()) {
                         console.warn(`[MINING AI] Calling breakWallAhead and branchTunnel (canReachByWalking=${canReachByWalking}, shouldMoveCloser=${shouldMoveCloser}, strategy=${strategy}, inLoop=${inLoop}, digContext.max=${digContext.max}, digContext.cleared=${digContext.cleared})`);
                     }
-                    breakWallAhead(entity, config.tunnelHeight, digContext, targetInfo, directionOverride);
+                    breakWallAhead(entity, config.tunnelHeight, digContext, targetInfo, directionOverride, tick);
                     if (getDebugGeneral() || getDebugMining()) {
                         console.warn(`[MINING AI] After breakWallAhead: cleared=${digContext.cleared}/${digContext.max}`);
                     }
@@ -5331,11 +5475,18 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                     const horizontalDist = Math.hypot(dx, dz);
                     
                     // OPTION 1: Pitfall creation (breaking blocks under target)
-                    // Best when: Target is above, close horizontally, and we can break blocks under them
-                    // This is HIGHEST priority when conditions are met - very effective strategy
-                    // BUT: Only use pitfall when target is at reasonable height (3-5 blocks) and bear is pursuing (not running away)
-                    // Pitfall is ineffective when target is too high (7+ blocks) - use stairs instead
-                    if (dy > 3 && dy <= 5 && horizontalDist <= 4 && (strategy === "pitfall" || strategy === "hybrid_pitfall")) {
+                    // Best when: Target is on a pillar/bridge OR at reasonable height (3-5 blocks) and close
+                    // Pitfall is NOT effective for high targets (5+ blocks) - use stairs instead
+                    const pillarInfo = isTargetOnPillarOrBridge(entity, targetInfo);
+                    const isOnPillar = pillarInfo !== null;
+                    // Only consider pitfall if:
+                    // 1. Target is on a pillar/bridge (always effective), OR
+                    // 2. Target is at reasonable height (3-5 blocks) and close (pitfall works well)
+                    // Do NOT use pitfall for high targets (dy > 5) - stairs are better
+                    const shouldConsiderPitfall = isOnPillar || 
+                                                 (dy > 3 && dy <= 5 && horizontalDist <= 4);
+                    
+                    if (shouldConsiderPitfall && (strategy === "pitfall" || strategy === "hybrid_pitfall" || isOnPillar)) {
                         // Check if there are blocks to break under the target
                         const targetX = Math.floor(targetLoc.x);
                         const targetY = Math.floor(targetLoc.y);
@@ -5343,12 +5494,23 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                         let pitfallScore = 0;
                         
                         // Check for breakable blocks under target
-                        for (let y = targetY - 1; y >= Math.max(targetY - 5, Math.floor(loc.y) - 2); y--) {
-                            const block = getBlock(entity.dimension, targetX, y, targetZ);
-                            if (isBreakableBlock(block) && isSolidBlock(block)) {
-                                pitfallScore = 10; // High score - very effective
-                                break;
+                        // For pillars, check a wider area (3x3); for normal, just directly under
+                        const checkRadius = isOnPillar ? 1 : 0;
+                        const maxDepth = isOnPillar ? 15 : 5;
+                        
+                        for (let dx = -checkRadius; dx <= checkRadius; dx++) {
+                            for (let dz = -checkRadius; dz <= checkRadius; dz++) {
+                                for (let y = targetY - 1; y >= Math.max(targetY - maxDepth, Math.floor(loc.y) - 2); y--) {
+                                    const block = getBlock(entity.dimension, targetX + dx, y, targetZ + dz);
+                                    if (isBreakableBlock(block) && isSolidBlock(block)) {
+                                        // Higher score for pillars (more strategic)
+                                        pitfallScore = isOnPillar ? 12 : 8; // Reduced from 15/10 to prefer stairs more
+                                        break;
+                                    }
+                                }
+                                if (pitfallScore > 0) break;
                             }
+                            if (pitfallScore > 0) break;
                         }
                         
                         if (pitfallScore > actionScore) {
@@ -5358,13 +5520,21 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                     }
                     
                     // OPTION 2: Regular stairs
-                    // Good for: Moderate climbs, most situations
+                    // Good for: All climbs, especially high targets (5+ blocks)
                     // Create stairs proactively when target is above, even while moving horizontally
                     // This ensures stairs are built on the way to the target, not just when directly below
                     if (dy > 1) {
                         // Regular stairs are always viable (they adapt to terrain)
                         // Higher score if target is significantly above (more planning needed)
-                        const regularStairScore = dy > 3 ? 7 : 5; // Higher score for higher targets
+                        // Prefer stairs over pitfall for high targets (dy > 5)
+                        let regularStairScore = 5; // Base score
+                        if (dy > 5) {
+                            regularStairScore = 10; // High score for high targets - stairs are better than pitfall
+                        } else if (dy > 3) {
+                            regularStairScore = 8; // Higher score for moderate heights
+                        } else {
+                            regularStairScore = 6; // Base score for low heights
+                        }
                         if (regularStairScore > actionScore) {
                             actionScore = regularStairScore;
                             chosenAction = "regular_stair";
@@ -5741,22 +5911,13 @@ function initializeMiningAI() {
                 const entityId = entity.id;
                 let status = { valid: true, inRange: false, dist: 0 };
                 
-                // Check if entity is valid
-                if (typeof entity?.isValid === "function") {
-                    try {
-                        if (!entity.isValid()) {
-                            invalidCount++;
-                            status.valid = false;
-                            entityStatus.set(entityId, status);
-                            continue;
-                        }
-                    } catch (e) {
-                        // Error checking validity - assume invalid
-                        invalidCount++;
-                        status.valid = false;
-                        entityStatus.set(entityId, status);
-                        continue;
-                    }
+                // Check if entity is valid (handles both function and boolean property)
+                const entityIsValid = typeof entity?.isValid === "function" ? entity.isValid() : Boolean(entity?.isValid);
+                if (!entityIsValid) {
+                    invalidCount++;
+                    status.valid = false;
+                    entityStatus.set(entityId, status);
+                    continue;
                 }
                 
                 // Check if entity is within processing distance of any player
@@ -6126,21 +6287,19 @@ function initializeMiningAI() {
                     // Get all players and mobs to check which targets are still alive
                     const allPlayers = getCachedPlayers();
                     for (const player of allPlayers) {
-                        try {
-                            if (player.isValid && player.isValid()) {
-                                activeTargetIds.add(player.id);
-                            }
-                        } catch { }
+                        const playerIsValid = typeof player.isValid === "function" ? player.isValid() : Boolean(player.isValid);
+                        if (playerIsValid) {
+                            activeTargetIds.add(player.id);
+                        }
                     }
                     const dimension = world.getDimension("overworld");
                     if (dimension) {
                         const mobs = getCachedMobs(dimension, { x: 0, y: 0, z: 0 }, 1000);
                         for (const mob of mobs) {
-                            try {
-                                if (mob.isValid && mob.isValid()) {
-                                    activeTargetIds.add(mob.id);
-                                }
-                            } catch { }
+                            const mobIsValid = typeof mob.isValid === "function" ? mob.isValid() : Boolean(mob.isValid);
+                            if (mobIsValid) {
+                                activeTargetIds.add(mob.id);
+                            }
                         }
                     }
                 } catch { }
@@ -6268,20 +6427,25 @@ function handleLeaderDeath(deadLeaderId) {
         for (const followerId of followers) {
             try {
                 const followerEntity = world.getEntity(followerId);
-                if (!followerEntity || !followerEntity.isValid()) {
-                    continue; // Follower no longer exists
-                }
-                
-                if (deadLeaderPos) {
-                    const distSq = distanceSq(deadLeaderPos, followerEntity.location);
-                    if (distSq < nearestDistanceSq) {
-                        nearestDistanceSq = distSq;
+                if (followerEntity) {
+                    const followerIsValid = typeof followerEntity.isValid === "function" ? followerEntity.isValid() : Boolean(followerEntity.isValid);
+                    if (!followerIsValid) {
+                        continue; // Follower no longer exists
+                    }
+                    
+                    if (deadLeaderPos) {
+                        const distSq = distanceSq(deadLeaderPos, followerEntity.location);
+                        if (distSq < nearestDistanceSq) {
+                            nearestDistanceSq = distSq;
+                            nearestFollowerId = followerId;
+                        }
+                    } else {
+                        // If we can't get leader position, just use first valid follower
                         nearestFollowerId = followerId;
+                        break;
                     }
                 } else {
-                    // If we can't get leader position, just use first valid follower
-                    nearestFollowerId = followerId;
-                    break;
+                    continue; // Follower entity not found
                 }
             } catch {
                 continue; // Skip invalid followers

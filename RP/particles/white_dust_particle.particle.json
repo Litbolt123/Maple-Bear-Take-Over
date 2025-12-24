@@ -13,14 +13,11 @@
 				"position": true,
 				"rotation": true
 			},
-			"minecraft:emitter_rate_steady": {
-				"spawn_rate": 5,
-				"max_particles": 150
-			},
-			"minecraft:emitter_lifetime_looping": {
-				"active_time": 6
-			},
-			"minecraft:emitter_shape_sphere": {
+		"minecraft:emitter_rate_steady": {
+			"spawn_rate": 5,
+			"max_particles": 150
+		},
+		"minecraft:emitter_shape_sphere": {
 				"radius": 0.5,
 				"direction": [
 					0,
