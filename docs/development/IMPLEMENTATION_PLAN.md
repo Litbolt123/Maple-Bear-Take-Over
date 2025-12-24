@@ -25,8 +25,8 @@ This document tracks the detailed implementation plan for tasks 8-11.
 - [x] Cache block lookups in getBlock() function ✅
 - [x] Periodic cache cleanup to prevent memory bloat ✅
 - [ ] Cache pathfinding calculations (future optimization)
-- [ ] Batch leader/follower assignments (already optimized)
-- [ ] Optimize target detection loops (already optimized with target cache)
+- [x] Batch leader/follower assignments ✅
+- [x] Optimize target detection loops ✅
 
 ### Phase 3: Torpedo AI Optimizations ✅
 - [x] Add AI_TICK_INTERVAL (runs every 2 ticks)
@@ -77,14 +77,14 @@ This document tracks the detailed implementation plan for tasks 8-11.
 - [x] Fix vertical mining logic (aggressive upward/downward modes)
 - [ ] Test upward/downward mining (needs in-game testing)
 
-### Phase 6: Debug Menu Integration ✅
+### Phase 4: Debug Menu Integration ✅
 - [x] Add "Pathfinding Debug" option to Mining AI Debug menu
 - [x] Add "Vertical Mining Debug" option to Mining AI Debug menu
 - [x] Add getDebugVertical() helper function
 - [x] Add debug logging to needsVerticalMining function
 - [x] Add debug logging to aggressive upward/downward mining
 
-### Phase 4: Cave-Aware Mining ✅
+### Phase 5: Cave-Aware Mining ✅
 - [x] Detect caves in front of bear (detectCaveAhead function with heat-seeking vision)
 - [x] Mine towards cave entrance (shouldMineTowardsCave function)
 - [x] Use heat-seeking vision for cave detection (raycast through up to 5 breakable blocks)
@@ -92,7 +92,7 @@ This document tracks the detailed implementation plan for tasks 8-11.
 - [x] Cave detection integrated with stuck detection (prioritizes caves when stuck)
 - [ ] Test cave detection and mining (needs in-game testing)
 
-### Phase 5: Testing & Refinement
+### Phase 6: Testing & Refinement
 - [ ] Test all improvements together
 - [ ] Fix any bugs
 - [ ] Performance check

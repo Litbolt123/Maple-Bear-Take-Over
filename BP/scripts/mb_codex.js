@@ -2366,7 +2366,7 @@ export function showCodexBook(player, context) {
                 console.warn(`[DEBUG MENU] Flying AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
             }
                 return openFlyingDebugMenu(getDebugSettings(player));
-        }).catch(() => openMain());
+        }).catch(() => openDebugMenu());
     }
 
     function openSpawnDebugMenu(settings) {
@@ -2617,6 +2617,7 @@ function getDefaultDebugSettings() {
             general: false,
             target: false,
             pathfinding: false,
+            vertical: false,
             mining: false,
             movement: false,
             stairCreation: false,

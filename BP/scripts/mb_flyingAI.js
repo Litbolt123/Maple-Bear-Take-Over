@@ -62,6 +62,15 @@ const lastSeenTargetTick = new Map(); // Track when target was last seen (for pa
 function findTarget(entity, maxDistance = MAX_TARGET_DISTANCE) {
     const dimension = entity?.dimension;
     if (!dimension) return null;
+    
+    // Performance: Check cache first
+    const entityId = entity.id;
+    const currentTick = system.currentTick;
+    const cached = targetCache.get(entityId);
+    if (cached && cached.tick === currentTick) {
+        return cached.target;
+    }
+    
     const origin = entity.location;
     const maxDistSq = maxDistance * maxDistance;
     let best = null;
@@ -69,8 +78,10 @@ function findTarget(entity, maxDistance = MAX_TARGET_DISTANCE) {
 
     // Use shared cache instead of querying all players
     const allPlayers = getCachedPlayers();
+    const dimensionId = dimension?.id;
+    if (!dimensionId) return null;
     for (const player of allPlayers) {
-        if (player.dimension !== dimension) continue;
+        if (!player.dimension?.id || player.dimension.id !== dimensionId) continue;
         // Skip creative and spectator mode players (they can't be attacked)
         try {
             const gameMode = player.getGameMode();
@@ -100,15 +111,21 @@ function findTarget(entity, maxDistance = MAX_TARGET_DISTANCE) {
         }
     }
 
-    if (!best) return null;
-    return {
-        entity: best,
-        vector: {
-            x: best.location.x - origin.x,
-            y: best.location.y - origin.y,
-            z: best.location.z - origin.z
-        }
-    };
+    let target = null;
+    if (best) {
+        target = {
+            entity: best,
+            vector: {
+                x: best.location.x - origin.x,
+                y: best.location.y - origin.y,
+                z: best.location.z - origin.z
+            }
+        };
+    }
+    
+    // Cache the result for this tick
+    targetCache.set(entityId, { target, tick: currentTick });
+    return target;
 }
 
 function probeGroundHeight(entity) {

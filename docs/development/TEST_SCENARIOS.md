@@ -1,7 +1,7 @@
 # Mining AI Test Scenarios
 
 **Created**: 2025-12-21  
-**Last Updated**: 2025-01-XX  
+**Last Updated**: 2025-12-21  
 **Purpose**: Comprehensive test scenarios for mining bear AI behavior
 
 ## Recent Updates
@@ -347,6 +347,31 @@ This test suite has been updated to include tests for:
 
 ---
 
+### Scenario 15: Multiple Bears Coordination (Targeting System)
+**Setup**:
+- Spawn multiple mining bears (3+ bears)
+- Have them target the same player
+- Observe leader/follower behavior and targeting system limits
+
+**Expected Behavior**:
+- Only 2 bears can actively target the same target (MAX_BEARS_PER_TARGET = 2)
+- One bear should be leader (with target, can mine)
+- One bear should be follower (follows leader, doesn't mine)
+- Extra bears should find different targets or wait
+- Bears should not interfere with each other's mining
+
+**Debug Flags**: `general`, `target`
+
+**What to Check**:
+- [ ] Only 2 bears actively targeting same target
+- [ ] Leader has `role=leader` and `hasTarget=true` and `isActivelyTargeting=true`
+- [ ] Follower has `role=follower` and follows leader
+- [ ] Extra bears see "Target is full" message
+- [ ] Bears coordinate without conflicts
+- [ ] Mining actions don't interfere with each other
+
+---
+
 ### Scenario 16: Target Below - Ramp vs Straight-Down Mining
 **Setup**:
 - Spawn a mining bear on a platform
@@ -480,31 +505,6 @@ This test suite has been updated to include tests for:
 - [ ] Logs show: `Cleared target - player in creative/spectator mode`
 - [ ] Check happens at start of `processContext` (early return)
 - [ ] Bear finds other targets or goes idle
-
----
-
-### Scenario 15: Multiple Bears Coordination (Targeting System)
-**Setup**:
-- Spawn multiple mining bears (3+ bears)
-- Have them target the same player
-- Observe leader/follower behavior and targeting system limits
-
-**Expected Behavior**:
-- Only 2 bears can actively target the same target (MAX_BEARS_PER_TARGET = 2)
-- One bear should be leader (with target, can mine)
-- One bear should be follower (follows leader, doesn't mine)
-- Extra bears should find different targets or wait
-- Bears should not interfere with each other's mining
-
-**Debug Flags**: `general`, `target`
-
-**What to Check**:
-- [ ] Only 2 bears actively targeting same target
-- [ ] Leader has `role=leader` and `hasTarget=true` and `isActivelyTargeting=true`
-- [ ] Follower has `role=follower` and follows leader
-- [ ] Extra bears see "Target is full" message
-- [ ] Bears coordinate without conflicts
-- [ ] Mining actions don't interfere with each other
 
 ---
 

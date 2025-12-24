@@ -625,10 +625,10 @@ function checkVariantUnlock(player, codexParam = null) {
             // Separate kill checks for each bear type's day 4+ variants (only valid if day >= 8)
             const tinyBearDay4Unlock = currentDay >= 8 && (codex.mobs.variantKills.tinyBear.day4 || 0) >= 3;
             const infectedBearDay4Unlock = currentDay >= 8 && (codex.mobs.variantKills.infectedBear.day4 || 0) >= 3;
-            const buffBearDay4Unlock = currentDay >= 8 && (codex.mobs.variantKills.buffBear.day4 || 0) >= 3;
+            // Note: buffBear doesn't have day4 variant (only original, day13, day20), so it's excluded from this check
             const otherMobDay4Unlock = currentDay >= 8 && ((codex.mobs.variantKills.infectedPig.day4 || 0) >= 3 || (codex.mobs.variantKills.infectedCow.day4 || 0) >= 3);
 
-            const killUnlock = tinyBearDay4Unlock || infectedBearDay4Unlock || buffBearDay4Unlock || otherMobDay4Unlock;
+            const killUnlock = tinyBearDay4Unlock || infectedBearDay4Unlock || otherMobDay4Unlock;
             
             if (dayUnlock || killUnlock) {
                 codex.mobs.day8VariantsUnlocked = true;
@@ -661,7 +661,7 @@ function checkVariantUnlock(player, codexParam = null) {
             // Separate kill checks for each bear type's day 8+ variants (only valid if day >= 13)
             const tinyBearDay8Unlock = currentDay >= 13 && (codex.mobs.variantKills.tinyBear.day8 || 0) >= 3;
             const infectedBearDay8Unlock = currentDay >= 13 && (codex.mobs.variantKills.infectedBear.day8 || 0) >= 3;
-            const buffBearDay8Unlock = currentDay >= 13 && (codex.mobs.variantKills.buffBear.day8 || 0) >= 3;
+            const buffBearDay8Unlock = currentDay >= 13 && (codex.mobs.variantKills.buffBear?.day13 || 0) >= 3;
             const otherMobDay8Unlock = currentDay >= 13 && ((codex.mobs.variantKills.infectedPig.day8 || 0) >= 3 || (codex.mobs.variantKills.infectedCow.day8 || 0) >= 3);
 
             const killUnlock = tinyBearDay8Unlock || infectedBearDay8Unlock || buffBearDay8Unlock || otherMobDay8Unlock;
@@ -1174,7 +1174,7 @@ function convertEntity(deadEntity, killer, targetEntityId, conversionName) {
     const newEntity = dimension.spawnEntity(targetEntityId, location);
         
     // Add visual feedback
-        dimension.spawnParticle("mb:white_dust_particale", location);
+        dimension.spawnParticle("mb:white_dust_particle", location);
     
     // Place snow layer at spawn location (all Maple Bears spawn on snow)
     // Place snow at the block below the entity (where there's air above ground)
@@ -4628,7 +4628,7 @@ function clearPlayerCodexState(player) {
  */
 function unlockAllContentForDay(day) {
     try {
-        const MILESTONE_DAYS = [2, 4, 8, 13, 20, 25];
+        const MILESTONE_DAYS = [2, 4, 8, 11, 13, 15, 17, 20, 25, 50, 75, 100];
         
         // Process all milestone days up to the set day
         for (const milestoneDay of MILESTONE_DAYS) {
@@ -4662,8 +4662,17 @@ function unlockAllContentForDay(day) {
                     case 8:
                         milestoneMessage = "The sky is no longer safe. You've witnessed Maple Bears taking flight, soaring through the air with an unnatural grace. These flying variants can reach places that were once thought secure, and they seem to hunt from above with terrifying precision. The infection has learned to take to the skies.";
                         break;
+                    case 11:
+                        milestoneMessage = "The infection continues to evolve. More dangerous variants have appeared, and the threat grows with each passing day. The white dust spreads further, and the corrupted creatures become more aggressive.";
+                        break;
                     case 13:
                         milestoneMessage = "A new threat has emerged - massive Buff Maple Bears that tower over their smaller counterparts. These behemoths are incredibly dangerous and seem to possess an intelligence that the smaller variants lack. They actively hunt larger creatures and have been observed coordinating attacks. The infection has reached a critical point, with these powerful variants capable of spreading the corruption at an alarming rate.";
+                        break;
+                    case 15:
+                        milestoneMessage = "The ground beneath your feet is no longer safe. You've discovered Maple Bears that can dig through the earth itself, tunneling towards their targets with relentless determination. These mining variants can reach you even in the deepest underground bases, and they seem to work together, creating elaborate tunnel networks. Nowhere is truly hidden from the infection.";
+                        break;
+                    case 17:
+                        milestoneMessage = "A new terror has emerged from the skies - torpedo-like Maple Bears that dive with devastating speed and force. These creatures strike from above with such velocity that they can break through almost any defense. They seem to target with an almost supernatural accuracy, as if they can sense your presence through walls. The infection has become a predator from every angle.";
                         break;
                     case 20:
                         milestoneMessage = "The world feels hushed, as if holding its breath. Day 20 bears walk like winter's final verdict, and the dust they shed clings to the air itself. Survivors whisper that the infection now remembers every step we've taken.";

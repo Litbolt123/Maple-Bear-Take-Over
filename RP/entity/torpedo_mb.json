@@ -7,7 +7,7 @@
 			"textures": { "default": "textures/entity/infected_day13" },
 			"geometry": { "default": "geometry.infected" },
 			"particle_effects": {
-				"death_dust": "mb:white_dust_particale"
+				"death_dust": "mb:white_dust_particle"
 			},
 			"render_controllers": [
 				"controller.render.infected"

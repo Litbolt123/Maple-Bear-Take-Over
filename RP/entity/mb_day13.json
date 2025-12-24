@@ -13,7 +13,7 @@
 				"default": "geometry.mb"
 			},
 			"particle_effects": {
-				"death_dust": "mb:white_dust_particale"
+				"death_dust": "mb:white_dust_particle"
 			},
 			"render_controllers": [
 				"controller.render.mb"

@@ -29,7 +29,7 @@ The spawning system is a sophisticated, performance-optimized system that finds 
 #### **Tile Collection Process**:
 1. **Check Cache First**: 
    - Validates cached blocks still exist
-   - Filters by distance (15-48 blocks from player)
+   - Filters by distance (15-45 blocks from player)
    - Checks for air above (2 blocks of headroom)
 
 2. **Scan Around Cached Tiles** (if cache has 5+ tiles):
@@ -38,18 +38,20 @@ The spawning system is a sophisticated, performance-optimized system that finds 
    - Only does this if cache has enough tiles
 
 3. **Full Area Scan** (if cache is empty or has <5 tiles):
-   - **Horizontal Range**: 15-48 blocks from player (ring area)
-   - **Vertical Range**: ±20 blocks from player Y level (initially)
+   - **Horizontal Range**: 15-45 blocks from player (ring area)
+   - **Vertical Range**: +30 blocks above / -15 blocks below player Y level (initially, asymmetric)
    - **Query Limit**: 6000 block queries per scan
    - **Strategy**: 
      - Scans XZ rectangle (97×97 = 9,409 positions)
-     - Filters to ring area (≈6,530 positions)
+     - Filters to ring area (≈5,655 positions)
      - Checks Y levels from top to bottom
      - Stops early when hitting solid blocks
+   - **Note**: Above-ground detection with surface level uses ±8 blocks from surface (symmetric, special case)
 
 4. **Expanded Y Range** (if initial scan finds <8 tiles):
-   - Expands by additional ±20 blocks vertically
+   - Expands by additional ±15 blocks vertically (multiplayer) or ±20 blocks (single player)
    - Only if query limit not reached
+   - **Result**: Total range becomes +45/-30 (multiplayer) or +50/-35 (single player) after expansion
 
 ### 4. **Spawn Attempt System** (`attemptSpawnType`)
 
@@ -75,7 +77,7 @@ The spawning system is a sophisticated, performance-optimized system that finds 
      - Weather multiplier (rain = 1.2x, thunder = 1.5x)
      - Single player bonus (1.25x to compensate for no group cache)
      - Sunset window (1.35x between ticks 12000-12500)
-     - Spawn difficulty state
+     - Spawn difficulty state: Based on global difficulty setting (Easy=-1: 0.85x, Normal=0: 1.0x, Hard=1: 1.15x, custom range -5 to +5), multiplies the base chance after other multipliers are applied
 5. **Attempt Spawn**: 
    - Tries up to `SPAWN_ATTEMPTS` (18) times
    - Picks random tile from `spacedTiles`
@@ -85,13 +87,13 @@ The spawning system is a sophisticated, performance-optimized system that finds 
 ### 5. **Tile Filtering & Spacing**
 
 #### **Distance Filtering**:
-- Only tiles within 15-48 blocks horizontally are valid
+- Only tiles within 15-45 blocks horizontally are valid
 - Prevents spawning too close or too far
 
 #### **Spacing Filter** (`filterTilesWithSpacing`):
 - Ensures tiles are at least `spacing` blocks apart (default 2.5)
 - Prevents clustering
-- Day 20+: Reduced spacing (2.0-2.5) for denser spawns
+- Day 20+: Spacing adaptively reduced to between 2.0 and 2.5 based on tile density (2.0 for very dense areas with >30 tiles, 2.5 for medium/low density areas with ≤30 tiles)
 
 #### **Sampling**:
 - Limits to `MAX_CANDIDATES_PER_SCAN` (180) tiles
@@ -199,25 +201,45 @@ Only cache entries from these 9 chunks are checked!
 ```
 Adaptive Y Range Based on Player Y Level:
 
-Player Y = 71 (Above Ground):
+Default Range (Most Cases):
 ┌─────────────────────────────────────┐
 │  Y=101  ← +30 blocks up             │
 │  ...                                 │
-│  Y=71   ← Player                     │
+│  Y=71   ← Player (example)           │
 │  ...                                 │
 │  Y=56   ← -15 blocks down            │
 └─────────────────────────────────────┘
-Total: 45 blocks (focuses on surface)
+Total: 45 blocks (asymmetric: +30/-15)
 
-Player Y = 30 (Underground):
+Above Ground with Surface Detection:
 ┌─────────────────────────────────────┐
-│  Y=60  ← +30 blocks up              │
-│  ...                                │
-│  Y=30  ← Player                      │
-│  ...                                │
-│  Y=-10 ← -40 blocks down            │
+│  Y=79   ← +8 blocks from surface    │
+│  ...                                 │
+│  Y=71   ← Surface level             │
+│  ...                                 │
+│  Y=63   ← -8 blocks from surface    │
 └─────────────────────────────────────┘
-Total: 70 blocks (more range for caves)
+Total: 16 blocks (symmetric: ±8 from surface)
+
+Underground (Same as Default):
+┌─────────────────────────────────────┐
+│  Y=60   ← +30 blocks up              │
+│  ...                                 │
+│  Y=30   ← Player (example)          │
+│  ...                                 │
+│  Y=15   ← -15 blocks down            │
+└─────────────────────────────────────┘
+Total: 45 blocks (asymmetric: +30/-15)
+
+Expansion (if <8 tiles found):
+┌─────────────────────────────────────┐
+│  Y=116  ← +30 +15 = +45 up          │
+│  ...                                 │
+│  Y=71   ← Player                     │
+│  ...                                 │
+│  Y=41   ← -15 -15 = -30 down        │
+└─────────────────────────────────────┘
+Total: 75 blocks (multiplayer: +45/-30)
 ```
 
 #### Step 3: Cluster Detection (10×10 Scan)
@@ -263,10 +285,10 @@ This finds clusters of dusted_dirt/snow_layer efficiently!
    ↓
 5. Full Area Scan (if cache insufficient)
    ├─ Horizontal: Ring 15-45 blocks from player
-   ├─ Vertical: Adaptive range based on player Y
-   │  ├─ Above ground (Y>60): +30/-15 blocks
-   │  ├─ Mid-level (Y 50-60): ±25 blocks
-   │  └─ Underground (Y<50): +30/-40 blocks
+   ├─ Vertical: Adaptive range based on environment
+   │  ├─ Default: +30/-15 blocks (asymmetric)
+   │  ├─ Above ground with surface detection: ±8 blocks from surface (symmetric)
+   │  └─ Expansion (if <8 tiles found): ±15 (multiplayer) or ±20 (single player)
    └─ Query limit: 6000 (normal) or 12000 (single player)
    ↓
 6. For Each Found Block:
@@ -319,8 +341,9 @@ Block Found → Registered in Cache
 - **Activation Radius**: 2 chunks (256 blocks)
 - **Distance Range**: 15-45 blocks from player
 - **Cluster Scan**: 10×10 area (5 blocks each direction)
-- **Y Range (Above Ground)**: +30/-15 blocks
-- **Y Range (Underground)**: +30/-40 blocks
+- **Y Range (Default)**: +30/-15 blocks (asymmetric)
+- **Y Range (Above Ground with Surface)**: ±8 blocks from surface (symmetric)
+- **Y Range Expansion**: ±15 blocks (multiplayer) or ±20 blocks (single player)
 - **Cache Trim Age**: 1 hour (72000 ticks)
 - **Query Limit**: 6000 (normal) / 12000 (single player)
 

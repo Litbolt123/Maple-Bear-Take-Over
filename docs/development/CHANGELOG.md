@@ -45,7 +45,8 @@ This file tracks all features added, removed, and changes made to the addon.
   - 1-2 players: Max 1 buff bear
   - 3-4 players: Max 2 buff bears
   - 5+ players: Max 3 buff bears
-  - Replaces the old static cap of 5 buff bears**Milestone days list**: Updated `MILESTONE_DAYS` array to include days 11, 15, and 17 for Flying Bears, Mining Bears, and Torpedo Bears respectively.
+  - Replaces the old static cap of 5 buff bears
+- **Milestone days list**: Updated `MILESTONE_DAYS` array to include days 11, 15, and 17 for Flying Bears, Mining Bears, and Torpedo Bears respectively.
 
 ### Fixed
 - **Day 8 variant unlock bug**: Fixed issue where day 8+ variants were unlocking on day 5 when players saw bears attack animals. Now, kill-based variant unlocks (3 kills of day 4+ variants) only trigger when the current day is >= 8, ensuring day 8 variants only unlock on day 8 or later. Same fix applied to day 13 and day 20 variant unlocks.

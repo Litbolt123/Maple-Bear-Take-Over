@@ -1484,8 +1484,10 @@ function initializeTorpedoAI() {
                 // Check if entity still exists (this is expensive, so only do it occasionally)
                 if (currentTick % 100 === 0) {
                     // Every 5 seconds, clean up stale cache entries
-                    const entity = world.getEntity(entityId);
-                    if (!entity || !entity.isValid()) {
+                    // Check if entity ID is not in seen set (entity no longer valid this tick)
+                    // or if cache entry has expired based on TARGET_CACHE_TICKS
+                    const cacheAge = currentTick - cached.tick;
+                    if (!seen.has(entityId) || cacheAge >= TARGET_CACHE_TICKS) {
                         targetCache.delete(entityId);
                     }
                 }

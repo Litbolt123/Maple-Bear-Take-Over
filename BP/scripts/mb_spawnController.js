@@ -805,13 +805,17 @@ const WEATHER_MULTIPLIERS = {
 
 /**
  * Get weather multiplier for a dimension
- * Uses command-based detection since Script API doesn't support weather directly
+ * Uses API-based detection or event subscriptions to track weather state
  * @param {Dimension} dimension The dimension to check
  * @returns {number} Weather multiplier (0.7 for rain/snow, 1.0 for clear/thunder)
  */
 function getWeatherMultiplier(dimension) {
     try {
+        if (!dimension) return 1.0;
+        
         const dimId = dimension.id;
+        if (!dimId) return 1.0;
+        
         const cached = weatherCache.get(dimId);
         const currentTick = system.currentTick;
         
@@ -820,7 +824,7 @@ function getWeatherMultiplier(dimension) {
             return WEATHER_MULTIPLIERS[cached.weather] || 1.0;
         }
         
-        // Default to clear weather if not cached
+        // Default to clear weather if not cached (will be updated by updateWeatherCache)
         if (!cached) {
             weatherCache.set(dimId, { weather: 'clear', tick: currentTick });
             return 1.0;
@@ -833,13 +837,16 @@ function getWeatherMultiplier(dimension) {
     }
 }
 
+// Weather detection method: tracks which method is available and working
+let weatherDetectionMethod = null; // Will be set to 'api', 'event', or 'none'
+let weatherEventSubscription = null; // Store event subscription if using events
+
 /**
- * Update weather cache for a dimension using command detection
- * This runs asynchronously and updates the cache
+ * Update weather cache for a dimension using available API methods
+ * Tries dimension/world properties first, then falls back to event-based tracking
  * @param {Dimension} dimension The dimension to check
  */
 function updateWeatherCache(dimension) {
-    // Get dimId first, before any try/catch blocks to ensure it's always defined
     if (!dimension) return;
     const dimId = dimension.id;
     if (!dimId) return;
@@ -853,46 +860,187 @@ function updateWeatherCache(dimension) {
             return; // Cache still valid
         }
         
-        // Use command to query weather
-        // We'll use /weather query and parse the result
-        // Since this is async, we'll trigger it and update cache when result comes back
-        dimension.runCommandAsync("weather query").then((result) => {
-            try {
-                let weather = 'clear'; // Default
-                
-                // Parse command result to determine weather
-                // Command output format: "Weather is now: [clear|rain|thunder]"
-                const output = result.successCount > 0 ? result.statusMessage || '' : '';
-                
-                if (output.includes('rain') && !output.includes('thunder')) {
-                    weather = 'rain';
-                } else if (output.includes('thunder') || output.includes('storm')) {
-                    weather = 'thunder';
-                } else if (output.includes('snow')) {
-                    weather = 'snow';
-                } else {
-                    weather = 'clear';
-                }
-                
-                // Update cache
-                weatherCache.set(dimId, { weather: weather, tick: system.currentTick });
-            } catch (error) {
-                // On error, keep existing cache or set to clear
-                if (!weatherCache.has(dimId)) {
-                    weatherCache.set(dimId, { weather: 'clear', tick: system.currentTick });
-                }
-            }
-        }).catch((error) => {
-            // Command failed - keep existing cache or set to clear
-            if (!weatherCache.has(dimId)) {
-                weatherCache.set(dimId, { weather: 'clear', tick: system.currentTick });
-            }
-        });
+        // Determine detection method on first call (feature detection)
+        if (weatherDetectionMethod === null) {
+            weatherDetectionMethod = detectWeatherAPI();
+        }
+        
+        let weather = 'clear'; // Default
+        
+        // Try API-based detection first
+        if (weatherDetectionMethod === 'api') {
+            weather = detectWeatherFromAPI(dimension);
+        }
+        // Event-based detection is handled by event subscription - events update cache directly
+        // If method is 'event', cache will be updated by events; we default to 'clear' until event fires
+        // If method is 'none', always default to 'clear' (effectively disables weather effects)
+        
+        // Update cache with detected weather (always set both tick and weather for consistency)
+        weatherCache.set(dimId, { weather: weather, tick: currentTick });
     } catch (error) {
         // On error, keep existing cache or set to clear
+        const currentTick = system.currentTick;
         if (!weatherCache.has(dimId)) {
-            weatherCache.set(dimId, { weather: 'clear', tick: system.currentTick });
+            weatherCache.set(dimId, { weather: 'clear', tick: currentTick });
         }
+    }
+}
+
+/**
+ * Detect which weather API method is available
+ * @returns {string} 'api', 'event', or 'none'
+ */
+function detectWeatherAPI() {
+    try {
+        // Try dimension-level properties first
+        const testDim = world.getDimension("overworld");
+        if (testDim) {
+            // Check for dimension weather properties (if they exist in this API version)
+            if (typeof testDim.isRaining === 'function' || typeof testDim.isRaining === 'boolean') {
+                return 'api';
+            }
+            if (typeof testDim.rainLevel !== 'undefined' || typeof testDim.lightningLevel !== 'undefined') {
+                return 'api';
+            }
+        }
+        
+        // Try world-level weather component
+        try {
+            const weatherComp = world.getComponent("minecraft:weather");
+            if (weatherComp && (typeof weatherComp.rain_level !== 'undefined' || typeof weatherComp.lightning_level !== 'undefined')) {
+                return 'api';
+            }
+        } catch (e) {
+            // Component doesn't exist or not accessible
+        }
+        
+        // Try event subscription
+        if (typeof world.afterEvents !== 'undefined') {
+            try {
+                // Check if weatherChanged event exists
+                if (world.afterEvents.weatherChanged) {
+                    setupWeatherEventSubscription();
+                    return 'event';
+                }
+            } catch (e) {
+                // Event doesn't exist
+            }
+        }
+        
+        // No weather API available
+        return 'none';
+    } catch (error) {
+        return 'none';
+    }
+}
+
+/**
+ * Detect weather from API properties
+ * @param {Dimension} dimension The dimension to check
+ * @returns {string} Weather state: 'clear', 'rain', 'thunder', or 'snow'
+ */
+function detectWeatherFromAPI(dimension) {
+    try {
+        let rainLevel = 0;
+        let lightningLevel = 0;
+        
+        // Try dimension-level properties (check for function or boolean property)
+        if (typeof dimension.isRaining === 'function') {
+            const isRaining = dimension.isRaining();
+            const isThundering = typeof dimension.isThundering === 'function' ? dimension.isThundering() : false;
+            if (isThundering) return 'thunder';
+            if (isRaining) {
+                // Check if in cold biome for snow (simplified: check dimension ID, overworld might have snow)
+                // For now, treat all rain as rain (snow detection would require biome checking)
+                return 'rain';
+            }
+            return 'clear';
+        } else if (typeof dimension.isRaining === 'boolean') {
+            // Handle boolean property case
+            const isRaining = dimension.isRaining;
+            const isThundering = typeof dimension.isThundering === 'boolean' ? dimension.isThundering : false;
+            if (isThundering) return 'thunder';
+            if (isRaining) return 'rain';
+            return 'clear';
+        }
+        
+        if (typeof dimension.rainLevel !== 'undefined') {
+            rainLevel = dimension.rainLevel;
+        }
+        if (typeof dimension.lightningLevel !== 'undefined') {
+            lightningLevel = dimension.lightningLevel;
+        }
+        
+        // Try world-level weather component
+        if (rainLevel === 0 && lightningLevel === 0) {
+            try {
+                const weatherComp = world.getComponent("minecraft:weather");
+                if (weatherComp) {
+                    if (typeof weatherComp.rain_level !== 'undefined') {
+                        rainLevel = weatherComp.rain_level;
+                    }
+                    if (typeof weatherComp.lightning_level !== 'undefined') {
+                        lightningLevel = weatherComp.lightning_level;
+                    }
+                }
+            } catch (e) {
+                // Component not accessible
+            }
+        }
+        
+        // Determine weather state from levels
+        if (lightningLevel > 0) {
+            return 'thunder';
+        } else if (rainLevel > 0) {
+            // Note: Snow detection would require biome checking, defaulting to rain
+            return 'rain';
+        }
+        
+        return 'clear';
+    } catch (error) {
+        return 'clear';
+    }
+}
+
+/**
+ * Setup event subscription for weather changes (Option B - Fallback)
+ * This maintains weather state via events when direct API access isn't available
+ */
+function setupWeatherEventSubscription() {
+    try {
+        if (weatherEventSubscription !== null) {
+            return; // Already subscribed
+        }
+        
+        if (typeof world.afterEvents !== 'undefined' && world.afterEvents.weatherChanged) {
+            weatherEventSubscription = world.afterEvents.weatherChanged.subscribe((event) => {
+                try {
+                    const dimension = event.dimension;
+                    if (!dimension) return;
+                    
+                    const dimId = dimension.id;
+                    const currentTick = system.currentTick;
+                    let weather = 'clear';
+                    
+                    // Parse event data to determine weather
+                    if (event.lightning !== undefined && event.lightning) {
+                        weather = 'thunder';
+                    } else if (event.raining !== undefined && event.raining) {
+                        weather = 'rain';
+                    } else {
+                        weather = 'clear';
+                    }
+                    
+                    // Update cache with event data
+                    weatherCache.set(dimId, { weather: weather, tick: currentTick });
+                } catch (error) {
+                    // Silently handle errors
+                }
+            });
+        }
+    } catch (error) {
+        // Event subscription failed, will default to 'none' method
+        weatherDetectionMethod = 'none';
     }
 }
 
@@ -944,6 +1092,7 @@ const chunkLastVisit = new Map();
 let lastChunkTrimTick = 0;
 
 const CACHE_CHECK_RADIUS = 100; // Only check cached blocks within 100 blocks of player (performance optimization)
+const DUSTED_DIRT_CACHE_TTL = SCAN_INTERVAL * 30; // Cache entries expire after 30 scan intervals (90 seconds)
 const CACHE_VALIDATION_INTERVAL = SCAN_INTERVAL * 3; // Validate cache every 3 scan intervals (~15 seconds)
 const CACHE_VALIDATION_SAMPLE_SIZE = 50; // Validate up to 50 blocks per validation cycle
 let lastCacheValidationTick = 0;
@@ -1040,12 +1189,28 @@ function trimOldChunks() {
 export function registerDustedDirtBlock(x, y, z, dimension = null) {
     const key = `${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`;
     const chunkKey = getChunkKey(x, z);
+    
+    // Defensively validate dimension before accessing .id property
+    const dimensionId = dimension && typeof dimension.id !== 'undefined' ? dimension.id : null;
+    
+    // Warn if dimension was provided but is invalid (not null/undefined, but missing id)
+    if (dimension !== null && dimension !== undefined && dimensionId === null) {
+        if (isDebugEnabled('spawn', 'general') || isDebugEnabled('spawn', 'all')) {
+            console.warn(`[SPAWN DEBUG] Invalid dimension provided to registerDustedDirtBlock at (${Math.floor(x)}, ${Math.floor(y)}, ${Math.floor(z)}): dimension is not null but missing id property`, {
+                dimension: dimension,
+                dimensionType: typeof dimension,
+                hasId: 'id' in (dimension || {}),
+                stack: new Error().stack
+            });
+        }
+    }
+    
     const entry = { 
         x: Math.floor(x), 
         y: Math.floor(y),
         z: Math.floor(z), 
         tick: system.currentTick,
-        dimension: dimension ? dimension.id : null,
+        dimension: dimensionId,
         chunkKey: chunkKey
     };
     dustedDirtCache.set(key, entry);
@@ -2070,8 +2235,10 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         }
     }
     
-    // Always log scan stats (not conditional on debug)
-    console.warn(`[SPAWN DEBUG] Scan stats: Blocks checked: ${blocksChecked}, Found target blocks: ${blocksFound}, Chunks not loaded: ${chunksNotLoaded}, Air: ${airBlocks}, Other: ${otherBlocks}, Queries used: ${blockQueryCount}/${queryLimit}${isSinglePlayer ? ' [SINGLE PLAYER MODE]' : ''}`);
+    // Log scan stats (conditional on debug)
+    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+        console.warn(`[SPAWN DEBUG] Scan stats: Blocks checked: ${blocksChecked}, Found target blocks: ${blocksFound}, Chunks not loaded: ${chunksNotLoaded}, Air: ${airBlocks}, Other: ${otherBlocks}, Queries used: ${blockQueryCount}/${queryLimit}${isSinglePlayer ? ' [SINGLE PLAYER MODE]' : ''}`);
+    }
     
     // TEMPORARY: Detailed XZ position stats
     if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
@@ -2593,12 +2760,23 @@ function cleanupPlayerGroups(allPlayers) {
     }
 }
 
+/**
+ * Determines if the game is in single-player mode.
+ * Single-player mode is active when group cache is disabled, no group players exist, or only one player is present.
+ * @param {boolean} useGroupCache - Whether group cache is enabled
+ * @param {Array|null} groupPlayers - Array of players in the group, or null if not applicable
+ * @returns {boolean} True if in single-player mode, false otherwise
+ */
+function isSinglePlayerMode(useGroupCache, groupPlayers) {
+    return !useGroupCache || !groupPlayers || groupPlayers.length === 1;
+}
+
 function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCache = false, groupPlayers = null) {
     const playerId = player.id;
     const now = system.currentTick;
     
     // Detect if single player (no group cache or only one player in dimension)
-    const isSinglePlayer = !useGroupCache || (groupPlayers && groupPlayers.length === 1);
+    const isSinglePlayer = isSinglePlayerMode(useGroupCache, groupPlayers);
     
     // Try to use group cache if available and enabled
     let cache = null;
@@ -3076,7 +3254,10 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     
     // Single player bonus: more spawn attempts to compensate for fewer tiles
     const baseAttempts = Math.max(1, SPAWN_ATTEMPTS + (modifiers.attemptBonus ?? 0));
-    const isSinglePlayer = !modifiers.isGroupCache;
+    // modifiers.isGroupCache is true when useGroupCache && dimensionPlayers && dimensionPlayers.length > 1
+    // Use helper function: pass modifiers.isGroupCache as useGroupCache, and a dummy array when group cache is active
+    // to ensure the helper returns false (since groupPlayers.length > 1 means not single-player)
+    const isSinglePlayer = isSinglePlayerMode(modifiers.isGroupCache, modifiers.isGroupCache ? [1, 2] : null);
     const attemptBonus = isSinglePlayer ? Math.floor(baseAttempts * 0.5) : 0; // 50% more attempts for single players (increased from 30%)
     const attempts = Math.min(baseAttempts + attemptBonus, pool.length);
     // console.warn(`[SPAWN DEBUG] Attempting ${config.id} for ${player.name}: ${attempts} attempts, ${pool.length} tiles, ${nearbyCount}/${maxCount} nearby (type limit: ${typeSpawnCount}/${perTypeSpawnLimit})`);
