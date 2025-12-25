@@ -36,11 +36,11 @@
 			},
 			"buffed": {
 				"minecraft:health": {
-					"value": 90,
-					"max": 90
+					"value": 12,
+					"max": 12
 				},
 				"minecraft:attack": {
-					"damage": 7
+					"damage": 4
 				}
 			},
 			"variant_0": {},
@@ -173,15 +173,15 @@
 				}
 			},
 			"minecraft:health": {
-				"value": 18,
-				"max": 18
+				"value": 6,
+				"max": 6
 			},
 			"minecraft:collision_box": {
 				"width": 0.55,
 				"height": 2.05
 			},
 		"minecraft:attack": {
-			"damage": 6
+			"damage": 4
 		},
 			"minecraft:movement": {
 				"value": 0.58

@@ -1,5 +1,9 @@
 # Variable Biome Sizes in Minecraft Bedrock
 
+## Status: ✅ Implemented
+
+This system is now implemented in the Maple Bear Takeover addon. The infected biome (`mb:infected_biome`) uses variable sizes across all three dimensions (Overworld, Nether, End). See `BP/biomes/mb_infected_biome.json` for the implementation.
+
 ## Overview
 To achieve much more variable biome sizes in Minecraft Bedrock—ranging from super small patches to massive expanses—use the `minecraft:replace_biomes` component with multiple replacement configurations.
 
@@ -57,9 +61,35 @@ Add to your custom biome JSON file:
 
 3. **For extreme variability**: Create duplicate biome files with different scales replacing each other, though this uses more pack space.
 
+## Implementation in Maple Bear Takeover
+
+The addon implements variable sizes for:
+- **Overworld**: 5 biome categories (common land, ocean/water, arid/mountain, cold, cave) - each with 3 size variants
+  - Large: `noise_frequency_scale: 0.1`, lower `amount` (0.01-0.02)
+  - Medium: `noise_frequency_scale: 5`, moderate `amount` (0.02-0.03)
+  - Small: `noise_frequency_scale: 80`, higher `amount` (0.03-0.05)
+
+**Note**: Biome replacement (`minecraft:replace_biomes`) is **only available for the Overworld** in Minecraft Bedrock Edition. The `dimension` field must be `"minecraft:overworld"`. Nether and End dimensions use different generation systems and do not support biome replacement.
+
+### Nether and End Spawning
+
+Since biome replacement doesn't work in Nether/End, the spawn system uses **aggressive block scanning** instead:
+- **Nether**: Scans for multiple block types:
+  - `minecraft:netherrack` (most common)
+  - `minecraft:soul_sand` (soul sand valleys)
+  - `minecraft:soul_soil` (soul sand valleys - variant)
+  - `minecraft:basalt` (basalt deltas top layer)
+  - `minecraft:crimson_nylium` (crimson forests)
+  - `minecraft:warped_nylium` (warped forests)
+- **End**: Scans for `minecraft:end_stone` blocks
+- **Enhanced Scanning**: Uses 1.5x query limits (9,000 queries normal, 18,000 single player)
+- **Always Full Scan**: Nether/End always perform full area scans (doesn't rely on cache)
+- **Block Registration**: Found blocks are cached for future spawn attempts
+
 ## Notes
 
 - Stack several configurations with different scales and low amount values for natural variety
 - The noise system is seed-dependent, so test with multiple seeds
 - Balance is key: too many replacements can cause biome conflicts
+- See `docs/development/DIMENSION_ADAPTATIONS.md` for details on Nether/End implementation
 

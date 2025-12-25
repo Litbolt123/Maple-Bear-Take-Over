@@ -65,8 +65,8 @@
 					"deals_damage": "no"
 				}
 			},
-			"minecraft:health": { "value": 10, "max": 10 },
-			"minecraft:attack": { "damage": 3 },
+			"minecraft:health": { "value": 7, "max": 7 },
+			"minecraft:attack": { "damage": 2 },
 			"minecraft:movement": { "value": 0.85 },
 			"minecraft:movement.fly": { "value": 1.2 },
 			"minecraft:navigation.fly": {

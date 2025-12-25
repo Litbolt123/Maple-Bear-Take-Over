@@ -1,0 +1,148 @@
+{
+	"format_version": "1.21.120",
+	"minecraft:biome": {
+		"description": {
+			"identifier": "mb:infected_biome_medium"
+		},
+		"components": {
+			"minecraft:climate": {
+				"temperature": 1,
+				"downfall": 0.9,
+				"snow_accumulation": [
+					0.01,
+					0.1
+				]
+			},
+			"minecraft:tags": {
+				"tags": [
+					"infected_biome"
+				]
+			},
+			"minecraft:replace_biomes": {
+				"replacements": [
+					{
+						"dimension": "minecraft:overworld",
+						"targets": [
+							"minecraft:plains",
+							"minecraft:sunflower_plains",
+							"minecraft:forest",
+							"minecraft:forest_hills",
+							"minecraft:birch_forest",
+							"minecraft:birch_forest_hills",
+							"minecraft:birch_forest_mutated",
+							"minecraft:birch_forest_hills_mutated",
+							"minecraft:taiga",
+							"minecraft:taiga_hills",
+							"minecraft:taiga_mutated",
+							"minecraft:savanna",
+							"minecraft:savanna_mutated",
+							"minecraft:savanna_plateau",
+							"minecraft:savanna_plateau_mutated",
+							"minecraft:meadow",
+							"minecraft:cherry_grove",
+							"minecraft:flower_forest",
+							"minecraft:roofed_forest",
+							"minecraft:roofed_forest_mutated",
+							"minecraft:jungle",
+							"minecraft:jungle_hills",
+							"minecraft:jungle_mutated",
+							"minecraft:jungle_edge",
+							"minecraft:jungle_edge_mutated",
+							"minecraft:bamboo_jungle",
+							"minecraft:bamboo_jungle_hills",
+							"minecraft:swampland",
+							"minecraft:swampland_mutated",
+							"minecraft:mangrove_swamp",
+							"minecraft:pale_garden"
+						],
+						"amount": 0.08,
+						"noise_frequency_scale": 3.5
+					},
+					{
+						"dimension": "minecraft:overworld",
+						"targets": [
+							"minecraft:ocean",
+							"minecraft:deep_ocean",
+							"minecraft:cold_ocean",
+							"minecraft:deep_cold_ocean",
+							"minecraft:lukewarm_ocean",
+							"minecraft:deep_lukewarm_ocean",
+							"minecraft:warm_ocean",
+							"minecraft:deep_warm_ocean",
+							"minecraft:frozen_ocean",
+							"minecraft:deep_frozen_ocean",
+							"minecraft:legacy_frozen_ocean",
+							"minecraft:beach",
+							"minecraft:cold_beach",
+							"minecraft:stone_beach",
+							"minecraft:river",
+							"minecraft:frozen_river"
+						],
+						"amount": 0.06,
+						"noise_frequency_scale": 3.5
+					},
+					{
+						"dimension": "minecraft:overworld",
+						"targets": [
+							"minecraft:desert",
+							"minecraft:desert_hills",
+							"minecraft:desert_mutated",
+							"minecraft:mesa",
+							"minecraft:mesa_bryce",
+							"minecraft:mesa_plateau",
+							"minecraft:mesa_plateau_mutated",
+							"minecraft:mesa_plateau_stone",
+							"minecraft:mesa_plateau_stone_mutated",
+							"minecraft:extreme_hills",
+							"minecraft:extreme_hills_edge",
+							"minecraft:extreme_hills_mutated",
+							"minecraft:extreme_hills_plus_trees",
+							"minecraft:extreme_hills_plus_trees_mutated",
+							"minecraft:jagged_peaks",
+							"minecraft:frozen_peaks",
+							"minecraft:stony_peaks"
+						],
+						"amount": 0.06,
+						"noise_frequency_scale": 3.5
+					},
+					{
+						"dimension": "minecraft:overworld",
+						"targets": [
+							"minecraft:ice_plains_spikes",
+							"minecraft:ice_plains",
+							"minecraft:cold_taiga",
+							"minecraft:cold_taiga_hills",
+							"minecraft:cold_taiga_mutated",
+							"minecraft:grove",
+							"minecraft:snowy_slopes"
+						],
+						"amount": 0.06,
+						"noise_frequency_scale": 3.5
+					},
+					{
+						"dimension": "minecraft:overworld",
+						"targets": [
+							"minecraft:lush_caves",
+							"minecraft:dripstone_caves",
+							"minecraft:deep_dark"
+						],
+						"amount": 0.08,
+						"noise_frequency_scale": 3.5
+					}
+				]
+			},
+			"minecraft:surface_builder": {
+				"builder": {
+					"type": "minecraft:overworld",
+					"sea_floor_depth": 7,
+					"sea_floor_material": "mb:dusted_dirt",
+					"foundation_material": "minecraft:stone",
+					"mid_material": "minecraft:dirt",
+					"top_material": "mb:dusted_dirt",
+					"sea_material": "minecraft:water"
+				}
+			}
+		}
+	}
+}
+

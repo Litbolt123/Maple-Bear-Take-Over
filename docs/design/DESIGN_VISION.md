@@ -146,15 +146,20 @@ This document captures the core design philosophy, intentions, and vision for th
 - **Infected biome**: Replaces many vanilla biomes
 - **Safer zones**: Some biomes excluded from replacement
 
-### Nether (Future)
-- **Bear variants**: Mix of normal variants + fire/lava-proof variants
-- **Corruption evolution**: Over time, bears adapt to Nether environment
-- **No unique variants initially**: Reuse existing variants with adaptations
+### Nether (Implemented)
+- **Bear variants**: All bear types can spawn in Nether
+- **Fire resistance adaptation**: Bears gain fire resistance based on day variant:
+  - Day 4 and earlier: No fire resistance
+  - Day 8-17: Fire Resistance I (temporary, requires 10 seconds in Nether first)
+  - Day 20+: Fire Resistance III (complete immunity, immediate)
+- **Infected biome**: Replaces all 5 vanilla Nether biomes with variable sizes
+- **Spawn blocks**: `netherrack` is a valid spawn block in Nether
 
-### End (Future)
-- **Bear variants**: Increased flying/torpedo presence (more void = more aerial threats)
-- **Mixed spawns**: Normal variants + flying/torpedo emphasis
-- **Corruption evolution**: Bears adapt to End over time
+### End (Implemented)
+- **Bear variants**: All bear types can spawn, but flying/torpedo bears have increased spawn rates
+- **Spawn rate scaling**: Flying/torpedo spawn rates increase with world day (1.5x-3.0x), other types reduced (0.5x)
+- **Infected biome**: Replaces all 5 vanilla End biomes with variable sizes (lowest density)
+- **Spawn blocks**: `end_stone` is a valid spawn block in End
 
 ---
 

@@ -1,0 +1,12 @@
+{
+	"format_version": "1.21.40",
+	"minecraft:client_biome": {
+		"description": { "identifier": "mb:infected_biome_medium" },
+		"components": {
+            "minecraft:sky_color": { "sky_color": "#C8D2E1" },
+            "minecraft:fog_appearance": { "fog_identifier": "mb:infected_biome" },
+            "minecraft:water_appearance": { "surface_color": "#F0F2F4" }
+		}
+	}
+}
+

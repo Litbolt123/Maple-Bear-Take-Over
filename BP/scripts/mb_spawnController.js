@@ -126,10 +126,34 @@ const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
 const TARGET_BLOCK = "mb:dusted_dirt";
 const TARGET_BLOCK_2 = "mb:snow_layer"; // Also check for snow layers
+const NETHER_TARGET_BLOCKS = [
+    "minecraft:netherrack",
+    "minecraft:soul_sand",
+    "minecraft:soul_soil",
+    "minecraft:basalt",
+    "minecraft:crimson_nylium",
+    "minecraft:warped_nylium"
+];
+const END_TARGET_BLOCK = "minecraft:end_stone";
 
-// Helper function to check if a block is a valid target block
-function isValidTargetBlock(typeId) {
-    return typeId === TARGET_BLOCK || typeId === TARGET_BLOCK_2;
+// Helper function to check if a block is a valid target block for a dimension
+function isValidTargetBlock(typeId, dimensionId = null) {
+    // Never allow blocked spawn blocks (stronghold blocks, etc.)
+    if (BLOCKED_SPAWN_BLOCKS.has(typeId)) {
+        return false;
+    }
+    
+    if (typeId === TARGET_BLOCK || typeId === TARGET_BLOCK_2) {
+        return true;
+    }
+    // Dimension-specific blocks
+    if (dimensionId === "minecraft:nether" && NETHER_TARGET_BLOCKS.includes(typeId)) {
+        return true;
+    }
+    if (dimensionId === "minecraft:the_end" && typeId === END_TARGET_BLOCK) {
+        return true;
+    }
+    return false;
 }
 
 const AIR_BLOCKS = new Set([
@@ -298,10 +322,29 @@ function getFlyingSpawnLocation(settings, dimension, tile) {
     return null;
 }
 
+// Blocks that should NEVER be valid spawn locations (structures, player-built blocks, etc.)
+const BLOCKED_SPAWN_BLOCKS = new Set([
+    "minecraft:stone_bricks",
+    "minecraft:mossy_stone_bricks",
+    "minecraft:cracked_stone_bricks",
+    "minecraft:chiseled_stone_bricks",
+    "minecraft:infested_stone_bricks",
+    "minecraft:infested_mossy_stone_bricks",
+    "minecraft:infested_cracked_stone_bricks",
+    "minecraft:infested_chiseled_stone_bricks"
+]);
+
 // Check if a block type is valid for mining bear spawning (stone, deepslate, etc. in caves)
 function isValidMiningSpawnBlock(blockType) {
     if (!blockType) return false;
+    
+    // Never allow blocked spawn blocks (stronghold blocks, etc.)
+    if (BLOCKED_SPAWN_BLOCKS.has(blockType)) {
+        return false;
+    }
+    
     // Allow stone and deepslate variants for cave spawning
+    // BUT exclude stone_bricks variants (already blocked above)
     return blockType.startsWith("minecraft:stone") || 
            blockType.startsWith("minecraft:deepslate") ||
            blockType.startsWith("minecraft:cobbled_deepslate") ||
@@ -336,7 +379,8 @@ function getMiningSpawnLocation(settings, dimension, tile) {
     }
     
     // If tile doesn't have dusted_dirt or snow_layer, check if it has stone/deepslate (for cave spawning)
-    if (!tileBlock || !isValidTargetBlock(tileBlock.typeId)) {
+    const dimensionId = dimension.id;
+    if (!tileBlock || !isValidTargetBlock(tileBlock.typeId, dimensionId)) {
         // Check if it's a valid mining spawn block (stone/deepslate)
         if (tileBlock && isValidMiningSpawnBlock(tileBlock.typeId)) {
             // Only allow if it's in a cave (has roof) - don't spawn on surface stone
@@ -352,9 +396,9 @@ function getMiningSpawnLocation(settings, dimension, tile) {
                     if (dx === 0 && dz === 0) continue;
                     try {
                         const nearbyBlock = dimension.getBlock({ x: baseX + dx, y: tile.y, z: baseZ + dz });
-                        if (nearbyBlock && (isValidTargetBlock(nearbyBlock.typeId) || isValidMiningSpawnBlock(nearbyBlock.typeId))) {
+                        if (nearbyBlock && (isValidTargetBlock(nearbyBlock.typeId, dimensionId) || isValidMiningSpawnBlock(nearbyBlock.typeId))) {
                             // Check if it's in a cave (for stone/deepslate)
-                            if (!isValidTargetBlock(nearbyBlock.typeId) && !hasRoof(dimension, baseX + dx, baseZ + dz, clearanceTop + 1, settings.roofProbe, settings.requiredRoofBlocks)) {
+                            if (!isValidTargetBlock(nearbyBlock.typeId, dimensionId) && !hasRoof(dimension, baseX + dx, baseZ + dz, clearanceTop + 1, settings.roofProbe, settings.requiredRoofBlocks)) {
                                 continue; // Not in cave, skip
                             }
                             // Found valid block nearby - adjust spawn position
@@ -387,7 +431,7 @@ function getMiningSpawnLocation(settings, dimension, tile) {
         // Check if this is dusted_dirt (surface spawn allowed) or stone/deepslate (must be in cave)
         try {
             const checkBlock = dimension.getBlock({ x: baseX, y: tile.y, z: baseZ });
-            if (checkBlock && isValidTargetBlock(checkBlock.typeId)) {
+            if (checkBlock && isValidTargetBlock(checkBlock.typeId, dimensionId)) {
                 // Surface spawns allowed for dusted_dirt - just need clearance
                 return { x: baseX + 0.5, y: spawnY, z: baseZ + 0.5 };
             } else if (checkBlock && isValidMiningSpawnBlock(checkBlock.typeId)) {
@@ -746,7 +790,7 @@ const SPAWN_CONFIGS = [
     {
         id: TORPEDO_BEAR_ID,
         startDay: 17,
-        endDay: Infinity, // Continues indefinitely - highest variant (TORPEDO_BEAR_DAY20_ID) takes over at day 22
+        endDay: Infinity, // Continues indefinitely - highest variant (TORPEDO_BEAR_DAY20_ID) takes over at day 20
         baseChance: 0.03, // Super rare - reduced from 0.10
         chancePerDay: 0.005, // Reduced from 0.018
         maxChance: 0.08, // Reduced from 0.34
@@ -759,7 +803,7 @@ const SPAWN_CONFIGS = [
     },
     {
         id: TORPEDO_BEAR_DAY20_ID,
-        startDay: 22,
+        startDay: 20,
         endDay: Infinity,
         baseChance: 0.04, // Super rare - reduced from 0.14
         chancePerDay: 0.006, // Reduced from 0.015
@@ -1247,7 +1291,8 @@ export function testBlockAtPosition(dimension, x, y, z) {
             return;
         }
         const typeId = block.typeId;
-        const isTarget = isValidTargetBlock(typeId);
+        const dimensionId = dimension.id;
+        const isTarget = isValidTargetBlock(typeId, dimensionId);
         console.warn(`[SPAWN DEBUG] Manual test - Block at (${x}, ${y}, ${z}):`);
         console.warn(`[SPAWN DEBUG]   typeId: "${typeId}"`);
         console.warn(`[SPAWN DEBUG]   TARGET_BLOCK: "${TARGET_BLOCK}" or "${TARGET_BLOCK_2}"`);
@@ -1305,7 +1350,8 @@ function validateDustedDirtCache(dimension) {
                 const checkDim = dimension || (value.dimension ? world.getDimension(value.dimension) : null);
                 if (checkDim) {
                     const block = checkDim.getBlock({ x: value.x, y: value.y, z: value.z });
-                    if (!block || !isValidTargetBlock(block.typeId)) {
+                    const checkDimId = checkDim.id;
+                    if (!block || !isValidTargetBlock(block.typeId, checkDimId)) {
                         // Block no longer exists or changed type, remove from cache
                         toRemove.push(key);
                         debugLog('cache', `Removed invalid cache entry: ${key} (block: ${block?.typeId || 'null'})`);
@@ -1374,7 +1420,8 @@ function scanAroundDustedDirt(dimension, centerX, centerY, centerZ, seen, candid
                     localQueries++;
                     if (!block) continue;
                     
-                    if (isValidTargetBlock(block.typeId)) {
+                    const dimensionId = dimension.id;
+                    if (isValidTargetBlock(block.typeId, dimensionId)) {
                         const blockAbove = dimension.getBlock({ x, y: y + 1, z });
                         localQueries++;
                         if (localQueries < maxLocalQueries) {
@@ -1438,12 +1485,26 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
     
     // Debug: Log scan start (before initialYRange is defined)
     if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
-        console.warn(`[SPAWN DEBUG] Starting tile collection: Center (${cx}, ${cy}, ${cz}), Range: ${minDistance}-${maxDistance}, Limit: ${limit}${isSinglePlayer ? ' [SINGLE PLAYER MODE - Enhanced Scanning]' : ''}`);
-        console.warn(`[SPAWN DEBUG] Player position: (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)})`);
-        console.warn(`[SPAWN DEBUG] TARGET_BLOCK constants: "${TARGET_BLOCK}" and "${TARGET_BLOCK_2}"`);
+        const dimensionId = dimension.id;
+        const isNetherOrEnd = dimensionId === "minecraft:nether" || dimensionId === "minecraft:the_end";
+        let targetBlocks = `"${TARGET_BLOCK}" and "${TARGET_BLOCK_2}"`;
+        if (dimensionId === "minecraft:nether") {
+            targetBlocks = NETHER_TARGET_BLOCKS.map(b => `"${b}"`).join(", ");
+        } else if (dimensionId === "minecraft:the_end") {
+            targetBlocks = `"${END_TARGET_BLOCK}"`;
+        }
+        console.warn(`[SPAWN DEBUG] Starting tile collection: Center (${cx}, ${cy}, ${cz}), Range: ${minDistance}-${maxDistance}, Limit: ${limit}${isSinglePlayer ? ' [SINGLE PLAYER MODE - Enhanced Scanning]' : ''}${isNetherOrEnd ? ' [NETHER/END - Reduced Scanning]' : ''}`);
+        console.warn(`[SPAWN DEBUG] Player position: (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)}), Dimension: ${dimensionId}`);
+        console.warn(`[SPAWN DEBUG] TARGET_BLOCK constants: ${targetBlocks}`);
         console.warn(`[SPAWN DEBUG] IMPORTANT: Blocks closer than ${minDistance} blocks or farther than ${maxDistance} blocks will be SKIPPED`);
-        if (isSinglePlayer) {
-            console.warn(`[SPAWN DEBUG] Single player detected: Using ${queryLimit} queries (2x normal) and adaptive Y range for more thorough scanning`);
+        // Note: queryLimit is calculated in collectDustedTiles, so we can't show it here
+        if (isSinglePlayer && !isNetherOrEnd) {
+            console.warn(`[SPAWN DEBUG] Single player detected: Using 2x normal query limit and adaptive Y range for more thorough scanning`);
+        }
+        if (isNetherOrEnd) {
+            const baseLimit = isSinglePlayer ? MAX_BLOCK_QUERIES_SINGLE_PLAYER : MAX_BLOCK_QUERIES_PER_SCAN;
+            const netherLimit = Math.floor(baseLimit * 0.75);
+            console.warn(`[SPAWN DEBUG] Nether/End detected: Using ${netherLimit} queries (75% of ${baseLimit}) - blocks are abundant, reduced scanning to prevent lag`);
         }
     }
     
@@ -1555,8 +1616,20 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     const seen = new Set();
     let blockQueryCount = 0;
     
+    const dimensionId = dimension.id;
+    const isNetherOrEnd = dimensionId === "minecraft:nether" || dimensionId === "minecraft:the_end";
+    
     // Single player: Use higher query limit for more thorough scanning
-    const queryLimit = isSinglePlayer ? MAX_BLOCK_QUERIES_SINGLE_PLAYER : MAX_BLOCK_QUERIES_PER_SCAN;
+    // Nether/End: Use REDUCED limits since blocks are abundant (netherrack/end_stone everywhere)
+    // We don't need aggressive scanning - blocks are easy to find, but we need to limit performance impact
+    let queryLimit;
+    if (isNetherOrEnd) {
+        // Nether/End: Use 75% of normal limits (reduced from 150% to prevent lag)
+        // Blocks are abundant, so we can find enough with less scanning
+        queryLimit = isSinglePlayer ? Math.floor(MAX_BLOCK_QUERIES_SINGLE_PLAYER * 0.75) : Math.floor(MAX_BLOCK_QUERIES_PER_SCAN * 0.75);
+    } else {
+        queryLimit = isSinglePlayer ? MAX_BLOCK_QUERIES_SINGLE_PLAYER : MAX_BLOCK_QUERIES_PER_SCAN;
+    }
 
     // Update active chunks based on player position
     updateActiveChunks(center.x, center.z);
@@ -1574,7 +1647,6 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     const cacheMaxDistance = maxDistance; // Use maxDistance (45 blocks) for cache validation
     const cacheMaxSq = cacheMaxDistance * cacheMaxDistance;
     const cacheCheckRadiusSq = CACHE_CHECK_RADIUS * CACHE_CHECK_RADIUS; // Only check blocks within this radius
-    const dimensionId = dimension.id;
     
     // Debug: Log cache size
     if (isDebugEnabled('spawn', 'cache') || isDebugEnabled('spawn', 'all')) {
@@ -1652,7 +1724,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         try {
             const block = dimension.getBlock({ x: value.x, y: value.y, z: value.z });
             blockQueryCount++;
-            if (block && isValidTargetBlock(block.typeId)) {
+            if (block && isValidTargetBlock(block.typeId, dimensionId)) {
                 const blockAbove = dimension.getBlock({ x: value.x, y: value.y + 1, z: value.z });
                 blockQueryCount++;
                 if (blockQueryCount < queryLimit) {
@@ -1678,12 +1750,18 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                         }
                     }
                 }
-            } else if (!block || !isValidTargetBlock(block.typeId)) {
+            } else if (!block || !isValidTargetBlock(block.typeId, dimensionId)) {
                 // Block no longer exists or changed, remove from cache
                 unregisterDustedDirtBlock(value.x, value.y, value.z);
                 debugLog('cache', `Removed invalid block from cache: ${value.x},${value.y},${value.z} (type: ${block?.typeId || 'null'})`);
                 if (isDebugEnabled('spawn', 'validation') || isDebugEnabled('spawn', 'all')) {
-                    console.warn(`[SPAWN DEBUG] Cache entry ${key}: Block changed or missing (expected: ${TARGET_BLOCK}, got: ${block?.typeId || 'null'})`);
+                    let expectedBlocks = TARGET_BLOCK;
+                    if (dimensionId === "minecraft:nether") {
+                        expectedBlocks = NETHER_TARGET_BLOCKS.join(" or ");
+                    } else if (dimensionId === "minecraft:the_end") {
+                        expectedBlocks = END_TARGET_BLOCK;
+                    }
+                    console.warn(`[SPAWN DEBUG] Cache entry ${key}: Block changed or missing (expected: ${expectedBlocks}, got: ${block?.typeId || 'null'})`);
                 }
             }
         } catch (error) {
@@ -1774,7 +1852,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                         }
                         if (!block) continue;
                         
-                        if (isValidTargetBlock(block.typeId)) {
+                        const dimensionId = dimension.id;
+                        if (isValidTargetBlock(block.typeId, dimensionId)) {
                             const blockAbove = dimension.getBlock({ x: checkX, y: checkY + 1, z: checkZ });
                             blockQueryCount++;
                             if (blockQueryCount < queryLimit) {
@@ -1802,7 +1881,9 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         }
         
         // If we found enough tiles from cache + scanning around cache, we're done
-        if (candidates.length >= limit || cachedTiles.length >= MIN_CACHED_TILES_FOR_FULL_SCAN) {
+        // EXCEPTION: Nether/End always do full scan since we can't rely on biome replacement
+        // (blocks must be found through active scanning, not cached from biome generation)
+        if (!isNetherOrEnd && (candidates.length >= limit || cachedTiles.length >= MIN_CACHED_TILES_FOR_FULL_SCAN)) {
             // console.warn(`[SPAWN DEBUG] Found ${candidates.length} tiles (${cachedTiles.length} cached + ${candidates.length - cachedTiles.length} from cache scan), skipping full scan`);
             return candidates.slice(0, limit);
         }
@@ -1811,6 +1892,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     // Only do full area scan if we have very few cached tiles
     // This is the expensive operation, so we avoid it when possible
     // If cache is empty or very small, we MUST do a full scan to find blocks
+    // Nether/End: Always do full scan since biome replacement doesn't work there
     
     if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
         console.warn(`[SPAWN DEBUG] Starting full area scan: Cache had ${cachedTiles.length} tiles, candidates so far: ${candidates.length}`);
@@ -1962,13 +2044,28 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         }
     } else {
         // Default: Fixed Y range (15 below, 30 above player)
-        yRangeUp = 30; // Always check 30 blocks above player
-        yRangeDown = 15; // Always check 15 blocks below player
-        yStart = cy + yRangeUp;
-        yEnd = cy - yRangeDown;
+        // Nether/End: Use smaller range to avoid ceiling/floor issues
+        if (isNetherOrEnd) {
+            // Nether ceiling is ~Y=128, floor is ~Y=0-32
+            // End has void below, islands at various heights
+            // Use smaller range (±15) to stay closer to player level and avoid invalid areas
+            yRangeUp = 15; // Reduced from 30 for Nether/End
+            yRangeDown = 15; // Keep at 15
+            // Cap Y start to avoid Nether ceiling (Y=128) - leave some buffer
+            const maxY = dimensionId === "minecraft:nether" ? 125 : 320; // Nether ceiling buffer, End has no ceiling
+            yStart = Math.min(cy + yRangeUp, maxY);
+            yEnd = Math.max(cy - yRangeDown, -64);
+        } else {
+            yRangeUp = 30; // Always check 30 blocks above player
+            yRangeDown = 15; // Always check 15 blocks below player
+            yStart = cy + yRangeUp;
+            yEnd = cy - yRangeDown;
+        }
         
         if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
-            if (isUnderground) {
+            if (isNetherOrEnd) {
+                console.warn(`[SPAWN DEBUG] Environment detection: Nether/End (player Y: ${cy}), using reduced Y range (±${yRangeDown} blocks) to avoid ceiling/void`);
+            } else if (isUnderground) {
                 console.warn(`[SPAWN DEBUG] Environment detection: Underground (player Y: ${cy}), using default Y range`);
             } else {
                 console.warn(`[SPAWN DEBUG] Environment detection: Unknown/neutral (player Y: ${cy}, samples checked: ${sampleQueryCount}), using default Y range`);
@@ -2063,6 +2160,14 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     
     // Scan XZ rectangle, checking Y levels
     for (let x = xStart; x <= xEnd; x++) {
+        // Early exit: If we have enough candidates, stop scanning (especially important for Nether/End)
+        if (candidates.length >= limit) {
+            if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                console.warn(`[SPAWN DEBUG] Scan stopped: Found enough tiles (${candidates.length}/${limit})`);
+            }
+            break;
+        }
+        
         if (blockQueryCount >= queryLimit) {
             if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
                 console.warn(`[SPAWN DEBUG] Scan stopped: Query limit reached (${blockQueryCount}/${queryLimit})${isSinglePlayer ? ' [SINGLE PLAYER MODE]' : ''}`);
@@ -2071,6 +2176,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         }
         
         for (let z = zStart; z <= zEnd; z++) {
+            // Early exit: Check candidates before each XZ position
+            if (candidates.length >= limit) break;
             if (blockQueryCount >= queryLimit) break;
             
             xzPositionsChecked++;
@@ -2116,6 +2223,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
             })();
             
             for (const y of yLevelsToCheck) {
+                // Early exit: Check if we have enough candidates
+                if (candidates.length >= limit) break;
                 if (blockQueryCount >= queryLimit) break;
                 
                 // Skip if Y is out of world bounds
@@ -2142,35 +2251,61 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                 if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
                     if (blocksChecked <= 10 && !isAir(block) && block.typeId) {
                         const dist = Math.sqrt(dx * dx + dz * dz);
-                        const isTarget = isValidTargetBlock(block.typeId);
+                        const dimensionId = dimension.id;
+                        const isTarget = isValidTargetBlock(block.typeId, dimensionId);
                         console.warn(`[SPAWN DEBUG] Block at (${x}, ${y}, ${z}): typeId="${block.typeId}", TARGET_BLOCK="${TARGET_BLOCK}" or "${TARGET_BLOCK_2}", match=${isTarget}, dist: ${dist.toFixed(1)}`);
                     }
                 }
 
-                // Check for both dusted_dirt and snow_layer blocks
-                if (block.typeId === TARGET_BLOCK || block.typeId === TARGET_BLOCK_2) {
+                // Check for valid target blocks (dimension-specific)
+                const dimensionId = dimension.id;
+                if (isValidTargetBlock(block.typeId, dimensionId)) {
                     blocksFound++;
-                    // Always log when we find a target block - this is important!
-                    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
-                        const dist = Math.sqrt(dx * dx + dz * dz);
-                        const blockType = block.typeId === TARGET_BLOCK ? "dusted_dirt" : "snow_layer";
-                        console.warn(`[SPAWN DEBUG] ✓✓✓ FOUND ${blockType} at (${x}, ${y}, ${z}), dist: ${dist.toFixed(1)}, Y diff: ${(y - cy).toFixed(1)}`);
-                    }
+                    // Check for air above before logging/adding - only valid spawn locations
                     const blockAbove = dimension.getBlock({ x, y: y + 1, z });
                     blockQueryCount++;
                     if (blockQueryCount < queryLimit) {
                         const blockTwoAbove = dimension.getBlock({ x, y: y + 2, z });
                         blockQueryCount++;
                         if (isAir(blockAbove) && isAir(blockTwoAbove)) {
+                            // Only log when we find a VALID spawn tile (has air above)
+                            if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                                const dist = Math.sqrt(dx * dx + dz * dz);
+                                let blockType = block.typeId === TARGET_BLOCK ? "dusted_dirt" : (block.typeId === TARGET_BLOCK_2 ? "snow_layer" : block.typeId);
+                                if (dimensionId === "minecraft:nether") {
+                                    // Map Nether block IDs to readable names
+                                    const netherBlockNames = {
+                                        "minecraft:netherrack": "netherrack",
+                                        "minecraft:soul_sand": "soul_sand",
+                                        "minecraft:soul_soil": "soul_soil",
+                                        "minecraft:basalt": "basalt",
+                                        "minecraft:crimson_nylium": "crimson_nylium",
+                                        "minecraft:warped_nylium": "warped_nylium"
+                                    };
+                                    blockType = netherBlockNames[block.typeId] || block.typeId;
+                                }
+                                if (dimensionId === "minecraft:the_end" && block.typeId === END_TARGET_BLOCK) blockType = "end_stone";
+                                console.warn(`[SPAWN DEBUG] ✓✓✓ FOUND VALID ${blockType} at (${x}, ${y}, ${z}), dist: ${dist.toFixed(1)}, Y diff: ${(y - cy).toFixed(1)}`);
+                            }
                             const key = `${x},${y},${z}`;
                             if (!seen.has(key)) {
                                 seen.add(key);
                                 candidates.push({ x, y, z });
-                                // Register in cache for future use
+                                // Register in cache for future use (works for all dimension-specific blocks)
                                 registerDustedDirtBlock(x, y, z, dimension);
                                 
+                                // Early exit for Nether/End: Stop scanning once we have enough valid tiles
+                                // Blocks are abundant, so we don't need to scan exhaustively
+                                if (isNetherOrEnd && candidates.length >= Math.min(limit, 30)) {
+                                    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                                        console.warn(`[SPAWN DEBUG] Early exit: Found ${candidates.length} valid tiles in Nether/End (sufficient for spawning)`);
+                                    }
+                                    return candidates.slice(0, limit);
+                                }
+                                
                                 // Scan around this block for nearby dusted_dirt/snow_layer patches (10x10 area)
-                                if (blockQueryCount < queryLimit - 30) { // Reserve some queries for local scan
+                                // Skip local scan in Nether/End to reduce lag (blocks are already abundant)
+                                if (!isNetherOrEnd && blockQueryCount < queryLimit - 30) { // Reserve some queries for local scan
                                     const localQueries = scanAroundDustedDirt(dimension, x, y, z, seen, candidates, blockQueryCount, limit);
                                     blockQueryCount += localQueries;
                                 }
@@ -2194,7 +2329,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
                         if (otherBlocks <= 5 && block.typeId) { // Only log first 5 to avoid spam
                             const dist = Math.sqrt(dx * dx + dz * dz);
-                            const isTarget = isValidTargetBlock(block.typeId);
+                            const dimensionId = dimension.id;
+                            const isTarget = isValidTargetBlock(block.typeId, dimensionId);
                             console.warn(`[SPAWN DEBUG] Found non-air block at (${x}, ${y}, ${z}): typeId="${block.typeId}", TARGET_BLOCK="${TARGET_BLOCK}" or "${TARGET_BLOCK_2}", match=${isTarget}, dist: ${dist.toFixed(1)}`);
                         }
                     }
@@ -2270,7 +2406,15 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     
     // Warning if no target blocks found
     if (blocksFound === 0 && (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all'))) {
-        console.warn(`[SPAWN DEBUG] ⚠️ WARNING: No ${TARGET_BLOCK} or ${TARGET_BLOCK_2} blocks found in scan area!`);
+        let expectedBlocks = `${TARGET_BLOCK} or ${TARGET_BLOCK_2}`;
+        if (isNetherOrEnd) {
+            if (dimensionId === "minecraft:nether") {
+                expectedBlocks = NETHER_TARGET_BLOCKS.join(", ");
+            } else if (dimensionId === "minecraft:the_end") {
+                expectedBlocks = `${END_TARGET_BLOCK}`;
+            }
+        }
+        console.warn(`[SPAWN DEBUG] ⚠️ WARNING: No ${expectedBlocks} blocks found in scan area!`);
         console.warn(`[SPAWN DEBUG] Scan area: X[${xStart} to ${xEnd}], Z[${zStart} to ${zEnd}], Y[${clampedYEnd} to ${clampedYStart}], Player: (${cx}, ${cy}, ${cz})`);
         console.warn(`[SPAWN DEBUG] Distance range: ${minDistance}-${maxDistance} blocks horizontally, Y range: +${yRangeUp}/-${yRangeDown} blocks from player Y ${cy}`);
         console.warn(`[SPAWN DEBUG] Spawn ranges: minDist=${MIN_SPAWN_DISTANCE}, maxDist=${MAX_SPAWN_DISTANCE}, YRange=+${yRangeUp}/-${yRangeDown}`);
@@ -2326,7 +2470,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     }
                     if (!block) continue;
 
-                    if (isValidTargetBlock(block.typeId)) {
+                    const dimensionId = dimension.id;
+                    if (isValidTargetBlock(block.typeId, dimensionId)) {
                         const blockAbove = dimension.getBlock({ x, y: y + 1, z });
                         blockQueryCount++;
                         if (blockQueryCount < queryLimit) {
@@ -3277,6 +3422,23 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
         chance = Math.min(chance * 1.2, chanceCap);
     }
     
+    // End dimension: Increase flying/torpedo bear spawn rates over time
+    const dimensionId = dimension.id;
+    if (dimensionId === "minecraft:the_end") {
+        if (isFlyingOrTorpedo) {
+            // Flying/torpedo bears get increased spawn rates in End (more aggressive)
+            let endMultiplier = 1.5; // Start at 1.5x (increased from 1.0x)
+            if (currentDay >= 20) endMultiplier += 0.75; // 2.25x at day 20 (increased from 1.5x)
+            if (currentDay >= 30) endMultiplier += 0.75; // 3.0x at day 30 (increased from 2.0x)
+            if (currentDay >= 40) endMultiplier += 0.5; // 3.5x at day 40 (increased from 2.5x)
+            endMultiplier = Math.min(endMultiplier, 4.0); // Cap at 4.0x (increased from 3.0x)
+            chance = Math.min(chance * endMultiplier, chanceCap);
+        } else {
+            // Other bear types get reduced spawn rates in End (more reduction to make room for flying/torpedo)
+            chance = Math.min(chance * 0.35, chanceCap); // Reduced from 0.5x to 0.35x
+        }
+    }
+    
     // High Y level boost: If player is at high altitude, increase spawn chance for flying/torpedo bears
     const playerY = playerPos.y;
     if (isFlyingOrTorpedo && playerY >= 80) {
@@ -3719,7 +3881,7 @@ system.runInterval(() => {
             if (config.id === MINING_BEAR_ID && currentDay >= 20) shouldSkip = true; // Skip if day20+ mining variants available
             if (config.id === BUFF_BEAR_ID && currentDay >= 20) shouldSkip = true; // Skip if day20+ buff variants available
             if (config.id === BUFF_BEAR_DAY13_ID && currentDay >= 20) shouldSkip = true; // Skip if day20+ buff variants available
-            if (config.id === TORPEDO_BEAR_ID && currentDay >= 22) shouldSkip = true; // Skip if day22+ torpedo variants available
+            if (config.id === TORPEDO_BEAR_ID && currentDay >= 20) shouldSkip = true; // Skip if day20+ torpedo variants available
             
             if (shouldSkip) continue;
             

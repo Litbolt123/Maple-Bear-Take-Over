@@ -8,6 +8,7 @@ import "./mb_miningAI.js";
 import { collectedBlocks } from "./mb_miningAI.js";
 import "./mb_flyingAI.js";
 import "./mb_torpedoAI.js";
+import "./mb_dimensionAdaptation.js";
 
 // NOTE: Debug and testing features have been commented out for playability
 // To re-enable testing features, uncomment the following sections:

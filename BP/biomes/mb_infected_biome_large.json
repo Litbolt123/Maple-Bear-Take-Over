@@ -2,7 +2,7 @@
 	"format_version": "1.21.120",
 	"minecraft:biome": {
 		"description": {
-			"identifier": "mb:infected_biome"
+			"identifier": "mb:infected_biome_large"
 		},
 		"components": {
 			"minecraft:climate": {
@@ -56,7 +56,7 @@
 							"minecraft:pale_garden"
 						],
 						"amount": 0.08,
-						"noise_frequency_scale": 25
+						"noise_frequency_scale": 0.08
 					},
 					{
 						"dimension": "minecraft:overworld",
@@ -78,8 +78,8 @@
 							"minecraft:river",
 							"minecraft:frozen_river"
 						],
-						"amount": 0.04,
-						"noise_frequency_scale": 25
+						"amount": 0.06,
+						"noise_frequency_scale": 0.08
 					},
 					{
 						"dimension": "minecraft:overworld",
@@ -102,8 +102,8 @@
 							"minecraft:frozen_peaks",
 							"minecraft:stony_peaks"
 						],
-						"amount": 0.04,
-						"noise_frequency_scale": 25
+						"amount": 0.06,
+						"noise_frequency_scale": 0.08
 					},
 					{
 						"dimension": "minecraft:overworld",
@@ -116,8 +116,8 @@
 							"minecraft:grove",
 							"minecraft:snowy_slopes"
 						],
-						"amount": 0.04,
-						"noise_frequency_scale": 25
+						"amount": 0.06,
+						"noise_frequency_scale": 0.08
 					},
 					{
 						"dimension": "minecraft:overworld",
@@ -126,8 +126,8 @@
 							"minecraft:dripstone_caves",
 							"minecraft:deep_dark"
 						],
-						"amount": 0.06,
-						"noise_frequency_scale": 25
+						"amount": 0.08,
+						"noise_frequency_scale": 0.08
 					}
 				]
 			},
@@ -145,3 +145,4 @@
 		}
 	}
 }
+
