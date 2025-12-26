@@ -1,9 +1,9 @@
 {
-	"_ARCHIVE_NOTE": "This file was archived on 2025-12-25 when split into 3 separate biome files (large/medium/small) to fix 'already defined' errors. Some Nether/End biome IDs were removed as they don't exist in Bedrock Edition. See mb_infected_biome_large.json, mb_infected_biome_medium.json, and mb_infected_biome_small.json for current implementation.",
+	"_ARCHIVE_NOTE": "This file was archived on 2025-12-25 when split into 3 separate biome files (large/medium/small) to fix 'already defined' errors. This file preserves the ORIGINAL state before any removals. The biomes listed in _REMOVED_BIOMES below were removed from the NEW implementation files (mb_infected_biome_large.json, mb_infected_biome_medium.json, mb_infected_biome_small.json) because they are Java Edition only and not recognized in Bedrock Edition. See those files for the current implementation.",
 	"_REMOVED_BIOMES": {
 		"nether": ["minecraft:nether_wastes", "minecraft:soul_sand_valley"],
 		"end": ["minecraft:end_highlands", "minecraft:end_midlands", "minecraft:end_barrens", "minecraft:small_end_islands"],
-		"reason": "These biome IDs are Java Edition only and not recognized in Bedrock Edition"
+		"reason": "These biome IDs are Java Edition only and were removed from the new implementation files (not from this archive, which preserves original state). They are not recognized in Bedrock Edition."
 	},
 	"format_version": "1.21.120",
 	"minecraft:biome": {

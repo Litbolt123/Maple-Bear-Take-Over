@@ -136,6 +136,18 @@ const NETHER_TARGET_BLOCKS = [
 ];
 const END_TARGET_BLOCK = "minecraft:end_stone";
 
+// Blocks that should NEVER be valid spawn locations (structures, player-built blocks, etc.)
+const BLOCKED_SPAWN_BLOCKS = new Set([
+    "minecraft:stone_bricks",
+    "minecraft:mossy_stone_bricks",
+    "minecraft:cracked_stone_bricks",
+    "minecraft:chiseled_stone_bricks",
+    "minecraft:infested_stone_bricks",
+    "minecraft:infested_mossy_stone_bricks",
+    "minecraft:infested_cracked_stone_bricks",
+    "minecraft:infested_chiseled_stone_bricks"
+]);
+
 // Helper function to check if a block is a valid target block for a dimension
 function isValidTargetBlock(typeId, dimensionId = null) {
     // Never allow blocked spawn blocks (stronghold blocks, etc.)
@@ -322,18 +334,6 @@ function getFlyingSpawnLocation(settings, dimension, tile) {
     return null;
 }
 
-// Blocks that should NEVER be valid spawn locations (structures, player-built blocks, etc.)
-const BLOCKED_SPAWN_BLOCKS = new Set([
-    "minecraft:stone_bricks",
-    "minecraft:mossy_stone_bricks",
-    "minecraft:cracked_stone_bricks",
-    "minecraft:chiseled_stone_bricks",
-    "minecraft:infested_stone_bricks",
-    "minecraft:infested_mossy_stone_bricks",
-    "minecraft:infested_cracked_stone_bricks",
-    "minecraft:infested_chiseled_stone_bricks"
-]);
-
 // Check if a block type is valid for mining bear spawning (stone, deepslate, etc. in caves)
 function isValidMiningSpawnBlock(blockType) {
     if (!blockType) return false;
@@ -464,10 +464,31 @@ const MIN_SPAWN_DISTANCE = 15; // Minimum distance from player (15 blocks)
 const MAX_SPAWN_DISTANCE = 45; // Maximum distance from player (45 blocks)
 const BASE_MIN_TILE_SPACING = 2.5; // blocks between spawn tiles (reduced from 3 for better coverage on day 20+)
 const SCAN_INTERVAL = 60; // ticks (~3 seconds) - reduced for more frequent smaller scans
-const BLOCK_SCAN_COOLDOWN = SCAN_INTERVAL * 2; // Only scan blocks every 2 intervals (~6 seconds)
+// Dynamic scan cooldown based on player count (longer for multiplayer to spread load)
+function getBlockScanCooldown(totalPlayerCount) {
+    if (totalPlayerCount === 1) return SCAN_INTERVAL * 2; // 6 seconds for single player
+    if (totalPlayerCount === 2) return SCAN_INTERVAL * 3; // 9 seconds for 2 players
+    return SCAN_INTERVAL * 4; // 12 seconds for 3+ players
+}
+const BLOCK_SCAN_COOLDOWN = SCAN_INTERVAL * 2; // Default (single player) - use getBlockScanCooldown() for multiplayer
 const MAX_BLOCK_QUERIES_PER_SCAN = 6000; // Limit block queries per scan (smaller batches, more frequent)
 const MAX_BLOCK_QUERIES_SINGLE_PLAYER = 12000; // Double the limit for single player (more thorough scanning)
 // Total queries over time: 6000 every 60 ticks = ~100 queries/tick average (same as 12000 every 120 ticks)
+
+// Calculate block query limit based on player count (reduces lag with multiple players)
+function getBlockQueryLimit(isSinglePlayer, totalPlayerCount) {
+    let baseLimit = isSinglePlayer ? MAX_BLOCK_QUERIES_SINGLE_PLAYER : MAX_BLOCK_QUERIES_PER_SCAN;
+    
+    // Scale down block queries when multiple players are present
+    // This prevents total block query explosion (4 players × 6000 = 24,000 queries per tick!)
+    if (totalPlayerCount > 1) {
+        // More aggressive scaling to reduce lag: 2 players: 0.5x, 3 players: 0.35x, 4+ players: 0.25x
+        const multiplier = totalPlayerCount === 2 ? 0.5 : totalPlayerCount === 3 ? 0.35 : 0.25;
+        baseLimit = Math.floor(baseLimit * multiplier);
+    }
+    
+    return baseLimit;
+}
 
 const SUNRISE_BOOST_DURATION = 200; // ticks
 const SUNRISE_BOOST_MULTIPLIER = 1.25;
@@ -830,12 +851,36 @@ let lastProcessedDay = 0;
 let sunriseBoostTicks = 0;
 const playerTileCache = new Map();
 const entityCountCache = new Map(); // Cache entity counts per player
-const ENTITY_COUNT_CACHE_TTL = SCAN_INTERVAL * 2; // Refresh entity counts every 2 scan intervals
+// Dynamic entity count cache TTL based on player count (longer for multiplayer to reduce queries)
+function getEntityCountCacheTTL(totalPlayerCount) {
+    if (totalPlayerCount === 1) return SCAN_INTERVAL * 4; // 12 seconds for single player
+    if (totalPlayerCount === 2) return SCAN_INTERVAL * 6; // 18 seconds for 2 players
+    return SCAN_INTERVAL * 8; // 24 seconds for 3+ players
+}
+const ENTITY_COUNT_CACHE_TTL = SCAN_INTERVAL * 4; // Default (single player) - use getEntityCountCacheTTL() for multiplayer
 const MAX_SPAWNS_PER_TICK_PER_PLAYER_BASE = 4; // Base spawn limit (day 2) - increased from 3
 const MAX_SPAWNS_PER_TICK_PER_PLAYER_MAX = 16; // Maximum spawn limit (day 20+) - increased from 12
-const PLAYER_PROCESSING_ROTATION = []; // Rotate which players to process
+// Global spawn limit to prevent entity explosion with multiple players
+const MAX_GLOBAL_SPAWNS_PER_TICK = 24; // Maximum total spawns across all players per tick
 let playerRotationIndex = 0;
 let lastBlockScanTick = 0; // Track when we last did expensive block scans
+// Global spawn counter (resets each tick)
+let globalSpawnCount = 0;
+
+// Track barren areas (where full scan found 0 target blocks) to avoid wasteful rescans
+// key: "chunkX,chunkZ" -> { lastScanTick, foundBlocks }
+const barrenAreaCache = new Map();
+const BARREN_AREA_COOLDOWN = SCAN_INTERVAL * 5; // 15 seconds before retrying barren area
+
+// Cache spawn attempt results per tile to prevent repeated failed attempts
+// key: "x,y,z" -> { lastAttemptTick, success }
+const spawnAttemptCache = new Map();
+const SPAWN_ATTEMPT_COOLDOWN = 5; // Skip tile for 5 ticks if it failed recently
+
+// Progressive tile discovery: Track which areas have been scanned to spread discovery across multiple ticks
+// key: "chunkX,chunkZ" -> { scanCycle: 0-3, lastScanTick }
+const progressiveScanCache = new Map();
+const PROGRESSIVE_SCAN_CYCLES = 4; // Spread discovery across 4 scan cycles
 
 // Weather detection cache (dimension -> weather state)
 const weatherCache = new Map(); // Map<dimensionId, {weather: string, tick: number}>
@@ -1104,15 +1149,29 @@ const loggedDimensionsThisTick = new Set(); // Track which dimensions have been 
 const loggedSelectedGroupsThisTick = new Set(); // Track which groups have been logged as "selected" this tick
 const loggedMaintainedGroupsThisTick = new Set(); // Track which groups have been logged as "maintained" this tick
 
-// Calculate dynamic spawn limit based on current day
-function getMaxSpawnsPerTick(day) {
-    if (day < 2) return 2;
-    if (day < 4) return 3; // Day 2-3: 3 spawns (increased from 2)
-    if (day < 8) return 4; // Day 4-7: 4 spawns (increased from 3)
-    if (day < 13) return 6; // Day 8-12: 6 spawns (increased from 4)
-    if (day < 20) return 8; // Day 13-19: 8 spawns (increased from 5)
-    // Day 20+: Scale from 10 to 16 based on how far past day 20
-    return Math.min(MAX_SPAWNS_PER_TICK_PER_PLAYER_MAX, 10 + Math.floor((day - 20) / 5));
+// Calculate dynamic spawn limit based on current day and player count
+// When multiple players are present, reduce per-player limits to prevent total entity explosion
+function getMaxSpawnsPerTick(day, totalPlayerCount = 1) {
+    let baseLimit;
+    if (day < 2) baseLimit = 2;
+    else if (day < 4) baseLimit = 3; // Day 2-3: 3 spawns
+    else if (day < 8) baseLimit = 4; // Day 4-7: 4 spawns
+    else if (day < 13) baseLimit = 6; // Day 8-12: 6 spawns
+    else if (day < 20) baseLimit = 8; // Day 13-19: 8 spawns
+    else {
+        // Day 20+: Scale from 10 to 16 based on how far past day 20
+        baseLimit = Math.min(MAX_SPAWNS_PER_TICK_PER_PLAYER_MAX, 10 + Math.floor((day - 20) / 5));
+    }
+    
+    // Reduce per-player limit when multiple players are present
+    // This prevents total entity count from exploding
+    if (totalPlayerCount > 1) {
+        // Scale down: 2 players = 0.7x, 3 players = 0.5x, 4+ players = 0.4x
+        const multiplier = totalPlayerCount === 2 ? 0.7 : totalPlayerCount === 3 ? 0.5 : 0.4;
+        baseLimit = Math.max(2, Math.floor(baseLimit * multiplier));
+    }
+    
+    return baseLimit;
 }
 
 // Spatial chunking system for dusted_dirt cache
@@ -1466,7 +1525,14 @@ function scanAroundDustedDirt(dimension, centerX, centerY, centerZ, seen, candid
 // ============================================================================
 
 // Collect tiles for mining bear spawning (includes dusted_dirt AND stone/deepslate in caves)
-function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, limit = MAX_CANDIDATES_PER_SCAN, isSinglePlayer = false) {
+function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, limit = MAX_CANDIDATES_PER_SCAN, isSinglePlayer = false, totalPlayerCount = 1) {
+    // Reduce candidate limit when multiple players are present (less tiles needed per player)
+    let effectiveLimit = limit;
+    if (totalPlayerCount > 1) {
+        // 2 players: 0.9x, 3 players: 0.8x, 4+ players: 0.7x
+        const multiplier = totalPlayerCount === 2 ? 0.9 : totalPlayerCount === 3 ? 0.8 : 0.7;
+        effectiveLimit = Math.floor(limit * multiplier);
+    }
     const cx = Math.floor(center.x);
     const cy = Math.floor(center.y);
     const cz = Math.floor(center.z);
@@ -1475,8 +1541,8 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
     const candidates = [];
     const seen = new Set();
     
-    // Single player: Use higher query limit for more thorough scanning
-    const queryLimit = isSinglePlayer ? MAX_BLOCK_QUERIES_SINGLE_PLAYER : MAX_BLOCK_QUERIES_PER_SCAN;
+    // Use scaled query limit based on player count (reduces lag with multiple players)
+    const queryLimit = getBlockQueryLimit(isSinglePlayer, totalPlayerCount);
     
     // Track total query budget across both phases
     // Allocate 60% for dusted_dirt, 40% for stone/deepslate
@@ -1511,7 +1577,7 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
     // First, get dusted_dirt tiles (reuse existing function)
     // Note: collectDustedTiles has its own internal query budget management
     // We can't directly track its usage, but we allocate the budget here for clarity
-    const dustedTiles = collectDustedTiles(dimension, center, minDistance, maxDistance, Math.floor(limit * 0.6), isSinglePlayer); // 60% from dusted_dirt
+    const dustedTiles = collectDustedTiles(dimension, center, minDistance, maxDistance, Math.floor(limit * 0.6), isSinglePlayer, totalPlayerCount); // 60% from dusted_dirt
     
     // Debug: Log dusted tiles found
     if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
@@ -1606,7 +1672,15 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
     return candidates.slice(0, limit);
 }
 
-function collectDustedTiles(dimension, center, minDistance, maxDistance, limit = MAX_CANDIDATES_PER_SCAN, isSinglePlayer = false) {
+function collectDustedTiles(dimension, center, minDistance, maxDistance, limit = MAX_CANDIDATES_PER_SCAN, isSinglePlayer = false, totalPlayerCount = 1) {
+    // Reduce candidate limit when multiple players are present (less tiles needed per player)
+    let effectiveLimit = limit;
+    if (totalPlayerCount > 1) {
+        // 2 players: 0.9x, 3 players: 0.8x, 4+ players: 0.7x
+        const multiplier = totalPlayerCount === 2 ? 0.9 : totalPlayerCount === 3 ? 0.8 : 0.7;
+        effectiveLimit = Math.floor(limit * multiplier);
+    }
+    
     const cx = Math.floor(center.x);
     const cy = Math.floor(center.y);
     const cz = Math.floor(center.z);
@@ -1619,17 +1693,21 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     const dimensionId = dimension.id;
     const isNetherOrEnd = dimensionId === "minecraft:nether" || dimensionId === "minecraft:the_end";
     
-    // Single player: Use higher query limit for more thorough scanning
+    // Use scaled query limit based on player count (reduces lag with multiple players)
     // Nether/End: Use REDUCED limits since blocks are abundant (netherrack/end_stone everywhere)
     // We don't need aggressive scanning - blocks are easy to find, but we need to limit performance impact
+    let baseQueryLimit = getBlockQueryLimit(isSinglePlayer, totalPlayerCount);
     let queryLimit;
     if (isNetherOrEnd) {
-        // Nether/End: Use 75% of normal limits (reduced from 150% to prevent lag)
+        // Nether/End: Use 75% of scaled limits (reduced from 150% to prevent lag)
         // Blocks are abundant, so we can find enough with less scanning
-        queryLimit = isSinglePlayer ? Math.floor(MAX_BLOCK_QUERIES_SINGLE_PLAYER * 0.75) : Math.floor(MAX_BLOCK_QUERIES_PER_SCAN * 0.75);
+        queryLimit = Math.floor(baseQueryLimit * 0.75);
     } else {
-        queryLimit = isSinglePlayer ? MAX_BLOCK_QUERIES_SINGLE_PLAYER : MAX_BLOCK_QUERIES_PER_SCAN;
+        queryLimit = baseQueryLimit;
     }
+    
+    // Use effective limit (scaled for multiplayer)
+    limit = effectiveLimit;
 
     // Update active chunks based on player position
     updateActiveChunks(center.x, center.z);
@@ -1799,7 +1877,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     // Strategy: Prioritize cached tiles and scan around them first
     // This is much more efficient than full area scans
     const CACHE_SCAN_RADIUS = 8; // Scan 8 blocks around each cached tile
-    const MIN_CACHED_TILES_FOR_FULL_SCAN = 5; // Only do full scan if we have very few cached tiles
+    // Dynamic cache threshold based on player count (lower for multiplayer to reduce lag)
+    const MIN_CACHED_TILES_FOR_FULL_SCAN = totalPlayerCount === 1 ? 8 : totalPlayerCount === 2 ? 6 : 4;
     
     // If we have enough tiles from cache, skip expensive scan entirely
     if (cachedTiles.length >= limit) {
@@ -1883,7 +1962,11 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         // If we found enough tiles from cache + scanning around cache, we're done
         // EXCEPTION: Nether/End always do full scan since we can't rely on biome replacement
         // (blocks must be found through active scanning, not cached from biome generation)
-        if (!isNetherOrEnd && (candidates.length >= limit || cachedTiles.length >= MIN_CACHED_TILES_FOR_FULL_SCAN)) {
+        // More aggressive: Skip full scan if we have enough tiles OR enough cached tiles (reduces lag)
+        // Lower threshold for 3+ players to rely more on cache
+        const minTilesNeeded = totalPlayerCount >= 3 ? Math.floor(limit * 0.2) : Math.floor(limit * 0.3); // 20% for 3+ players, 30% for 1-2 players
+        const minCachedForSkip = totalPlayerCount >= 3 ? 4 : MIN_CACHED_TILES_FOR_FULL_SCAN; // Lower threshold for 3+ players
+        if (!isNetherOrEnd && (candidates.length >= minTilesNeeded || cachedTiles.length >= minCachedForSkip)) {
             // console.warn(`[SPAWN DEBUG] Found ${candidates.length} tiles (${cachedTiles.length} cached + ${candidates.length - cachedTiles.length} from cache scan), skipping full scan`);
             return candidates.slice(0, limit);
         }
@@ -1894,9 +1977,28 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     // If cache is empty or very small, we MUST do a full scan to find blocks
     // Nether/End: Always do full scan since biome replacement doesn't work there
     
+    // Check if this area was recently scanned and found 0 blocks (barren area)
+    // Skip full scan if area is barren and cooldown hasn't expired
+    if (!isNetherOrEnd) {
+        const chunkKey = getChunkKey(cx, cz);
+        const barrenInfo = barrenAreaCache.get(chunkKey);
+        const now = system.currentTick;
+        
+        if (barrenInfo && (now - barrenInfo.lastScanTick) < BARREN_AREA_COOLDOWN) {
+            // Area was recently scanned and found 0 blocks, skip full scan
+            if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                console.warn(`[SPAWN DEBUG] Skipping full scan: Area ${chunkKey} is barren (found 0 blocks ${Math.floor((now - barrenInfo.lastScanTick) / 20)}s ago), using cache only`);
+            }
+            return candidates.slice(0, limit);
+        }
+    }
+    
     if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
         console.warn(`[SPAWN DEBUG] Starting full area scan: Cache had ${cachedTiles.length} tiles, candidates so far: ${candidates.length}`);
     }
+    
+    // Track how many blocks we found before the full scan (to detect if scan found 0 new blocks)
+    const candidatesBeforeScan = candidates.length;
 
     // Conceptualize as a rectangular cuboid:
     // - XZ: Square area from -maxDistance to +maxDistance around player (48 blocks = 97x97 = 9,409 XZ positions)
@@ -1906,10 +2008,62 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     // - With 30,000 query limit, we check ~23% of potential area, which is reasonable
     
     // First pass: Check cube ring (XZ ring 15-45 blocks, Y adaptive range)
-    const xStart = cx - maxDistance;
-    const xEnd = cx + maxDistance;
-    const zStart = cz - maxDistance;
-    const zEnd = cz + maxDistance;
+    let xStart = cx - maxDistance;
+    let xEnd = cx + maxDistance;
+    let zStart = cz - maxDistance;
+    let zEnd = cz + maxDistance;
+    
+    // Progressive tile discovery: Only scan 25% of area per cycle (spread across 4 cycles)
+    // Only do progressive discovery if cache has some tiles (not completely empty)
+    if (!isNetherOrEnd && cachedTiles.length > 0 && totalPlayerCount > 1) {
+        const chunkKey = getChunkKey(cx, cz);
+        const progressiveInfo = progressiveScanCache.get(chunkKey);
+        const now = system.currentTick;
+        
+        if (progressiveInfo && (now - progressiveInfo.lastScanTick) < SCAN_INTERVAL * 4) {
+            // Continue progressive scan - divide area into 4 quadrants
+            const scanCycle = progressiveInfo.scanCycle;
+            const xMid = Math.floor((xStart + xEnd) / 2);
+            const zMid = Math.floor((zStart + zEnd) / 2);
+            
+            // Cycle 0: Top-left quadrant (x <= mid, z <= mid)
+            // Cycle 1: Top-right quadrant (x > mid, z <= mid)
+            // Cycle 2: Bottom-left quadrant (x <= mid, z > mid)
+            // Cycle 3: Bottom-right quadrant (x > mid, z > mid)
+            if (scanCycle === 0) {
+                xEnd = xMid;
+                zEnd = zMid;
+            } else if (scanCycle === 1) {
+                xStart = xMid + 1;
+                zEnd = zMid;
+            } else if (scanCycle === 2) {
+                xEnd = xMid;
+                zStart = zMid + 1;
+            } else { // scanCycle === 3
+                xStart = xMid + 1;
+                zStart = zMid + 1;
+            }
+            
+            // Update progressive scan cache for next cycle
+            const nextCycle = (scanCycle + 1) % PROGRESSIVE_SCAN_CYCLES;
+            progressiveScanCache.set(chunkKey, { scanCycle: nextCycle, lastScanTick: now });
+            
+            if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                console.warn(`[SPAWN DEBUG] Progressive discovery: Scanning quadrant ${scanCycle + 1}/4 (X[${xStart} to ${xEnd}], Z[${zStart} to ${zEnd}])`);
+            }
+        } else {
+            // Start new progressive scan cycle - first cycle: scan top-left quadrant
+            const xMid = Math.floor((xStart + xEnd) / 2);
+            const zMid = Math.floor((zStart + zEnd) / 2);
+            xEnd = xMid;
+            zEnd = zMid;
+            progressiveScanCache.set(chunkKey, { scanCycle: 1, lastScanTick: now });
+            
+            if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                console.warn(`[SPAWN DEBUG] Progressive discovery: Starting cycle 1/4 (X[${xStart} to ${xEnd}], Z[${zStart} to ${zEnd}])`);
+            }
+        }
+    }
     
     // Smart Y-level detection: Sample blocks to determine if above ground or underground
     // This helps prioritize scanning at the right Y levels
@@ -2056,8 +2210,14 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
             yStart = Math.min(cy + yRangeUp, maxY);
             yEnd = Math.max(cy - yRangeDown, -64);
         } else {
-            yRangeUp = 30; // Always check 30 blocks above player
-            yRangeDown = 15; // Always check 15 blocks below player
+            // Reduce Y range for 3+ players to reduce lag (fewer blocks to check)
+            if (totalPlayerCount >= 3) {
+                yRangeUp = 20; // Reduced from 30 for 3+ players
+                yRangeDown = 10; // Reduced from 15 for 3+ players
+            } else {
+                yRangeUp = 30; // Always check 30 blocks above player
+                yRangeDown = 15; // Always check 15 blocks below player
+            }
             yStart = cy + yRangeUp;
             yEnd = cy - yRangeDown;
         }
@@ -2520,6 +2680,28 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     } else {
         debugLog('spawn', `Scanned ${blockQueryCount} blocks in rectangular cuboid, found ${candidates.length} total dusted dirt tiles (${cachedTiles.length} from cache)`);
     }
+    
+    // Track barren areas: If full scan found 0 new blocks (excluding cached tiles), mark area as barren
+    if (!isNetherOrEnd && typeof candidatesBeforeScan !== 'undefined') {
+        const newBlocksFound = candidates.length - candidatesBeforeScan;
+        if (newBlocksFound === 0 && blockQueryCount > 100) { // Only mark as barren if we did a significant scan
+            const chunkKey = getChunkKey(cx, cz);
+            barrenAreaCache.set(chunkKey, {
+                lastScanTick: system.currentTick,
+                foundBlocks: 0
+            });
+            if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                console.warn(`[SPAWN DEBUG] Marked area ${chunkKey} as barren (found 0 new blocks in full scan)`);
+            }
+        } else if (newBlocksFound > 0) {
+            // Area has blocks, remove from barren cache if present
+            const chunkKey = getChunkKey(cx, cz);
+            if (barrenAreaCache.has(chunkKey)) {
+                barrenAreaCache.delete(chunkKey);
+            }
+        }
+    }
+    
     return candidates;
 }
 
@@ -2921,7 +3103,7 @@ function isSinglePlayerMode(useGroupCache, groupPlayers) {
     return !useGroupCache || !groupPlayers || groupPlayers.length === 1;
 }
 
-function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCache = false, groupPlayers = null) {
+function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCache = false, groupPlayers = null, totalPlayerCount = 1) {
     const playerId = player.id;
     const now = system.currentTick;
     
@@ -2955,9 +3137,10 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
                         movedSq = dx * dx + dz * dz;
                         const timeSinceLastScan = now - lastBlockScanTick;
                         const cacheAge = now - groupCache.tick;
+                        const scanCooldown = getBlockScanCooldown(groupPlayers ? groupPlayers.length : 1);
                         
                         // Use group cache if it's recent and group hasn't moved much
-                        if (now - groupCache.tick < CACHE_TICK_TTL && timeSinceLastScan < BLOCK_SCAN_COOLDOWN) {
+                        if (now - groupCache.tick < CACHE_TICK_TTL && timeSinceLastScan < scanCooldown) {
                             cache = groupCache;
                             isGroupCache = true;
                             // Update player's group assignment
@@ -2966,7 +3149,7 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
                             // (per-player tile counts are logged later after filtering)
                         } else {
                             // Only log when cache expires (not every time)
-                            if (cacheAge >= CACHE_TICK_TTL || timeSinceLastScan >= BLOCK_SCAN_COOLDOWN) {
+                            if (cacheAge >= CACHE_TICK_TTL || timeSinceLastScan >= scanCooldown) {
                                 debugLog('groups', `Group ${groupId} cache expired for ${player.name} (age: ${cacheAge}, cooldown: ${timeSinceLastScan}), rescanning`);
                             }
                             needsRescan = true;
@@ -2999,7 +3182,8 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
             const dz = playerPos.z - cache.center.z;
             movedSq = dx * dx + dz * dz;
             const timeSinceLastScan = now - lastBlockScanTick;
-            if (movedSq > CACHE_MOVE_THRESHOLD_SQ || now - cache.tick > CACHE_TICK_TTL || timeSinceLastScan >= BLOCK_SCAN_COOLDOWN) {
+            const scanCooldown = getBlockScanCooldown(totalPlayerCount);
+            if (movedSq > CACHE_MOVE_THRESHOLD_SQ || now - cache.tick > CACHE_TICK_TTL || timeSinceLastScan >= scanCooldown) {
                 needsRescan = true;
             }
         }
@@ -3035,7 +3219,8 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
                             // The limit prevents excessive scanning, but we need full coverage for each player
                             // For mining bears, also collect stone/deepslate tiles in caves
                             // Note: For groups, we don't use single player mode (multiple players = more load)
-                            const playerTiles = collectMiningSpawnTiles(dimension, pPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN, false);
+                            // Pass total player count to scale down block queries
+                            const playerTiles = collectMiningSpawnTiles(dimension, pPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN, false, totalPlayerCount);
                             
                             tilesPerPlayer.push({ name: p.name, count: playerTiles.length });
                             
@@ -3093,7 +3278,8 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
             // console.warn(`[SPAWN DEBUG] Rescanning tiles for ${player.name} (moved: ${Math.sqrt(movedSq).toFixed(1)} blocks, cache age: ${now - (cache?.tick || 0)} ticks)`);
             // For mining bears, also collect stone/deepslate tiles in caves
             // Single player mode: Use more thorough scanning (double query limit)
-            const tiles = collectMiningSpawnTiles(dimension, playerPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN, isSinglePlayer);
+            // Pass total player count to scale down block queries when multiple players present
+            const tiles = collectMiningSpawnTiles(dimension, playerPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN, isSinglePlayer, totalPlayerCount);
             
             // Debug: Log tile collection results
             if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
@@ -3259,23 +3445,36 @@ function getLateMultipliers(config, day) {
     return { chanceMultiplier, chanceCap, extraCount };
 }
 
-function getEntityCountsForPlayer(player, dimension, playerPos) {
+function getEntityCountsForPlayer(player, dimension, playerPos, totalPlayerCount = 1) {
     const playerId = player.id;
     const now = system.currentTick;
     let cache = entityCountCache.get(playerId);
     
-    if (!cache || now - cache.tick > ENTITY_COUNT_CACHE_TTL) {
+    const cacheTTL = getEntityCountCacheTTL(totalPlayerCount);
+    if (!cache || now - cache.tick > cacheTTL) {
         try {
-            // Refresh entity counts
+            // Refresh entity counts - use filter to only get Maple Bear entities (more efficient)
             const maxRadius = Math.max(...SPAWN_CONFIGS.map(c => c.spreadRadius));
+            const mbTypePrefixes = ["mb:mb", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+            
+            // Use filter to reduce entity processing overhead
             const allNearbyEntities = dimension.getEntities({
                 location: playerPos,
-                maxDistance: maxRadius
+                maxDistance: maxRadius,
+                excludeTypes: [], // We'll filter manually for better control
+                excludeFamilies: [] // We want all entities to check their typeId
             });
             
             const counts = {};
-            const mbTypePrefixes = ["mb:mb", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+            let processedCount = 0;
+            const MAX_ENTITY_PROCESS_COUNT = 200; // Limit processing to prevent lag with too many entities
+            
             for (const entity of allNearbyEntities) {
+                // Early exit if too many entities (performance protection)
+                if (processedCount++ > MAX_ENTITY_PROCESS_COUNT) {
+                    break;
+                }
+                
                 try {
                     const typeId = entity.typeId;
                     if (mbTypePrefixes.some(prefix => typeId.startsWith(prefix))) {
@@ -3311,7 +3510,7 @@ function getEntityCountsForPlayer(player, dimension, playerPos) {
     return cache.counts;
 }
 
-function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers = {}, entityCounts = {}, spawnCount = {}, nearbyPlayerCount = 1) {
+function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers = {}, entityCounts = {}, spawnCount = {}, nearbyPlayerCount = 1, totalPlayerCountInDimension = 1) {
     const currentDay = getCurrentDay();
     if (currentDay < config.startDay || currentDay > config.endDay) return false;
 
@@ -3373,10 +3572,17 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
         }
     }
 
-    // Throttle spawns per tick (global limit - dynamic based on day)
-    const maxSpawnsPerTick = getMaxSpawnsPerTick(currentDay);
+    // Throttle spawns per tick (per-player limit - dynamic based on day and player count)
+    // Use cached player count passed as parameter (avoids expensive getPlayers() call)
+    const maxSpawnsPerTick = getMaxSpawnsPerTick(currentDay, totalPlayerCountInDimension);
     if (spawnCount.value >= maxSpawnsPerTick) {
-        // console.warn(`[SPAWN DEBUG] Global spawn limit reached for ${player.name} (${spawnCount.value}/${maxSpawnsPerTick})`);
+        // console.warn(`[SPAWN DEBUG] Per-player spawn limit reached for ${player.name} (${spawnCount.value}/${maxSpawnsPerTick})`);
+        return false;
+    }
+    
+    // Global spawn limit check (prevents total entity explosion across all players)
+    if (globalSpawnCount >= MAX_GLOBAL_SPAWNS_PER_TICK) {
+        // console.warn(`[SPAWN DEBUG] Global spawn limit reached (${globalSpawnCount}/${MAX_GLOBAL_SPAWNS_PER_TICK})`);
         return false;
     }
 
@@ -3403,18 +3609,51 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     }
     
     // Single player bonus: more spawn attempts to compensate for fewer tiles
+    // With multiple players, reduce attempts per config to spread load and prevent lag
     const baseAttempts = Math.max(1, SPAWN_ATTEMPTS + (modifiers.attemptBonus ?? 0));
     // modifiers.isGroupCache is true when useGroupCache && dimensionPlayers && dimensionPlayers.length > 1
     // Use helper function: pass modifiers.isGroupCache as useGroupCache, and a dummy array when group cache is active
     // to ensure the helper returns false (since groupPlayers.length > 1 means not single-player)
     const isSinglePlayer = isSinglePlayerMode(modifiers.isGroupCache, modifiers.isGroupCache ? [1, 2] : null);
-    const attemptBonus = isSinglePlayer ? Math.floor(baseAttempts * 0.5) : 0; // 50% more attempts for single players (increased from 30%)
-    const attempts = Math.min(baseAttempts + attemptBonus, pool.length);
+    let attemptBonus = isSinglePlayer ? Math.floor(baseAttempts * 0.5) : 0; // 50% more attempts for single players (increased from 30%)
+    
+    // Performance optimization: Reduce attempts when multiple players are present
+    // This spreads spawn load across players and prevents lag spikes
+    let multiplayerAttemptReduction = 1.0;
+    if (totalPlayerCountInDimension > 1) {
+        // 2 players: 0.9x, 3 players: 0.8x, 4+ players: 0.7x
+        multiplayerAttemptReduction = totalPlayerCountInDimension === 2 ? 0.9 : totalPlayerCountInDimension === 3 ? 0.8 : 0.7;
+    }
+    
+    const attempts = Math.min(Math.floor((baseAttempts + attemptBonus) * multiplayerAttemptReduction), pool.length);
     // console.warn(`[SPAWN DEBUG] Attempting ${config.id} for ${player.name}: ${attempts} attempts, ${pool.length} tiles, ${nearbyCount}/${maxCount} nearby (type limit: ${typeSpawnCount}/${perTypeSpawnLimit})`);
 
     let chance = config.baseChance + (config.chancePerDay ?? 0) * Math.max(0, currentDay - config.startDay);
     chance *= late.chanceMultiplier;
     chance *= modifiers.chanceMultiplier ?? 1;
+    
+    // Spawn rate compensation: Boost spawn chance when fewer tiles are available (due to reduced scanning)
+    // Expected tiles for single player: ~50-100 tiles typical, use 75 as baseline
+    const expectedTiles = 75;
+    const availableTiles = pool.length;
+    const tileDensityRatio = Math.min(1.0, availableTiles / expectedTiles);
+    
+    // Tile density-based spawn chance adjustment
+    if (availableTiles < 10) {
+        // Low tile density: Increase spawn chance by 20-30%
+        chance *= 1.25;
+    } else if (availableTiles >= 30) {
+        // High tile density: Slight reduction (5-10%) to prevent over-spawning
+        chance *= 0.95;
+    }
+    
+    // Additional compensation for multiplayer when tiles are reduced
+    if (tileDensityRatio < 1.0 && totalPlayerCountInDimension > 1) {
+        // Boost spawn chance when we have fewer tiles than expected (compensate for reduced scanning)
+        const compensationMultiplier = 1.0 + (1.0 - tileDensityRatio) * 0.5; // Up to 1.5x boost
+        chance *= Math.min(compensationMultiplier, 1.5); // Cap at 1.5x
+    }
+    
     const chanceCap = Math.min(late.chanceCap, modifiers.chanceCap ?? late.chanceCap);
     chance = Math.min(chance, chanceCap);
 
@@ -3426,12 +3665,12 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     const dimensionId = dimension.id;
     if (dimensionId === "minecraft:the_end") {
         if (isFlyingOrTorpedo) {
-            // Flying/torpedo bears get increased spawn rates in End (more aggressive)
-            let endMultiplier = 1.5; // Start at 1.5x (increased from 1.0x)
-            if (currentDay >= 20) endMultiplier += 0.75; // 2.25x at day 20 (increased from 1.5x)
-            if (currentDay >= 30) endMultiplier += 0.75; // 3.0x at day 30 (increased from 2.0x)
-            if (currentDay >= 40) endMultiplier += 0.5; // 3.5x at day 40 (increased from 2.5x)
-            endMultiplier = Math.min(endMultiplier, 4.0); // Cap at 4.0x (increased from 3.0x)
+            // Flying/torpedo bears get increased spawn rates in End (balanced to avoid difficulty spikes)
+            let endMultiplier = 1.5; // Start at 1.5x
+            if (currentDay >= 20) endMultiplier += 0.5; // 2.0x at day 20
+            if (currentDay >= 30) endMultiplier += 0.5; // 2.5x at day 30
+            if (currentDay >= 40) endMultiplier += 0.5; // 3.0x at day 40
+            endMultiplier = Math.min(endMultiplier, 3.0); // Cap at 3.0x (reduced from 4.0x for balance)
             chance = Math.min(chance * endMultiplier, chanceCap);
         } else {
             // Other bear types get reduced spawn rates in End (more reduction to make room for flying/torpedo)
@@ -3442,23 +3681,39 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     // High Y level boost: If player is at high altitude, increase spawn chance for flying/torpedo bears
     const playerY = playerPos.y;
     if (isFlyingOrTorpedo && playerY >= 80) {
-        // Boost spawn chance by up to 50% when player is at high Y level
-        const yBoost = Math.min(1.5, 1.0 + ((playerY - 80) / 100) * 0.5); // 1.0x at Y=80, 1.5x at Y=180+
+        // Boost spawn chance by up to 30% when player is at high Y level (reduced from 50% for balance)
+        const yBoost = Math.min(1.3, 1.0 + ((playerY - 80) / 100) * 0.3); // 1.0x at Y=80, 1.3x at Y=180+
         chance = Math.min(chance * yBoost, chanceCap);
     }
     // console.warn(`[SPAWN DEBUG] ${config.id} spawn chance: ${(chance * 100).toFixed(1)}% (cap: ${(chanceCap * 100).toFixed(1)}%)`);
 
-    for (let i = 0; i < attempts && spawnCount.value < maxSpawnsPerTick; i++) {
+    for (let i = 0; i < attempts && spawnCount.value < maxSpawnsPerTick && globalSpawnCount < MAX_GLOBAL_SPAWNS_PER_TICK; i++) {
         // Check per-type limit again in loop
         if (spawnCount.perType?.[config.id] >= perTypeSpawnLimit) {
+            break;
+        }
+        
+        // Check global limit in loop
+        if (globalSpawnCount >= MAX_GLOBAL_SPAWNS_PER_TICK) {
             break;
         }
         
         const index = Math.floor(Math.random() * pool.length);
         const candidate = pool.splice(index, 1)[0];
         const { x, y, z } = candidate;
+        
+        // Check spawn attempt cache: Skip tiles that failed recently
+        const tileKey = `${x},${y},${z}`;
+        const attemptCache = spawnAttemptCache.get(tileKey);
+        const now = system.currentTick;
+        if (attemptCache && !attemptCache.success && (now - attemptCache.lastAttemptTick) < SPAWN_ATTEMPT_COOLDOWN) {
+            // This tile failed recently, skip it for a few ticks
+            continue;
+        }
 
         if (Math.random() > chance) {
+            // Track failed attempt in cache
+            spawnAttemptCache.set(tileKey, { lastAttemptTick: now, success: false });
             // console.warn(`[SPAWN DEBUG] Skipping tile (${x}, ${y}, ${z}) for ${config.id} due to spawn chance (${(chance * 100).toFixed(1)}%)`);
             continue;
         }
@@ -3467,11 +3722,16 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
 
         const spawnLocation = getSpawnLocationForConfig(config.id, dimension, candidate);
         if (!spawnLocation) {
+            // Track failed attempt (no valid spawn location)
+            spawnAttemptCache.set(tileKey, { lastAttemptTick: now, success: false });
             continue;
         }
         try {
             const entity = dimension.spawnEntity(config.id, spawnLocation);
             if (entity) {
+                // Track successful spawn attempt
+                spawnAttemptCache.set(tileKey, { lastAttemptTick: now, success: true });
+                
                 debugLog('spawn', `${config.id} spawned at (${Math.floor(spawnLocation.x)}, ${Math.floor(spawnLocation.y)}, ${Math.floor(spawnLocation.z)})`);
                 lastSpawnTickByType.set(key, system.currentTick);
                 removeTileFromCache(player.id, candidate);
@@ -3503,12 +3763,18 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
                 // Update cached count
                 entityCounts[config.id] = (entityCounts[config.id] || 0) + 1;
                 spawnCount.value++;
+                globalSpawnCount++; // Increment global counter to prevent entity explosion with multiple players
                 // Track per-type spawn count
                 if (!spawnCount.perType) spawnCount.perType = {};
                 spawnCount.perType[config.id] = (spawnCount.perType[config.id] || 0) + 1;
                 return true;
+            } else {
+                // Track failed spawn attempt (entity spawn returned null)
+                spawnAttemptCache.set(tileKey, { lastAttemptTick: now, success: false });
             }
         } catch (error) {
+            // Track failed spawn attempt (error during spawn)
+            spawnAttemptCache.set(tileKey, { lastAttemptTick: now, success: false });
             // Log spawn failures - these are important to track
             errorLog(`Failed to spawn ${config.id}`, error, {
                 location: spawnLocation,
@@ -3597,6 +3863,9 @@ debugLog('spawn', "Maple Bear spawn controller initialized with debugging enable
 
 system.runInterval(() => {
     try {
+        // Reset global spawn counter each tick
+        globalSpawnCount = 0;
+        
         const currentDay = getCurrentDay(); // Cache this value
         if (currentDay < 2) {
             return;
@@ -3606,6 +3875,19 @@ system.runInterval(() => {
         if (system.currentTick % (SCAN_INTERVAL * 5) === 0) {
             try {
                 cleanupDustedDirtCache();
+                // Cleanup old spawn attempt cache entries (older than 20 ticks)
+                const now = system.currentTick;
+                for (const [tileKey, attempt] of spawnAttemptCache.entries()) {
+                    if (now - attempt.lastAttemptTick > 20) {
+                        spawnAttemptCache.delete(tileKey);
+                    }
+                }
+                // Cleanup old progressive scan cache entries (older than 20 scan intervals)
+                for (const [chunkKey, info] of progressiveScanCache.entries()) {
+                    if (now - info.lastScanTick > SCAN_INTERVAL * 20) {
+                        progressiveScanCache.delete(chunkKey);
+                    }
+                }
             } catch (error) {
                 errorLog(`Error in cleanupDustedDirtCache`, error);
             }
@@ -3735,13 +4017,36 @@ system.runInterval(() => {
     // Try to use group cache if multiple players in same dimension
     const useGroupCache = dimensionPlayers.length > 1;
     
-    // Performance: Always process only 1 player per tick to spread load
-    // This prevents lag spikes from processing multiple players at once
-    const playerIndex = Math.floor(playerRotationIndex / dimensions.length) % dimensionPlayers.length;
-    const player = dimensionPlayers[playerIndex];
+    // Time-based scan spreading: Spread player scans across multiple ticks to reduce simultaneous load
+    // For 2 players: Process player 0 on even ticks, player 1 on odd ticks
+    // For 3 players: Process player 0 on ticks % 3 == 0, player 1 on ticks % 3 == 1, player 2 on ticks % 3 == 2
+    // For 4+ players: Similar pattern with 4-tick cycle
+    const playerCount = dimensionPlayers.length;
+    let player = null;
+    
+    if (playerCount === 1) {
+        // Single player: process every tick
+        player = dimensionPlayers[0];
+    } else {
+        // Multiplayer: spread across ticks
+        const spreadInterval = playerCount === 2 ? 2 : playerCount === 3 ? 3 : 4;
+        const tickOffset = system.currentTick % spreadInterval;
+        // Use tick offset to select which player to process this tick
+        const playerIndex = tickOffset % playerCount;
+        player = dimensionPlayers[playerIndex];
+    }
+    
     const playersToProcess = player ? [player] : [];
     
     if (playersToProcess.length === 0) return;
+    
+    // Cache dimension player count to avoid expensive getPlayers() calls inside spawn loop
+    let dimensionPlayerCount = 1;
+    try {
+        dimensionPlayerCount = dimensionPlayers ? dimensionPlayers.length : 1;
+    } catch (error) {
+        // On error, default to 1
+    }
     
     // Process all selected players
     for (const player of playersToProcess) {
@@ -3751,7 +4056,7 @@ system.runInterval(() => {
 
         let tileInfo;
         try {
-            tileInfo = getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCache, dimensionPlayers);
+            tileInfo = getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCache, dimensionPlayers, dimensionPlayerCount);
         } catch (error) {
             errorLog(`Error getting tiles for player ${player.name}`, error, {
                 player: player.name,
@@ -3775,7 +4080,7 @@ system.runInterval(() => {
         // Early exit if too many entities nearby (skip processing)
         let entityCounts;
         try {
-            entityCounts = getEntityCountsForPlayer(player, dimension, playerPos);
+            entityCounts = getEntityCountsForPlayer(player, dimension, playerPos, dimensionPlayerCount);
         } catch (error) {
             errorLog(`Error getting entity counts for player ${player.name}`, error, {
                 player: player.name,
@@ -3787,6 +4092,15 @@ system.runInterval(() => {
         
         const totalNearbyBears = Object.values(entityCounts).reduce((sum, count) => sum + count, 0);
         debugLog('spawn', `${player.name}: ${totalNearbyBears} nearby bears, ${spacedTiles.length} spawn tiles available`);
+        
+        // Performance optimization: Skip spawn processing if too many entities nearby
+        // This prevents expensive operations when area is already saturated
+        const MAX_NEARBY_BEARS = 50; // Hard limit - skip processing if exceeded
+        if (totalNearbyBears > MAX_NEARBY_BEARS) {
+            debugLog('spawn', `Skipping spawn processing for ${player.name} - too many nearby bears (${totalNearbyBears} > ${MAX_NEARBY_BEARS})`);
+            continue; // Skip this player entirely to prevent lag
+        }
+        
         if (totalNearbyBears > 30) {
             debugLog('spawn', `Skipping ${player.name} - too many bears nearby (${totalNearbyBears})`);
             continue; // Too many bears, skip this player
@@ -3859,6 +4173,15 @@ system.runInterval(() => {
 
         // Track spawns per tick for this player (per-player budget, not shared)
         const spawnCount = { value: 0 };
+        
+        // Get nearby player count once (cached for all spawn attempts)
+        let nearbyPlayerCount = 1;
+        try {
+            const nearbyPlayers = dimension.getPlayers({ location: playerPos, maxDistance: MAX_SPAWN_DISTANCE });
+            nearbyPlayerCount = nearbyPlayers.length;
+        } catch (error) {
+            // On error, default to 1
+        }
 
         // Only process configs that are active for current day
         // Skip lower variants when higher variants are available
@@ -3910,16 +4233,8 @@ system.runInterval(() => {
                     }
                     configModifiers.extraCount = Math.min(configModifiers.extraCount, 0);
                 }
-                // Get nearby player count for buff bear cap calculation
-                let nearbyPlayerCount = 1;
-                try {
-                    const nearbyPlayers = dimension.getPlayers({ location: playerPos, maxDistance: MAX_SPAWN_DISTANCE });
-                    nearbyPlayerCount = nearbyPlayers.length;
-                } catch (error) {
-                    // On error, default to 1
-                }
-                
-                const spawned = attemptSpawnType(player, dimension, playerPos, spacedTiles, config, configModifiers, entityCounts, spawnCount, nearbyPlayerCount);
+                // Use cached nearby player count (calculated once above)
+                const spawned = attemptSpawnType(player, dimension, playerPos, spacedTiles, config, configModifiers, entityCounts, spawnCount, nearbyPlayerCount, dimensionPlayerCount);
                 debugLog('spawn', `Successfully spawned ${config.id} for ${player.name}`, spawned);
             } catch (error) {
                 errorLog(`Error attempting spawn for ${config.id}`, error, {
