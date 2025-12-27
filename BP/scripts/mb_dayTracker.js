@@ -646,10 +646,24 @@ function startDayCycleLoop() {
     dayCycleLoopId = system.runInterval(() => {
         try {
             const currentTime = world.getTimeOfDay();
+            const actualDay = getCurrentDay();
+            
+            // Check if day was manually changed (sync issue fix)
+            // This handles cases where day is changed via dev tools/book
+            if (actualDay !== lastKnownDay) {
+                // Day was manually changed, update our tracking
+                // Only log if it's a significant change (not just natural progression)
+                if (Math.abs(actualDay - lastKnownDay) > 1 || (lastTimeOfDay <= 1000 && actualDay !== lastKnownDay + 1)) {
+                    console.log(`📅 Day manually changed to: Day ${actualDay} (was Day ${lastKnownDay})`);
+                }
+                lastKnownDay = actualDay;
+            }
+            
             // Detect sunrise (~1000 is safe for detection)
             if (lastTimeOfDay > 1000 && currentTime <= 1000) {
                 let newDay = getCurrentDay() + 1;
                 setCurrentDay(newDay);
+                lastKnownDay = newDay; // Update cached value
                 console.log(`🌅 New day detected: Day ${newDay}`);
 
                 // Check for daily events to record (reflection on previous day)

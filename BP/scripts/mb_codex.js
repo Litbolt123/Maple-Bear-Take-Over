@@ -2372,9 +2372,10 @@ export function showCodexBook(player, context) {
     function openSpawnDebugMenu(settings) {
         const spawn = settings.spawn || {};
         const form = new ActionFormData().title("§bSpawn Controller Debug");
-        form.body(`§7Toggle debug logging for Spawn Controller:\n\n§8Current settings:\n§7• General: ${spawn.general ? "§aON" : "§cOFF"}\n§7• Tile Scanning: ${spawn.tileScanning ? "§aON" : "§cOFF"}\n§7• Cache: ${spawn.cache ? "§aON" : "§cOFF"}\n§7• Validation: ${spawn.validation ? "§aON" : "§cOFF"}\n§7• Distance: ${spawn.distance ? "§aON" : "§cOFF"}\n§7• Spacing: ${spawn.spacing ? "§aON" : "§cOFF"}`);
+        form.body(`§7Toggle debug logging for Spawn Controller:\n\n§8Current settings:\n§7• General: ${spawn.general ? "§aON" : "§cOFF"}\n§7• Discovery: ${spawn.discovery ? "§aON" : "§cOFF"}\n§7• Tile Scanning: ${spawn.tileScanning ? "§aON" : "§cOFF"}\n§7• Cache: ${spawn.cache ? "§aON" : "§cOFF"}\n§7• Validation: ${spawn.validation ? "§aON" : "§cOFF"}\n§7• Distance: ${spawn.distance ? "§aON" : "§cOFF"}\n§7• Spacing: ${spawn.spacing ? "§aON" : "§cOFF"}`);
         
         form.button(`§${spawn.general ? "a" : "c"}General Logging`);
+        form.button(`§${spawn.discovery ? "a" : "c"}Discovery Phase`);
         form.button(`§${spawn.tileScanning ? "a" : "c"}Tile Scanning`);
         form.button(`§${spawn.cache ? "a" : "c"}Cache`);
         form.button(`§${spawn.validation ? "a" : "c"}Validation`);
@@ -2384,13 +2385,13 @@ export function showCodexBook(player, context) {
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 7) {
+            if (!res || res.canceled || res.selection === 8) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
                 return openDebugMenu();
             }
 
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
-            const flags = ["general", "tileScanning", "cache", "validation", "distance", "spacing", "all"];
+            const flags = ["general", "discovery", "tileScanning", "cache", "validation", "distance", "spacing", "all"];
             if (res.selection < flags.length) {
                 const flagName = flags[res.selection];
                 const newState = toggleDebugFlag("spawn", flagName);
@@ -2638,6 +2639,7 @@ function getDefaultDebugSettings() {
         },
         spawn: {
             general: false,
+            discovery: false,
             tileScanning: false,
             cache: false,
             validation: false,

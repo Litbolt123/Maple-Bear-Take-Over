@@ -29,7 +29,7 @@ The spawning system is a sophisticated, performance-optimized system that finds 
 #### **Tile Collection Process**:
 1. **Check Cache First**: 
    - Validates cached blocks still exist
-   - Filters by distance (15-45 blocks from player)
+   - Filters by distance (15-45 blocks from player) - **Validation Phase**
    - Checks for air above (2 blocks of headroom)
 
 2. **Scan Around Cached Tiles** (if cache has 5+ tiles):
@@ -37,16 +37,27 @@ The spawning system is a sophisticated, performance-optimized system that finds 
    - Much more efficient than full area scan
    - Only does this if cache has enough tiles
 
-3. **Full Area Scan** (if cache is empty or has <5 tiles):
-   - **Horizontal Range**: 15-45 blocks from player (ring area)
+3. **Two-Phase Block Discovery System**:
+   
+   **Discovery Phase** (if cache is empty or has <5 tiles):
+   - **Purpose**: Find ALL `dusted_dirt`/`snow_layer` blocks in a larger area to pre-cache them
+   - **Horizontal Range**: 0-75 blocks from player (full circle, not just ring)
+   - **For New Chunks**: Reduced to 0-20/30 blocks to prevent lag spikes
+   - **No Distance Filtering**: Discovers blocks even if outside spawn range (15-45)
    - **Vertical Range**: +30 blocks above / -15 blocks below player Y level (initially, asymmetric)
-   - **Query Limit**: 6000 block queries per scan
+   - **Query Limit**: 6000 block queries per scan (normal) or 12000 (single player)
    - **Strategy**: 
-     - Scans XZ rectangle (97×97 = 9,409 positions)
-     - Filters to ring area (≈5,655 positions)
+     - Scans XZ rectangle (151×151 = 22,801 positions for 75-block radius)
      - Checks Y levels from top to bottom
      - Stops early when hitting solid blocks
-   - **Note**: Above-ground detection with surface level uses ±8 blocks from surface (symmetric, special case)
+     - **Note**: Above-ground detection with surface level uses ±8 blocks from surface (symmetric, special case)
+   
+   **Validation Phase** (after discovery):
+   - **Purpose**: Filter discovered blocks to valid spawn range
+   - **Horizontal Range**: 15-45 blocks from player (ring area only)
+   - **For New Chunks**: 15-20/30 blocks (reduced spawn range)
+   - **Filtering**: Removes blocks that are too close (<15) or too far (>45) from player
+   - **Result**: Only blocks in valid spawn range are returned for spawning
 
 4. **Expanded Y Range** (if initial scan finds <8 tiles):
    - Expands by additional ±15 blocks vertically (multiplayer) or ±20 blocks (single player)
@@ -87,8 +98,10 @@ The spawning system is a sophisticated, performance-optimized system that finds 
 ### 5. **Tile Filtering & Spacing**
 
 #### **Distance Filtering**:
-- Only tiles within 15-45 blocks horizontally are valid
-- Prevents spawning too close or too far
+- **Discovery Phase**: Finds all blocks in 0-75 range (or 0-20/30 for new chunks) - no distance filtering
+- **Validation Phase**: Filters discovered blocks to 15-45 blocks horizontally (spawn range)
+- Prevents spawning too close (<15 blocks) or too far (>45 blocks)
+- Blocks discovered outside spawn range are cached for future use when player moves
 
 #### **Spacing Filter** (`filterTilesWithSpacing`):
 - Ensures tiles are at least `spacing` blocks apart (default 2.5)
@@ -103,10 +116,12 @@ The spawning system is a sophisticated, performance-optimized system that finds 
 
 1. **Player Rotation**: Only processes 1 player per tick
 2. **Dimension Rotation**: Processes one dimension per tick
-3. **Cache System**: Avoids expensive block scans when possible
-4. **Query Limits**: Caps at 6000 block queries per scan
-5. **Early Breaks**: Stops scanning when hitting solid blocks
-6. **Group Caching**: Shares tiles between nearby players
+3. **Two-Phase Discovery**: Separates block discovery (0-75 range) from spawn validation (15-45 range), allowing pre-caching of blocks before players move into range
+4. **Cache System**: Avoids expensive block scans when possible - blocks discovered in larger radius are cached for reuse
+5. **Query Limits**: Caps at 6000 block queries per scan (normal) or 12000 (single player)
+6. **Early Breaks**: Stops scanning when hitting solid blocks
+7. **Group Caching**: Shares tiles between nearby players
+8. **Dimension-Specific Y Bounds**: Prevents spawning in unspawnable locations (Nether ceiling Y=128, void, etc.)
 
 ### 7. **Special Features**
 
@@ -177,9 +192,28 @@ Active Chunks (2 chunk radius):
 Only cache entries from these 9 chunks are checked!
 ```
 
-#### Step 2: Distance-Based Scanning
+#### Step 2: Two-Phase Distance-Based Scanning
 
-**Horizontal Scanning (Top-Down View):**
+**Discovery Phase (Top-Down View):**
+```
+                    Player (P)
+                      │
+                      │
+         ┌────────────┼────────────┐
+         │            │          │
+         │ Discovery  │ Discovery │ Discovery
+         │  Phase     │  Phase   │  Phase
+         │  (0-15)    │ (15-45)  │ (45-75)
+         │            │          │
+         │            │          │
+         └────────────┼────────────┘
+                      │
+                      │
+    Discovery: Full circle 0-75 blocks
+    (Finds ALL blocks, caches them)
+```
+
+**Validation Phase (Top-Down View):**
 ```
                     Player (P)
                       │
@@ -194,8 +228,67 @@ Only cache entries from these 9 chunks are checked!
          └────────────┼────────────┘
                       │
                       │
-         Scan Area: Ring between 15-45 blocks
+    Validation: Ring between 15-45 blocks
+    (Filters discovered blocks to spawn range)
 ```
+
+**Combined Two-Phase Visualization:**
+```
+                    Player (P)
+                      │
+                      │
+    ┌─────────────────┼─────────────────┐
+    │                 │                 │
+    │   Discovery     │   Discovery     │   Discovery
+    │   Phase         │   Phase         │   Phase
+    │   (0-15)        │   (15-45)       │   (45-75)
+    │   [Cached]      │   [Cached]      │   [Cached]
+    │   [Not Used]    │   [Used]        │   [Not Used]
+    │                 │                 │
+    │   Too Close     │   ✓ Valid       │   Too Far
+    │   (Filtered)    │   Spawn Range   │   (Filtered)
+    │                 │                 │
+    └─────────────────┼─────────────────┘
+                      │
+                      │
+    Discovery: Scans 0-75 blocks (full circle)
+    Validation: Filters to 15-45 blocks (ring)
+    
+    Result: Blocks in 15-45 range are used for spawning
+            Blocks in 0-15 and 45-75 are cached for future use
+```
+
+**Combined Two-Phase Visualization:**
+```
+                    Player (P)
+                      │
+                      │
+    ┌─────────────────┼─────────────────┐
+    │                 │                 │
+    │   Discovery     │   Discovery     │   Discovery
+    │   Phase         │   Phase         │   Phase
+    │   (0-15)        │   (15-45)       │   (45-75)
+    │   [Cached]      │   [Cached]      │   [Cached]
+    │   [Not Used]    │   [Used]        │   [Not Used]
+    │                 │                 │
+    │   Too Close     │   ✓ Valid       │   Too Far
+    │   (Filtered)    │   Spawn Range   │   (Filtered)
+    │                 │                 │
+    └─────────────────┼─────────────────┘
+                      │
+                      │
+    Discovery: Scans 0-75 blocks (full circle)
+    Validation: Filters to 15-45 blocks (ring)
+    
+    Result: Blocks in 15-45 range are used for spawning
+            Blocks in 0-15 and 45-75 are cached for future use
+```
+
+**Key Difference:**
+- **Discovery Phase**: Scans 0-75 blocks to find ALL blocks (no distance filtering)
+- **Validation Phase**: Filters discovered blocks to 15-45 spawn range
+- Blocks discovered outside spawn range (0-15 and 45-75) are cached but not used for spawning
+- When player moves, cached blocks may enter spawn range without needing a new scan
 
 **Vertical Scanning (Side View):**
 ```
@@ -283,27 +376,103 @@ This finds clusters of dusted_dirt/snow_layer efficiently!
    │  └─ Scan 10×10 area around it
    └─ Find additional nearby blocks
    ↓
-5. Full Area Scan (if cache insufficient)
-   ├─ Horizontal: Ring 15-45 blocks from player
+5. Discovery Phase Scan (if cache insufficient)
+   ├─ Horizontal: Full circle 0-75 blocks from player (or 0-20/30 for new chunks)
    ├─ Vertical: Adaptive range based on environment
    │  ├─ Default: +30/-15 blocks (asymmetric)
    │  ├─ Above ground with surface detection: ±8 blocks from surface (symmetric)
    │  └─ Expansion (if <8 tiles found): ±15 (multiplayer) or ±20 (single player)
-   └─ Query limit: 6000 (normal) or 12000 (single player)
+   ├─ Query limit: 6000 (normal) or 12000 (single player)
+   └─ **No distance filtering** - finds ALL blocks in discovery radius
    ↓
-6. For Each Found Block:
+6. For Each Found Block (Discovery Phase):
    ├─ Check 10×10 area around it
-   ├─ Register in cache (with chunk key)
-   └─ Add to candidates if valid
+   ├─ Register in cache (with chunk key) - **Cached even if outside spawn range**
+   └─ Add to candidates (all discovered blocks)
    ↓
-7. Filter & Space Candidates
-   ├─ Distance: 15-45 blocks ✓
+7. Validation Phase - Filter Discovered Blocks:
+   ├─ Distance: Filter to 15-45 blocks ✓ (removes blocks <15 or >45)
+   ├─ Log filtering results (X discovered → Y in spawn range)
+   └─ Blocks outside spawn range remain cached for future use
+   ↓
+8. Filter & Space Candidates
+   ├─ Distance: Already filtered to 15-45 blocks ✓
    ├─ Spacing: 2.5 blocks minimum
    └─ Sample: Max 180 tiles
    ↓
-8. Spawn Attempts
+9. Spawn Attempts
    └─ Use filtered tiles for spawning
 ```
+
+### Two-Phase System Flow Visualization
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    DISCOVERY PHASE                          │
+│                                                              │
+│  Player Position: (1000, 70, 2000)                          │
+│                                                              │
+│         ┌───────────────────────────────────┐                │
+│         │                                   │                │
+│         │   Discovery Radius: 0-75 blocks  │                │
+│         │                                   │                │
+│         │   ┌─────────────────────────┐   │                │
+│         │   │                         │   │                │
+│         │   │   Spawn Range: 15-45    │   │                │
+│         │   │                         │   │                │
+│         │   │      ┌───────┐         │   │                │
+│         │   │      │ Player │         │   │                │
+│         │   │      └───────┘         │   │                │
+│         │   │                         │   │                │
+│         │   └─────────────────────────┘   │                │
+│         │                                   │                │
+│         └───────────────────────────────────┘                │
+│                                                              │
+│  Scans: ALL blocks in 0-75 range                            │
+│  Result: Finds 50 blocks total                              │
+│  Cache: All 50 blocks registered in cache                   │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    VALIDATION PHASE                          │
+│                                                              │
+│         ┌───────────────────────────────────┐                │
+│         │                                   │                │
+│         │   [Filtered Out]                 │                │
+│         │   Blocks 0-15: 8 blocks          │                │
+│         │   (Too close - cached only)     │                │
+│         │                                   │                │
+│         │   ┌─────────────────────────┐   │                │
+│         │   │ ✓ VALID SPAWN RANGE     │   │                │
+│         │   │   Blocks 15-45: 30 blocks│   │                │
+│         │   │   (Used for spawning)    │   │                │
+│         │   └─────────────────────────┘   │                │
+│         │                                   │                │
+│         │   [Filtered Out]                 │                │
+│         │   Blocks 45-75: 12 blocks       │                │
+│         │   (Too far - cached only)       │                │
+│         │                                   │                │
+│         └───────────────────────────────────┘                │
+│                                                              │
+│  Filters: 50 discovered → 30 in spawn range              │
+│  Result: 30 blocks available for spawning                 │
+│  Cache: All 50 blocks remain cached for future use          │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    SPAWN ATTEMPTS                            │
+│                                                              │
+│  Uses: 30 validated blocks (15-45 range)                    │
+│  After spacing filter: 12 spaced tiles                     │
+│  Spawn attempts: Up to 18 attempts per bear type            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Benefits of Two-Phase System:**
+1. **Pre-caching**: Blocks discovered outside spawn range are cached before player moves into range
+2. **Reduced Rescans**: When player moves, cached blocks may enter spawn range without new scan
+3. **Better Performance**: Discovery happens once, validation is fast filtering
+4. **Smoother Gameplay**: Less lag when players move to new areas
 
 ### Cache Lifecycle
 
@@ -339,11 +508,15 @@ Block Found → Registered in Cache
 
 - **Chunk Size**: 128×128 blocks
 - **Activation Radius**: 2 chunks (256 blocks)
-- **Distance Range**: 15-45 blocks from player
+- **Discovery Radius**: 0-75 blocks from player (normal chunks) or 0-20/30 blocks (new chunks)
+- **Spawn Range**: 15-45 blocks from player (validation phase filters to this)
 - **Cluster Scan**: 10×10 area (5 blocks each direction)
 - **Y Range (Default)**: +30/-15 blocks (asymmetric)
 - **Y Range (Above Ground with Surface)**: ±8 blocks from surface (symmetric)
 - **Y Range Expansion**: ±15 blocks (multiplayer) or ±20 blocks (single player)
 - **Cache Trim Age**: 1 hour (72000 ticks)
 - **Query Limit**: 6000 (normal) / 12000 (single player)
+- **Dimension Y Bounds**: 
+  - Nether: -64 to 127 (ceiling at Y=128)
+  - Overworld/End: -64 to 320
 

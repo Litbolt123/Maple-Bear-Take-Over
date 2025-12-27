@@ -1,7 +1,7 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { getCodex, getDefaultCodex, markCodex, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled } from "./mb_codex.js";
-import { initializeDayTracking, getCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
+import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock } from "./mb_spawnController.js";
 import "./mb_spawnController.js";
 import "./mb_miningAI.js";
@@ -4845,7 +4845,8 @@ function executeMbCommand(sender, subcommand, args = []) {
                 sender.sendMessage("§7[MBI] Usage: /scriptevent mb:cmd <base64('set_day\u0001<number>')>");
                 return;
             }
-            world.setDynamicProperty("mb_day_count", dayNumber);
+            // Use setCurrentDay to ensure both dynamic property and scoreboard are updated
+            setCurrentDay(dayNumber);
             sender.sendMessage(`§7[MBI] Forced current day to ${dayNumber}.`);
             
             // Unlock all content that would normally unlock up to this day
