@@ -1,5 +1,5 @@
 import { world, system } from "@minecraft/server";
-import { getCodex, saveCodex, getKnowledgeLevel, hasKnowledge, checkKnowledgeProgression } from "./mb_codex.js";
+import { getCodex, saveCodex, getKnowledgeLevel, hasKnowledge, checkKnowledgeProgression, getPlayerSoundVolume } from "./mb_codex.js";
 
 // Minimal dynamic property test (must be delayed until after startup)
 // system.run(() => {
@@ -300,18 +300,18 @@ function getInfectionSound(day) {
     } else if (day <= 17) {
         return { sound: "mob.wither.death", pitch: 0.7, volume: 0.8 };
     } else if (day === 25) {
-        return { sound: "mob.player.levelup", pitch: 1.2, volume: 1.0 };
+        return { sound: "mob.player.levelup", pitch: 1.2, volume: 0.8 };
     } else if (day > 25) {
         // Post-victory: Escalating danger sounds
         const daysPastVictory = day - 25;
         if (daysPastVictory <= 5) {
             return { sound: "mob.wither.spawn", pitch: 0.7, volume: 0.8 };
         } else if (daysPastVictory <= 10) {
-            return { sound: "mob.wither.spawn", pitch: 0.6, volume: 0.9 };
+            return { sound: "mob.wither.spawn", pitch: 0.6, volume: 0.85 };
         } else if (daysPastVictory <= 20) {
-            return { sound: "mob.wither.death", pitch: 0.5, volume: 1.0 };
+            return { sound: "mob.wither.death", pitch: 0.5, volume: 0.9 };
         } else {
-            return { sound: "mob.wither.death", pitch: 0.4, volume: 1.0 };
+            return { sound: "mob.wither.death", pitch: 0.4, volume: 0.9 };
         }
     }
     return { sound: "ambient.weather.thunder", pitch: 0.6, volume: 0.9 };
@@ -377,8 +377,9 @@ export function checkDailyEventsForAllPlayers() {
                         if (dayToRecord === 2 || dayToRecord === 4 || dayToRecord === 8 || dayToRecord === 11 || dayToRecord === 13 || dayToRecord === 15 || dayToRecord === 17) {
                             try {
                                 // Play discovery sound
-                                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-                                player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+                                const volumeMultiplier = getPlayerSoundVolume(player);
+                                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+                                player.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
 
                                 // Send discovery message
                                 player.sendMessage("§7You feel your thoughts organizing... New insights about yesterday's events have been recorded in your mind.");
@@ -516,12 +517,13 @@ function showPlayerTitle(player, text, subtitle = undefined, options = {}, day =
             player.onScreenDisplay.setTitle(text, titleOptions);
 
             // Use infection-based sound if day is provided
+            const volumeMultiplier = getPlayerSoundVolume(player);
             if (day !== null) {
                 const soundConfig = getInfectionSound(day);
-                player.playSound(soundConfig.sound, { pitch: soundConfig.pitch, volume: soundConfig.volume });
+                player.playSound(soundConfig.sound, { pitch: soundConfig.pitch, volume: soundConfig.volume * volumeMultiplier });
             } else {
                 // Default sound for backwards compatibility
-                player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.5 });
+                player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.5 * volumeMultiplier });
             }
         }
     } catch (error) {
@@ -676,9 +678,10 @@ function startDayCycleLoop() {
                 for (const player of world.getAllPlayers()) {
                     if (player && player.isValid) {
                         const soundConfig = getInfectionSound(newDay);
+                        const volumeMultiplier = getPlayerSoundVolume(player);
                         player.playSound(soundConfig.sound, {
                             pitch: soundConfig.pitch,
-                            volume: soundConfig.volume
+                            volume: soundConfig.volume * volumeMultiplier
                         });
                         
                         // Enhanced title for post-victory days
@@ -705,7 +708,8 @@ function startDayCycleLoop() {
                             const daysPastVictory = newDay - 25;
                             player.sendMessage(`§c§l[WARNING] §r§cThe infection has grown ${daysPastVictory} days stronger since victory.`);
                             player.sendMessage(`§cThe world becomes more dangerous with each passing day.`);
-                            player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.7 });
+                            const volumeMultiplier = getPlayerSoundVolume(player);
+                            player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.7 * volumeMultiplier });
                             
                             // Track achievement milestones
                             try {
@@ -770,7 +774,8 @@ export function mbiHandleMilestoneDay(day) {
                     if (player && player.isValid) {
                         try {
                             // Use wither death for milestone (special occasion)
-                            player.playSound("mob.wither.death", { pitch: 0.7, volume: 0.7 });
+                            const volumeMultiplier = getPlayerSoundVolume(player);
+                            player.playSound("mob.wither.death", { pitch: 0.7, volume: 0.7 * volumeMultiplier });
                         } catch (err) {
                             console.warn("[ERROR] in player.playSound:", err);
                         }
@@ -834,8 +839,9 @@ export function mbiHandleMilestoneDay(day) {
                 for (const player of world.getAllPlayers()) {
                     try {
                         // Victory celebration
-                        player.playSound("mob.wither.death", { pitch: 0.5, volume: 1.0 });
-                        player.playSound("mob.player.levelup", { pitch: 1.2, volume: 1.0 });
+                        const volumeMultiplier = getPlayerSoundVolume(player);
+                        player.playSound("mob.wither.death", { pitch: 0.5, volume: 0.8 * volumeMultiplier });
+                        player.playSound("mob.player.levelup", { pitch: 1.2, volume: 0.8 * volumeMultiplier });
                         showPlayerTitle(player, `§a§lVICTORY!`, `§7You survived 25 days!`, { fadeInDuration: 20, stayDuration: 100, fadeOutDuration: 20 }, day);
                         
                         // Mark victory achievement
@@ -1045,14 +1051,15 @@ export function initializeDayTracking() {
             if (player && player.isValid) {
                 system.run(() => {
                     // Use nice sound for world start
+                    const volumeMultiplier = getPlayerSoundVolume(player);
                     if (currentDay < 2) {
-                        player.playSound("random.levelup", { pitch: 1.2, volume: 0.6 });
+                        player.playSound("random.levelup", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
                         showPlayerTitle(player, "§aa completely normal world...", undefined, {}, currentDay);
                         showPlayerActionbar(player, "Everything seems peaceful here...");
                     } else {
                         // Use infection-based sound for progressed worlds
                         const soundConfig = getInfectionSound(currentDay);
-                        player.playSound(soundConfig.sound, { pitch: soundConfig.pitch, volume: soundConfig.volume });
+                        player.playSound(soundConfig.sound, { pitch: soundConfig.pitch, volume: soundConfig.volume * volumeMultiplier });
                         showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay);
                         showPlayerActionbar(player, "The Maple Bear infection continues...");
                     }
@@ -1155,9 +1162,10 @@ world.afterEvents.playerJoin.subscribe((event) => {
                         } else {
                             // Show join message for subsequent joins
                             const soundConfig = getInfectionSound(currentDay);
+                            const volumeMultiplier = getPlayerSoundVolume(player);
                             player.playSound(soundConfig.sound, {
                                 pitch: soundConfig.pitch,
-                                volume: soundConfig.volume
+                                volume: soundConfig.volume * volumeMultiplier
                             });
 
                             if (isFirstTimePlayer) {

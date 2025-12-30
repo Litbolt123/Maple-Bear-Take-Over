@@ -1,6 +1,6 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
-import { getCodex, getDefaultCodex, markCodex, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled } from "./mb_codex.js";
+import { getCodex, getDefaultCodex, markCodex, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock } from "./mb_spawnController.js";
 import "./mb_spawnController.js";
@@ -299,9 +299,10 @@ function checkAndUnlockMobDiscovery(codex, player, killType, mobKillType, hitTyp
         codex.mobs[unlockKey] = true;
         markCodex(player, `mobs.${unlockKey}`);
         sendDiscoveryMessage(player, codex, messageType, itemType);
-        player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+        const volumeMultiplier = getPlayerSoundVolume(player);
+        player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
         if (requiredKills === 1) {
-            player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+            player.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
         }
 
         // Update knowledge progression after discovery
@@ -552,12 +553,14 @@ function unlockDay4Variant(player, codex, condition, individualFlagKey, messageF
 
             if (codex.items.snowBookCrafted) {
                 player.sendMessage("§8Day 4+ variants unlocked.");
-                    player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
-                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
+                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
             } else {
                 player.sendMessage("§7You feel your knowledge expanding...");
-                player.playSound("random.orb", { pitch: 1.3, volume: 0.6 });
-                player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("random.orb", { pitch: 1.3, volume: 0.6 * volumeMultiplier });
+                player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 * volumeMultiplier });
             }
             console.log(`[CODEX] ${player.name} unlocked ${logLabel} day 4+ variants`);
         }
@@ -734,8 +737,9 @@ function checkVariantUnlock(player, codexParam = null) {
                 try {
                     if (player && player.isValid) {
                         player.sendMessage(unlock.message);
+                        const volumeMultiplier = getPlayerSoundVolume(player);
                         for (const sound of unlock.sounds) {
-                            player.playSound(sound.sound, { pitch: sound.pitch, volume: sound.volume });
+                            player.playSound(sound.sound, { pitch: sound.pitch, volume: sound.volume * volumeMultiplier });
                         }
                     }
                 } catch (error) {
@@ -1103,7 +1107,8 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
     if (codex?.items?.snowBookCrafted) {
         player.sendMessage("§7Check your journal.");
         // Play discovery sound
-        player.playSound("random.orb", { pitch: 1.8, volume: 0.6 });
+        const volumeMultiplier = getPlayerSoundVolume(player);
+        player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
         } else {
         // Two-level mapping: messageType -> itemType -> message
         const messages = {
@@ -1144,7 +1149,8 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
         player.sendMessage(message);
 
         // Play discovery sound
-        player.playSound("random.orb", { pitch: 1.8, volume: 0.6 });
+        const volumeMultiplier = getPlayerSoundVolume(player);
+        player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
     }
 }
 
@@ -1781,7 +1787,8 @@ function handlePotion(player, item) {
             if (!codex.items.potionsSeen) {
                 markCodex(player, "items.potionsSeen"); 
                 sendDiscoveryMessage(player, codex, "interesting", "potion");
-                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
             }
         } catch { }
 
@@ -1795,8 +1802,9 @@ function handlePotion(player, item) {
                 if (!codex.items.weaknessPotionSeen) {
                     markCodex(player, "items.weaknessPotionSeen"); 
                     sendDiscoveryMessage(player, codex, "important", "weakness");
-                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-                    player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+                    player.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
                 }
             } catch { }
             player.sendMessage("§7You feel weak... This might help with curing infections.");
@@ -1819,8 +1827,9 @@ function handleEnchantedGoldenApple(player, item) {
         if (!codex.items.enchantedGoldenAppleSeen) {
             markCodex(player, "items.enchantedGoldenAppleSeen"); 
             sendDiscoveryMessage(player, codex, "important", "enchanted_apple");
-            player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-            player.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+            player.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
         }
     } catch { }
 
@@ -1854,18 +1863,19 @@ function handleEnchantedGoldenApple(player, item) {
                 // Mark cure items as discovered
                 try { markCodex(player, "items.cureItemsSeen"); } catch { }
                 
+                const volumeMultiplier = getPlayerSoundVolume(player);
                 if (isFirstCure) {
                     // Happy and relieved first-time cure sounds
-                    player.playSound("mob.villager.idle", { pitch: 1.8, volume: 1.0 });
-                    player.playSound("random.orb", { pitch: 1.8, volume: 1.0 });
-                    player.playSound("mob.villager.celebrate", { pitch: 1.5, volume: 0.8 });
-                    player.playSound("random.levelup", { pitch: 1.2, volume: 0.8 });
-                    player.playSound("mob.villager.yes", { pitch: 1.3, volume: 0.6 });
+                    player.playSound("mob.villager.idle", { pitch: 1.8, volume: 0.85 * volumeMultiplier });
+                    player.playSound("random.orb", { pitch: 1.8, volume: 0.85 * volumeMultiplier });
+                    player.playSound("mob.villager.celebrate", { pitch: 1.5, volume: 0.75 * volumeMultiplier });
+                    player.playSound("random.levelup", { pitch: 1.2, volume: 0.75 * volumeMultiplier });
+                    player.playSound("mob.villager.yes", { pitch: 1.3, volume: 0.6 * volumeMultiplier });
                 } else {
                     // Regular cure sounds - still happy but less dramatic
-                    player.playSound("random.orb", { pitch: 1.4, volume: 0.8 });
-                    player.playSound("mob.villager.idle", { pitch: 1.5, volume: 0.6 });
-                    player.playSound("mob.villager.yes", { pitch: 1.2, volume: 0.4 });
+                    player.playSound("random.orb", { pitch: 1.4, volume: 0.8 * volumeMultiplier });
+                    player.playSound("mob.villager.idle", { pitch: 1.5, volume: 0.6 * volumeMultiplier });
+                    player.playSound("mob.villager.yes", { pitch: 1.2, volume: 0.4 * volumeMultiplier });
                 }
 
                 // Grant immunity for 5 minutes
@@ -1971,10 +1981,11 @@ function handleSnowConsumption(player, item) {
         player.sendMessage("§8You have been infected. Find a cure.");
         
         // Scary infection sounds
-        player.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.8 });
-        player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 0.6 });
-        player.playSound("mob.enderman.teleport", { pitch: 1.0, volume: 0.4 });
-        player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.6 });
+        const volumeMultiplier = getPlayerSoundVolume(player);
+        player.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.8 * volumeMultiplier });
+        player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 0.6 * volumeMultiplier });
+        player.playSound("mob.enderman.teleport", { pitch: 1.0, volume: 0.4 * volumeMultiplier });
+        player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.6 * volumeMultiplier });
         
         console.log(`[SNOW] ${player.name} started infection by eating snow`);
         
@@ -2024,24 +2035,25 @@ function handleSnowConsumption(player, item) {
             infectionState.lastTierMessage = currentTier;
             
             // Play appropriate sound based on tier message tone
+            const volumeMultiplier = getPlayerSoundVolume(player);
             if (snowCount <= 5) {
                 // Tier 1: Positive sound
-                player.playSound("random.levelup", { pitch: 1.2, volume: 0.6 });
+                player.playSound("random.levelup", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
             } else if (snowCount <= 10) {
                 // Tier 2: Neutral sound
-                player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.5 });
+                player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.5 * volumeMultiplier });
             } else if (snowCount <= 20) {
                 // Tier 3: Warning sound
-                player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 0.6 });
+                player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 0.6 * volumeMultiplier });
             } else if (snowCount <= 50) {
                 // Tier 4: Dangerous sound
-                player.playSound("mob.wither.ambient", { pitch: 0.7, volume: 0.7 });
+                player.playSound("mob.wither.ambient", { pitch: 0.7, volume: 0.7 * volumeMultiplier });
             } else if (snowCount <= 100) {
                 // Tier 5: Extreme sound
-                player.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.8 });
+                player.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.8 * volumeMultiplier });
             } else {
                 // Tier 6: Devastating sound
-                player.playSound("mob.wither.death", { pitch: 0.5, volume: 0.9 });
+                player.playSound("mob.wither.death", { pitch: 0.5, volume: 0.9 * volumeMultiplier });
             }
         }
         
@@ -2075,7 +2087,8 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
             if (!codex.items.goldenAppleSeen) {
                 markCodex(player, "items.goldenAppleSeen"); 
                 sendDiscoveryMessage(player, codex, "interesting", "golden_apple");
-                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
             }
         } catch { }
         
@@ -2098,12 +2111,13 @@ world.afterEvents.itemCompleteUse.subscribe((event) => {
                     markCodex(player, "items.goldenAppleInfectionReductionDiscovered");
                     
                     // Use the standard discovery message pattern
+                    const volumeMultiplier = getPlayerSoundVolume(player);
                     if (codex.items.snowBookCrafted) {
                         player.sendMessage("§7Check your journal.");
-                        player.playSound("random.orb", { pitch: 1.8, volume: 0.6 });
+                        player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
                     } else {
                         player.sendMessage("§7You feel slightly better for a moment after eating the golden apple... This seems important to remember.");
-                        player.playSound("random.orb", { pitch: 1.8, volume: 0.6 });
+                        player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
                     }
                     
                     saveCodex(player, codex);
@@ -3126,16 +3140,17 @@ world.afterEvents.entityHurt.subscribe((event) => {
 
         // Ramping hit sounds - progressively more disturbing
         if (newHitCount < HITS_TO_INFECT) {
+            const volumeMultiplier = getPlayerSoundVolume(player);
             if (newHitCount === 1) {
                 // First hit: mild concern - like a tap on the shoulder
-                player.playSound("mob.villager.hmm", { pitch: 0.8, volume: 0.5 });
-                player.playSound("random.pop", { pitch: 0.6, volume: 0.4 });
+                player.playSound("mob.villager.hmm", { pitch: 0.8, volume: 0.5 * volumeMultiplier });
+                player.playSound("random.pop", { pitch: 0.6, volume: 0.4 * volumeMultiplier });
             } else if (newHitCount === 2) {
                 // Second hit: getting hit - more impactful but not terrifying
-                player.playSound("mob.villager.hmm", { pitch: 0.6, volume: 0.6 });
-                player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.5 });
-                player.playSound("random.pop", { pitch: 0.8, volume: 0.5 });
-                player.playSound("mob.wolf.growl", { pitch: 0.7, volume: 0.3 });
+                player.playSound("mob.villager.hmm", { pitch: 0.6, volume: 0.6 * volumeMultiplier });
+                player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.5 * volumeMultiplier });
+                player.playSound("random.pop", { pitch: 0.8, volume: 0.5 * volumeMultiplier });
+                player.playSound("mob.wolf.growl", { pitch: 0.7, volume: 0.3 * volumeMultiplier });
             }
         }
 
@@ -3153,11 +3168,12 @@ world.afterEvents.entityHurt.subscribe((event) => {
             trackInfectionHistory(player, "infected");
             
             // Scary infection sounds - final hit with dog snarl (LOUD!)
-            player.playSound("mob.wither.spawn", { pitch: 0.6, volume: 1.0 });
-            player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 0.8 });
-            player.playSound("mob.enderman.teleport", { pitch: 1.0, volume: 0.6 });
-            player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.8 });
-            player.playSound("mob.wolf.growl", { pitch: 0.7, volume: 1.0 }); // Dog snarl for final hit
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.85 * volumeMultiplier });
+            player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 0.75 * volumeMultiplier });
+            player.playSound("mob.enderman.teleport", { pitch: 1.0, volume: 0.6 * volumeMultiplier });
+            player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.75 * volumeMultiplier });
+            player.playSound("mob.wolf.growl", { pitch: 0.7, volume: 0.85 * volumeMultiplier }); // Dog snarl for final hit
             
             // Get first-time message state
             const firstTime = firstTimeMessages.get(player.id) || { hasBeenHit: false, hasBeenInfected: false, snowTier: 0 };
@@ -3334,7 +3350,8 @@ system.runInterval(() => {
                     try {
                         applyEffect(player, goodEffect.effect, goodEffect.duration, { amplifier: goodEffect.amp, showParticles: true });
                         player.sendMessage("§7You feel a brief moment of clarity.");
-                        player.playSound("random.levelup", { pitch: 1.5, volume: 0.6 });
+                        const volumeMultiplier = getPlayerSoundVolume(player);
+                        player.playSound("random.levelup", { pitch: 1.5, volume: 0.6 * volumeMultiplier });
                         console.log(`[INFECTION] ${player.name} received rare good effect: ${goodEffect.effect}`);
                         
                         // Track rare good effects in codex
@@ -3388,7 +3405,8 @@ system.runInterval(() => {
                         try { 
                             markCodex(p, "items.brewingStandSeen"); 
                             sendDiscoveryMessage(p, codex, "interesting", "brewing_stand");
-                            p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                            const volumeMultiplier = getPlayerSoundVolume(p);
+                            p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
                         } catch { }
                         break; 
                     }
@@ -3403,7 +3421,24 @@ system.runInterval(() => {
                         try { 
                             markCodex(p, "items.dustedDirtSeen"); 
                             sendDiscoveryMessage(p, codex, "interesting");
-                            p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                            const volumeMultiplier = getPlayerSoundVolume(p);
+                            p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+                        } catch { }
+                        break; 
+                    }
+                }
+            }
+            
+            // Check for basic journal
+            if (!codex?.items?.basicJournalSeen) {
+                for (let i = 0; i < inv.size; i++) {
+                    const it = inv.getItem(i);
+                    if (it && it.typeId === "mb:basic_journal") { 
+                        try { 
+                            markCodex(p, "items.basicJournalSeen"); 
+                            sendDiscoveryMessage(p, codex, "interesting", "basic_journal");
+                            const volumeMultiplier = getPlayerSoundVolume(p);
+                            p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
                         } catch { }
                         break; 
                     }
@@ -3424,10 +3459,11 @@ system.runInterval(() => {
                             p.sendMessage("§7You feel your knowledge pulled into the book...");
                             
                             // Dramatic sound effects
-                            p.playSound("mob.enderman.portal", { pitch: 0.8, volume: 1.0 });
-                            p.playSound("mob.enderman.teleport", { pitch: 1.2, volume: 0.8 });
-                            p.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.6 });
-                            p.playSound("random.orb", { pitch: 1.5, volume: 1.0 });
+                            const volumeMultiplier = getPlayerSoundVolume(p);
+                            p.playSound("mob.enderman.portal", { pitch: 0.8, volume: 1.0 * volumeMultiplier });
+                            p.playSound("mob.enderman.teleport", { pitch: 1.2, volume: 0.8 * volumeMultiplier });
+                            p.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.6 * volumeMultiplier });
+                            p.playSound("random.orb", { pitch: 1.5, volume: 1.0 * volumeMultiplier });
                             
                             // Temporary blindness effect
                                 applyEffect(p, "minecraft:blindness", 60, { amplifier: 0 });
@@ -3466,7 +3502,8 @@ system.runInterval(() => {
                         codex.biomes.infectedBiomeSeen = true;
                         markCodex(p, "biomes.infectedBiomeSeen");
                         p.sendMessage("§7You notice the ground beneath you feels... different. The air is heavy with an unsettling presence.");
-                        p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                        const volumeMultiplier = getPlayerSoundVolume(p);
+                        p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
                         saveCodex(p, codex);
                     }
 
@@ -3836,8 +3873,9 @@ world.afterEvents.effectAdd.subscribe((event) => {
             if (!codex.items.weaknessPotionSeen) {
                 markCodex(entity, "items.weaknessPotionSeen");
                 sendDiscoveryMessage(entity, codex, "important");
-                entity.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
-                entity.playSound("random.orb", { pitch: 1.5, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(entity);
+                entity.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+                entity.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
             }
         } catch { }
     }
@@ -3849,7 +3887,8 @@ world.afterEvents.effectAdd.subscribe((event) => {
             if (!codex.items.potionsSeen) {
                 markCodex(entity, "items.potionsSeen");
                 sendDiscoveryMessage(entity, codex, "interesting");
-                entity.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 });
+                const volumeMultiplier = getPlayerSoundVolume(entity);
+                entity.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
             }
         } catch { }
     }
@@ -4306,6 +4345,87 @@ function getBestArmorTier(player) {
 
 // Note: All scripted spawning logic removed - using spawn rules and multiple entity files instead
 
+// --- Basic Journal First-Join Logic ---
+function giveBasicJournalIfNeeded(player) {
+    try {
+        // Check if player already received journal using dynamic property
+        const playerKey = `mb_has_basic_journal_${player.id}`;
+        if (world.getDynamicProperty(playerKey)) {
+            return; // Already given
+        }
+        
+        // Wait a few seconds for player to fully load, then give journal with pop-in effect
+        system.runTimeout(() => {
+            try {
+                if (!player || !player.isValid) return;
+                
+                const inventory = player.getComponent("inventory")?.container;
+                if (!inventory) {
+                    // Retry after another delay if inventory not ready
+                    system.runTimeout(() => giveBasicJournalIfNeeded(player), 40);
+                    return;
+                }
+                
+                // Check if player already has one in inventory
+                let hasJournal = false;
+                for (let i = 0; i < inventory.size; i++) {
+                    const item = inventory.getItem(i);
+                    if (item && item.typeId === "mb:basic_journal") {
+                        hasJournal = true;
+                        break;
+                    }
+                }
+                
+                if (hasJournal) {
+                    world.setDynamicProperty(playerKey, true);
+                    return;
+                }
+                
+                // Give the journal
+                const journal = new ItemStack("mb:basic_journal", 1);
+                const remaining = inventory.addItem(journal);
+                
+                if (!remaining) {
+                    // Successfully added - show pop-in effect
+                    world.setDynamicProperty(playerKey, true);
+                    
+                    // Visual pop-in effect with discovery sound
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("random.pop", { pitch: 1.2, volume: 0.7 * volumeMultiplier });
+                    player.playSound("random.orb", { pitch: 1.5, volume: 0.5 * volumeMultiplier });
+                    player.playSound("mob.villager.idle", { pitch: 1.3, volume: 0.6 * volumeMultiplier }); // Discovery sound
+                    
+                    // Show title
+                    player.onScreenDisplay.setTitle("§6§lBasic Journal", {
+                        fadeInDuration: 10,
+                        stayDuration: 40,
+                        fadeOutDuration: 20
+                    });
+                    
+                    // Chat message
+                    system.runTimeout(() => {
+                        if (player && player.isValid) {
+                            player.sendMessage("§eA journal appeared in your inventory!");
+                            player.sendMessage("§7Right-click it to open and learn about your world.");
+                        }
+                    }, 20);
+                } else {
+                    // Inventory full - drop it
+                    player.dimension.spawnItem(journal, player.location);
+                    world.setDynamicProperty(playerKey, true);
+                    player.sendMessage("§eA journal fell from your inventory!");
+                    player.sendMessage("§7Right-click it to open and learn about your world.");
+                    player.playSound("random.pop", { pitch: 1.0, volume: 0.5 });
+                }
+            } catch (error) {
+                console.warn(`[BASIC JOURNAL] Error giving journal to ${player?.name}:`, error);
+            }
+        }, 100); // 5 second delay for pop-in effect
+    } catch (error) {
+        console.warn(`[BASIC JOURNAL] Error in giveBasicJournalIfNeeded:`, error);
+    }
+}
+
 // --- Player Join/Leave Handlers for Infection Data ---
 world.afterEvents.playerJoin.subscribe((event) => {
     try {
@@ -4317,6 +4437,7 @@ world.afterEvents.playerJoin.subscribe((event) => {
             const player = world.getAllPlayers().find(p => p.id === playerId);
             if (player) {
                 loadInfectionData(player);
+                giveBasicJournalIfNeeded(player);
             }
         }, 60); // 3 second delay
     } catch (error) {
@@ -4414,6 +4535,25 @@ world.beforeEvents.itemUse.subscribe((event) => {
     console.log(`[SNOW DEBUG] itemUse event fired - Player: ${player?.name}, Item: ${item?.typeId}`);
     }
 
+    // Basic Journal - GAMEPLAY FEATURE
+    if (item?.typeId === "mb:basic_journal") {
+        event.cancel = true;
+        system.run(() => {
+            // Check if this is the first time opening
+            const firstTimeKey = `mb_basic_journal_first_open_${player.id}`;
+            const hasOpenedBefore = world.getDynamicProperty(firstTimeKey);
+            
+            if (!hasOpenedBefore) {
+                // First time - show welcome screen
+                showFirstTimeWelcomeScreen(player);
+            } else {
+                // Show normal menu
+                showBasicJournalUI(player);
+            }
+        });
+        return;
+    }
+
     // Infection Tracker Book - GAMEPLAY FEATURE
     if (item?.typeId === "mb:snow_book") {
         if (DEBUG_SNOW_MECHANICS) {
@@ -4484,6 +4624,7 @@ world.beforeEvents.itemUse.subscribe((event) => {
 
     // Debug item testing features have been removed for playability
 });
+
 
 // Handle snow layer placement and block conversion underneath
 world.afterEvents.playerPlaceBlock.subscribe((event) => {

@@ -105,7 +105,7 @@
 	"block_sounds": {
 		"mb:snow_layer": {
 			"pitch": 1,
-			"volume": 2,
+			"volume": 1.2,
 			"events": {
 				"break": "mb.snow_layer_break",
 				"hit": "mb.snow_layer_hit",
@@ -117,7 +117,7 @@
 		"block_sounds": {
 			"mb:snow_layer": {
 				"pitch": 1,
-				"volume": 1,
+				"volume": 0.6,
 				"events": {
 					"fall": "mb.snow_layer_fall",
 					"jump": "mb.snow_layer_jump",

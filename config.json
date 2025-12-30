@@ -3,17 +3,11 @@
 	"name": "MapleBear TakeOver",
 	"namespace": "bridge",
 	"authors": [
-		"MapleBear industries"
+		"Maple Bear Industries"
 	],
-	"targetVersion": "1.21.120",
+	"targetVersion": "1.21.130",
 	"description": "Don't do drugs kids...",
-	"experimentalGameplay": {
-		"creationOfCustomBiomes": true,
-		"upcomingCreatorFeatures": true,
-		"enableGameTestFramework": true,
-		"dataDrivenJigsawStructures": true,
-		"renderDragonFeatures": true
-	},
+	"experimentalGameplay": {},
 	"bdsProject": false,
 	"packs": {
 		"behaviorPack": "./BP",

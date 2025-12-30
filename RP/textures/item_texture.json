@@ -20,6 +20,9 @@
 		"mb_snow_book": {
 			"textures": "textures/items/snow_book"
 		},
+		"mb_basic_journal": {
+			"textures": "textures/items/basic_journal"
+		},
 		"mb_mb_day4_egg": {
 			"textures": "textures/items/mb_day4"
 		},

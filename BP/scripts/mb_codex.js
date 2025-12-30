@@ -1,6 +1,6 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
-import { recordDailyEvent, getCurrentDay } from "./mb_dayTracker.js";
+import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTracker.js";
 import { ModalFormData } from "@minecraft/server-ui";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
@@ -46,7 +46,7 @@ export function getDefaultCodex() {
         },
         // Aggregated metadata by effect id
         symptomsMeta: {},
-        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, dustedDirtSeen: false, bookCraftMessageShown: false, goldenAppleSeen: false, enchantedGoldenAppleSeen: false, goldenAppleInfectionReductionDiscovered: false },
+        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, basicJournalSeen: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, dustedDirtSeen: false, bookCraftMessageShown: false, goldenAppleSeen: false, enchantedGoldenAppleSeen: false, goldenAppleInfectionReductionDiscovered: false },
         mobs: { 
             mapleBearSeen: false, 
             infectedBearSeen: false, 
@@ -152,6 +152,47 @@ export function saveCodex(player, codex) {
         player.setDynamicProperty("mb_codex", JSON.stringify(codex));
     } catch (e) {
         console.warn('Failed to save codex:', e);
+    }
+}
+
+/**
+ * Get player's sound volume multiplier (0-1)
+ * Checks Basic Journal settings first, then falls back to codex settings
+ * @param {Player} player - The player to get sound volume for
+ * @returns {number} Volume multiplier between 0-1, defaults to 1.0
+ */
+export function getPlayerSoundVolume(player) {
+    try {
+        // Check Basic Journal settings first (world dynamic property)
+        const settingsKey = `mb_player_settings_${player.id}`;
+        const rawSettings = world.getDynamicProperty(settingsKey);
+        
+        if (rawSettings) {
+            let parsedSettings = rawSettings;
+            if (typeof rawSettings === 'string') {
+                try {
+                    parsedSettings = JSON.parse(rawSettings);
+                } catch (e) {
+                    // If parsing fails, continue to codex check
+                }
+            }
+            
+            if (parsedSettings && typeof parsedSettings === 'object' && typeof parsedSettings.soundVolume === 'number') {
+                return Math.max(0, Math.min(1, parsedSettings.soundVolume));
+            }
+        }
+        
+        // Fall back to codex settings
+        const codex = getCodex(player);
+        if (codex.settings && typeof codex.settings.soundVolume === 'number') {
+            return Math.max(0, Math.min(1, codex.settings.soundVolume));
+        }
+        
+        // Default to 1.0 if not set
+        return 1.0;
+    } catch (error) {
+        console.warn(`[SOUND VOLUME] Error getting sound volume for ${player.name}:`, error);
+        return 1.0;
     }
 }
 
@@ -503,8 +544,9 @@ export function shareKnowledge(fromPlayer, toPlayer) {
         } else {
             toPlayer.sendMessage(`§7Knowledge shared, but no journal to record it.`);
         }
-        toPlayer.playSound("random.orb", { pitch: 1.2, volume: 0.8 });
-        toPlayer.playSound("mob.experience_orb.pickup", { pitch: 1.0, volume: 0.6 });
+        const volumeMultiplier = getPlayerSoundVolume(toPlayer);
+        toPlayer.playSound("random.orb", { pitch: 1.2, volume: 0.8 * volumeMultiplier });
+        toPlayer.playSound("mob.experience_orb.pickup", { pitch: 1.0, volume: 0.6 * volumeMultiplier });
 
         return true;
     }
@@ -553,7 +595,8 @@ export function showCodexBook(player, context) {
     const { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, getCurrentDay, getDayDisplayInfo } = context;
 
     // Play journal open sound
-    player.playSound("mb.codex_open", { pitch: 1.0, volume: 1.0 });
+    const volumeMultiplier = getPlayerSoundVolume(player);
+    player.playSound("mb.codex_open", { pitch: 1.0, volume: 1.0 * volumeMultiplier });
 
     // Ensure knowledge progression is up to date before presenting information
     try {
@@ -572,10 +615,53 @@ export function showCodexBook(player, context) {
                 codex.settings = {
                     showSearchButton: true,
                     bearSoundVolume: 2, // 0=off, 1=low, 2=high
-                    blockBreakVolume: 2 // 0=off, 1=low, 2=high
+                    blockBreakVolume: 2, // 0=off, 1=low, 2=high
+                    // Add Basic Journal settings with defaults
+                    soundVolume: 1.0, // 0-1 range (stored as 0-1, displayed as 0-10 slider)
+                    showTips: true,
+                    audioMessages: true
                 };
                 saveCodex(player, codex);
+            } else {
+                // Ensure Basic Journal settings exist (for backwards compatibility)
+                if (codex.settings.soundVolume === undefined) {
+                    codex.settings.soundVolume = 1.0;
+                }
+                if (codex.settings.showTips === undefined) {
+                    codex.settings.showTips = true;
+                }
+                if (codex.settings.audioMessages === undefined) {
+                    codex.settings.audioMessages = true;
+                }
             }
+            
+            // Sync with Basic Journal settings if they exist (for backwards compatibility)
+            const basicSettingsKey = `mb_player_settings_${player.id}`;
+            const rawBasicSettings = world.getDynamicProperty(basicSettingsKey);
+            if (rawBasicSettings) {
+                let parsedBasicSettings = rawBasicSettings;
+                if (typeof rawBasicSettings === 'string') {
+                    try {
+                        parsedBasicSettings = JSON.parse(rawBasicSettings);
+                    } catch (e) {
+                        // If parsing fails, skip sync
+                    }
+                }
+                
+                if (parsedBasicSettings && typeof parsedBasicSettings === 'object') {
+                    // Merge Basic Journal settings into codex settings (Basic Journal takes precedence if set)
+                    if (typeof parsedBasicSettings.soundVolume === 'number') {
+                        codex.settings.soundVolume = parsedBasicSettings.soundVolume;
+                    }
+                    if (typeof parsedBasicSettings.showTips === 'boolean') {
+                        codex.settings.showTips = parsedBasicSettings.showTips;
+                    }
+                    if (typeof parsedBasicSettings.audioMessages === 'boolean') {
+                        codex.settings.audioMessages = parsedBasicSettings.audioMessages;
+                    }
+                }
+            }
+            
             return codex.settings;
         }
     function buildSummary() {
@@ -737,13 +823,15 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled) {
                 // Play journal close sound when canceling/closing
-                player.playSound("mb.codex_close", { pitch: 1.0, volume: 1.0 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_close", { pitch: 1.0, volume: 1.0 * volumeMultiplier });
                 return;
             }
             const sel = res.selection;
             if (sel >= 0 && sel < buttonActions.length) {
                 // Play page turn sound for navigation
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 buttonActions[sel]();
             }
         }).catch(() => { });
@@ -796,7 +884,8 @@ export function showCodexBook(player, context) {
         }
         
         new ActionFormData().title("§6Infection").body(lines.join("\n")).button("§8Back").show(player).then(() => {
-            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             openMain();
         });
     }
@@ -854,7 +943,8 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled) return;
 
             // Play page turn sound
-            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             
             // If no content available, just go back
             if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects) {
@@ -916,7 +1006,8 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled) return openSymptoms();
 
             // Play page turn sound
-            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             
             // If no symptoms available, just go back
             if (entries.length === 0) {
@@ -942,7 +1033,8 @@ export function showCodexBook(player, context) {
                     body = `§e${e.title}\n§7Sources: §f${srcs}\n§7Duration: §f${minDur}s - ${maxDur}s\n§7Amplifier: §f${minAmp} - ${maxAmp}\n§7Timing: §f${timingStr}\n§7Snow Count: §f${snowStr}`;
                 }
                 new ActionFormData().title(`§6Infection Symptoms: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
-                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                     openInfectionSymptoms();
                 });
             } else {
@@ -989,7 +1081,8 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled) return openSymptoms();
 
             // Play page turn sound
-            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             
             // If no effects available, just go back
             if (entries.length === 0) {
@@ -1007,7 +1100,8 @@ export function showCodexBook(player, context) {
                     body = `§e${e.title}\n§7Type: ${effectType}\n§7Description: §f${description}\n\n§7This effect can be obtained by consuming snow while infected. The chance and intensity depend on your infection level.`;
                 }
                 new ActionFormData().title(`§6Snow Effects: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
-                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                     openSnowEffects();
                 });
             } else {
@@ -1148,7 +1242,8 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled) return openMain();
 
             // Play page turn sound
-            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             if (res.selection >= 0 && res.selection < entries.length) {
                 const e = entries[res.selection];
                 const known = codex.mobs[e.key];
@@ -1343,7 +1438,8 @@ export function showCodexBook(player, context) {
                 }
 
                 new ActionFormData().title(`§6Mobs: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
-                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                     openMobs();
                 });
             } else {
@@ -1358,6 +1454,7 @@ export function showCodexBook(player, context) {
         // Item icon configuration
         const ITEM_ICONS = {
             'snowFound': "textures/items/mb_snow",
+            'basicJournalSeen': "textures/items/basic_journal",
             'snowBookCrafted': "textures/items/snow_book",
             'cureItemsSeen': "textures/items/apple_golden",
             'potionsSeen': "textures/items/potion_bottle_saturation",
@@ -1370,6 +1467,7 @@ export function showCodexBook(player, context) {
         
         const entries = [
             { key: "snowFound", title: "'Snow' (Powder)", icon: ITEM_ICONS.snowFound },
+            { key: "basicJournalSeen", title: "Basic Journal", icon: ITEM_ICONS.basicJournalSeen },
             { key: "snowBookCrafted", title: "Powdery Journal", icon: ITEM_ICONS.snowBookCrafted },
             { key: "cureItemsSeen", title: "Cure Items", icon: ITEM_ICONS.cureItemsSeen },
             { key: "potionsSeen", title: "Potions", icon: ITEM_ICONS.potionsSeen },
@@ -1403,6 +1501,8 @@ export function showCodexBook(player, context) {
                 } else {
                     title = 'Unknown White Substance';
                 }
+            } else if (e.key === 'basicJournalSeen' && codex.items.basicJournalSeen) {
+                showIcon = true;
             } else if (e.key === 'snowBookCrafted' && codex.items.snowBookCrafted) {
                 showIcon = true;
             }
@@ -1421,7 +1521,8 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled) return openMain();
 
             // Play page turn sound
-            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             if (res.selection >= 0 && res.selection < entries.length) {
                 const e = entries[res.selection];
                 const known = codex.items[e.key];
@@ -1442,6 +1543,8 @@ export function showCodexBook(player, context) {
                         } else {
                             body = "§eUnknown White Substance\n§7A powdery white substance. You have no idea what this could be.";
                         }
+                    } else if (e.key === "basicJournalSeen") {
+                        body = "§eBasic Journal\n§7A simple journal that helps you understand what's happening in your world.\n\n§7Features:\n§7• Explains your goals and objectives\n§7• Provides survival tips\n§7• Shows recipe for Powdery Journal upgrade\n§7• Settings menu for customization\n\n§7This journal is given to all survivors when they first join. Upgrade it to a Powdery Journal for advanced tracking capabilities.";
                     } else if (e.key === "snowBookCrafted") {
                         // Progressive journal information based on usage
                         const totalKills = (codex.mobs.tinyBearKills || 0) + (codex.mobs.infectedBearKills || 0) + (codex.mobs.infectedPigKills || 0) + (codex.mobs.infectedCowKills || 0) + (codex.mobs.buffBearKills || 0) +
@@ -1554,7 +1657,8 @@ export function showCodexBook(player, context) {
                     }
                 }
                 new ActionFormData().title(`§6Items: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
-                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                     openItems();
                 });
             } else {
@@ -1581,7 +1685,8 @@ export function showCodexBook(player, context) {
                 if (!res || res.canceled) return openTimeline();
 
                 // Play page turn sound
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
 
                 openTimeline();
             });
@@ -1613,7 +1718,8 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled) return openTimeline();
 
             // Play page turn sound
-            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             if (res.selection >= 0 && res.selection < daysWithEvents.length) {
                 const selectedDay = daysWithEvents[res.selection];
                 const dayEvents = codex.dailyEvents[selectedDay];
@@ -1660,7 +1766,8 @@ export function showCodexBook(player, context) {
                 }
 
                 new ActionFormData().title(`§6Daily Log: Day ${selectedDay}`).body(body).button("§8Back").show(player).then(() => {
-                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                     openDailyLog();
                 });
             } else {
@@ -1761,19 +1868,22 @@ export function showCodexBook(player, context) {
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === entries.length) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openMain();
             }
 
             const entry = entries[res.selection];
-            player.playSound("mb.codex_turn_page", { pitch: 0.9, volume: 0.7 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 0.9, volume: 0.7 * volumeMultiplier });
             new ActionFormData()
                 .title(`§6Late Lore: ${entry.title}`)
                 .body(`${entry.body}\n\n§8The journal records what we would rather forget.`)
                 .button("§8Back")
                 .show(player)
                 .then(() => {
-                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                     openLateLore();
                 });
         }).catch(() => { openMain(); });
@@ -1814,11 +1924,13 @@ export function showCodexBook(player, context) {
         
         form.show(player).then((res) => {
             if (!res || res.canceled) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openMain();
             }
             
-            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             const selection = res.selection;
             if (selection >= 0 && selection < buttonActions.length) {
                 buttonActions[selection]();
@@ -1952,10 +2064,12 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§6Days & Milestones").body(body).button("§8Back");
         form.show(player).then((res) => {
             if (!res || res.canceled) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openTimeline();
             }
-            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             openTimeline();
         }).catch(() => { openTimeline(); });
     }
@@ -2003,10 +2117,12 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§6Achievements").body(body).button("§8Back");
         form.show(player).then((res) => {
             if (!res || res.canceled) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openMain();
             }
-            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             return openMain();
         }).catch(() => { openMain(); });
     }
@@ -2028,13 +2144,15 @@ export function showCodexBook(player, context) {
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === options.length) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openMain();
             }
 
             const chosen = options[res.selection];
             if (chosen) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
                 chosen.action();
             } else {
                 openDeveloperTools();
@@ -2064,11 +2182,13 @@ export function showCodexBook(player, context) {
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 4) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openDeveloperTools();
             }
 
-            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
             switch (res.selection) {
                 case 0:
                     return triggerDebugCommand("set_spawn_difficulty", ["easy"], () => openSpawnDifficultyMenu());
@@ -2252,16 +2372,19 @@ export function showCodexBook(player, context) {
 
         form.show(player).then((res) => {
             if (!res || res.canceled) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openMain();
             }
 
             if (res.selection === 5) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openMain();
             }
 
-            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
             switch (res.selection) {
                 case 0: return openMiningDebugMenu(settings);
                 case 1: return openTorpedoDebugMenu(settings);
@@ -2291,11 +2414,13 @@ export function showCodexBook(player, context) {
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 9) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openDebugMenu();
             }
 
-            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
             const flags = ["pitfall", "general", "target", "pathfinding", "vertical", "mining", "movement", "stairCreation", "all"];
             if (res.selection < flags.length) {
                 const newState = toggleDebugFlag("mining", flags[res.selection]);
@@ -2322,11 +2447,13 @@ export function showCodexBook(player, context) {
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 5) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openDebugMenu();
             }
 
-            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
             const flags = ["general", "targeting", "diving", "blockBreaking", "all"];
             if (res.selection < flags.length) {
                 const newState = toggleDebugFlag("torpedo", flags[res.selection]);
@@ -2352,11 +2479,13 @@ export function showCodexBook(player, context) {
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 4) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openDebugMenu();
             }
 
-            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
             const flags = ["general", "targeting", "pathfinding", "all"];
             if (res.selection < flags.length) {
                 const newState = toggleDebugFlag("flying", flags[res.selection]);
@@ -2386,11 +2515,13 @@ export function showCodexBook(player, context) {
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 8) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openDebugMenu();
             }
 
-            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
             const flags = ["general", "discovery", "tileScanning", "cache", "validation", "distance", "spacing", "all"];
             if (res.selection < flags.length) {
                 const flagName = flags[res.selection];
@@ -2419,11 +2550,13 @@ export function showCodexBook(player, context) {
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 4) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openDebugMenu();
             }
 
-            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
             const flags = ["death", "conversion", "infection", "all"];
             if (res.selection < flags.length) {
                 const newState = toggleDebugFlag("main", flags[res.selection]);
@@ -2440,7 +2573,7 @@ export function showCodexBook(player, context) {
         const settings = getSettings();
         const codex = getCodex(player);
         
-        // Get spawn difficulty state
+        // Get spawn difficulty state (for display only, not editable here)
         const spawnValue = getSpawnDifficultyValue();
         let spawnBoostText = "Normal (0)";
         if (spawnValue === -1) spawnBoostText = "Easy (-1)";
@@ -2449,53 +2582,109 @@ export function showCodexBook(player, context) {
         else if (spawnValue > 0) spawnBoostText = `Custom (+${spawnValue})`;
         else spawnBoostText = `Custom (${spawnValue})`;
         
-        const volumeLabels = ["Off", "Low", "High"];
-        const bearVolLabel = volumeLabels[settings.bearSoundVolume] || "High";
-        const breakVolLabel = volumeLabels[settings.blockBreakVolume] || "High";
+        // Convert soundVolume (0-1) to slider value (0-10)
+        const volumeSliderValue = Math.round((settings.soundVolume || 1.0) * 10);
         
-        let body = `§6Settings\n\n`;
-        body += `§7Spawn Boost/Decrease: §f${spawnBoostText}\n`;
-        body += `§7Bear Sound Volume: §f${bearVolLabel} (${settings.bearSoundVolume}/2)\n`;
-        body += `§7Block Break Volume: §f${breakVolLabel} (${settings.blockBreakVolume}/2)\n`;
-        body += `§7Show Search Button: §f${settings.showSearchButton ? "Yes" : "No"}\n\n`;
-        body += `§8Adjust these settings to customize your journal experience.`;
+        // Create dropdown options for bear/block volumes
+        const volumeOptions = ["Off", "Low", "High"];
+        const bearVolIndex = Math.max(0, Math.min(2, settings.bearSoundVolume || 2));
+        const breakVolIndex = Math.max(0, Math.min(2, settings.blockBreakVolume || 2));
         
-        const form = new ActionFormData().title("§eSettings").body(body);
-        form.button(`§fBear Sounds: ${bearVolLabel}`);
-        form.button(`§fBlock Breaking: ${breakVolLabel}`);
-        form.button(`§fSearch Button: ${settings.showSearchButton ? "§aShow" : "§cHide"}`);
-        form.button("§8Back");
-        
-        form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 3) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
-                return openMain();
-            }
+        try {
+            const form = new ModalFormData()
+                .title("§eSettings")
+                .slider("Sound Volume (0-10)", 0, 10, { valueStep: 1, defaultValue: volumeSliderValue })
+                .toggle("Show Tips", { defaultValue: settings.showTips !== false })
+                .toggle("Audio Messages", { defaultValue: settings.audioMessages !== false })
+                .dropdown("Bear Sound Volume", volumeOptions, { defaultValueIndex: bearVolIndex })
+                .dropdown("Block Break Volume", volumeOptions, { defaultValueIndex: breakVolIndex })
+                .toggle("Show Search Button", { defaultValue: settings.showSearchButton !== false });
             
-            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
-            const codex = getCodex(player);
-            const settings = getSettings();
-            
-            switch (res.selection) {
-                case 0: // Bear sound volume
-                    settings.bearSoundVolume = (settings.bearSoundVolume + 1) % 3;
+            form.show(player).then((res) => {
+                if (!res || res.canceled) {
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                    return openMain();
+                }
+                
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
+                
+                // Update settings from form values
+                if (res.formValues && res.formValues.length >= 6) {
+                    // Convert slider value (0-10) back to float (0-1)
+                    const sliderValue = typeof res.formValues[0] === 'number' 
+                        ? Math.max(0, Math.min(10, Math.round(Number(res.formValues[0]))))
+                        : volumeSliderValue;
+                    const normalizedVolume = Math.round((sliderValue / 10) * 100) / 100;
+                    
+                    settings.soundVolume = normalizedVolume;
+                    settings.showTips = Boolean(res.formValues[1]);
+                    settings.audioMessages = Boolean(res.formValues[2]);
+                    settings.bearSoundVolume = typeof res.formValues[3] === 'number' ? Math.max(0, Math.min(2, res.formValues[3])) : bearVolIndex;
+                    settings.blockBreakVolume = typeof res.formValues[4] === 'number' ? Math.max(0, Math.min(2, res.formValues[4])) : breakVolIndex;
+                    settings.showSearchButton = Boolean(res.formValues[5]);
+                    
+                    // Save to codex
                     saveCodex(player, codex);
-                    openSettings();
-                    break;
-                case 1: // Block break volume
-                    settings.blockBreakVolume = (settings.blockBreakVolume + 1) % 3;
-                    saveCodex(player, codex);
-                    openSettings();
-                    break;
-                case 2: // Search button toggle
-                    settings.showSearchButton = !settings.showSearchButton;
-                    saveCodex(player, codex);
-                    openSettings();
-                    break;
-                default:
+                    
+                    // Also save to Basic Journal settings for backwards compatibility
+                    const basicSettingsKey = `mb_player_settings_${player.id}`;
+                    const basicSettings = {
+                        soundVolume: normalizedVolume,
+                        showTips: settings.showTips,
+                        audioMessages: settings.audioMessages
+                    };
+                    try {
+                        world.setDynamicProperty(basicSettingsKey, JSON.stringify(basicSettings));
+                    } catch (error) {
+                        console.warn(`[SETTINGS] Error saving Basic Journal settings:`, error);
+                    }
+                    
+                    // Show action buttons immediately as part of the same form experience
+                    const actionForm = new ActionFormData()
+                        .title("§eSettings")
+                        .body("§7Continue modifying settings");
+                    
+                    actionForm.button("§aGo back to menu", "textures/ui/confirm");
+                    actionForm.button("§bSave Settings", "textures/items/redstone");
+                    
+                    actionForm.show(player).then((actionRes) => {
+                        if (!actionRes || actionRes.canceled) {
+                            const volumeMultiplier = getPlayerSoundVolume(player);
+                            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                            return openMain();
+                        }
+                        
+                        const volumeMultiplier = getPlayerSoundVolume(player);
+                        player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
+                        
+                        if (actionRes.selection === 0) {
+                            // Done - go to main menu
+                            openMain();
+                        } else if (actionRes.selection === 1) {
+                            // Save Settings - refresh the settings form
+                            openSettings();
+                        } else {
+                            openMain();
+                        }
+                    }).catch(() => openMain());
+                } else {
+                    // No form values - just go back to main
                     openMain();
-            }
-        }).catch(() => openMain());
+                }
+            }).catch((error) => {
+                console.warn(`[SETTINGS] Error showing settings form:`, error);
+                console.warn(`[SETTINGS] Error stack:`, error?.stack);
+                player.sendMessage("§cError opening settings! Check console for details.");
+                openMain();
+            });
+        } catch (error) {
+            console.warn(`[SETTINGS] Error creating settings form:`, error);
+            console.warn(`[SETTINGS] Error stack:`, error?.stack);
+            player.sendMessage("§cError creating settings form! Check console for details.");
+            openMain();
+        }
     }
 
     function openSearch() {
@@ -2506,7 +2695,8 @@ export function showCodexBook(player, context) {
         
         modal.show(player).then((res) => {
             if (!res || res.canceled || !res.formValues?.[0]) {
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openMain();
             }
             
@@ -2584,11 +2774,13 @@ export function showCodexBook(player, context) {
             
             form.show(player).then((res) => {
                 if (!res || res.canceled || res.selection === results.length) {
-                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 });
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                     return openSearch();
                 }
                 
-                player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 });
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
                 const selected = results[res.selection];
                 if (selected && selected.action) {
                     selected.action();
@@ -2727,4 +2919,262 @@ export function isDebugEnabled(category, flag) {
         // Silent fail - debug is optional
     }
     return false;
+}
+
+// --- Basic Journal UI Functions ---
+export function showBasicJournalUI(player) {
+    const form = new ActionFormData().title("§6Basic Journal");
+    
+    // Get current day for context
+    const currentDay = getCurrentDay ? getCurrentDay() : 0;
+    const display = typeof getDayDisplayInfo === 'function' ? getDayDisplayInfo(currentDay) : { color: '§f', symbols: '' };
+    
+    form.body(`§7Welcome to your world...\n\n${display.color}${display.symbols} Current Day: ${currentDay}\n\n§7This journal will help you understand what's happening.`);
+    
+    form.button("§eYour Goal", "textures/items/snow_book");
+    form.button("§bSettings", "textures/ui/settings_glyph_color_2x");
+    form.button("§aRecipe: Powdery Journal", "textures/items/snow_book");
+    form.button("§7Tips", "textures/items/book_writable");
+    
+    form.show(player).then((response) => {
+        if (response.canceled) return;
+        
+        switch (response.selection) {
+            case 0:
+                showGoalScreen(player);
+                break;
+            case 1:
+                showSettingsScreen(player);
+                break;
+            case 2:
+                showRecipeScreen(player);
+                break;
+            case 3:
+                showTipsScreen(player);
+                break;
+        }
+    });
+}
+
+export function showFirstTimeWelcomeScreen(player) {
+    const form = new ActionFormData().title("§6Welcome to Your Journal");
+    form.body(`§eWelcome, Survivor!\n\n§7This journal will help you understand what's happening in your world.\n\n§7Would you like to hear an audio introduction?\n\n§7(You can change this setting later)`);
+    form.button("§aYes, Play Audio", "textures/ui/info");
+    form.button("§7Skip for Now", "textures/ui/info");
+    
+    form.show(player).then((response) => {
+        if (response.canceled) {
+            // If canceled, mark as opened and show normal menu
+            const firstTimeKey = `mb_basic_journal_first_open_${player.id}`;
+            world.setDynamicProperty(firstTimeKey, true);
+            showBasicJournalUI(player);
+            return;
+        }
+        
+        const firstTimeKey = `mb_basic_journal_first_open_${player.id}`;
+        world.setDynamicProperty(firstTimeKey, true);
+        
+        if (response.selection === 0) {
+            // Play audio intro
+            playJournalIntroAudio(player);
+        } else {
+            // Skip - go to normal menu
+            showBasicJournalUI(player);
+        }
+    });
+}
+
+function playJournalIntroAudio(player) {
+    // Check if audio messages are enabled
+    const settingsKey = `mb_player_settings_${player.id}`;
+    let rawSettings = world.getDynamicProperty(settingsKey);
+    
+    // Parse settings if it's a JSON string
+    let settings = null;
+    if (rawSettings) {
+        if (typeof rawSettings === 'string') {
+            try {
+                settings = JSON.parse(rawSettings);
+            } catch (e) {
+                settings = null;
+            }
+        } else if (typeof rawSettings === 'object') {
+            settings = rawSettings;
+        }
+    }
+    
+    if (settings && settings.audioMessages === false) {
+        // Audio disabled, skip to menu
+        showBasicJournalUI(player);
+        return;
+    }
+    
+    // Get sound volume setting (default to 1.0 if not set)
+    const soundVolume = (settings && typeof settings.soundVolume === 'number') 
+        ? settings.soundVolume 
+        : 1.0;
+    
+    // Play intro audio
+    // TODO: Replace "mb.journal_intro" with your custom sound identifier
+    // Add your audio file to RP/sounds/ and register it in RP/sounds/sound_definitions.json
+    try {
+        // Try custom sound first, fallback to placeholder
+        try {
+            player.playSound("mb.journal_intro", { pitch: 1.0, volume: soundVolume });
+        } catch {
+            // Fallback to placeholder sounds if custom sound not found
+            player.playSound("mob.enderman.portal", { pitch: 0.8, volume: soundVolume });
+            player.playSound("random.orb", { pitch: 1.2, volume: soundVolume * 0.8 });
+        }
+        
+        // Show message while audio plays
+        player.sendMessage("§7Playing introduction...");
+        
+        // After audio, show normal menu
+        // Adjust timing (in ticks) based on your audio length
+        // 1 second = 20 ticks, so 5 seconds = 100 ticks
+        system.runTimeout(() => {
+            if (player && player.isValid) {
+                showBasicJournalUI(player);
+            }
+        }, 100); // TODO: Adjust this to match your audio file length
+    } catch (error) {
+        console.warn(`[BASIC JOURNAL] Error playing intro audio:`, error);
+        showBasicJournalUI(player);
+    }
+}
+
+function showGoalScreen(player) {
+    const form = new ActionFormData().title("§6Your Goal");
+    form.body(`§eThe Infection\n\n§7Your world has been infected by a mysterious white powder. Strange creatures called "Maple Bears" are spreading this infection.\n\n§eYour Objectives:\n§7• Survive the infection\n§7• Learn about the bears and their behavior\n§7• Discover how to cure yourself\n§7• Upgrade this journal to track your progress\n\n§7The infection gets worse over time. Stay alert!`);
+    form.button("§8Back");
+    form.show(player).then((res) => {
+        if (!res.canceled) showBasicJournalUI(player);
+    });
+}
+
+function showSettingsScreen(player) {
+    // Get or create settings
+    const settingsKey = `mb_player_settings_${player.id}`;
+    let rawSettings = world.getDynamicProperty(settingsKey);
+    
+    // Ensure we have a valid settings object
+    let settings = {};
+    if (rawSettings) {
+        // Try to parse if it's a JSON string, otherwise use as-is (for backwards compatibility)
+        let parsedSettings = rawSettings;
+        if (typeof rawSettings === 'string') {
+            try {
+                parsedSettings = JSON.parse(rawSettings);
+            } catch (e) {
+                // If parsing fails, use defaults
+                parsedSettings = null;
+            }
+        }
+        
+        if (parsedSettings && typeof parsedSettings === 'object') {
+            // Copy properties to ensure we have a clean object
+            settings = {
+                soundVolume: typeof parsedSettings.soundVolume === 'number' ? parsedSettings.soundVolume : 1.0,
+                showTips: parsedSettings.showTips !== false,
+                audioMessages: parsedSettings.audioMessages !== false
+            };
+        } else {
+            // Default settings
+            settings = {
+                soundVolume: 1.0,
+                showTips: true,
+                audioMessages: true
+            };
+        }
+    } else {
+        // Default settings
+        settings = {
+            soundVolume: 1.0,
+            showTips: true,
+            audioMessages: true
+        };
+    }
+    
+    // Ensure all settings exist and are correct types
+    if (settings.audioMessages === undefined) {
+        settings.audioMessages = true;
+    }
+    if (settings.soundVolume === undefined || typeof settings.soundVolume !== 'number') {
+        settings.soundVolume = 1.0;
+    }
+    if (settings.showTips === undefined) {
+        settings.showTips = true;
+    }
+    
+    // Extract values for form (ensure they're the right types)
+    const soundVolume = Number(settings.soundVolume);
+    const showTips = Boolean(settings.showTips);
+    const audioMessages = Boolean(settings.audioMessages);
+    
+    // Convert volume to integer scale (0-10) for slider (sliders only accept integers)
+    const volumeSliderValue = Math.round(soundVolume * 10);
+    
+    const form = new ModalFormData()
+        .title("§bSettings")
+        .slider("Sound Volume (0-10)", 0, 10, { valueStep: 1, defaultValue: volumeSliderValue })
+        .toggle("Show Tips", { defaultValue: showTips })
+        .toggle("Audio Messages", { defaultValue: audioMessages });
+    
+    form.show(player).then((response) => {
+        if (response.canceled) {
+            showBasicJournalUI(player);
+            return;
+        }
+        
+        // Ensure formValues are valid
+        if (response.formValues && response.formValues.length >= 3) {
+            // Get slider value (0-10) - ensure it's a valid number
+            const sliderValue = typeof response.formValues[0] === 'number' 
+                ? Math.max(0, Math.min(10, Math.round(Number(response.formValues[0]))))
+                : volumeSliderValue;
+            
+            // Convert to float (0-1) for storage, but ensure it's a proper number
+            const normalizedVolume = Math.round((sliderValue / 10) * 100) / 100; // Round to 2 decimal places
+            
+            // Get toggle values - ensure they're proper booleans
+            const showTipsValue = Boolean(response.formValues[1]);
+            const audioMessagesValue = Boolean(response.formValues[2]);
+            
+            // Create a new clean settings object with explicitly typed values
+            const newSettings = {
+                soundVolume: Number(normalizedVolume),
+                showTips: Boolean(showTipsValue),
+                audioMessages: Boolean(audioMessagesValue)
+            };
+            
+            try {
+                // Stringify the object for storage (like other dynamic properties in the codebase)
+                world.setDynamicProperty(settingsKey, JSON.stringify(newSettings));
+                player.sendMessage("§7Settings saved!");
+            } catch (error) {
+                console.warn(`[BASIC JOURNAL] Error saving settings:`, error);
+                player.sendMessage("§cError saving settings!");
+            }
+        }
+        showBasicJournalUI(player);
+    });
+}
+
+function showRecipeScreen(player) {
+    const form = new ActionFormData().title("§aRecipe: Powdery Journal");
+    form.body(`§ePowdery Journal Recipe\n\n§7Upgrade your Basic Journal to a Powdery Journal:\n\n§7Crafting Pattern:\n§7  S S S\n§7  S J S\n§7  S S S\n\n§7S = "snow" (mb:snow)\n§7J = Basic Journal\n\n§7The Powdery Journal will automatically track your infection status, discoveries, and bear encounters.`);
+    form.button("§8Back");
+    form.show(player).then((res) => {
+        if (!res.canceled) showBasicJournalUI(player);
+    });
+}
+
+function showTipsScreen(player) {
+    const form = new ActionFormData().title("§7Tips");
+    form.body(`§eSurvival Tips\n\n§7• Break "dusted dirt" blocks to collect "snow"\n§7• Eating "snow" gives temporary effects but increases infection\n§7• Maple Bears spread infection when they hit you\n§7• Explore infected biomes to learn more\n§7• Upgrade to Powdery Journal for detailed tracking\n\n§7Good luck, survivor!`);
+    form.button("§8Back");
+    form.show(player).then((res) => {
+        if (!res.canceled) showBasicJournalUI(player);
+    });
 }
