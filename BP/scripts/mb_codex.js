@@ -1518,7 +1518,12 @@ export function showCodexBook(player, context) {
         }
         form.button("§8Back");
         form.show(player).then((res) => {
-            if (!res || res.canceled) return openMain();
+            if (!res || res.canceled) {
+                // Play page turn sound when going back
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openMain();
+            }
 
             // Play page turn sound
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -1715,7 +1720,12 @@ export function showCodexBook(player, context) {
         
         form.button("§8Back");
         form.show(player).then((res) => {
-            if (!res || res.canceled) return openTimeline();
+            if (!res || res.canceled) {
+                // Play page turn sound when going back
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openTimeline();
+            }
 
             // Play page turn sound
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -1817,6 +1827,9 @@ export function showCodexBook(player, context) {
         form.body(body);
         form.button("§8Back");
         form.show(player).then((res) => {
+            // Play page turn sound when going back
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             openMain();
         });
     }
@@ -2601,17 +2614,11 @@ export function showCodexBook(player, context) {
                 .toggle("Show Search Button", { defaultValue: settings.showSearchButton !== false });
             
             form.show(player).then((res) => {
-                if (!res || res.canceled) {
-                    const volumeMultiplier = getPlayerSoundVolume(player);
-                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                    return openMain();
-                }
-                
                 const volumeMultiplier = getPlayerSoundVolume(player);
-                player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
                 
-                // Update settings from form values
-                if (res.formValues && res.formValues.length >= 6) {
+                // Save settings if form values exist (whether submitted or canceled)
+                // ModalFormData may provide formValues even when canceled if user interacted with form
+                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 6) {
                     // Convert slider value (0-10) back to float (0-1)
                     const sliderValue = typeof res.formValues[0] === 'number' 
                         ? Math.max(0, Math.min(10, Math.round(Number(res.formValues[0]))))
@@ -2625,7 +2632,7 @@ export function showCodexBook(player, context) {
                     settings.blockBreakVolume = typeof res.formValues[4] === 'number' ? Math.max(0, Math.min(2, res.formValues[4])) : breakVolIndex;
                     settings.showSearchButton = Boolean(res.formValues[5]);
                     
-                    // Save to codex
+                    // Save to codex (auto-save on any form close - submit or cancel)
                     saveCodex(player, codex);
                     
                     // Also save to Basic Journal settings for backwards compatibility
@@ -2641,38 +2648,20 @@ export function showCodexBook(player, context) {
                         console.warn(`[SETTINGS] Error saving Basic Journal settings:`, error);
                     }
                     
-                    // Show action buttons immediately as part of the same form experience
-                    const actionForm = new ActionFormData()
-                        .title("§eSettings")
-                        .body("§7Continue modifying settings");
-                    
-                    actionForm.button("§aGo back to menu", "textures/ui/confirm");
-                    actionForm.button("§bSave Settings", "textures/items/redstone");
-                    
-                    actionForm.show(player).then((actionRes) => {
-                        if (!actionRes || actionRes.canceled) {
-                            const volumeMultiplier = getPlayerSoundVolume(player);
-                            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                            return openMain();
-                        }
-                        
-                        const volumeMultiplier = getPlayerSoundVolume(player);
-                        player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
-                        
-                        if (actionRes.selection === 0) {
-                            // Done - go to main menu
-                            openMain();
-                        } else if (actionRes.selection === 1) {
-                            // Save Settings - refresh the settings form
-                            openSettings();
-                        } else {
-                            openMain();
-                        }
-                    }).catch(() => openMain());
+                    // Send confirmation message (consistent with Basic Journal)
+                    player.sendMessage("§7Settings saved!");
+                    player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
+                } else if (res && res.canceled) {
+                    // Form was canceled - if formValues aren't available, we can't save changes
+                    // This happens if user clicks cancel before interacting with form
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 } else {
-                    // No form values - just go back to main
-                    openMain();
+                    // Form was submitted but no values (shouldn't happen)
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 }
+                
+                // Return to main menu (settings auto-saved if formValues were available)
+                openMain();
             }).catch((error) => {
                 console.warn(`[SETTINGS] Error showing settings form:`, error);
                 console.warn(`[SETTINGS] Error stack:`, error?.stack);
@@ -2923,6 +2912,10 @@ export function isDebugEnabled(category, flag) {
 
 // --- Basic Journal UI Functions ---
 export function showBasicJournalUI(player) {
+    // Play journal open sound
+    const volumeMultiplier = getPlayerSoundVolume(player);
+    player.playSound("mb.codex_open", { pitch: 1.0, volume: 1.0 * volumeMultiplier });
+    
     const form = new ActionFormData().title("§6Basic Journal");
     
     // Get current day for context
@@ -2931,13 +2924,22 @@ export function showBasicJournalUI(player) {
     
     form.body(`§7Welcome to your world...\n\n${display.color}${display.symbols} Current Day: ${currentDay}\n\n§7This journal will help you understand what's happening.`);
     
-    form.button("§eYour Goal", "textures/items/snow_book");
+    form.button("§eYour Goal", "textures/items/mb_snow");
     form.button("§bSettings", "textures/ui/settings_glyph_color_2x");
     form.button("§aRecipe: Powdery Journal", "textures/items/snow_book");
-    form.button("§7Tips", "textures/items/book_writable");
+    form.button("§eTips", "textures/items/book_writable");
     
     form.show(player).then((response) => {
-        if (response.canceled) return;
+        if (response.canceled) {
+            // Play close sound when canceled
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_close", { pitch: 1.0, volume: 1.0 * volumeMultiplier });
+            return;
+        }
+        
+        // Play page turn sound when navigating
+        const volumeMultiplier = getPlayerSoundVolume(player);
+        player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
         
         switch (response.selection) {
             case 0:
@@ -2957,6 +2959,10 @@ export function showBasicJournalUI(player) {
 }
 
 export function showFirstTimeWelcomeScreen(player) {
+    // Play journal open sound
+    const volumeMultiplier = getPlayerSoundVolume(player);
+    player.playSound("mb.codex_open", { pitch: 1.0, volume: 1.0 * volumeMultiplier });
+    
     const form = new ActionFormData().title("§6Welcome to Your Journal");
     form.body(`§eWelcome, Survivor!\n\n§7This journal will help you understand what's happening in your world.\n\n§7Would you like to hear an audio introduction?\n\n§7(You can change this setting later)`);
     form.button("§aYes, Play Audio", "textures/ui/info");
@@ -2967,12 +2973,18 @@ export function showFirstTimeWelcomeScreen(player) {
             // If canceled, mark as opened and show normal menu
             const firstTimeKey = `mb_basic_journal_first_open_${player.id}`;
             world.setDynamicProperty(firstTimeKey, true);
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_close", { pitch: 1.0, volume: 1.0 * volumeMultiplier });
             showBasicJournalUI(player);
             return;
         }
         
         const firstTimeKey = `mb_basic_journal_first_open_${player.id}`;
         world.setDynamicProperty(firstTimeKey, true);
+        
+        // Play page turn sound
+        const volumeMultiplier = getPlayerSoundVolume(player);
+        player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
         
         if (response.selection === 0) {
             // Play audio intro
@@ -3049,7 +3061,16 @@ function showGoalScreen(player) {
     form.body(`§eThe Infection\n\n§7Your world has been infected by a mysterious white powder. Strange creatures called "Maple Bears" are spreading this infection.\n\n§eYour Objectives:\n§7• Survive the infection\n§7• Learn about the bears and their behavior\n§7• Discover how to cure yourself\n§7• Upgrade this journal to track your progress\n\n§7The infection gets worse over time. Stay alert!`);
     form.button("§8Back");
     form.show(player).then((res) => {
-        if (!res.canceled) showBasicJournalUI(player);
+        if (res.canceled) {
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_close", { pitch: 1.0, volume: 1.0 * volumeMultiplier });
+            return;
+        }
+        
+        // Play page turn sound when going back
+        const volumeMultiplier = getPlayerSoundVolume(player);
+        player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+        showBasicJournalUI(player);
     });
 }
 
@@ -3123,9 +3144,16 @@ function showSettingsScreen(player) {
     
     form.show(player).then((response) => {
         if (response.canceled) {
+            // Play page turn sound when going back
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             showBasicJournalUI(player);
             return;
         }
+        
+        // Play page turn sound when saving settings
+        const volumeMultiplier = getPlayerSoundVolume(player);
+        player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
         
         // Ensure formValues are valid
         if (response.formValues && response.formValues.length >= 3) {
@@ -3166,7 +3194,16 @@ function showRecipeScreen(player) {
     form.body(`§ePowdery Journal Recipe\n\n§7Upgrade your Basic Journal to a Powdery Journal:\n\n§7Crafting Pattern:\n§7  S S S\n§7  S J S\n§7  S S S\n\n§7S = "snow" (mb:snow)\n§7J = Basic Journal\n\n§7The Powdery Journal will automatically track your infection status, discoveries, and bear encounters.`);
     form.button("§8Back");
     form.show(player).then((res) => {
-        if (!res.canceled) showBasicJournalUI(player);
+        if (res.canceled) {
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_close", { pitch: 1.0, volume: 1.0 * volumeMultiplier });
+            return;
+        }
+        
+        // Play page turn sound when going back
+        const volumeMultiplier = getPlayerSoundVolume(player);
+        player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+        showBasicJournalUI(player);
     });
 }
 
@@ -3175,6 +3212,15 @@ function showTipsScreen(player) {
     form.body(`§eSurvival Tips\n\n§7• Break "dusted dirt" blocks to collect "snow"\n§7• Eating "snow" gives temporary effects but increases infection\n§7• Maple Bears spread infection when they hit you\n§7• Explore infected biomes to learn more\n§7• Upgrade to Powdery Journal for detailed tracking\n\n§7Good luck, survivor!`);
     form.button("§8Back");
     form.show(player).then((res) => {
-        if (!res.canceled) showBasicJournalUI(player);
+        if (res.canceled) {
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_close", { pitch: 1.0, volume: 1.0 * volumeMultiplier });
+            return;
+        }
+        
+        // Play page turn sound when going back
+        const volumeMultiplier = getPlayerSoundVolume(player);
+        player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+        showBasicJournalUI(player);
     });
 }
