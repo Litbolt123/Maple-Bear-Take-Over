@@ -5043,4 +5043,19 @@ try {
     console.warn("[MBI] Failed to expose debug command bridge:", err);
 }
 
+// --- Initialize Basic Journal for Existing Players on Script Load ---
+// This ensures players who load into an existing world (not joining) also get the journal
+system.runTimeout(() => {
+    try {
+        const allPlayers = world.getAllPlayers();
+        for (const player of allPlayers) {
+            if (player && player.isValid) {
+                giveBasicJournalIfNeeded(player);
+            }
+        }
+    } catch (error) {
+        console.warn(`[BASIC JOURNAL] Error initializing journals for existing players:`, error);
+    }
+}, 100); // 5 second delay to ensure world is fully loaded
+
 

@@ -2924,7 +2924,7 @@ export function showBasicJournalUI(player) {
     
     form.body(`§7Welcome to your world...\n\n${display.color}${display.symbols} Current Day: ${currentDay}\n\n§7This journal will help you understand what's happening.`);
     
-    form.button("§eYour Goal", "textures/items/mb_snow");
+    form.button("§0Your Goal", "textures/items/mb_snow");
     form.button("§bSettings", "textures/ui/settings_glyph_color_2x");
     form.button("§aRecipe: Powdery Journal", "textures/items/snow_book");
     form.button("§eTips", "textures/items/book_writable");
@@ -2965,8 +2965,8 @@ export function showFirstTimeWelcomeScreen(player) {
     
     const form = new ActionFormData().title("§6Welcome to Your Journal");
     form.body(`§eWelcome, Survivor!\n\n§7This journal will help you understand what's happening in your world.\n\n§7Would you like to hear an audio introduction?\n\n§7(You can change this setting later)`);
-    form.button("§aYes, Play Audio", "textures/ui/info");
-    form.button("§7Skip for Now", "textures/ui/info");
+    form.button("§aYes, Play Audio", "textures/ui/accept");
+    form.button("§7Skip for Now", "textures/ui/cancel");
     
     form.show(player).then((response) => {
         if (response.canceled) {
@@ -3058,7 +3058,7 @@ function playJournalIntroAudio(player) {
 
 function showGoalScreen(player) {
     const form = new ActionFormData().title("§6Your Goal");
-    form.body(`§eThe Infection\n\n§7Your world has been infected by a mysterious white powder. Strange creatures called "Maple Bears" are spreading this infection.\n\n§eYour Objectives:\n§7• Survive the infection\n§7• Learn about the bears and their behavior\n§7• Discover how to cure yourself\n§7• Upgrade this journal to track your progress\n\n§7The infection gets worse over time. Stay alert!`);
+    form.body(`§eThe Infection\n\n§7Your world has been infected by a mysterious white powder. Strange creatures called "Maple Bears" are spreading this infection.\n\n§eYour Objectives:\n§7• Survive the infection.\n§7• Learn about the bears and their behavior.\n§7• Discover how to cure yourself, if you get infected.\n§7• Upgrade this journal to track your progress.\n\n§7The infection gets worse over time. Stay alert!`);
     form.button("§8Back");
     form.show(player).then((res) => {
         if (res.canceled) {
@@ -3191,7 +3191,7 @@ function showSettingsScreen(player) {
 
 function showRecipeScreen(player) {
     const form = new ActionFormData().title("§aRecipe: Powdery Journal");
-    form.body(`§ePowdery Journal Recipe\n\n§7Upgrade your Basic Journal to a Powdery Journal:\n\n§7Crafting Pattern:\n§7  S S S\n§7  S J S\n§7  S S S\n\n§7S = "snow" (mb:snow)\n§7J = Basic Journal\n\n§7The Powdery Journal will automatically track your infection status, discoveries, and bear encounters.`);
+    form.body(`§ePowdery Journal Recipe\n\n§7Upgrade your Basic Journal to a Powdery Journal:\n\n§7Crafting Pattern:\n§7  S S S\n§7  S J S\n§7  S S S\n\n§7S = "snow"\n§7J = Basic Journal\n\n§7The Powdery Journal will automatically track your infection status, discoveries, and bear encounters.`);
     form.button("§8Back");
     form.show(player).then((res) => {
         if (res.canceled) {
