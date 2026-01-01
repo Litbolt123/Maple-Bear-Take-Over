@@ -271,13 +271,13 @@ const playerInventories = new Map();
  */
 
 // --- Unified Infection System Data ---
-const playerInfection = new Map(); // playerId -> InfectionState
-const bearHitCount = new Map(); // playerId -> hitCount (tracks hits before infection)
+export const playerInfection = new Map(); // playerId -> InfectionState
+export const bearHitCount = new Map(); // playerId -> hitCount (tracks hits before infection)
 const firstTimeMessages = new Map(); // playerId -> { hasBeenHit: false, hasBeenInfected: false, snowTier: 0 }
-const maxSnowLevels = new Map(); // playerId -> { maxLevel: 0, achievedAt: timestamp }
+export const maxSnowLevels = new Map(); // playerId -> { maxLevel: 0, achievedAt: timestamp }
 const infectionExperience = new Map(); // playerId -> { bearInfected, snowInfected, maxSeverity, effectsSeen }
 const INFECTION_TICKS = 24000 * 5; // 5 Minecraft days
-const HITS_TO_INFECT = 3; // Number of hits required to get infected
+export const HITS_TO_INFECT = 3; // Number of hits required to get infected
 // Random effect interval is now handled inline in the infection system
 
 // Snow consumption mechanics are now handled inline in the itemCompleteUse handler
@@ -4139,7 +4139,7 @@ function isPlayerImmune(player) {
  * @param {number} ticks
  * @returns {string}
  */
-function formatTicksDuration(ticks) {
+export function formatTicksDuration(ticks) {
     const totalSeconds = Math.max(0, Math.floor((ticks || 0) / 20));
     const days = Math.floor(totalSeconds / 86400);
     const hours = Math.floor((totalSeconds % 86400) / 3600);
@@ -4158,7 +4158,7 @@ function formatTicksDuration(ticks) {
  * @param {number} ms
  * @returns {string}
  */
-function formatMillisDuration(ms) {
+export function formatMillisDuration(ms) {
     const totalSeconds = Math.max(0, Math.floor((ms || 0) / 1000));
     const days = Math.floor(totalSeconds / 86400);
     const hours = Math.floor((totalSeconds % 86400) / 3600);
@@ -4521,7 +4521,7 @@ function isEquippableByBear(typeId) {
 
 // --- Cure Immunity System ---
 // Track players who are immune to infection after being cured
-const curedPlayers = new Map(); // playerId -> immunityEndTime
+export const curedPlayers = new Map(); // playerId -> immunityEndTime
 const CURE_IMMUNITY_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 // Test functions have been removed for playability

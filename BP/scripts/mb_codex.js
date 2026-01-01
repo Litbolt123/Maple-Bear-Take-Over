@@ -1,7 +1,7 @@
 import { system, world } from "@minecraft/server";
-import { ActionFormData } from "@minecraft/server-ui";
+import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTracker.js";
-import { ModalFormData } from "@minecraft/server-ui";
+import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels } from "./main.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
@@ -2924,10 +2924,73 @@ export function showBasicJournalUI(player) {
     
     form.body(`§7Welcome to your world...\n\n${display.color}${display.symbols} Current Day: ${currentDay}\n\n§7This journal will help you understand what's happening.`);
     
-    form.button("§0Your Goal", "textures/items/mb_snow");
-    form.button("§bSettings", "textures/ui/settings_glyph_color_2x");
-    form.button("§aRecipe: Powdery Journal", "textures/items/snow_book");
-    form.button("§eTips", "textures/items/book_writable");
+    const buttons = [];
+    const buttonActions = [];
+    const buttonIcons = [];
+    
+    buttons.push("§0Your Goal");
+    buttonIcons.push("textures/items/mb_snow");
+    buttonActions.push(() => showGoalScreen(player));
+    
+    buttons.push("§bSettings");
+    buttonIcons.push("textures/ui/settings_glyph_color_2x");
+    buttonActions.push(() => showSettingsScreen(player));
+    
+    buttons.push("§aRecipe: Powdery Journal");
+    buttonIcons.push("textures/items/snow_book");
+    buttonActions.push(() => showRecipeScreen(player));
+    
+    buttons.push("§eTips");
+    buttonIcons.push("textures/items/book_writable");
+    buttonActions.push(() => showTipsScreen(player));
+    
+    // Add debug/dev tools if player has cheats
+    const hasDebugOptions = (player.hasTag && player.hasTag("mb_cheats")) || Boolean(system?.isEnableCheats?.());
+    if (hasDebugOptions) {
+        buttons.push("§bDebug Menu");
+        buttonIcons.push(undefined); // No icon for debug menu
+        buttonActions.push(() => {
+            // Create context object for showCodexBook
+            const context = {
+                playerInfection,
+                curedPlayers,
+                formatTicksDuration,
+                formatMillisDuration,
+                HITS_TO_INFECT,
+                bearHitCount,
+                maxSnowLevels,
+                getCurrentDay,
+                getDayDisplayInfo
+            };
+            showCodexBook(player, context);
+        });
+        buttons.push("§cDeveloper Tools");
+        buttonIcons.push(undefined); // No icon for developer tools
+        buttonActions.push(() => {
+            // Create context object for showCodexBook
+            const context = {
+                playerInfection,
+                curedPlayers,
+                formatTicksDuration,
+                formatMillisDuration,
+                HITS_TO_INFECT,
+                bearHitCount,
+                maxSnowLevels,
+                getCurrentDay,
+                getDayDisplayInfo
+            };
+            showCodexBook(player, context);
+        });
+    }
+    
+    // Add buttons to form
+    for (let i = 0; i < buttons.length; i++) {
+        if (buttonIcons[i]) {
+            form.button(buttons[i], buttonIcons[i]);
+        } else {
+            form.button(buttons[i]);
+        }
+    }
     
     form.show(player).then((response) => {
         if (response.canceled) {
@@ -2941,19 +3004,8 @@ export function showBasicJournalUI(player) {
         const volumeMultiplier = getPlayerSoundVolume(player);
         player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
         
-        switch (response.selection) {
-            case 0:
-                showGoalScreen(player);
-                break;
-            case 1:
-                showSettingsScreen(player);
-                break;
-            case 2:
-                showRecipeScreen(player);
-                break;
-            case 3:
-                showTipsScreen(player);
-                break;
+        if (response.selection >= 0 && response.selection < buttonActions.length) {
+            buttonActions[response.selection]();
         }
     });
 }
@@ -2965,7 +3017,7 @@ export function showFirstTimeWelcomeScreen(player) {
     
     const form = new ActionFormData().title("§6Welcome to Your Journal");
     form.body(`§eWelcome, Survivor!\n\n§7This journal will help you understand what's happening in your world.\n\n§7Would you like to hear an audio introduction?\n\n§7(You can change this setting later)`);
-    form.button("§aYes, Play Audio", "textures/ui/accept");
+    form.button("§aYes, Play Audio", "textures/items/gold_ingot");
     form.button("§7Skip for Now", "textures/ui/cancel");
     
     form.show(player).then((response) => {
@@ -2986,12 +3038,12 @@ export function showFirstTimeWelcomeScreen(player) {
         const volumeMultiplier = getPlayerSoundVolume(player);
         player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
         
+        // Always show the menu first
+        showBasicJournalUI(player);
+        
         if (response.selection === 0) {
-            // Play audio intro
+            // Play audio intro in the background after showing menu
             playJournalIntroAudio(player);
-        } else {
-            // Skip - go to normal menu
-            showBasicJournalUI(player);
         }
     });
 }
@@ -3016,8 +3068,7 @@ function playJournalIntroAudio(player) {
     }
     
     if (settings && settings.audioMessages === false) {
-        // Audio disabled, skip to menu
-        showBasicJournalUI(player);
+        // Audio disabled, menu already shown
         return;
     }
     
@@ -3041,18 +3092,8 @@ function playJournalIntroAudio(player) {
         
         // Show message while audio plays
         player.sendMessage("§7Playing introduction...");
-        
-        // After audio, show normal menu
-        // Adjust timing (in ticks) based on your audio length
-        // 1 second = 20 ticks, so 5 seconds = 100 ticks
-        system.runTimeout(() => {
-            if (player && player.isValid) {
-                showBasicJournalUI(player);
-            }
-        }, 100); // TODO: Adjust this to match your audio file length
     } catch (error) {
         console.warn(`[BASIC JOURNAL] Error playing intro audio:`, error);
-        showBasicJournalUI(player);
     }
 }
 
