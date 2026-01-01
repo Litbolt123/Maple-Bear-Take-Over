@@ -799,10 +799,10 @@ export function mbiHandleMilestoneDay(day) {
                     world.sendMessage(`§8[MBI] §6Who is that over there...?`);
                     break;
                 case 8:
-                    world.sendMessage(`§8[MBI] §cIf you see one, run.`);
+                    world.sendMessage(`§8[MBI] §cThe sky is no longer safe. Flying Maple Bears have arrived.`);
                     break;
                 case 13:
-                    world.sendMessage(`§8[MBI] §7The infection has increased to new heights.`);
+                    world.sendMessage(`§8[MBI] §cIf you see one, run.`);
                     break;
                 case 20:
                     world.sendMessage(`§8[MBI] §7The air feels thin. Day 20 has settled in.`);

@@ -102,7 +102,7 @@
 							"minecraft:frozen_peaks",
 							"minecraft:stony_peaks"
 						],
-						"amount": 0.06,
+						"amount": 0.03,
 						"noise_frequency_scale": 3.5
 					},
 					{
@@ -116,7 +116,7 @@
 							"minecraft:grove",
 							"minecraft:snowy_slopes"
 						],
-						"amount": 0.06,
+						"amount": 0.01,
 						"noise_frequency_scale": 3.5
 					},
 					{
@@ -145,4 +145,3 @@
 		}
 	}
 }
-

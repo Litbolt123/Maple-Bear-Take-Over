@@ -137,6 +137,37 @@ const TORPEDO_BEAR_ID = "mb:torpedo_mb";
 const TORPEDO_BEAR_DAY20_ID = "mb:torpedo_mb_day20";
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
+// Track entities that consistently fail to spawn (to reduce error spam)
+// Map: entityId -> { failureCount: number, lastFailureTick: number, pendingRetries: number }
+const entitySpawnFailures = new Map();
+const MAX_FAILURES_BEFORE_SILENT = 3; // Stop logging errors after 3 failures, but keep trying to spawn
+const MAX_PENDING_RETRIES = 5; // Maximum number of delayed retries before giving up
+const RETRY_DELAY_TICKS = 100; // Wait 5 seconds (100 ticks) before retrying unregistered entities
+
+// Fallback entity mapping: if day 20 variant fails, try the previous variant
+const ENTITY_FALLBACKS = {
+    [INFECTED_BEAR_DAY20_ID]: INFECTED_BEAR_DAY13_ID,
+    [INFECTED_BEAR_DAY13_ID]: INFECTED_BEAR_DAY8_ID,
+    [INFECTED_BEAR_DAY8_ID]: INFECTED_BEAR_ID,
+    [BUFF_BEAR_DAY20_ID]: BUFF_BEAR_DAY13_ID,
+    [BUFF_BEAR_DAY13_ID]: BUFF_BEAR_ID,
+    [MINING_BEAR_DAY20_ID]: MINING_BEAR_ID,
+    [FLYING_BEAR_DAY20_ID]: FLYING_BEAR_DAY15_ID,
+    [FLYING_BEAR_DAY15_ID]: FLYING_BEAR_ID,
+    [TORPEDO_BEAR_DAY20_ID]: TORPEDO_BEAR_ID,
+    [DAY20_BEAR_ID]: DAY13_BEAR_ID,
+    [DAY13_BEAR_ID]: DAY8_BEAR_ID,
+    [DAY8_BEAR_ID]: DAY4_BEAR_ID,
+    [DAY4_BEAR_ID]: TINY_BEAR_ID
+};
+
+/**
+ * Get fallback entity ID if primary fails, or null if no fallback
+ */
+function getFallbackEntityId(entityId) {
+    return ENTITY_FALLBACKS[entityId] || null;
+}
+
 // ============================================================================
 // SECTION 3: BLOCK TYPE CONSTANTS AND HELPERS
 // ============================================================================
@@ -4723,12 +4754,69 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
             continue;
         }
         try {
-            const entity = dimension.spawnEntity(config.id, spawnLocation);
+            // Ensure entity ID is a valid string
+            if (!config.id || typeof config.id !== 'string') {
+                continue;
+            }
+            
+            // Try to spawn the primary entity
+            let entity = null;
+            let entityIdToSpawn = config.id;
+            let triedFallback = false;
+            
+            try {
+                entity = dimension.spawnEntity(entityIdToSpawn, spawnLocation);
+            } catch (spawnError) {
+                // Check if this is a "cannot convert to object" error (entity not registered)
+                // The error message can be in different formats, so check multiple ways
+                const errorMessage = spawnError?.message || String(spawnError) || '';
+                const errorString = errorMessage.toLowerCase();
+                const isRegistrationError = errorString.includes('cannot convert to object') || 
+                                          errorString.includes('cannot convert') ||
+                                          (spawnError?.name === 'TypeError' && errorString.includes('object'));
+                
+                if (isRegistrationError) {
+                    // Entity not registered yet - try fallback
+                    const fallbackId = getFallbackEntityId(entityIdToSpawn);
+                    if (fallbackId) {
+                        triedFallback = true;
+                        try {
+                            entity = dimension.spawnEntity(fallbackId, spawnLocation);
+                            entityIdToSpawn = fallbackId; // Update to fallback for tracking
+                            // Log successful fallback spawn
+                            debugLog('spawn', `${config.id} not registered, using fallback ${fallbackId}`);
+                        } catch (fallbackError) {
+                            // Fallback also failed - might also not be registered
+                            // Re-throw original error so it gets tracked
+                            throw spawnError;
+                        }
+                    } else {
+                        // No fallback available, re-throw original error
+                        throw spawnError;
+                    }
+                } else {
+                    // Different error, re-throw
+                    throw spawnError;
+                }
+            }
+            
             if (entity) {
+                // Clear failure tracking on successful spawn
+                if (entitySpawnFailures.has(config.id)) {
+                    entitySpawnFailures.delete(config.id);
+                }
+                if (triedFallback && entitySpawnFailures.has(entityIdToSpawn)) {
+                    entitySpawnFailures.delete(entityIdToSpawn);
+                }
+                
                 // Track successful spawn attempt
                 spawnAttemptCache.set(tileKey, { lastAttemptTick: now, success: true });
                 
-                debugLog('spawn', `${config.id} spawned at (${Math.floor(spawnLocation.x)}, ${Math.floor(spawnLocation.y)}, ${Math.floor(spawnLocation.z)})`);
+                if (triedFallback) {
+                    debugLog('spawn', `${config.id} failed, spawned fallback ${entityIdToSpawn} at (${Math.floor(spawnLocation.x)}, ${Math.floor(spawnLocation.y)}, ${Math.floor(spawnLocation.z)})`);
+                } else {
+                    debugLog('spawn', `${config.id} spawned at (${Math.floor(spawnLocation.x)}, ${Math.floor(spawnLocation.y)}, ${Math.floor(spawnLocation.z)})`);
+                }
                 lastSpawnTickByType.set(key, system.currentTick);
                 removeTileFromCache(player.id, candidate);
                 const originalIndex = tiles.findIndex(t => t.x === x && t.y === y && t.z === z);
@@ -4763,13 +4851,13 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
                     // Ignore snow placement errors
                 }
                 
-                // Update cached count
-                entityCounts[config.id] = (entityCounts[config.id] || 0) + 1;
+                // Update cached count (use the actual entity ID that spawned, not the config ID)
+                entityCounts[entityIdToSpawn] = (entityCounts[entityIdToSpawn] || 0) + 1;
                 spawnCount.value++;
                 globalSpawnCount++; // Increment global counter to prevent entity explosion with multiple players
                 // Track per-type spawn count
                 if (!spawnCount.perType) spawnCount.perType = {};
-                spawnCount.perType[config.id] = (spawnCount.perType[config.id] || 0) + 1;
+                spawnCount.perType[entityIdToSpawn] = (spawnCount.perType[entityIdToSpawn] || 0) + 1;
                 return true;
             } else {
                 // Track failed spawn attempt (entity spawn returned null)
@@ -4778,13 +4866,29 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
         } catch (error) {
             // Track failed spawn attempt (error during spawn)
             spawnAttemptCache.set(tileKey, { lastAttemptTick: now, success: false });
-            // Log spawn failures - these are important to track
-            errorLog(`Failed to spawn ${config.id}`, error, {
-                location: spawnLocation,
-                player: player.name,
-                dimension: dimension.id,
-                config: config.id
-            });
+            
+            // Track failure for this entity type (for error suppression only, not for blocking)
+            const failureInfo = entitySpawnFailures.get(config.id);
+            if (failureInfo) {
+                failureInfo.failureCount++;
+                failureInfo.lastFailureTick = now;
+            } else {
+                entitySpawnFailures.set(config.id, {
+                    failureCount: 1,
+                    lastFailureTick: now
+                });
+            }
+            
+            // Only log if we haven't exceeded the silent threshold (to reduce spam, but keep trying to spawn)
+            const currentFailureInfo = entitySpawnFailures.get(config.id);
+            if (currentFailureInfo && currentFailureInfo.failureCount < MAX_FAILURES_BEFORE_SILENT) {
+                errorLog(`Failed to spawn ${config.id}`, error, {
+                    location: spawnLocation,
+                    player: player.name,
+                    dimension: dimension.id,
+                    config: config.id
+                });
+            }
         }
     }
 
@@ -5399,12 +5503,31 @@ system.runInterval(() => {
                 const spawned = attemptSpawnType(player, dimension, playerPos, spacedTiles, config, configModifiers, entityCounts, spawnCount, nearbyPlayerCount, dimensionPlayerCount);
                 debugLog('spawn', `Successfully spawned ${config.id} for ${player.name}`, spawned);
             } catch (error) {
-                errorLog(`Error attempting spawn for ${config.id}`, error, {
-                    player: player.name,
-                    config: config.id,
-                    currentDay,
-                    dimension: dimension.id
-                });
+                // Track failure for this entity type (for error suppression only, not for blocking)
+                const failureInfo = entitySpawnFailures.get(config.id);
+                if (failureInfo) {
+                    failureInfo.failureCount++;
+                    failureInfo.lastFailureTick = system.currentTick;
+                } else {
+                    entitySpawnFailures.set(config.id, {
+                        failureCount: 1,
+                        lastFailureTick: system.currentTick
+                    });
+                }
+                
+                // Only log if we haven't exceeded the silent threshold (to reduce spam, but keep trying to spawn)
+                const currentFailureInfo = entitySpawnFailures.get(config.id);
+                if (currentFailureInfo && currentFailureInfo.failureCount < MAX_FAILURES_BEFORE_SILENT) {
+                    // Defensively access properties in case player/dimension became invalid
+                    const playerName = (player && typeof player.name !== 'undefined') ? player.name : 'unknown';
+                    const dimensionId = (dimension && typeof dimension.id !== 'undefined') ? dimension.id : 'unknown';
+                    errorLog(`Error attempting spawn for ${config.id}`, error, {
+                        player: playerName,
+                        config: config.id,
+                        currentDay,
+                        dimension: dimensionId
+                    });
+                }
             }
         }
         debugLog('spawn', `No active spawn configs for day ${currentDay}`, processedConfigs === 0);
