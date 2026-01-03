@@ -137,6 +137,80 @@ const TORPEDO_BEAR_ID = "mb:torpedo_mb";
 const TORPEDO_BEAR_DAY20_ID = "mb:torpedo_mb_day20";
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
+// ============================================================================
+// SECTION 2.1: ENTITY TYPE CONSTANTS AND CAPS
+// ============================================================================
+
+// Entity type constants
+const TINY_TYPE = "tiny";
+const INFECTED_TYPE = "infected";
+const MINING_TYPE = "mining";
+const FLYING_TYPE = "flying";
+const TORPEDO_TYPE = "torpedo";
+
+// Spawn caps for each type (all variants count toward the same cap)
+const ENTITY_TYPE_CAPS = {
+    [TINY_TYPE]: 75,
+    [INFECTED_TYPE]: 50,
+    [MINING_TYPE]: 20,
+    [FLYING_TYPE]: 30,
+    [TORPEDO_TYPE]: 10
+};
+
+// Map each entity ID to its type
+const ENTITY_TO_TYPE_MAP = {
+    // Tiny bears
+    [TINY_BEAR_ID]: TINY_TYPE,
+    [DAY4_BEAR_ID]: TINY_TYPE,
+    [DAY8_BEAR_ID]: TINY_TYPE,
+    [DAY13_BEAR_ID]: TINY_TYPE,
+    [DAY20_BEAR_ID]: TINY_TYPE,
+    // Infected bears
+    [INFECTED_BEAR_ID]: INFECTED_TYPE,
+    [INFECTED_BEAR_DAY8_ID]: INFECTED_TYPE,
+    [INFECTED_BEAR_DAY13_ID]: INFECTED_TYPE,
+    [INFECTED_BEAR_DAY20_ID]: INFECTED_TYPE,
+    // Mining bears
+    [MINING_BEAR_ID]: MINING_TYPE,
+    [MINING_BEAR_DAY20_ID]: MINING_TYPE,
+    // Flying bears
+    [FLYING_BEAR_ID]: FLYING_TYPE,
+    [FLYING_BEAR_DAY15_ID]: FLYING_TYPE,
+    [FLYING_BEAR_DAY20_ID]: FLYING_TYPE,
+    // Torpedo bears
+    [TORPEDO_BEAR_ID]: TORPEDO_TYPE,
+    [TORPEDO_BEAR_DAY20_ID]: TORPEDO_TYPE
+};
+
+/**
+ * Get the entity type for a given entity ID
+ * @param {string} entityId - The entity identifier
+ * @returns {string|null} - The type constant or null if not a Maple Bear
+ */
+function getEntityType(entityId) {
+    return ENTITY_TO_TYPE_MAP[entityId] || null;
+}
+
+/**
+ * Get the total count of all variants of a given type
+ * @param {Object} entityCounts - Object mapping entity IDs to their counts
+ * @param {string} type - The type constant (e.g., TINY_TYPE, INFECTED_TYPE)
+ * @returns {number} - Total count of all variants of that type
+ */
+function getTypeCount(entityCounts, type) {
+    if (!entityCounts || typeof entityCounts !== 'object' || !type) {
+        return 0;
+    }
+    
+    let total = 0;
+    for (const [entityId, count] of Object.entries(entityCounts)) {
+        if (getEntityType(entityId) === type) {
+            total += (count || 0);
+        }
+    }
+    return total;
+}
+
 // Track entities that consistently fail to spawn (to reduce error spam)
 // Map: entityId -> { failureCount: number, lastFailureTick: number, pendingRetries: number }
 const entitySpawnFailures = new Map();
@@ -4515,13 +4589,9 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
         return false; // Too many of this type nearby - stop spawning until some are killed
     }
     
-    // Check total nearby bears - stop spawning if 40+ bears within range
-    const totalNearbyBears = entityCounts && typeof entityCounts === 'object' 
-        ? Object.values(entityCounts).reduce((sum, count) => sum + (count || 0), 0)
-        : 0;
-    if (totalNearbyBears >= 40) {
-        return false; // Too many bears total - stop spawning
-    }
+    // Note: Type-based caps are now the primary control mechanism
+    // Global cap check removed - type caps (75 tiny, 50 infected, 20 mining, 30 flying, 10 torpedo) handle limits
+    // Maximum theoretical total if all types hit their caps: 185 bears
     
     // Check buff bear limit - dynamic cap based on nearby player count
     if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
@@ -4546,6 +4616,21 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
         
         if (buffBearCount >= maxBuffBears) {
             return false; // Too many buff bears for this player count - stop spawning
+        }
+    }
+    
+    // Check type-based spawn caps (all variants of a type count toward the same cap)
+    const entityType = getEntityType(config.id);
+    if (entityType && ENTITY_TYPE_CAPS[entityType] !== undefined) {
+        const typeCount = getTypeCount(entityCounts, entityType);
+        const typeCap = ENTITY_TYPE_CAPS[entityType];
+        
+        // Debug logging for type caps
+        if (typeCount >= typeCap) {
+            debugLog('spawn', `${config.id} (${entityType}): Type cap reached (${typeCount}/${typeCap}) - blocking spawn`);
+            return false; // Too many of this type nearby - stop spawning until some are killed
+        } else {
+            debugLog('spawn', `${config.id} (${entityType}): Type count ${typeCount}/${typeCap} - allowing spawn`);
         }
     }
 
@@ -5328,47 +5413,35 @@ system.runInterval(() => {
         const totalNearbyBears = entityCounts && typeof entityCounts === 'object' 
             ? Object.values(entityCounts).reduce((sum, count) => sum + (count || 0), 0)
             : 0;
-        debugLog('spawn', `${player.name}: ${totalNearbyBears} nearby bears, ${spacedTiles.length} spawn tiles available`);
         
-        // Performance optimization: Skip spawn processing if too many entities nearby
-        // This prevents expensive operations when area is already saturated
-        const MAX_NEARBY_BEARS = 50; // Hard limit - skip processing if exceeded
-        if (totalNearbyBears > MAX_NEARBY_BEARS) {
-            debugLog('spawn', `Skipping spawn processing for ${player.name} - too many nearby bears (${totalNearbyBears} > ${MAX_NEARBY_BEARS})`);
-            continue; // Skip this player entirely to prevent lag
+        // Debug: Show breakdown by type
+        const tinyCount = getTypeCount(entityCounts, TINY_TYPE);
+        const infectedCount = getTypeCount(entityCounts, INFECTED_TYPE);
+        const miningCount = getTypeCount(entityCounts, MINING_TYPE);
+        const flyingCount = getTypeCount(entityCounts, FLYING_TYPE);
+        const torpedoCount = getTypeCount(entityCounts, TORPEDO_TYPE);
+        const buffCount = (entityCounts[BUFF_BEAR_ID] || 0) + 
+                         (entityCounts[BUFF_BEAR_DAY13_ID] || 0) + 
+                         (entityCounts[BUFF_BEAR_DAY20_ID] || 0);
+        
+        debugLog('spawn', `${player.name}: ${totalNearbyBears} total bears nearby (Tiny: ${tinyCount}/75, Infected: ${infectedCount}/50, Mining: ${miningCount}/20, Flying: ${flyingCount}/30, Torpedo: ${torpedoCount}/10, Buff: ${buffCount}/dynamic), ${spacedTiles.length} spawn tiles available`);
+        
+        // Performance optimization: Skip spawn processing only if extremely high entity count
+        // Type-based caps are the primary control mechanism, but we keep a very high safety limit
+        // to prevent extreme lag (theoretical max with all type caps: 185 bears)
+        // Mining and torpedo bears are exempt from this cap - they cause mayhem and should always be able to spawn
+        const MAX_NEARBY_BEARS_SAFETY = 200; // Very high safety limit - only for extreme cases
+        // miningCount and torpedoCount already calculated above for debug logging
+        const nonMayhemBears = totalNearbyBears - miningCount - torpedoCount; // Count excluding mining/torpedo
+        
+        // Store whether we've hit the safety cap (for use when processing configs)
+        const hasHitSafetyCap = nonMayhemBears > MAX_NEARBY_BEARS_SAFETY;
+        if (hasHitSafetyCap) {
+            debugLog('spawn', `Safety cap reached for ${player.name} (${nonMayhemBears} non-mayhem bears > ${MAX_NEARBY_BEARS_SAFETY}), but allowing mining/torpedo spawns`);
         }
         
-        // For tight groups, check if ANY player in group has >30 bears (shared entity count check)
-        if (isTightGroupMode) {
-            let maxBearsInGroup = totalNearbyBears;
-            for (const otherPlayer of dimensionPlayers) {
-                if (otherPlayer.id === player.id) continue;
-                try {
-                    // Use batch entity counts if available
-                    let otherEntityCounts;
-                    if (batchEntityCounts.has(otherPlayer.id)) {
-                        otherEntityCounts = batchEntityCounts.get(otherPlayer.id);
-                    } else {
-                        otherEntityCounts = getEntityCountsForPlayer(otherPlayer, dimension, otherPlayer.location, dimensionPlayerCount);
-                    }
-                    // Ensure otherEntityCounts is always a valid object (fixes "cannot convert to object" errors)
-                    if (!otherEntityCounts || typeof otherEntityCounts !== 'object') {
-                        otherEntityCounts = {};
-                    }
-                    const otherTotalBears = Object.values(otherEntityCounts).reduce((sum, count) => sum + (count || 0), 0);
-                    maxBearsInGroup = Math.max(maxBearsInGroup, otherTotalBears);
-                } catch (error) {
-                    // Skip on error
-                }
-            }
-            if (maxBearsInGroup > 30) {
-                debugLog('spawn', `Skipping tight group - too many bears nearby (max: ${maxBearsInGroup})`);
-                continue; // Skip tight group if any player has >30 bears
-            }
-        } else if (totalNearbyBears > 30) {
-            debugLog('spawn', `Skipping ${player.name} - too many bears nearby (${totalNearbyBears})`);
-            continue; // Too many bears, skip this player
-        }
+        // Note: Removed the 30-bear global cap check - type-based caps now handle all spawn limiting
+        // Type caps: 75 tiny, 50 infected, 20 mining, 30 flying, 10 torpedo (buff bears have dynamic cap)
 
         // Check if single player (no group cache benefit)
         const isSinglePlayer = !useGroupCache || (dimensionPlayers && dimensionPlayers.length === 1);
@@ -5472,6 +5545,12 @@ system.runInterval(() => {
             if (config.id === TORPEDO_BEAR_ID && currentDay >= 20) shouldSkip = true; // Skip if day20+ torpedo variants available
             
             if (shouldSkip) continue;
+            
+            // Allow mining and torpedo bears to spawn even if safety cap is reached (they cause mayhem!)
+            const configType = getEntityType(config.id);
+            if (hasHitSafetyCap && configType !== MINING_TYPE && configType !== TORPEDO_TYPE) {
+                continue; // Skip non-mayhem types if safety cap is reached
+            }
             
             processedConfigs++;
             
