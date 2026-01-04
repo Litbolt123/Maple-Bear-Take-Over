@@ -159,7 +159,7 @@
 			"sounds": [
 				{
 					"name": "sounds/Block Sounds/'snow'_layer_hit",
-					"volume": 1
+					"volume": 0.2
 				}
 			]
 		},
@@ -171,7 +171,7 @@
 			"sounds": [
 				{
 					"name": "sounds/Block Sounds/'snow'_layer_step",
-					"volume": 1
+					"volume": 0.7
 				}
 			]
 		},
@@ -183,7 +183,7 @@
 			"sounds": [
 				{
 					"name": "sounds/Block Sounds/'snow'_layer_jump",
-					"volume": 1
+					"volume": 0.7
 				}
 			]
 		},
@@ -195,7 +195,7 @@
 			"sounds": [
 				{
 					"name": "sounds/Block Sounds/'snow'_layer_fall",
-					"volume": 1
+					"volume": 0.7
 				}
 			]
 		},
@@ -207,7 +207,7 @@
 			"sounds": [
 				{
 					"name": "sounds/Block Sounds/'snow'_layer_land",
-					"volume": 1
+					"volume": 0.7
 				}
 			]
 		},
@@ -219,7 +219,7 @@
 			"sounds": [
 				{
 					"name": "sounds/Block Sounds/'snow'_layer_break",
-					"volume": 1
+					"volume": 0.2
 				}
 			]
 		},

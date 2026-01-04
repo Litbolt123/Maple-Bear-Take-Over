@@ -48,7 +48,8 @@
 					16
 				]
 			},
-			"minecraft:loot": "loot_tables/blocks/snow_layer.json"
+			"minecraft:loot": "loot_tables/blocks/snow_layer.json",
+			"tag:minecraft:is_shovel_item_destructible": {}
 		}
 	}
 }

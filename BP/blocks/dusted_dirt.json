@@ -26,7 +26,8 @@
 			},
 			"minecraft:light_dampening": 15,
 			"minecraft:collision_box": true,
-			"minecraft:loot": "loot_tables/blocks/dusted_dirt.json"
+			"minecraft:loot": "loot_tables/blocks/dusted_dirt.json",
+			"tag:minecraft:is_shovel_item_destructible": {}
 		}
 	}
 }
