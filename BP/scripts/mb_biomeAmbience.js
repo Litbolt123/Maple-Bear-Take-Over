@@ -3,24 +3,25 @@
 // ============================================================================
 // Handles ambient sound playback when players are in infected biomes.
 // Plays looping biome ambience sounds based on current day progression.
+// Starts immediately when player joins if in infected biome.
 // ============================================================================
 
 import { system, world } from "@minecraft/server";
 import { getCurrentDay } from "./mb_dayTracker.js";
-import { getPlayerSoundVolume } from "./mb_codex.js";
+import { getPlayerSoundVolume, isDebugEnabled } from "./mb_codex.js";
 
 // Track active biome ambience per player
-// Map: playerId -> { soundId: string, biomeId: string, lastCheckTick: number }
+// Map: playerId -> { soundId: string, biomeId: string, lastCheckTick: number, biomeSize: string }
 const activeBiomeAmbience = new Map();
 
 // Infected biome identifiers
 const INFECTED_BIOME_IDS = [
-    "mb:mb_infected_biome_small",
-    "mb:mb_infected_biome_medium",
-    "mb:mb_infected_biome_large"
+    "mb:infected_biome_small",
+    "mb:infected_biome_medium",
+    "mb:infected_biome_large"
 ];
 
-// Biome ambience sound variants
+// Biome ambience sound variants (all sizes use same sounds)
 const BIOME_AMBIENCE_SOUNDS = [
     "biome.infected_ambient_1",
     "biome.infected_ambient_2",
@@ -28,8 +29,12 @@ const BIOME_AMBIENCE_SOUNDS = [
     "biome.infected_ambient_4"
 ];
 
-// Check interval (every 3 seconds = 60 ticks)
-const BIOME_CHECK_INTERVAL = 60;
+// Check intervals - more frequent when in biome
+const BIOME_CHECK_INTERVAL_OUT = 60; // Every 3 seconds when not in biome
+const BIOME_CHECK_INTERVAL_IN = 20; // Every 1 second when in biome (more frequent checks)
+
+// Sound restart interval (for continuous looping)
+const SOUND_RESTART_INTERVAL = 100; // Every 5 seconds
 
 /**
  * Get biome ambience sound based on current day
@@ -49,91 +54,192 @@ function getBiomeAmbienceSound(day) {
 }
 
 /**
- * Check if player is in an infected biome
+ * Get volume multiplier based on biome size
+ * Large biomes are slightly louder
  */
-function isInInfectedBiome(player) {
-    try {
-        const block = player.dimension.getBlock(player.location);
-        if (!block) return false;
-        
-        const biome = block.dimension.getBiome(block.location);
-        if (!biome) return false;
-        
-        const biomeId = biome.id;
-        return INFECTED_BIOME_IDS.includes(biomeId);
-    } catch (error) {
-        return false;
+function getBiomeVolumeMultiplier(biomeId) {
+    if (biomeId === "mb:infected_biome_large") {
+        return 1.15; // 15% louder for large biomes
+    }
+    return 1.0; // Normal volume for small and medium
+}
+
+/**
+ * Get base volume based on current day
+ * Volume increases as days progress, with a cap
+ * Day 1-5: 0.7 (quiet)
+ * Day 6-10: 0.75
+ * Day 11-15: 0.8
+ * Day 16-20: 0.9
+ * Day 21+: 1.0 (max cap)
+ */
+function getBiomeVolumeByDay(day) {
+    if (day <= 5) {
+        return 0.7; // Early days - quiet
+    } else if (day <= 10) {
+        return 0.75; // Early-mid days
+    } else if (day <= 15) {
+        return 0.8; // Mid days
+    } else if (day <= 20) {
+        return 0.9; // Late-mid days
+    } else {
+        return 1.0; // Late days - max volume (cap)
     }
 }
 
 /**
- * Main biome ambience check loop
+ * Check if player is in an infected biome and return biome info
+ */
+function getInfectedBiomeInfo(player) {
+    try {
+        if (!player || !player.isValid || !player.dimension) {
+            if (isDebugEnabled("biome_ambience", "biome_check")) {
+                console.warn(`[BIOME AMBIENCE DEBUG] ${player?.name || "unknown"}: Invalid player or dimension`);
+            }
+            return null;
+        }
+        
+        // Get biome directly from dimension at player location
+        const biome = player.dimension.getBiome(player.location);
+        if (!biome) {
+            if (isDebugEnabled("biome_ambience", "biome_check")) {
+                console.warn(`[BIOME AMBIENCE DEBUG] ${player.name}: No biome found at location ${JSON.stringify(player.location)}`);
+            }
+            return null;
+        }
+        
+        // Biome can be an object with .id or a string
+        const biomeId = typeof biome === "string" ? biome : (biome.id || null);
+        if (!biomeId) {
+            if (isDebugEnabled("biome_ambience", "biome_check")) {
+                console.warn(`[BIOME AMBIENCE DEBUG] ${player.name}: Biome found but no ID (type: ${typeof biome}, value: ${JSON.stringify(biome)})`);
+            }
+            return null;
+        }
+        
+        if (isDebugEnabled("biome_ambience", "biome_check")) {
+            console.warn(`[BIOME AMBIENCE DEBUG] ${player.name}: Biome ID = ${biomeId}, checking against: ${JSON.stringify(INFECTED_BIOME_IDS)}`);
+        }
+        
+        if (INFECTED_BIOME_IDS.includes(biomeId)) {
+            const size = biomeId.includes("large") ? "large" : (biomeId.includes("medium") ? "medium" : "small");
+            if (isDebugEnabled("biome_ambience", "biome_check")) {
+                console.warn(`[BIOME AMBIENCE DEBUG] ${player.name}: ✓ In infected biome (${biomeId}, size: ${size})`);
+            }
+            return {
+                id: biomeId,
+                size: size
+            };
+        } else {
+            if (isDebugEnabled("biome_ambience", "biome_check")) {
+                console.warn(`[BIOME AMBIENCE DEBUG] ${player.name}: ✗ Not in infected biome (${biomeId} not in list)`);
+            }
+        }
+        return null;
+    } catch (error) {
+        // Log error for debugging
+        if (isDebugEnabled("biome_ambience", "errors")) {
+            console.warn(`[BIOME AMBIENCE ERROR] Error getting biome info for ${player?.name || "unknown"}:`, error);
+        }
+        return null;
+    }
+}
+
+/**
+ * Check and update biome ambience for a player
+ */
+function checkBiomeAmbienceForPlayer(player, currentDay) {
+    try {
+        if (!player || !player.isValid) {
+            if (isDebugEnabled("biome_ambience", "player_check")) {
+                console.warn(`[BIOME AMBIENCE DEBUG] Invalid player in checkBiomeAmbienceForPlayer`);
+            }
+            return;
+        }
+        
+        const playerId = player.id;
+        const currentAmbience = activeBiomeAmbience.get(playerId);
+        const biomeInfo = getInfectedBiomeInfo(player);
+        
+        if (isDebugEnabled("biome_ambience", "player_check")) {
+            const biome = player.dimension.getBiome(player.location);
+            const biomeId = typeof biome === "string" ? biome : (biome?.id || "unknown");
+            console.warn(`[BIOME AMBIENCE DEBUG] ${player.name} (day ${currentDay}): biome=${biomeId}, inInfected=${!!biomeInfo}, activeAmbience=${!!currentAmbience}, tick=${system.currentTick}`);
+        }
+        
+        if (biomeInfo) {
+            // Player is in infected biome
+            const soundId = getBiomeAmbienceSound(currentDay);
+            const biomeSize = biomeInfo.size;
+            const volumeMultiplier = getBiomeVolumeMultiplier(biomeInfo.id);
+            
+            // Check if we need to start or continue playing ambience
+            const shouldRestart = !currentAmbience || 
+                                 currentAmbience.soundId !== soundId ||
+                                 currentAmbience.biomeSize !== biomeSize ||
+                                 (system.currentTick - currentAmbience.lastCheckTick) > SOUND_RESTART_INTERVAL;
+            
+            if (shouldRestart) {
+                // Start or restart ambience
+                const playerVolumeMultiplier = getPlayerSoundVolume(player);
+                const baseVolume = getBiomeVolumeByDay(currentDay); // Volume increases with day progression
+                const finalVolume = baseVolume * volumeMultiplier * playerVolumeMultiplier;
+                
+                try {
+                    player.playSound(soundId, {
+                        pitch: 1.0,
+                        volume: finalVolume
+                    });
+                    activeBiomeAmbience.set(playerId, {
+                        soundId: soundId,
+                        biomeId: biomeInfo.id,
+                        biomeSize: biomeSize,
+                        lastCheckTick: system.currentTick
+                    });
+                    console.warn(`[BIOME AMBIENCE] Playing ${soundId} for ${player.name} (day ${currentDay}, ${biomeSize} biome, volume ${finalVolume.toFixed(2)})`);
+                    if (isDebugEnabled("biome_ambience", "sound_playback")) {
+                        console.warn(`[BIOME AMBIENCE DEBUG] Sound details: baseVolume=${baseVolume.toFixed(2)}, biomeMultiplier=${volumeMultiplier.toFixed(2)}, playerMultiplier=${playerVolumeMultiplier.toFixed(2)}, finalVolume=${finalVolume.toFixed(2)}`);
+                    }
+                } catch (error) {
+                    // Log error to help debug
+                    if (isDebugEnabled("biome_ambience", "errors")) {
+                        console.warn(`[BIOME AMBIENCE ERROR] Error playing sound ${soundId} for ${player.name}:`, error);
+                    }
+                }
+            } else {
+                // Update last check tick (continuous playback)
+                currentAmbience.lastCheckTick = system.currentTick;
+            }
+        } else {
+            // Player left infected biome - stop ambience
+            if (currentAmbience) {
+                activeBiomeAmbience.delete(playerId);
+                console.warn(`[BIOME AMBIENCE] Stopped for ${player.name} (left infected biome)`);
+            }
+        }
+    } catch (error) {
+        console.warn(`[BIOME AMBIENCE] Error checking biome for player:`, error);
+    }
+}
+
+/**
+ * Main biome ambience check loop - slower interval when no players in biomes
  */
 system.runInterval(() => {
     try {
-        const currentDay = getCurrentDay();
-        if (currentDay < 2) return; // Don't play ambience before day 2
-        
         const allPlayers = world.getAllPlayers();
         if (allPlayers.length === 0) return;
         
+        const currentDay = getCurrentDay();
+        
         for (const player of allPlayers) {
-            if (!player || !player.isValid) continue;
-            
-            try {
-                const playerId = player.id;
-                const currentAmbience = activeBiomeAmbience.get(playerId);
-                const inInfectedBiome = isInInfectedBiome(player);
-                
-                if (inInfectedBiome) {
-                    // Player is in infected biome
-                    const soundId = getBiomeAmbienceSound(currentDay);
-                    
-                    // For looping sounds, restart every 5 seconds (100 ticks) to maintain continuous playback
-                    const shouldRestart = !currentAmbience || 
-                                         currentAmbience.soundId !== soundId ||
-                                         (system.currentTick - currentAmbience.lastCheckTick) > 100;
-                    
-                    if (shouldRestart) {
-                        // Start or restart ambience
-                        const volumeMultiplier = getPlayerSoundVolume(player);
-                        try {
-                            player.playSound(soundId, {
-                                pitch: 1.0,
-                                volume: 0.5 * volumeMultiplier
-                            });
-                            activeBiomeAmbience.set(playerId, {
-                                soundId: soundId,
-                                biomeId: "infected",
-                                lastCheckTick: system.currentTick
-                            });
-                            console.warn(`[BIOME AMBIENCE] Playing ${soundId} for ${player.name} (day ${currentDay})`);
-                        } catch (error) {
-                            // Log error to help debug
-                            console.warn(`[BIOME AMBIENCE] Error playing sound ${soundId} for ${player.name}:`, error);
-                        }
-                    } else {
-                        // Update last check tick
-                        currentAmbience.lastCheckTick = system.currentTick;
-                    }
-                } else {
-                    // Player left infected biome - stop ambience
-                    if (currentAmbience) {
-                        activeBiomeAmbience.delete(playerId);
-                        // Note: Minecraft Bedrock doesn't have a direct way to stop sounds,
-                        // but the sound will naturally fade when leaving the biome
-                    }
-                }
-            } catch (error) {
-                // Error handling for individual player - continue with next player
-                console.warn(`[BIOME AMBIENCE] Error checking biome for player:`, error);
-            }
+            checkBiomeAmbienceForPlayer(player, currentDay);
         }
         
         // Cleanup stale entries (players who left)
         const now = system.currentTick;
         for (const [playerId, ambience] of activeBiomeAmbience.entries()) {
-            if (now - ambience.lastCheckTick > BIOME_CHECK_INTERVAL * 2) {
+            if (now - ambience.lastCheckTick > BIOME_CHECK_INTERVAL_OUT * 3) {
                 // Player hasn't been checked in a while - likely disconnected
                 activeBiomeAmbience.delete(playerId);
             }
@@ -141,5 +247,68 @@ system.runInterval(() => {
     } catch (error) {
         console.warn(`[BIOME AMBIENCE] Error in main loop:`, error);
     }
-}, BIOME_CHECK_INTERVAL);
+}, BIOME_CHECK_INTERVAL_OUT);
 
+/**
+ * Fast check loop - runs more frequently when players are in biomes
+ */
+system.runInterval(() => {
+    try {
+        // Only run if there are active ambience entries (players in biomes)
+        if (activeBiomeAmbience.size === 0) return;
+        
+        const allPlayers = world.getAllPlayers();
+        if (allPlayers.length === 0) return;
+        
+        const currentDay = getCurrentDay();
+        
+        // Only check players who have active ambience (in biomes)
+        for (const player of allPlayers) {
+            if (!player || !player.isValid) continue;
+            const playerId = player.id;
+            if (activeBiomeAmbience.has(playerId)) {
+                checkBiomeAmbienceForPlayer(player, currentDay);
+            }
+        }
+    } catch (error) {
+        console.warn(`[BIOME AMBIENCE] Error in fast check loop:`, error);
+    }
+}, BIOME_CHECK_INTERVAL_IN);
+
+// Initialize ambience for players already in biomes when they join
+world.afterEvents.playerSpawn.subscribe((event) => {
+    const player = event.player;
+    if (!player || !player.isValid) return;
+    
+    // Small delay to ensure world is ready
+    system.runTimeout(() => {
+        try {
+            if (!player.isValid) return;
+            const biomeInfo = getInfectedBiomeInfo(player);
+            if (biomeInfo) {
+                const currentDay = getCurrentDay();
+                const soundId = getBiomeAmbienceSound(currentDay);
+                const volumeMultiplier = getBiomeVolumeMultiplier(biomeInfo.id);
+                const playerVolumeMultiplier = getPlayerSoundVolume(player);
+                const baseVolume = 0.8;
+                const finalVolume = baseVolume * volumeMultiplier * playerVolumeMultiplier;
+                
+                player.playSound(soundId, {
+                    pitch: 1.0,
+                    volume: finalVolume
+                });
+                
+                activeBiomeAmbience.set(player.id, {
+                    soundId: soundId,
+                    biomeId: biomeInfo.id,
+                    biomeSize: biomeInfo.size,
+                    lastCheckTick: system.currentTick
+                });
+                
+                console.warn(`[BIOME AMBIENCE] Initialized for ${player.name} on spawn (${biomeInfo.size} biome)`);
+            }
+        } catch (error) {
+            // Ignore initialization errors
+        }
+    }, 20); // 1 second delay
+});

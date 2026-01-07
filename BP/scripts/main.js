@@ -85,6 +85,7 @@ const INFECTED_BEAR_DAY8_ID = "mb:infected_day8";
 const INFECTED_BEAR_DAY13_ID = "mb:infected_day13";
 const INFECTED_BEAR_DAY20_ID = "mb:infected_day20";
 const BUFF_BEAR_ID = "mb:buff_mb";
+const BUFF_BEAR_DAY8_ID = "mb:buff_mb_day8";
 const BUFF_BEAR_DAY13_ID = "mb:buff_mb_day13";
 const BUFF_BEAR_DAY20_ID = "mb:buff_mb_day20";
 const FLYING_BEAR_ID = "mb:flying_mb";
@@ -386,6 +387,9 @@ function trackBearKill(player, bearType) {
             codex.mobs.buffBearKills = (codex.mobs.buffBearKills || 0) + 1;
             codex.mobs.variantKills.buffBear.original = (codex.mobs.variantKills.buffBear.original || 0) + 1;
             checkAndUnlockMobDiscovery(codex, player, "buffBearKills", "buffBearMobKills", "buffBearHits", "buffBearSeen", 1, "threatening", "buff_bear");
+        } else if (bearType === BUFF_BEAR_DAY8_ID) {
+            codex.mobs.buffBearKills = (codex.mobs.buffBearKills || 0) + 1;
+            codex.mobs.variantKills.buffBear.day8 = (codex.mobs.variantKills.buffBear.day8 || 0) + 1;
         } else if (bearType === BUFF_BEAR_DAY13_ID) {
             codex.mobs.buffBearKills = (codex.mobs.buffBearKills || 0) + 1;
             codex.mobs.variantKills.buffBear.day13 = (codex.mobs.variantKills.buffBear.day13 || 0) + 1;
@@ -1274,7 +1278,7 @@ function convertMobToMapleBear(deadMob, killer) {
                 const typeId = nearby.typeId;
                 if (mbTypePrefixes.some(prefix => typeId.startsWith(prefix))) {
                     totalBearCount++;
-                    if (typeId === BUFF_BEAR_ID || typeId === BUFF_BEAR_DAY13_ID || typeId === BUFF_BEAR_DAY20_ID) {
+                    if (typeId === BUFF_BEAR_ID || typeId === BUFF_BEAR_DAY8_ID || typeId === BUFF_BEAR_DAY13_ID || typeId === BUFF_BEAR_DAY20_ID) {
                         buffBearCount++;
                     }
                 }
@@ -1306,7 +1310,7 @@ function convertMobToMapleBear(deadMob, killer) {
         let bearSize = "normal";
         
         // Buff Maple Bears always spawn normal human-sized Maple Bears
-        if (killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY13_ID || killerType === BUFF_BEAR_DAY20_ID) {
+        if (killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY8_ID || killerType === BUFF_BEAR_DAY13_ID || killerType === BUFF_BEAR_DAY20_ID) {
             newBearType = MAPLE_BEAR_ID;
             bearSize = "normal";
         } else if (killerType === MAPLE_BEAR_ID || killerType === MAPLE_BEAR_DAY4_ID || killerType === MAPLE_BEAR_DAY8_ID || killerType === MAPLE_BEAR_DAY13_ID || killerType === MAPLE_BEAR_DAY20_ID) {
@@ -1394,10 +1398,13 @@ function convertMobToMapleBear(deadMob, killer) {
                     newBearType = BUFF_BEAR_DAY20_ID;
                     bearSize = "buff";
                 } else if (currentDay >= 13) {
-                    newBearType = BUFF_BEAR_ID; // Day 13+ Buff Maple Bears (swapped from day 8)
+                    newBearType = BUFF_BEAR_DAY13_ID; // Day 13+ Buff Maple Bears
+                    bearSize = "buff";
+                } else if (currentDay >= 8) {
+                    newBearType = BUFF_BEAR_DAY8_ID; // Day 8-12 Buff Maple Bears (from large mob kills)
                     bearSize = "buff";
                 } else {
-                    newBearType = INFECTED_BEAR_ID; // Original normal bears
+                    newBearType = INFECTED_BEAR_ID; // Before day 8 - normal bears
                     bearSize = "normal";
                 }
             } else {
@@ -1434,13 +1441,15 @@ function getMobSize(mobType) {
         "minecraft:bat", "minecraft:chicken", "minecraft:parrot", "minecraft:rabbit",
         "minecraft:silverfish", "minecraft:endermite", "minecraft:bee", "minecraft:cod",
         "minecraft:salmon", "minecraft:tropical_fish", "minecraft:pufferfish", "minecraft:tadpole", 
-        "minecraft:axolotl", "minecraft:armadillo", "minecraft:fox"
+        "minecraft:axolotl", "minecraft:armadillo", "minecraft:fox", "minecraft:cat", "minecraft:ocelot",
+        "minecraft:allay", "minecraft:frog", "minecraft:glow_squid", "minecraft:squid", "minecraft:turtle"
     ];
     
-    // Large/boss mobs that should spawn Buff Maple Bears (day 13+)
+    // Large/boss mobs that should spawn Buff Maple Bears (day 8+)
     const largeMobs = [
-        "minecraft:warden", "minecraft:sniffer", "minecraft:ravager", "minecraft:iron_golem", "minecraft:shulker",
-        "minecraft:elder_guardian", "minecraft:ender_dragon", "minecraft:wither", "minecraft:ghast"
+        "minecraft:warden", "minecraft:sniffer", "minecraft:ravager", "minecraft:iron_golem",
+        "minecraft:elder_guardian", "minecraft:ender_dragon", "minecraft:wither", "minecraft:ghast",
+        "minecraft:giant", "minecraft:shulker" // Shulker moved to large (was in normal but checked as large)
     ];
     
     // Normal-sized mobs (horses, cows, etc.) - these should spawn normal Maple Bears
@@ -1454,7 +1463,9 @@ function getMobSize(mobType) {
         "minecraft:vindicator", "minecraft:evoker", "minecraft:vex", "minecraft:zombified_piglin",
         "minecraft:piglin", "minecraft:piglin_brute", "minecraft:hoglin", "minecraft:zoglin",
         "minecraft:blaze", "minecraft:magma_cube", "minecraft:slime", "minecraft:phantom",
-        "minecraft:enderman", "minecraft:shulker"
+        "minecraft:enderman", "minecraft:villager", "minecraft:villager_v2", "minecraft:wandering_trader",
+        "minecraft:zombie_pigman", "minecraft:zombie_horse", "minecraft:skeleton_horse",
+        "minecraft:strider", "minecraft:guardian", "minecraft:wolf", "minecraft:panda", "minecraft:polar_bear"
     ];
     
     if (tinyMobs.includes(mobType)) {
@@ -2188,7 +2199,7 @@ function handleMobConversion(entity, killer) {
     const mapleBearKillerTypes = [
         MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
         INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-        BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+        BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
         FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
         MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
         TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
@@ -2201,7 +2212,7 @@ function handleMobConversion(entity, killer) {
         const allMapleBearTypes = [
             MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
             INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-            BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+            BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
             FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
             MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
             TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID
@@ -2229,7 +2240,7 @@ function handleMobConversion(entity, killer) {
                 const typeId = nearby.typeId;
                 if (mbTypePrefixes.some(prefix => typeId.startsWith(prefix))) {
                     totalBearCount++;
-                    if (typeId === BUFF_BEAR_ID || typeId === BUFF_BEAR_DAY13_ID || typeId === BUFF_BEAR_DAY20_ID) {
+                    if (typeId === BUFF_BEAR_ID || typeId === BUFF_BEAR_DAY8_ID || typeId === BUFF_BEAR_DAY13_ID || typeId === BUFF_BEAR_DAY20_ID) {
                         buffBearCount++;
                     }
                 }
@@ -2593,7 +2604,7 @@ function handleInfectedPlayerDeath(player, source) {
     const mapleBearTypes = [
         MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
         INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-        BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+        BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
         FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
         MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
         TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
@@ -2652,6 +2663,26 @@ world.afterEvents.entityDie.subscribe((event) => {
         return; // Exit early for player deaths
     }
     
+    // Handle day 8 buff bear transformation to day 13 buff bear when killed after day 13
+    if (entity.typeId === BUFF_BEAR_DAY8_ID && source && source.damagingEntity) {
+        const currentDay = getCurrentDay();
+        if (currentDay >= 13) {
+            try {
+                const location = entity.location;
+                const dimension = entity.dimension;
+                if (location && dimension) {
+                    // Transform day 8 buff bear into day 13 buff bear (spawn before entity dies)
+                    const newBear = dimension.spawnEntity(BUFF_BEAR_DAY13_ID, location);
+                    if (newBear) {
+                        console.warn(`[TRANSFORMATION] Day 8 buff bear transformed to day 13 buff bear (day ${currentDay})`);
+                    }
+                }
+            } catch (error) {
+                console.warn(`[TRANSFORMATION] Error transforming day 8 buff bear:`, error);
+            }
+        }
+    }
+    
     // Handle mob conversion when killed by Maple Bears
     if (source && source.damagingEntity && !(entity instanceof Player)) {
         handleMobConversion(entity, source.damagingEntity);
@@ -2671,7 +2702,7 @@ world.afterEvents.entityDie.subscribe((event) => {
         const mapleBearTypes = [
             MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
             INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-            BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+            BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
             FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
             MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
             TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
@@ -3009,7 +3040,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 const mapleBearTypes = [
                     MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
                     INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
-                    BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+                    BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
                     INFECTED_PIG_ID, INFECTED_COW_ID,
                     FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
                     MINING_BEAR_ID, MINING_BEAR_DAY20_ID,

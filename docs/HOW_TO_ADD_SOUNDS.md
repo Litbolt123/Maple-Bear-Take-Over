@@ -74,6 +74,10 @@ Add the sound to `RP/sounds/sound_definitions.json`:
 
 If the sound is triggered by entity events (ambient, attack, hurt, death, etc.), add it to `RP/sounds.json`:
 
+**⚠️ IMPORTANT: Use the Template Format**
+
+All sound events **MUST** use the full template format with adjustable `volume` and `pitch` for each event. This allows fine-tuning of each sound individually.
+
 ```json
 {
   "entity_sounds": {
@@ -84,18 +88,36 @@ If the sound is triggered by entity events (ambient, attack, hurt, death, etc.),
         "events": {
           "ambient": {
             "sound": "sound.identifier",
-            "volume": 0.8,
+            "volume": 0.6,
             "pitch": 1
           },
-          "attack": "sound.identifier",
-          "hurt": "sound.identifier",
-          "death": "sound.identifier"
+          "attack": {
+            "sound": "sound.identifier",
+            "volume": 0.7,
+            "pitch": 1
+          },
+          "hurt": {
+            "sound": "sound.identifier",
+            "volume": 0.7,
+            "pitch": 1
+          },
+          "death": {
+            "sound": "sound.identifier",
+            "volume": 0.7,
+            "pitch": 1
+          }
         }
       }
     }
   }
 }
 ```
+
+**Template Reference (from `mb:infected`):**
+- Each event has its own `volume` and `pitch` values
+- Volume typically ranges from 0.4-0.8 (lower = quieter)
+- Pitch typically ranges from 0.7-1.3 (lower = deeper, higher = sharper)
+- All values are adjustable per event for fine-tuning
 
 **Entity Event Types (Valid LevelSoundEvents):**
 - `"ambient"` - Idle/ambient sounds (plays periodically)
@@ -117,9 +139,12 @@ If you try to use these in `sounds.json`, you'll get errors like:
 [Sound][error]-sounds.json | entity_sounds | mb:entity | events | dive | Event name 'dive' is not a valid LevelSoundEvent
 ```
 
-**Short vs Long Format:**
-- Short format: `"ambient": "sound.identifier"` (uses default volume/pitch)
-- Long format: `"ambient": { "sound": "sound.identifier", "volume": 0.8, "pitch": 1 }` (custom volume/pitch)
+**Generic Bear Hurt Sound:**
+- Bears without custom hurt sounds should use `generic_bear_hurt`
+- Adjust pitch based on bear size:
+  - Large bears (buff): pitch 0.7 (deeper)
+  - Medium bears (torpedo, mining): pitch 0.8-0.9
+  - Small bears (flying): pitch 1.1-1.3 (higher)
 
 ---
 
@@ -135,15 +160,39 @@ If you try to use these in `sounds.json`, you'll get errors like:
 "mb:mb_day20": { ... }
 ```
 
-You can use the short format to reference the same sound:
+**Always use the full template format** for consistency and adjustability:
 ```json
 "mb:mb_day4": {
+  "volume": 1,
+  "pitch": 1,
   "events": {
-    "ambient": "tiny_mb.ambient",
-    "attack": "tiny_mb.attack"
+    "ambient": {
+      "sound": "tiny_mb.ambient",
+      "volume": 0.4,
+      "pitch": 1.3
+    },
+    "attack": {
+      "sound": "tiny_mb.attack",
+      "volume": 0.7,
+      "pitch": 1
+    },
+    "hurt": {
+      "sound": "tiny_mb.hurt",
+      "volume": 0.4,
+      "pitch": 1.2
+    },
+    "death": {
+      "sound": "tiny_mb.death",
+      "volume": 0.6,
+      "pitch": 1.1
+    }
   }
 }
 ```
+
+**Reusing Sounds with Different Pitch:**
+- Mining bears reuse infected bear sounds at lower pitch (0.8) since they're the same size
+- Example: `"sound": "infected_mb.ambient", "pitch": 0.8` makes it sound deeper
 
 ---
 
@@ -229,21 +278,65 @@ RP/sounds/tiny_mb/
         "volume": 1,
         "pitch": 1,
         "events": {
-          "ambient": "tiny_mb.ambient",
-          "attack": "tiny_mb.attack",
-          "hurt": "tiny_mb.hurt",
-          "death": "tiny_mb.death"
+          "ambient": {
+            "sound": "tiny_mb.ambient",
+            "volume": 0.6,
+            "pitch": 1
+          },
+          "attack": {
+            "sound": "tiny_mb.attack",
+            "volume": 0.7,
+            "pitch": 1
+          },
+          "hurt": {
+            "sound": "tiny_mb.hurt",
+            "volume": 0.6,
+            "pitch": 1
+          },
+          "death": {
+            "sound": "tiny_mb.death",
+            "volume": 0.6,
+            "pitch": 1
+          },
+          "step": {
+            "sound": "tiny_mb_step",
+            "volume": 1,
+            "pitch": 1
+          }
         }
       },
       "mb:mb_day4": {
+        "volume": 1,
+        "pitch": 1,
         "events": {
-          "ambient": "tiny_mb.ambient",
-          "attack": "tiny_mb.attack",
-          "hurt": "tiny_mb.hurt",
-          "death": "tiny_mb.death"
+          "ambient": {
+            "sound": "tiny_mb.ambient",
+            "volume": 0.4,
+            "pitch": 1.3
+          },
+          "attack": {
+            "sound": "tiny_mb.attack",
+            "volume": 0.7,
+            "pitch": 1
+          },
+          "hurt": {
+            "sound": "tiny_mb.hurt",
+            "volume": 0.4,
+            "pitch": 1.2
+          },
+          "death": {
+            "sound": "tiny_mb.death",
+            "volume": 0.6,
+            "pitch": 1.1
+          },
+          "step": {
+            "sound": "tiny_mb_step",
+            "volume": 1,
+            "pitch": 1.1
+          }
         }
       }
-      // ... all other variants
+      // ... all other variants using the same template format
     }
   }
 }
@@ -254,11 +347,14 @@ RP/sounds/tiny_mb/
 ## Common Mistakes to Avoid
 
 1. **Forgetting to update `RP/sounds.json`** - Entity sounds won't play without this!
-2. **Including `.wav` extension in paths** - Use `sounds/folder/file` not `sounds/folder/file.wav`
-3. **Not adding all entity variants** - Day 4, 8, 13, 20 variants all need entries
-4. **Wrong sound identifier format** - Use dots: `tiny_mb.ambient` not `tiny_mb_ambient`
-5. **Incorrect file paths** - Must match actual folder structure exactly
-6. **Missing sound definitions** - Script-triggered sounds still need `sound_definitions.json`
+2. **Using short format instead of template format** - Always use the full format with `volume` and `pitch` for each event
+3. **Including `.wav` extension in paths** - Use `sounds/folder/file` not `sounds/folder/file.wav`
+4. **Not adding all entity variants** - Day 4, 8, 13, 20 variants all need entries
+5. **Wrong sound identifier format** - Use dots: `tiny_mb.ambient` not `tiny_mb_ambient`
+6. **Incorrect file paths** - Must match actual folder structure exactly
+7. **Missing sound definitions** - Script-triggered sounds still need `sound_definitions.json`
+8. **Empty events objects** - Don't create entries with `"events": {}` - either add events or omit the entry
+9. **Forgetting generic hurt sounds** - Bears without custom hurt sounds should use `generic_bear_hurt` with appropriate pitch
 
 ---
 
@@ -302,9 +398,12 @@ When adding new sounds, ensure you:
 - [ ] Files placed in correct `RP/sounds/` subfolder
 - [ ] Sound definition added to `RP/sounds/sound_definitions.json`
 - [ ] Entity sound events added to `RP/sounds.json` (if entity sound)
+- [ ] **Using full template format** with `volume` and `pitch` for each event
 - [ ] All entity variants added (day 4, 8, 13, 20, etc.)
+- [ ] Generic hurt sound added for bears without custom hurt sounds
 - [ ] File paths don't include `.wav` extension
 - [ ] Sound identifiers use dots, not underscores
+- [ ] Volume and pitch values adjusted appropriately for bear size/type
 - [ ] Tested in-game to verify sounds play
 
 ---
@@ -312,7 +411,16 @@ When adding new sounds, ensure you:
 ## Additional Notes
 
 - **Sound volume**: Adjust in both `sound_definitions.json` and `sounds.json` if needed
+  - Typical volume ranges: 0.4-0.8 (lower = quieter)
+  - Infected and mining bears use lower volumes (0.45-0.55) for ambient/attack/hurt/death
+- **Pitch adjustments**: 
+  - Lower pitch (0.7-0.9) = deeper/slower sounds (for larger bears)
+  - Higher pitch (1.1-1.3) = sharper/faster sounds (for smaller bears)
+  - Normal pitch (1.0) = standard sound
+- **Reusing sounds**: You can reuse sounds from other bear types with different pitch/volume
+  - Example: Mining bears use infected bear sounds at pitch 0.8
 - **Distance**: `max_distance` in `sound_definitions.json` controls how far sounds can be heard
 - **Looping**: Script-triggered looping sounds need periodic restarts (every 100 ticks)
 - **Format**: `.wav` files work, but `.fsb` is more compressed (used for some existing sounds)
+- **Template format**: Always use the full format with `volume` and `pitch` for each event - this is the standard for all Maple Bear entities
 

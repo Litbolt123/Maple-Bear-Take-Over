@@ -39,7 +39,7 @@
 					"hurt": {
 						"sound": "generic_bear_hurt",
 						"volume": 0.8,
-						"pitch": 0.7
+						"pitch": 0.4
 					},
 					"roar": {
 						"sound": "buff_mb.roar",
@@ -321,7 +321,7 @@
 					"hurt": {
 						"sound": "generic_bear_hurt",
 						"volume": 0.8,
-						"pitch": 0.7
+						"pitch": 0.35
 					},
 					"roar": {
 						"sound": "buff_mb.roar",
@@ -342,7 +342,7 @@
 					"hurt": {
 						"sound": "generic_bear_hurt",
 						"volume": 0.8,
-						"pitch": 0.7
+						"pitch": 0.3
 					},
 					"roar": {
 						"sound": "buff_mb.roar",
@@ -410,7 +410,7 @@
 					},
 					"death": {
 						"sound": "infected_mb.death",
-						"volume": 0.55,
+						"volume": 0.4,
 						"pitch": 0.8
 					}
 				}
@@ -436,7 +436,7 @@
 					},
 					"death": {
 						"sound": "infected_mb.death",
-						"volume": 0.55,
+						"volume": 0.4,
 						"pitch": 0.8
 					}
 				}

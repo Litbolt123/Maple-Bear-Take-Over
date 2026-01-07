@@ -126,6 +126,7 @@ const INFECTED_BEAR_DAY8_ID = "mb:infected_day8";
 const INFECTED_BEAR_DAY13_ID = "mb:infected_day13";
 const INFECTED_BEAR_DAY20_ID = "mb:infected_day20";
 const BUFF_BEAR_ID = "mb:buff_mb";
+const BUFF_BEAR_DAY8_ID = "mb:buff_mb_day8";
 const BUFF_BEAR_DAY13_ID = "mb:buff_mb_day13";
 const BUFF_BEAR_DAY20_ID = "mb:buff_mb_day20";
 const FLYING_BEAR_ID = "mb:flying_mb";
@@ -222,6 +223,8 @@ const RETRY_DELAY_TICKS = 100; // Wait 5 seconds (100 ticks) before retrying unr
 // Map: playerId -> { soundId: string, lastCheckTick: number }
 const activeBuffAmbience = new Map();
 const BUFF_AMBIENCE_RANGE = 25; // Blocks
+const BUFF_AMBIENCE_FAST_CHECK_INTERVAL = 20; // Every 1 second when buff bear is nearby
+const BUFF_AMBIENCE_SLOW_CHECK_INTERVAL = 60; // Every 3 seconds when no buff bear nearby
 
 // Fallback entity mapping: if day 20 variant fails, try the previous variant
 const ENTITY_FALLBACKS = {
@@ -4599,8 +4602,9 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     // Maximum theoretical total if all types hit their caps: 185 bears
     
     // Check buff bear limit - dynamic cap based on nearby player count
-    if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
+    if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY8_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
         const buffBearCount = (entityCounts[BUFF_BEAR_ID] || 0) + 
+                             (entityCounts[BUFF_BEAR_DAY8_ID] || 0) + 
                              (entityCounts[BUFF_BEAR_DAY13_ID] || 0) + 
                              (entityCounts[BUFF_BEAR_DAY20_ID] || 0);
         
@@ -5001,7 +5005,7 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
 // Calculate per-type spawn limit per tick based on day and bear type
 function getPerTypeSpawnLimit(day, config) {
     // Per-type spawn limits to prevent one type from dominating
-    if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
+    if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY8_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
         return 1; // Buff bears always limited to 1 per tick
     }
     
@@ -5439,97 +5443,104 @@ system.runInterval(() => {
         const flyingCount = getTypeCount(entityCounts, FLYING_TYPE);
         const torpedoCount = getTypeCount(entityCounts, TORPEDO_TYPE);
         const buffCount = (entityCounts[BUFF_BEAR_ID] || 0) + 
+                         (entityCounts[BUFF_BEAR_DAY8_ID] || 0) + 
                          (entityCounts[BUFF_BEAR_DAY13_ID] || 0) + 
                          (entityCounts[BUFF_BEAR_DAY20_ID] || 0);
         
         debugLog('spawn', `${player.name}: ${totalNearbyBears} total bears nearby (Tiny: ${tinyCount}/75, Infected: ${infectedCount}/50, Mining: ${miningCount}/20, Flying: ${flyingCount}/30, Torpedo: ${torpedoCount}/10, Buff: ${buffCount}/dynamic), ${spacedTiles.length} spawn tiles available`);
         
         // Buff Bear Proximity Ambience Check
-        // Only check if buffCount > 0 (optimization - reuse existing count data)
+        // Only check if current day >= 8 (when day 8 buff bears can be created) and buffCount > 0
         try {
-            const playerId = player.id;
-            const currentAmbience = activeBuffAmbience.get(playerId);
-            
-            if (buffCount > 0) {
-                // Query for buff bears within 25 blocks specifically
-                const buffBearTypes = [BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID];
-                let nearestBuffBear = null;
-                let nearestDistanceSq = BUFF_AMBIENCE_RANGE * BUFF_AMBIENCE_RANGE;
+            // Skip buff bear ambience before day 8 (when day 8 buff bears can be created from large mob kills)
+            if (currentDay >= 8) {
+                const playerId = player.id;
+                const currentAmbience = activeBuffAmbience.get(playerId);
                 
-                // Check all buff bear types
-                for (const buffType of buffBearTypes) {
-                    const entities = dimension.getEntities({
-                        location: playerPos,
-                        maxDistance: BUFF_AMBIENCE_RANGE,
-                        type: buffType
-                    });
+                if (buffCount > 0) {
+                    // Query for buff bears within 25 blocks specifically
+                    const buffBearTypes = [BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID];
+                    let nearestBuffBear = null;
+                    let nearestDistanceSq = BUFF_AMBIENCE_RANGE * BUFF_AMBIENCE_RANGE;
                     
-                    for (const entity of entities) {
-                        if (!entity || !entity.isValid) continue;
-                        const dx = entity.location.x - playerPos.x;
-                        const dy = entity.location.y - playerPos.y;
-                        const dz = entity.location.z - playerPos.z;
-                        const distSq = dx * dx + dy * dy + dz * dz;
+                    // Check all buff bear types
+                    for (const buffType of buffBearTypes) {
+                        const entities = dimension.getEntities({
+                            location: playerPos,
+                            maxDistance: BUFF_AMBIENCE_RANGE,
+                            type: buffType
+                        });
                         
-                        if (distSq < nearestDistanceSq) {
-                            nearestDistanceSq = distSq;
-                            nearestBuffBear = entity;
+                        for (const entity of entities) {
+                            if (!entity || !entity.isValid) continue;
+                            const dx = entity.location.x - playerPos.x;
+                            const dy = entity.location.y - playerPos.y;
+                            const dz = entity.location.z - playerPos.z;
+                            const distSq = dx * dx + dy * dy + dz * dz;
+                            
+                            if (distSq < nearestDistanceSq) {
+                                nearestDistanceSq = distSq;
+                                nearestBuffBear = entity;
+                            }
                         }
                     }
-                }
-                
-                // If buff bear found within range
-                if (nearestBuffBear && nearestBuffBear.isValid) {
-                    // Check if we need to start or continue playing ambience
-                    const soundId = Math.random() < 0.5 ? "buff_mb.nearby_1" : "buff_mb.nearby_2";
                     
-                    // For looping sounds, restart every 5 seconds (100 ticks) to maintain continuous playback
-                    const shouldRestart = !currentAmbience || 
-                                         currentAmbience.soundId !== soundId ||
-                                         (system.currentTick - currentAmbience.lastCheckTick) > 100;
-                    
-                    if (shouldRestart) {
-                        // Start or restart ambience
-                        const volumeMultiplier = getPlayerSoundVolume(player);
-                        try {
-                            player.playSound(soundId, { 
-                                pitch: 1.0, 
-                                volume: 0.6 * volumeMultiplier 
-                            });
-                            activeBuffAmbience.set(playerId, { 
-                                soundId: soundId, 
-                                lastCheckTick: system.currentTick 
-                            });
-                            if (isDebugEnabled('spawn', 'all')) {
-                                console.warn(`[BUFF AMBIENCE] Playing ${soundId} for ${player.name} at distance ${Math.sqrt(nearestDistanceSq).toFixed(1)} blocks`);
+                    // If buff bear found within range
+                    if (nearestBuffBear && nearestBuffBear.isValid) {
+                        // Check if we need to start or continue playing ambience
+                        // Keep same sound once started for continuity
+                        const soundId = currentAmbience?.soundId || (Math.random() < 0.5 ? "buff_mb.nearby_1" : "buff_mb.nearby_2");
+                        
+                        // For looping sounds, restart every 5 seconds (100 ticks) to maintain continuous playback
+                        const shouldRestart = !currentAmbience || 
+                                             (system.currentTick - currentAmbience.lastCheckTick) > 100;
+                        
+                        if (shouldRestart) {
+                            // Start or restart ambience
+                            const volumeMultiplier = getPlayerSoundVolume(player);
+                            const baseVolume = 0.9; // Increased from 0.6 for better audibility
+                            try {
+                                player.playSound(soundId, { 
+                                    pitch: 1.0, 
+                                    volume: baseVolume * volumeMultiplier 
+                                });
+                                activeBuffAmbience.set(playerId, { 
+                                    soundId: soundId, 
+                                    lastCheckTick: system.currentTick 
+                                });
+                                // Always log buff ambience (not conditional on debug)
+                                console.warn(`[BUFF AMBIENCE] Playing ${soundId} for ${player.name} at distance ${Math.sqrt(nearestDistanceSq).toFixed(1)} blocks (volume ${(baseVolume * volumeMultiplier).toFixed(2)})`);
+                            } catch (error) {
+                                // Log error to help debug
+                                console.warn(`[BUFF AMBIENCE] Error playing sound ${soundId} for ${player.name}:`, error);
                             }
-                        } catch (error) {
-                            // Log error to help debug
-                            console.warn(`[BUFF AMBIENCE] Error playing sound ${soundId} for ${player.name}:`, error);
+                        } else {
+                            // Update last check tick (continuous playback)
+                            currentAmbience.lastCheckTick = system.currentTick;
                         }
                     } else {
-                        // Update last check tick
-                        currentAmbience.lastCheckTick = system.currentTick;
+                        // No buff bear in range - stop ambience if playing
+                        if (currentAmbience) {
+                            activeBuffAmbience.delete(playerId);
+                            console.warn(`[BUFF AMBIENCE] Stopped for ${player.name} (out of range)`);
+                        }
                     }
                 } else {
-                    // No buff bear in range - stop ambience if playing
+                    // No buff bears nearby - stop ambience if playing
                     if (currentAmbience) {
                         activeBuffAmbience.delete(playerId);
-                        // Note: Minecraft Bedrock doesn't have a direct way to stop sounds,
-                        // but the sound will naturally fade when out of range
                     }
                 }
             } else {
-                // No buff bears nearby - stop ambience if playing
-                if (currentAmbience) {
+                // Before day 8 - clear any existing ambience if day rolled back (safety check)
+                const playerId = player.id;
+                if (activeBuffAmbience.has(playerId)) {
                     activeBuffAmbience.delete(playerId);
                 }
             }
         } catch (error) {
             // Error handling for ambience check - don't break spawn system
-            if (isDebugEnabled('spawn', 'all')) {
-                console.warn(`[SPAWN] Error checking buff bear ambience for ${player.name}:`, error);
-            }
+            console.warn(`[SPAWN] Error checking buff bear ambience for ${player.name}:`, error);
         }
         
         // Performance optimization: Skip spawn processing only if extremely high entity count
@@ -5663,7 +5674,7 @@ system.runInterval(() => {
             try {
                 // Ensure modifiers is an object before spreading (fixes "cannot convert to object" error)
                 const configModifiers = modifiers && typeof modifiers === 'object' ? { ...modifiers } : {};
-                if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
+                if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY8_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
                     // Reduced multiplayer bonus for buff bears (was 0.5x, now less reduction)
                     // But still reduce chance when multiple players nearby
                     const playerCount = dimensionPlayers ? dimensionPlayers.length : 1;
@@ -5743,3 +5754,104 @@ system.runInterval(() => {
         errorLog(`Error in main spawn interval`, error, { currentDay: getCurrentDay() });
     }
 }, SCAN_INTERVAL);
+
+// ============================================================================
+// BUFF BEAR AMBIENCE FAST CHECK
+// ============================================================================
+// Separate fast-check interval for buff bear ambience when buff bears are nearby
+// Runs more frequently (every 1 second) when buff bear ambience is active
+// ============================================================================
+
+system.runInterval(() => {
+    try {
+        // Only run if current day >= 8 (when day 8 buff bears can be created)
+        const currentDay = getCurrentDay();
+        if (currentDay < 8) {
+            // Clear all active ambience if day rolled back
+            if (activeBuffAmbience.size > 0) {
+                activeBuffAmbience.clear();
+            }
+            return;
+        }
+        
+        // Only run if there are active buff ambience entries (buff bears nearby)
+        if (activeBuffAmbience.size === 0) return;
+        
+        const allPlayers = world.getAllPlayers();
+        if (allPlayers.length === 0) return;
+        
+        // Only check players who have active buff ambience
+        for (const player of allPlayers) {
+            if (!player || !player.isValid) continue;
+            const playerId = player.id;
+            if (!activeBuffAmbience.has(playerId)) continue;
+            
+            try {
+                const dimension = player.dimension;
+                if (!dimension) continue;
+                
+                const playerPos = player.location;
+                const currentAmbience = activeBuffAmbience.get(playerId);
+                
+                // Query for buff bears within range
+                const buffBearTypes = [BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID];
+                let nearestBuffBear = null;
+                let nearestDistanceSq = BUFF_AMBIENCE_RANGE * BUFF_AMBIENCE_RANGE;
+                
+                for (const buffType of buffBearTypes) {
+                    const entities = dimension.getEntities({
+                        location: playerPos,
+                        maxDistance: BUFF_AMBIENCE_RANGE,
+                        type: buffType
+                    });
+                    
+                    for (const entity of entities) {
+                        if (!entity || !entity.isValid) continue;
+                        const dx = entity.location.x - playerPos.x;
+                        const dy = entity.location.y - playerPos.y;
+                        const dz = entity.location.z - playerPos.z;
+                        const distSq = dx * dx + dy * dy + dz * dz;
+                        
+                        if (distSq < nearestDistanceSq) {
+                            nearestDistanceSq = distSq;
+                            nearestBuffBear = entity;
+                        }
+                    }
+                }
+                
+                // If buff bear still in range, continue/restart ambience
+                if (nearestBuffBear && nearestBuffBear.isValid) {
+                    const soundId = currentAmbience.soundId; // Keep same sound
+                    const shouldRestart = (system.currentTick - currentAmbience.lastCheckTick) > 100;
+                    
+                    if (shouldRestart) {
+                        const volumeMultiplier = getPlayerSoundVolume(player);
+                        const baseVolume = 0.9;
+                        try {
+                            player.playSound(soundId, {
+                                pitch: 1.0,
+                                volume: baseVolume * volumeMultiplier
+                            });
+                            activeBuffAmbience.set(playerId, {
+                                soundId: soundId,
+                                lastCheckTick: system.currentTick
+                            });
+                        } catch (error) {
+                            console.warn(`[BUFF AMBIENCE] Error playing sound ${soundId} for ${player.name}:`, error);
+                        }
+                    } else {
+                        currentAmbience.lastCheckTick = system.currentTick;
+                    }
+                } else {
+                    // Buff bear out of range - stop ambience
+                    activeBuffAmbience.delete(playerId);
+                    console.warn(`[BUFF AMBIENCE] Stopped for ${player.name} (out of range)`);
+                }
+            } catch (error) {
+                console.warn(`[BUFF AMBIENCE] Error in fast check for ${player.name}:`, error);
+            }
+        }
+    } catch (error) {
+        console.warn(`[BUFF AMBIENCE] Error in fast check loop:`, error);
+    }
+}, BUFF_AMBIENCE_FAST_CHECK_INTERVAL);
