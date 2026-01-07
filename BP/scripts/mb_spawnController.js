@@ -4952,7 +4952,20 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
             // Track failed spawn attempt (error during spawn)
             spawnAttemptCache.set(tileKey, { lastAttemptTick: now, success: false });
             
-            // Track failure for this entity type (for error suppression only, not for blocking)
+            // Check if this is a registration error - suppress immediately since fallback handles it
+            const errorMessage = error?.message || String(error) || '';
+            const errorString = errorMessage.toLowerCase();
+            const isRegistrationError = errorString.includes('cannot convert to object') || 
+                                      errorString.includes('cannot convert') ||
+                                      (error?.name === 'TypeError' && errorString.includes('object'));
+            
+            if (isRegistrationError) {
+                // Registration errors are handled by fallback system - don't log or track them
+                // The fallback will try to spawn an alternative entity
+                continue;
+            }
+            
+            // For non-registration errors, track and log as before
             const failureInfo = entitySpawnFailures.get(config.id);
             if (failureInfo) {
                 failureInfo.failureCount++;
@@ -5582,7 +5595,20 @@ system.runInterval(() => {
                 const spawned = attemptSpawnType(player, dimension, playerPos, spacedTiles, config, configModifiers, entityCounts, spawnCount, nearbyPlayerCount, dimensionPlayerCount);
                 debugLog('spawn', `Successfully spawned ${config.id} for ${player.name}`, spawned);
             } catch (error) {
-                // Track failure for this entity type (for error suppression only, not for blocking)
+                // Check if this is a registration error - suppress immediately since fallback handles it
+                const errorMessage = error?.message || String(error) || '';
+                const errorString = errorMessage.toLowerCase();
+                const isRegistrationError = errorString.includes('cannot convert to object') || 
+                                          errorString.includes('cannot convert') ||
+                                          (error?.name === 'TypeError' && errorString.includes('object'));
+                
+                if (isRegistrationError) {
+                    // Registration errors are handled by fallback system - don't log or track them
+                    // The fallback will try to spawn an alternative entity
+                    continue;
+                }
+                
+                // For non-registration errors, track and log as before
                 const failureInfo = entitySpawnFailures.get(config.id);
                 if (failureInfo) {
                     failureInfo.failureCount++;
