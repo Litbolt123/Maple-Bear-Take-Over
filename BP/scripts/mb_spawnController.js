@@ -7,7 +7,7 @@
 
 import { system, world } from "@minecraft/server";
 import { getCurrentDay, isMilestoneDay } from "./mb_dayTracker.js";
-import { isDebugEnabled } from "./mb_codex.js";
+import { isDebugEnabled, getPlayerSoundVolume } from "./mb_codex.js";
 
 // ============================================================================
 // SECTION 1: DEBUG AND ERROR LOGGING
@@ -217,6 +217,11 @@ const entitySpawnFailures = new Map();
 const MAX_FAILURES_BEFORE_SILENT = 3; // Stop logging errors after 3 failures, but keep trying to spawn
 const MAX_PENDING_RETRIES = 5; // Maximum number of delayed retries before giving up
 const RETRY_DELAY_TICKS = 100; // Wait 5 seconds (100 ticks) before retrying unregistered entities
+
+// Track active buff bear proximity ambience per player
+// Map: playerId -> { soundId: string, lastCheckTick: number }
+const activeBuffAmbience = new Map();
+const BUFF_AMBIENCE_RANGE = 25; // Blocks
 
 // Fallback entity mapping: if day 20 variant fails, try the previous variant
 const ENTITY_FALLBACKS = {
@@ -5438,6 +5443,94 @@ system.runInterval(() => {
                          (entityCounts[BUFF_BEAR_DAY20_ID] || 0);
         
         debugLog('spawn', `${player.name}: ${totalNearbyBears} total bears nearby (Tiny: ${tinyCount}/75, Infected: ${infectedCount}/50, Mining: ${miningCount}/20, Flying: ${flyingCount}/30, Torpedo: ${torpedoCount}/10, Buff: ${buffCount}/dynamic), ${spacedTiles.length} spawn tiles available`);
+        
+        // Buff Bear Proximity Ambience Check
+        // Only check if buffCount > 0 (optimization - reuse existing count data)
+        try {
+            const playerId = player.id;
+            const currentAmbience = activeBuffAmbience.get(playerId);
+            
+            if (buffCount > 0) {
+                // Query for buff bears within 25 blocks specifically
+                const buffBearTypes = [BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID];
+                let nearestBuffBear = null;
+                let nearestDistanceSq = BUFF_AMBIENCE_RANGE * BUFF_AMBIENCE_RANGE;
+                
+                // Check all buff bear types
+                for (const buffType of buffBearTypes) {
+                    const entities = dimension.getEntities({
+                        location: playerPos,
+                        maxDistance: BUFF_AMBIENCE_RANGE,
+                        type: buffType
+                    });
+                    
+                    for (const entity of entities) {
+                        if (!entity || !entity.isValid) continue;
+                        const dx = entity.location.x - playerPos.x;
+                        const dy = entity.location.y - playerPos.y;
+                        const dz = entity.location.z - playerPos.z;
+                        const distSq = dx * dx + dy * dy + dz * dz;
+                        
+                        if (distSq < nearestDistanceSq) {
+                            nearestDistanceSq = distSq;
+                            nearestBuffBear = entity;
+                        }
+                    }
+                }
+                
+                // If buff bear found within range
+                if (nearestBuffBear && nearestBuffBear.isValid) {
+                    // Check if we need to start or continue playing ambience
+                    const soundId = Math.random() < 0.5 ? "buff_mb.nearby_1" : "buff_mb.nearby_2";
+                    
+                    // For looping sounds, restart every 5 seconds (100 ticks) to maintain continuous playback
+                    const shouldRestart = !currentAmbience || 
+                                         currentAmbience.soundId !== soundId ||
+                                         (system.currentTick - currentAmbience.lastCheckTick) > 100;
+                    
+                    if (shouldRestart) {
+                        // Start or restart ambience
+                        const volumeMultiplier = getPlayerSoundVolume(player);
+                        try {
+                            player.playSound(soundId, { 
+                                pitch: 1.0, 
+                                volume: 0.6 * volumeMultiplier 
+                            });
+                            activeBuffAmbience.set(playerId, { 
+                                soundId: soundId, 
+                                lastCheckTick: system.currentTick 
+                            });
+                            if (isDebugEnabled('spawn', 'all')) {
+                                console.warn(`[BUFF AMBIENCE] Playing ${soundId} for ${player.name} at distance ${Math.sqrt(nearestDistanceSq).toFixed(1)} blocks`);
+                            }
+                        } catch (error) {
+                            // Log error to help debug
+                            console.warn(`[BUFF AMBIENCE] Error playing sound ${soundId} for ${player.name}:`, error);
+                        }
+                    } else {
+                        // Update last check tick
+                        currentAmbience.lastCheckTick = system.currentTick;
+                    }
+                } else {
+                    // No buff bear in range - stop ambience if playing
+                    if (currentAmbience) {
+                        activeBuffAmbience.delete(playerId);
+                        // Note: Minecraft Bedrock doesn't have a direct way to stop sounds,
+                        // but the sound will naturally fade when out of range
+                    }
+                }
+            } else {
+                // No buff bears nearby - stop ambience if playing
+                if (currentAmbience) {
+                    activeBuffAmbience.delete(playerId);
+                }
+            }
+        } catch (error) {
+            // Error handling for ambience check - don't break spawn system
+            if (isDebugEnabled('spawn', 'all')) {
+                console.warn(`[SPAWN] Error checking buff bear ambience for ${player.name}:`, error);
+            }
+        }
         
         // Performance optimization: Skip spawn processing only if extremely high entity count
         // Type-based caps are the primary control mechanism, but we keep a very high safety limit

@@ -9,6 +9,7 @@ import { collectedBlocks } from "./mb_miningAI.js";
 import "./mb_flyingAI.js";
 import "./mb_torpedoAI.js";
 import "./mb_dimensionAdaptation.js";
+import "./mb_biomeAmbience.js";
 
 // NOTE: Debug and testing features have been commented out for playability
 // To re-enable testing features, uncomment the following sections:
@@ -3039,6 +3040,17 @@ world.afterEvents.entityHurt.subscribe((event) => {
             } else if (mobType === FLYING_BEAR_ID || mobType === FLYING_BEAR_DAY15_ID || mobType === FLYING_BEAR_DAY20_ID) {
                 codex.mobs.flyingBearHits = (codex.mobs.flyingBearHits || 0) + 1;
                 checkAndUnlockMobDiscovery(codex, player, "flyingBearKills", "flyingBearMobKills", "flyingBearHits", "flyingBearSeen", 2, "dangerous", "flying_bear");
+                
+                // Play dive attack sound when flying bear attacks
+                try {
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("flying_mb.dive", {
+                        pitch: 1.0,
+                        volume: 0.9 * volumeMultiplier
+                    });
+                } catch {
+                    // Ignore sound errors
+                }
             } else if (mobType === MINING_BEAR_ID || mobType === MINING_BEAR_DAY20_ID) {
                 codex.mobs.miningBearHits = (codex.mobs.miningBearHits || 0) + 1;
                 checkAndUnlockMobDiscovery(codex, player, "miningBearKills", "miningBearMobKills", "miningBearHits", "miningBearSeen", 2, "dangerous", "mining_bear");

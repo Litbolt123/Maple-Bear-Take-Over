@@ -58,6 +58,8 @@ const AIR_BLOCKS = new Set([
 
 const flightRoleMap = new Map();
 const lastSeenTargetTick = new Map(); // Track when target was last seen (for passive wandering)
+const lastFlightSoundTick = new Map(); // Track last flight sound playback per entity
+const FLIGHT_SOUND_INTERVAL = 40; // Play flight sound every 2 seconds (40 ticks)
 
 function findTarget(entity, maxDistance = MAX_TARGET_DISTANCE) {
     const dimension = entity?.dimension;
@@ -387,6 +389,34 @@ system.runInterval(() => {
                 
                 adjustAltitude(entity, profile, groundY);
                 resolveCeilingCollision(entity);
+                
+                // Play periodic flight sound
+                const entityId = entity.id;
+                const lastSoundTick = lastFlightSoundTick.get(entityId) || 0;
+                if (tick - lastSoundTick >= FLIGHT_SOUND_INTERVAL) {
+                    try {
+                        const loc = entity.location;
+                        const dimension = entity.dimension;
+                        if (dimension && loc) {
+                            const volume = 0.7;
+                            const pitch = 0.9 + Math.random() * 0.2;
+                            if (dimension.playSound) {
+                                dimension.playSound("flying_mb.flight", loc, { volume, pitch });
+                            } else {
+                                const px = loc.x.toFixed(1);
+                                const py = loc.y.toFixed(1);
+                                const pz = loc.z.toFixed(1);
+                                dimension.runCommandAsync(
+                                    `playsound flying_mb.flight @a[x=${px},y=${py},z=${pz},r=32] ${px} ${py} ${pz} ${volume.toFixed(2)} ${pitch.toFixed(2)}`
+                                );
+                            }
+                            lastFlightSoundTick.set(entityId, tick);
+                        }
+                    } catch {
+                        // Ignore sound errors
+                    }
+                }
+                
                 const targetInfo = findTarget(entity);
                 
                 // Debug targeting info
@@ -423,6 +453,12 @@ system.runInterval(() => {
         for (const [entityId] of lastSeenTargetTick.entries()) {
             if (!seenIds.has(entityId)) {
                 lastSeenTargetTick.delete(entityId);
+            }
+        }
+        // Clean up flight sound tracking
+        for (const [entityId] of lastFlightSoundTick.entries()) {
+            if (!seenIds.has(entityId)) {
+                lastFlightSoundTick.delete(entityId);
             }
         }
     }

@@ -258,6 +258,248 @@
 					"volume": 1
 				}
 			]
+		},
+		"tiny_mb.ambient": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 16,
+			"sounds": [
+				{
+					"name": "sounds/tiny_mb/tiny_mb_ambient",
+					"volume": 0.6
+				}
+			]
+		},
+		"tiny_mb.attack": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 16,
+			"sounds": [
+				{
+					"name": "sounds/tiny_mb/tiny_mb_attack",
+					"volume": 0.7
+				}
+			]
+		},
+		"tiny_mb.hurt": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 16,
+			"sounds": [
+				{
+					"name": "sounds/tiny_mb/tiny_mb_hurt",
+					"volume": 0.6
+				}
+			]
+		},
+		"tiny_mb.death": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				{
+					"name": "sounds/tiny_mb/tiny_mb_death",
+					"volume": 0.6
+				}
+			]
+		},
+		"infected_mb.ambient": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				{
+					"name": "sounds/infected_mb/infected_mb_ambient",
+					"volume": 0.8
+				}
+			]
+		},
+		"infected_mb.attack": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 24,
+			"sounds": [
+				{
+					"name": "sounds/infected_mb/infected_mb_attack",
+					"volume": 0.8
+				}
+			]
+		},
+		"infected_mb.hurt": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 24,
+			"sounds": [
+				{
+					"name": "sounds/infected_mb/infected_mb_hurt",
+					"volume": 0.8
+				}
+			]
+		},
+		"generic_bear_hurt": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 24,
+			"sounds": [
+				{
+					"name": "sounds/generic_bear_hurt",
+					"volume": 0.7
+				}
+			]
+		},
+		"infected_mb.death": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				{
+					"name": "sounds/infected_mb/infected_mb_death",
+					"volume": 0.8
+				}
+			]
+		},
+		"buff_mb.roar": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 48,
+			"sounds": [
+				{
+					"name": "sounds/buff_mb/buff_mb_roar",
+					"volume": 1.0
+				}
+			]
+		},
+		"buff_mb.nearby_1": {
+			"category": "ambient",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				{
+					"name": "sounds/buff_mb/buff_mb_nearby_1",
+					"volume": 0.6
+				}
+			]
+		},
+		"buff_mb.nearby_2": {
+			"category": "ambient",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				{
+					"name": "sounds/buff_mb/buff_mb_nearby_2",
+					"volume": 0.6
+				}
+			]
+		},
+		"flying_mb.flight": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				{
+					"name": "sounds/flying_mb/flying_mb_flight",
+					"volume": 0.7
+				}
+			]
+		},
+		"flying_mb.dive": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 40,
+			"sounds": [
+				{
+					"name": "sounds/flying_mb/flying_mb_dive",
+					"volume": 0.9
+				}
+			]
+		},
+		"mining_mb.dig": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 24,
+			"sounds": [
+				{
+					"name": "sounds/mining_mb/mining_mb_dig",
+					"volume": 0.7
+				}
+			]
+		},
+		"torpedo_mb.flight": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				{
+					"name": "sounds/torpedo_mb/torpedo_mb_flight",
+					"volume": 0.7
+				}
+			]
+		},
+		"torpedo_mb.explode": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 48,
+			"sounds": [
+				{
+					"name": "sounds/torpedo_mb/torpedo_mb_explode",
+					"volume": 1.0
+				}
+			]
+		},
+		"torpedo_mb.death": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				{
+					"name": "sounds/torpedo_mb/torpedo_mb_death",
+					"volume": 0.8
+				}
+			]
+		},
+		"biome.infected_ambient_1": {
+			"category": "ambient",
+			"min_distance": 0,
+			"max_distance": 64,
+			"sounds": [
+				{
+					"name": "sounds/biome_infected/biome_infected_1",
+					"volume": 0.5
+				}
+			]
+		},
+		"biome.infected_ambient_2": {
+			"category": "ambient",
+			"min_distance": 0,
+			"max_distance": 64,
+			"sounds": [
+				{
+					"name": "sounds/biome_infected/biome_infected_2",
+					"volume": 0.5
+				}
+			]
+		},
+		"biome.infected_ambient_3": {
+			"category": "ambient",
+			"min_distance": 0,
+			"max_distance": 64,
+			"sounds": [
+				{
+					"name": "sounds/biome_infected/biome_infected_3",
+					"volume": 0.5
+				}
+			]
+		},
+		"biome.infected_ambient_4": {
+			"category": "ambient",
+			"min_distance": 0,
+			"max_distance": 64,
+			"sounds": [
+				{
+					"name": "sounds/biome_infected/biome_infected_4",
+					"volume": 0.5
+				}
+			]
 		}
 	}
 }

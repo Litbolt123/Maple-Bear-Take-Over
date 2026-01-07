@@ -32,6 +32,8 @@ const DIVE_COOLDOWN_TICKS = 40; // Cooldown between dives (2 seconds)
 const MAX_DIVE_DEPTH = 50; // Maximum blocks below cruise altitude before forced back up (high for maximum dive compatibility - allows diving all the way to ground)
 const STATE_MAP = new Map();
 const BREAK_COUNT_MAP = new Map(); // Track total blocks broken per entity
+const lastTorpedoFlightSoundTick = new Map(); // Track last flight sound playback per entity
+const TORPEDO_FLIGHT_SOUND_INTERVAL = 50; // Play flight sound every 2.5 seconds (50 ticks)
 const SEE_THROUGH_BREAK_COUNT = 3; // Break this many blocks before backing off
 const SEE_THROUGH_BACKOFF_TICKS = 20; // Back off for this many ticks
 const BREAK_SOUND_DEFAULT = "dig.stone";
@@ -92,7 +94,7 @@ function checkTorpedoExhaustion(entity, config) {
             
             // Play explosion sound
             try {
-                dimension.runCommand(`playsound mob.tnt.explode @a ${loc.x} ${loc.y} ${loc.z} 1 1`);
+                dimension.runCommand(`playsound torpedo_mb.explode @a ${loc.x} ${loc.y} ${loc.z} 1 1`);
             } catch { }
             
             // Place snow layers on blocks nearby (5 block radius) - only if there are nearby blocks
@@ -244,6 +246,11 @@ function cleanupStates(seen) {
     for (const [id] of BREAK_COUNT_MAP) {
         if (!seen.has(id)) {
             BREAK_COUNT_MAP.delete(id);
+        }
+    }
+    for (const [id] of lastTorpedoFlightSoundTick) {
+        if (!seen.has(id)) {
+            lastTorpedoFlightSoundTick.delete(id);
         }
     }
 }
@@ -1126,6 +1133,31 @@ function initializeTorpedoAI() {
                 
                 const state = getState(entity);
                 const loc = entity.location;
+                
+                // Play periodic flight sound
+                const entityId = entity.id;
+                const lastSoundTick = lastTorpedoFlightSoundTick.get(entityId) || 0;
+                if (currentTick - lastSoundTick >= TORPEDO_FLIGHT_SOUND_INTERVAL) {
+                    try {
+                        if (dimension && loc) {
+                            const volume = 0.7;
+                            const pitch = 0.9 + Math.random() * 0.2;
+                            if (dimension.playSound) {
+                                dimension.playSound("torpedo_mb.flight", loc, { volume, pitch });
+                            } else {
+                                const px = loc.x.toFixed(1);
+                                const py = loc.y.toFixed(1);
+                                const pz = loc.z.toFixed(1);
+                                dimension.runCommandAsync(
+                                    `playsound torpedo_mb.flight @a[x=${px},y=${py},z=${pz},r=32] ${px} ${py} ${pz} ${volume.toFixed(2)} ${pitch.toFixed(2)}`
+                                );
+                            }
+                            lastTorpedoFlightSoundTick.set(entityId, currentTick);
+                        }
+                    } catch {
+                        // Ignore sound errors
+                    }
+                }
                 
                 // Log first processing of each entity (once per entity, using state to track, only when debug enabled)
                 if (!state.activationLogged) {

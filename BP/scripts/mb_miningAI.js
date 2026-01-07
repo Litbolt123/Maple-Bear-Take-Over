@@ -879,6 +879,30 @@ function clearBlock(dimension, x, y, z, digContext, entity = null, targetInfo = 
         block.setType("minecraft:air");
         playBreakSound(dimension, x, y, z, originalType);
         
+        // Play mining dig sound if this is a mining bear
+        if (entity) {
+            const entityType = entity.typeId;
+            if (entityType === "mb:mining_mb" || entityType === "mb:mining_mb_day20") {
+                try {
+                    const location = { x: x + 0.5, y: y + 0.5, z: z + 0.5 };
+                    const volume = 0.7;
+                    const pitch = 0.9 + Math.random() * 0.2;
+                    if (dimension.playSound) {
+                        dimension.playSound("mining_mb.dig", location, { volume, pitch });
+                    } else {
+                        const px = location.x.toFixed(1);
+                        const py = location.y.toFixed(1);
+                        const pz = location.z.toFixed(1);
+                        dimension.runCommandAsync(
+                            `playsound mining_mb.dig @a[x=${px},y=${py},z=${pz},r=16] ${px} ${py} ${pz} ${volume.toFixed(2)} ${pitch.toFixed(2)}`
+                        );
+                    }
+                } catch {
+                    // Ignore sound errors
+                }
+            }
+        }
+        
         // Collect or drop the broken block (using natural drops, not silk touch)
         // Use blockToItemType to convert blocks to their natural drops (e.g., stone -> cobblestone, grass_block -> dirt)
         // This ensures blocks drop like player breaking (no silk touch)
