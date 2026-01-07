@@ -3796,8 +3796,9 @@ system.runInterval(() => {
     } catch { }
 }, 20); // check every second
 
-// --- Snow Layer Falling/Breaking System ---
+// --- Snow Layer Falling/Breaking System --- [ARCHIVED - Commented out for now]
 // Make snow layers fall or break when there's no solid block beneath them (like vanilla snow layers)
+/*
 system.runInterval(() => {
     try {
         // Only check snow layers near players for performance
@@ -3861,6 +3862,7 @@ system.runInterval(() => {
         // Skip errors in the main loop
     }
 }, 40); // Check every 2 seconds
+*/
 
 // --- Monitor infected pig porkchop collection ---
 world.afterEvents.itemCompleteUse.subscribe((event) => {
@@ -4716,8 +4718,109 @@ world.afterEvents.playerPlaceBlock.subscribe((event) => {
                 }
             });
         }
+        
+        // [ARCHIVED] Check if snow layer should fall (no solid block underneath)
+        /*
+        system.run(() => {
+            try {
+                const belowBlock = dim.getBlock(belowPos);
+                if (!belowBlock || belowBlock.isAir || belowBlock.isLiquid || 
+                    belowBlock.typeId === "minecraft:air" || 
+                    belowBlock.typeId === "minecraft:cave_air" ||
+                    belowBlock.typeId === "minecraft:void_air") {
+                    // No solid block underneath - make it fall
+                    const blockLoc = { x: block.x, y: block.y, z: block.z };
+                    block.setType("minecraft:air"); // Remove the placed block
+                    
+                    // Spawn falling block entity using command (more reliable)
+                    try {
+                        dim.runCommand(`summon minecraft:falling_block ${blockLoc.x} ${blockLoc.y} ${blockLoc.z} {BlockState: {Name: "mb:snow_layer"}}`);
+                    } catch {
+                        // Fallback: just break the block and drop item
+                        const itemStack = new ItemStack("mb:snow", 1);
+                        dim.spawnItem(itemStack, blockLoc);
+                    }
+                }
+            } catch {
+                // Ignore errors
+            }
+        });
+        */
     }
 });
+
+// [ARCHIVED] Track falling block entities to detect when they land
+/*
+const trackedFallingSnowLayers = new Map(); // Map<entityId, {dimension, x, y, z}>
+
+// Monitor falling blocks and detect when they land on snow layers
+system.runInterval(() => {
+    try {
+        for (const [entityId, data] of trackedFallingSnowLayers.entries()) {
+            try {
+                const dimension = world.getDimension(data.dimension);
+                if (!dimension) {
+                    trackedFallingSnowLayers.delete(entityId);
+                    continue;
+                }
+                
+                // Check if entity still exists
+                const entities = dimension.getEntities({ type: "minecraft:falling_block", location: { x: data.x, y: data.y, z: data.z }, maxDistance: 2 });
+                const entity = entities.find(e => e.id === entityId);
+                
+                if (!entity || !entity.isValid()) {
+                    // Entity no longer exists - it has landed
+                    // Check if a block was placed at the landing location
+                    const block = dimension.getBlock({ x: data.x, y: data.y, z: data.z });
+                    if (block && block.typeId === "mb:snow_layer") {
+                        // Falling block has landed - check if it's on another snow layer
+                        const belowPos = { x: data.x, y: data.y - 1, z: data.z };
+                        const belowBlock = dimension.getBlock(belowPos);
+                        
+                        if (belowBlock && (belowBlock.typeId === "mb:snow_layer" || belowBlock.typeId === "minecraft:snow_layer")) {
+                            // Landed on another snow layer - break it and drop item
+                            block.setType("minecraft:air");
+                            const itemStack = new ItemStack("mb:snow", 1);
+                            const dropLoc = { x: data.x + 0.5, y: data.y + 0.5, z: data.z + 0.5 };
+                            dimension.spawnItem(itemStack, dropLoc);
+                        }
+                    }
+                    trackedFallingSnowLayers.delete(entityId);
+                } else {
+                    // Update position tracking
+                    const loc = entity.location;
+                    data.x = Math.floor(loc.x);
+                    data.y = Math.floor(loc.y);
+                    data.z = Math.floor(loc.z);
+                }
+            } catch {
+                trackedFallingSnowLayers.delete(entityId);
+            }
+        }
+    } catch {
+        // Ignore errors
+    }
+}, 5); // Check every 5 ticks
+
+// Detect when falling_block entities are spawned (for snow layers)
+world.afterEvents.entitySpawn.subscribe((event) => {
+    const entity = event.entity;
+    if (entity.typeId === "minecraft:falling_block") {
+        try {
+            const loc = entity.location;
+            // Track all falling blocks - we'll check if they're snow layers when they land
+            trackedFallingSnowLayers.set(entity.id, {
+                dimension: entity.dimension.id,
+                x: Math.floor(loc.x),
+                y: Math.floor(loc.y),
+                z: Math.floor(loc.z)
+            });
+        } catch {
+            // Ignore errors
+        }
+    }
+});
+*/
 
 // Track block breaks to remove dusted_dirt from cache
 world.afterEvents.playerBreakBlock.subscribe((event) => {
