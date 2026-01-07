@@ -94,7 +94,7 @@ function checkTorpedoExhaustion(entity, config) {
             
             // Play explosion sound
             try {
-                dimension.runCommand(`playsound torpedo_mb.explode @a ${loc.x} ${loc.y} ${loc.z} 1 1`);
+                dimension.runCommand(`playsound torpedo_mb.explode @a ${loc.x} ${loc.y} ${loc.z} 0.75 1`);
             } catch { }
             
             // Place snow layers on blocks nearby (5 block radius) - only if there are nearby blocks
@@ -1137,7 +1137,11 @@ function initializeTorpedoAI() {
                 // Play periodic flight sound
                 const entityId = entity.id;
                 const lastSoundTick = lastTorpedoFlightSoundTick.get(entityId) || 0;
-                if (currentTick - lastSoundTick >= TORPEDO_FLIGHT_SOUND_INTERVAL) {
+                if (!system || typeof system.currentTick === 'undefined') {
+                    continue; // Skip if system is not available
+                }
+                const tick = system.currentTick;
+                if (tick - lastSoundTick >= TORPEDO_FLIGHT_SOUND_INTERVAL) {
                     try {
                         if (dimension && loc) {
                             const volume = 0.7;
@@ -1152,7 +1156,7 @@ function initializeTorpedoAI() {
                                     `playsound torpedo_mb.flight @a[x=${px},y=${py},z=${pz},r=32] ${px} ${py} ${pz} ${volume.toFixed(2)} ${pitch.toFixed(2)}`
                                 );
                             }
-                            lastTorpedoFlightSoundTick.set(entityId, currentTick);
+                            lastTorpedoFlightSoundTick.set(entityId, tick);
                         }
                     } catch {
                         // Ignore sound errors
@@ -1514,11 +1518,12 @@ function initializeTorpedoAI() {
         for (const [entityId, cached] of targetCache.entries()) {
             try {
                 // Check if entity still exists (this is expensive, so only do it occasionally)
-                if (currentTick % 100 === 0) {
+                const tick = system.currentTick;
+                if (tick % 100 === 0) {
                     // Every 5 seconds, clean up stale cache entries
                     // Check if entity ID is not in seen set (entity no longer valid this tick)
                     // or if cache entry has expired based on TARGET_CACHE_TICKS
-                    const cacheAge = currentTick - cached.tick;
+                    const cacheAge = tick - cached.tick;
                     if (!seen.has(entityId) || cacheAge >= TARGET_CACHE_TICKS) {
                         targetCache.delete(entityId);
                     }

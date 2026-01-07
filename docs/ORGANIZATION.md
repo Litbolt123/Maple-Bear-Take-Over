@@ -14,9 +14,33 @@ docs/
 │   └── SAFE_BIOMES.md           # Analysis of safer biomes
 │
 ├── development/                 # Development Planning & Mechanics
-│   ├── MECHANICS_SUMMARY.md     # Currently implemented mechanics
-│   ├── IDEA_BRAINSTORM.md       # 100+ feature ideas
-│   └── MINING_BEAR_INTELLIGENCE_PLAN.md  # Mining bear AI plan
+│   ├── guides/                  # How-to guides and tutorials
+│   │   └── HOW_TO_ADD_SOUNDS.md
+│   ├── sounds/                  # Sound-related documentation
+│   │   ├── SOUND_PROGRESS.md
+│   │   ├── SOUND_GENERATION_PROMPT.md
+│   │   └── maple_bear_sound_prompts.md
+│   ├── ai/                      # AI and behavior documentation
+│   │   ├── MINING_BEAR_INTELLIGENCE_PLAN.md
+│   │   ├── AI_OPTIMIZATION_AUDIT.md
+│   │   └── HEAT_SEEKING_VISION.md
+│   ├── systems/                 # System documentation
+│   │   ├── SPAWN_SYSTEM_EXPLANATION.md
+│   │   ├── BIOME_GENERATION_VARIABLE_SIZES.md
+│   │   ├── DIMENSION_ADAPTATIONS.md
+│   │   └── LEADER_DEATH_HANDLER.md
+│   ├── planning/                # Planning and brainstorming
+│   │   ├── IMPLEMENTATION_PLAN.md
+│   │   ├── TASK_PRIORITY.md
+│   │   └── IDEA_BRAINSTORM.md
+│   ├── tracking/                # Progress tracking and summaries
+│   │   ├── CHANGELOG.md
+│   │   ├── SESSION_SUMMARY.md
+│   │   └── MECHANICS_SUMMARY.md
+│   ├── prompts/                 # Prompt files for AI generation
+│   │   └── maple_bear_condensed_prompts.md
+│   └── testing/                 # Testing documentation
+│       └── TEST_SCENARIOS.md
 │
 ├── reference/                   # External Documentation Resources
 │   ├── DOCUMENTATION_INDEX.md   # Index of official docs

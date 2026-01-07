@@ -442,7 +442,7 @@
 			"sounds": [
 				{
 					"name": "sounds/torpedo_mb/torpedo_mb_explode",
-					"volume": 1.0
+					"volume": 0.75
 				}
 			]
 		},

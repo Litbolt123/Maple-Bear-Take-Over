@@ -34,6 +34,8 @@
 				"falling": "animation.infected.falling",
 				"falling2": "animation.infected.falling2",
 				"falling3": "animation.infected.falling3",
+				"falling4": "animation.infected.falling4",
+				"falling5": "animation.infected.falling5",
 				"infected_controller": "controller.animation.infected_mb_variant_0",
 				"attack_controller": "controller.animation.infected_mb_attack",
 				"death_particles": "animation.mb.death_particles"
