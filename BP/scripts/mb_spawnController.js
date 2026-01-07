@@ -5492,8 +5492,10 @@ system.runInterval(() => {
                         const soundId = currentAmbience?.soundId || (Math.random() < 0.5 ? "buff_mb.nearby_1" : "buff_mb.nearby_2");
                         
                         // For looping sounds, restart every 5 seconds (100 ticks) to maintain continuous playback
+                        // Use lastPlayTick (or lastCheckTick for backwards compatibility) to track when sound was last played
+                        const lastPlayTick = currentAmbience?.lastPlayTick || currentAmbience?.lastCheckTick || 0;
                         const shouldRestart = !currentAmbience || 
-                                             (system.currentTick - currentAmbience.lastCheckTick) > 100;
+                                             (system.currentTick - lastPlayTick) > 100;
                         
                         if (shouldRestart) {
                             // Start or restart ambience
@@ -5506,23 +5508,32 @@ system.runInterval(() => {
                                 });
                                 activeBuffAmbience.set(playerId, { 
                                     soundId: soundId, 
-                                    lastCheckTick: system.currentTick 
+                                    lastCheckTick: system.currentTick,
+                                    lastPlayTick: system.currentTick // Track when sound was actually played
                                 });
-                                // Always log buff ambience (not conditional on debug)
-                                console.warn(`[BUFF AMBIENCE] Playing ${soundId} for ${player.name} at distance ${Math.sqrt(nearestDistanceSq).toFixed(1)} blocks (volume ${(baseVolume * volumeMultiplier).toFixed(2)})`);
+                                // Log buff ambience only if debug enabled
+                                if (isDebugEnabled("spawn", "general")) {
+                                    console.warn(`[BUFF AMBIENCE] Playing ${soundId} for ${player.name} at distance ${Math.sqrt(nearestDistanceSq).toFixed(1)} blocks (volume ${(baseVolume * volumeMultiplier).toFixed(2)})`);
+                                }
                             } catch (error) {
-                                // Log error to help debug
-                                console.warn(`[BUFF AMBIENCE] Error playing sound ${soundId} for ${player.name}:`, error);
+                                // Log error only if debug enabled
+                                if (isDebugEnabled("spawn", "general")) {
+                                    console.warn(`[BUFF AMBIENCE] Error playing sound ${soundId} for ${player.name}:`, error);
+                                }
                             }
                         } else {
-                            // Update last check tick (continuous playback)
-                            currentAmbience.lastCheckTick = system.currentTick;
+                            // Update last check tick (but NOT lastPlayTick - that only updates when sound plays)
+                            if (currentAmbience) {
+                                currentAmbience.lastCheckTick = system.currentTick;
+                            }
                         }
                     } else {
                         // No buff bear in range - stop ambience if playing
                         if (currentAmbience) {
                             activeBuffAmbience.delete(playerId);
-                            console.warn(`[BUFF AMBIENCE] Stopped for ${player.name} (out of range)`);
+                            if (isDebugEnabled("spawn", "general")) {
+                                console.warn(`[BUFF AMBIENCE] Stopped for ${player.name} (out of range)`);
+                            }
                         }
                     }
                 } else {
@@ -5837,7 +5848,9 @@ system.runInterval(() => {
                                 lastCheckTick: system.currentTick
                             });
                         } catch (error) {
-                            console.warn(`[BUFF AMBIENCE] Error playing sound ${soundId} for ${player.name}:`, error);
+                            if (isDebugEnabled("spawn", "general")) {
+                                console.warn(`[BUFF AMBIENCE] Error playing sound ${soundId} for ${player.name}:`, error);
+                            }
                         }
                     } else {
                         currentAmbience.lastCheckTick = system.currentTick;
@@ -5845,13 +5858,19 @@ system.runInterval(() => {
                 } else {
                     // Buff bear out of range - stop ambience
                     activeBuffAmbience.delete(playerId);
-                    console.warn(`[BUFF AMBIENCE] Stopped for ${player.name} (out of range)`);
+                    if (isDebugEnabled("spawn", "general")) {
+                        console.warn(`[BUFF AMBIENCE] Stopped for ${player.name} (out of range)`);
+                    }
                 }
             } catch (error) {
-                console.warn(`[BUFF AMBIENCE] Error in fast check for ${player.name}:`, error);
+                if (isDebugEnabled("spawn", "general")) {
+                    console.warn(`[BUFF AMBIENCE] Error in fast check for ${player.name}:`, error);
+                }
             }
         }
     } catch (error) {
-        console.warn(`[BUFF AMBIENCE] Error in fast check loop:`, error);
+        if (isDebugEnabled("spawn", "general")) {
+            console.warn(`[BUFF AMBIENCE] Error in fast check loop:`, error);
+        }
     }
 }, BUFF_AMBIENCE_FAST_CHECK_INTERVAL);

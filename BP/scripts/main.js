@@ -1442,14 +1442,14 @@ function getMobSize(mobType) {
         "minecraft:silverfish", "minecraft:endermite", "minecraft:bee", "minecraft:cod",
         "minecraft:salmon", "minecraft:tropical_fish", "minecraft:pufferfish", "minecraft:tadpole", 
         "minecraft:axolotl", "minecraft:armadillo", "minecraft:fox", "minecraft:cat", "minecraft:ocelot",
-        "minecraft:allay", "minecraft:frog", "minecraft:glow_squid", "minecraft:squid", "minecraft:turtle"
+        "minecraft:allay", "minecraft:frog", "minecraft:squid"
     ];
     
     // Large/boss mobs that should spawn Buff Maple Bears (day 8+)
     const largeMobs = [
         "minecraft:warden", "minecraft:sniffer", "minecraft:ravager", "minecraft:iron_golem",
         "minecraft:elder_guardian", "minecraft:ender_dragon", "minecraft:wither", "minecraft:ghast",
-        "minecraft:giant", "minecraft:shulker" // Shulker moved to large (was in normal but checked as large)
+        "minecraft:giant"
     ];
     
     // Normal-sized mobs (horses, cows, etc.) - these should spawn normal Maple Bears
@@ -1464,8 +1464,8 @@ function getMobSize(mobType) {
         "minecraft:piglin", "minecraft:piglin_brute", "minecraft:hoglin", "minecraft:zoglin",
         "minecraft:blaze", "minecraft:magma_cube", "minecraft:slime", "minecraft:phantom",
         "minecraft:enderman", "minecraft:villager", "minecraft:villager_v2", "minecraft:wandering_trader",
-        "minecraft:zombie_pigman", "minecraft:zombie_horse", "minecraft:skeleton_horse",
-        "minecraft:strider", "minecraft:guardian", "minecraft:wolf", "minecraft:panda", "minecraft:polar_bear"
+        "minecraft:zombie_pigman", "minecraft:zombie_horse", "minecraft:skeleton_horse","minecraft:glow_squid", , "minecraft:turtle",
+        "minecraft:strider", "minecraft:guardian", "minecraft:wolf", "minecraft:panda", "minecraft:polar_bear", "minecraft:shulker" 
     ];
     
     if (tinyMobs.includes(mobType)) {

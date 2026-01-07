@@ -174,10 +174,12 @@ function checkBiomeAmbienceForPlayer(player, currentDay) {
             const volumeMultiplier = getBiomeVolumeMultiplier(biomeInfo.id);
             
             // Check if we need to start or continue playing ambience
+            // Use lastPlayTick (or lastCheckTick for backwards compatibility) to track when sound was last played
+            const lastPlayTick = currentAmbience?.lastPlayTick || currentAmbience?.lastCheckTick || 0;
             const shouldRestart = !currentAmbience || 
                                  currentAmbience.soundId !== soundId ||
                                  currentAmbience.biomeSize !== biomeSize ||
-                                 (system.currentTick - currentAmbience.lastCheckTick) > SOUND_RESTART_INTERVAL;
+                                 (system.currentTick - lastPlayTick) > SOUND_RESTART_INTERVAL;
             
             if (shouldRestart) {
                 // Start or restart ambience
@@ -194,11 +196,12 @@ function checkBiomeAmbienceForPlayer(player, currentDay) {
                         soundId: soundId,
                         biomeId: biomeInfo.id,
                         biomeSize: biomeSize,
-                        lastCheckTick: system.currentTick
+                        lastCheckTick: system.currentTick,
+                        lastPlayTick: system.currentTick // Track when sound was actually played
                     });
-                    console.warn(`[BIOME AMBIENCE] Playing ${soundId} for ${player.name} (day ${currentDay}, ${biomeSize} biome, volume ${finalVolume.toFixed(2)})`);
                     if (isDebugEnabled("biome_ambience", "sound_playback")) {
-                        console.warn(`[BIOME AMBIENCE DEBUG] Sound details: baseVolume=${baseVolume.toFixed(2)}, biomeMultiplier=${volumeMultiplier.toFixed(2)}, playerMultiplier=${playerVolumeMultiplier.toFixed(2)}, finalVolume=${finalVolume.toFixed(2)}`);
+                        console.warn(`[BIOME AMBIENCE] Playing ${soundId} for ${player.name} (day ${currentDay}, ${biomeSize} biome, volume ${finalVolume.toFixed(2)})`);
+                        console.warn(`[BIOME AMBIENCE DEBUG] Sound details: baseVolume=${baseVolume.toFixed(2)}, biomeMultiplier=${volumeMultiplier.toFixed(2)}, playerMultiplier=${playerVolumeMultiplier.toFixed(2)}, finalVolume=${finalVolume.toFixed(2)}, tick=${system.currentTick}`);
                     }
                 } catch (error) {
                     // Log error to help debug
@@ -207,18 +210,25 @@ function checkBiomeAmbienceForPlayer(player, currentDay) {
                     }
                 }
             } else {
-                // Update last check tick (continuous playback)
-                currentAmbience.lastCheckTick = system.currentTick;
+                // Update last check tick (but NOT lastPlayTick - that only updates when sound plays)
+                if (currentAmbience) {
+                    currentAmbience.lastCheckTick = system.currentTick;
+                }
             }
         } else {
             // Player left infected biome - stop ambience
             if (currentAmbience) {
                 activeBiomeAmbience.delete(playerId);
-                console.warn(`[BIOME AMBIENCE] Stopped for ${player.name} (left infected biome)`);
+                if (isDebugEnabled("biome_ambience", "sound_playback")) {
+                    console.warn(`[BIOME AMBIENCE] Stopped for ${player.name} (left infected biome)`);
+                    console.warn(`[BIOME AMBIENCE DEBUG] Stopped ambience for ${player.name}, was playing ${currentAmbience.soundId} in ${currentAmbience.biomeSize} biome`);
+                }
             }
         }
     } catch (error) {
-        console.warn(`[BIOME AMBIENCE] Error checking biome for player:`, error);
+        if (isDebugEnabled("biome_ambience", "errors")) {
+            console.warn(`[BIOME AMBIENCE ERROR] Error checking biome for player ${player?.name || "unknown"}:`, error);
+        }
     }
 }
 
@@ -232,6 +242,10 @@ system.runInterval(() => {
         
         const currentDay = getCurrentDay();
         
+        if (isDebugEnabled("biome_ambience", "loop_status")) {
+            console.warn(`[BIOME AMBIENCE DEBUG] Main loop: ${allPlayers.length} players, day ${currentDay}, ${activeBiomeAmbience.size} active ambience entries, tick ${system.currentTick}`);
+        }
+        
         for (const player of allPlayers) {
             checkBiomeAmbienceForPlayer(player, currentDay);
         }
@@ -241,11 +255,16 @@ system.runInterval(() => {
         for (const [playerId, ambience] of activeBiomeAmbience.entries()) {
             if (now - ambience.lastCheckTick > BIOME_CHECK_INTERVAL_OUT * 3) {
                 // Player hasn't been checked in a while - likely disconnected
+                if (isDebugEnabled("biome_ambience", "cleanup")) {
+                    console.warn(`[BIOME AMBIENCE DEBUG] Cleaning up stale ambience entry for player ${playerId} (last check: ${now - ambience.lastCheckTick} ticks ago)`);
+                }
                 activeBiomeAmbience.delete(playerId);
             }
         }
     } catch (error) {
-        console.warn(`[BIOME AMBIENCE] Error in main loop:`, error);
+        if (isDebugEnabled("biome_ambience", "errors")) {
+            console.warn(`[BIOME AMBIENCE ERROR] Error in main loop:`, error);
+        }
     }
 }, BIOME_CHECK_INTERVAL_OUT);
 
@@ -262,6 +281,10 @@ system.runInterval(() => {
         
         const currentDay = getCurrentDay();
         
+        if (isDebugEnabled("biome_ambience", "loop_status")) {
+            console.warn(`[BIOME AMBIENCE DEBUG] Fast check loop: ${activeBiomeAmbience.size} active ambience entries, checking ${allPlayers.length} players, tick ${system.currentTick}`);
+        }
+        
         // Only check players who have active ambience (in biomes)
         for (const player of allPlayers) {
             if (!player || !player.isValid) continue;
@@ -271,7 +294,9 @@ system.runInterval(() => {
             }
         }
     } catch (error) {
-        console.warn(`[BIOME AMBIENCE] Error in fast check loop:`, error);
+        if (isDebugEnabled("biome_ambience", "errors")) {
+            console.warn(`[BIOME AMBIENCE ERROR] Error in fast check loop:`, error);
+        }
     }
 }, BIOME_CHECK_INTERVAL_IN);
 
@@ -302,13 +327,23 @@ world.afterEvents.playerSpawn.subscribe((event) => {
                     soundId: soundId,
                     biomeId: biomeInfo.id,
                     biomeSize: biomeInfo.size,
-                    lastCheckTick: system.currentTick
+                    lastCheckTick: system.currentTick,
+                    lastPlayTick: system.currentTick // Track when sound was actually played
                 });
                 
-                console.warn(`[BIOME AMBIENCE] Initialized for ${player.name} on spawn (${biomeInfo.size} biome)`);
+                if (isDebugEnabled("biome_ambience", "initialization")) {
+                    console.warn(`[BIOME AMBIENCE] Initialized for ${player.name} on spawn (${biomeInfo.size} biome)`);
+                    console.warn(`[BIOME AMBIENCE DEBUG] Spawn initialization: ${player.name} in ${biomeInfo.id} (${biomeInfo.size}), sound=${soundId}, volume=${finalVolume.toFixed(2)}, day=${currentDay}`);
+                }
+            } else {
+                if (isDebugEnabled("biome_ambience", "initialization")) {
+                    console.warn(`[BIOME AMBIENCE DEBUG] Spawn initialization: ${player.name} NOT in infected biome`);
+                }
             }
         } catch (error) {
-            // Ignore initialization errors
+            if (isDebugEnabled("biome_ambience", "errors")) {
+                console.warn(`[BIOME AMBIENCE ERROR] Error in spawn initialization for ${player?.name || "unknown"}:`, error);
+            }
         }
     }, 20); // 1 second delay
 });

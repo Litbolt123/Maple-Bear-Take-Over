@@ -2381,6 +2381,7 @@ export function showCodexBook(player, context) {
         form.button("§fFlying AI");
         form.button("§fSpawn Controller");
         form.button("§fMain Script");
+        form.button("§fBiome Ambience");
         form.button("§8Back");
 
         form.show(player).then((res) => {
@@ -2390,7 +2391,7 @@ export function showCodexBook(player, context) {
                 return openMain();
             }
 
-            if (res.selection === 5) {
+            if (res.selection === 6) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openMain();
@@ -2404,6 +2405,7 @@ export function showCodexBook(player, context) {
                 case 2: return openFlyingDebugMenu(settings);
                 case 3: return openSpawnDebugMenu(settings);
                 case 4: return openMainDebugMenu(settings);
+                case 5: return openBiomeAmbienceDebugMenu(settings);
                 default: return openDebugMenu();
             }
         }).catch(() => openMain());
@@ -2579,6 +2581,45 @@ export function showCodexBook(player, context) {
                 console.warn(`[DEBUG MENU] Main Script ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
             }
                 return openMainDebugMenu(getDebugSettings(player));
+        }).catch(() => openDebugMenu());
+    }
+
+    function openBiomeAmbienceDebugMenu(settings) {
+        const biome = settings.biome_ambience || {};
+        const form = new ActionFormData().title("§bBiome Ambience Debug");
+        form.body(`§7Toggle debug logging for Biome Ambience:\n\n§8Current settings:\n§7• Biome Check: ${biome.biome_check ? "§aON" : "§cOFF"}\n§7• Player Check: ${biome.player_check ? "§aON" : "§cOFF"}\n§7• Sound Playback: ${biome.sound_playback ? "§aON" : "§cOFF"}\n§7• Loop Status: ${biome.loop_status ? "§aON" : "§cOFF"}\n§7• Initialization: ${biome.initialization ? "§aON" : "§cOFF"}\n§7• Cleanup: ${biome.cleanup ? "§aON" : "§cOFF"}\n§7• Errors: ${biome.errors ? "§aON" : "§cOFF"}`);
+        
+        form.button(`§${biome.biome_check ? "a" : "c"}Biome Check`);
+        form.button(`§${biome.player_check ? "a" : "c"}Player Check`);
+        form.button(`§${biome.sound_playback ? "a" : "c"}Sound Playback`);
+        form.button(`§${biome.loop_status ? "a" : "c"}Loop Status`);
+        form.button(`§${biome.initialization ? "a" : "c"}Initialization`);
+        form.button(`§${biome.cleanup ? "a" : "c"}Cleanup`);
+        form.button(`§${biome.errors ? "a" : "c"}Errors`);
+        form.button(`§${biome.all ? "a" : "c"}Toggle All`);
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 8) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openDebugMenu();
+            }
+
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
+            const flags = ["biome_check", "player_check", "sound_playback", "loop_status", "initialization", "cleanup", "errors", "all"];
+            if (res.selection < flags.length) {
+                const flagName = flags[res.selection];
+                const newState = toggleDebugFlag("biome_ambience", flagName);
+                const stateText = newState ? "§aON" : "§cOFF";
+                player.sendMessage(`§7[DEBUG] Biome Ambience ${flagName} debug: ${stateText}`);
+                // Log to console for confirmation
+                console.warn(`[DEBUG MENU] Biome Ambience ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+                // Invalidate cache to ensure changes take effect immediately
+                invalidateDebugCache();
+            }
+                return openBiomeAmbienceDebugMenu(getDebugSettings(player));
         }).catch(() => openDebugMenu());
     }
 
@@ -2832,6 +2873,16 @@ function getDefaultDebugSettings() {
             death: false,
             conversion: false,
             infection: false,
+            all: false
+        },
+        biome_ambience: {
+            biome_check: false,
+            player_check: false,
+            sound_playback: false,
+            loop_status: false,
+            initialization: false,
+            cleanup: false,
+            errors: false,
             all: false
         }
     };
