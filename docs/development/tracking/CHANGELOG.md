@@ -67,7 +67,11 @@ This file tracks all features added, removed, and changes made to the addon.
 - **Spiral staircase not breaking blocks**: Fixed issue where `carveSpiralStair` wasn't breaking blocks because it attempted to break air or non-solid blocks. Added `isSolidBlock()` checks within `carveSpiralStair` to ensure it only attempts to break solid blocks.
 
 ### Removed
-- 
+- **Snow layer falling/breaking system**: Archived (commented out) the snow layer falling and breaking system in `main.js`. The system that made snow layers fall when placed without support and break when landing on other snow layers has been temporarily disabled. Code is preserved in comments marked with `[ARCHIVED]` for future reference. This includes:
+  - Snow layer floating detection and breaking (system.runInterval)
+  - Falling block spawning when placing snow layers without support
+  - Falling block tracking and landing detection system
+  - Entity spawn handler for tracking falling blocks
 
 ---
 

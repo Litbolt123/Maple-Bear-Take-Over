@@ -376,7 +376,7 @@
 			"sounds": [
 				{
 					"name": "sounds/buff_mb/buff_mb_nearby_1",
-					"volume": 0.6
+					"volume": 0.75
 				}
 			]
 		},
@@ -387,7 +387,7 @@
 			"sounds": [
 				{
 					"name": "sounds/buff_mb/buff_mb_nearby_2",
-					"volume": 0.6
+					"volume": 0.75
 				}
 			]
 		},

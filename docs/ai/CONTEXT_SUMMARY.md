@@ -2,7 +2,10 @@
 
 ## Recent Changes
 
-### Sound System Integration (Latest)
+### Snow Layer System Archived (Latest)
+- **Snow Layer Falling/Breaking System**: Archived (commented out) the snow layer falling and breaking system in `main.js`. The system that made snow layers fall when placed without support and break when landing on other snow layers has been temporarily disabled. Code is preserved in comments marked with `[ARCHIVED]` for future reference.
+
+### Sound System Integration
 - **Sound Progress Document Created**: Added `docs/development/SOUND_PROGRESS.md` to track sound integration progress
 - **Documentation Reorganized**: Moved all development-related MD files to `docs/development/` folder
 - **Debug Logging Silenced**: Made all ambience debug logs conditional on codex debug flags for cleaner console output

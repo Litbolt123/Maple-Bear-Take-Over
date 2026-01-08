@@ -8,17 +8,17 @@
 					"ambient": {
 						"sound": "tiny_mb.ambient",
 						"volume": 0.4,
-						"pitch": 1.3
+						"pitch": 1.4
 					},
 					"attack": {
 						"sound": "tiny_mb.attack",
 						"volume": 0.7,
-						"pitch": 1.3
+						"pitch": 1.4
 					},
 					"hurt": {
 						"sound": "tiny_mb.hurt",
 						"volume": 0.4,
-						"pitch": 1.2
+						"pitch": 1.3
 					},
 					"death": {
 						"sound": "tiny_mb.death",
@@ -43,7 +43,7 @@
 					},
 					"roar": {
 						"sound": "buff_mb.roar",
-						"volume": 1.0,
+						"volume": 1,
 						"pitch": 1
 					},
 					"step": {
@@ -119,27 +119,27 @@
 					"ambient": {
 						"sound": "tiny_mb.ambient",
 						"volume": 0.4,
-						"pitch": 1
+						"pitch": 1.4
 					},
 					"attack": {
 						"sound": "tiny_mb.attack",
 						"volume": 0.7,
-						"pitch": 1
+						"pitch": 1.4
 					},
 					"hurt": {
 						"sound": "tiny_mb.hurt",
 						"volume": 0.4,
-						"pitch": 1.2
+						"pitch": 1.3
 					},
 					"death": {
 						"sound": "tiny_mb.death",
 						"volume": 0.6,
-						"pitch": 1.1
+						"pitch": 1.4
 					},
 					"step": {
 						"sound": "tiny_mb_step",
 						"volume": 1,
-						"pitch": 1.1
+						"pitch": 1.3
 					}
 				}
 			},
@@ -150,27 +150,27 @@
 					"ambient": {
 						"sound": "tiny_mb.ambient",
 						"volume": 0.4,
-						"pitch": 1
+						"pitch": 1.4
 					},
 					"attack": {
 						"sound": "tiny_mb.attack",
 						"volume": 0.7,
-						"pitch": 1
+						"pitch": 1.4
 					},
 					"hurt": {
 						"sound": "tiny_mb.hurt",
 						"volume": 0.4,
-						"pitch": 1.2
+						"pitch": 1.3
 					},
 					"death": {
 						"sound": "tiny_mb.death",
 						"volume": 0.6,
-						"pitch": 1.1
+						"pitch": 1.4
 					},
 					"step": {
 						"sound": "tiny_mb_step",
 						"volume": 1,
-						"pitch": 1.1
+						"pitch": 1.3
 					}
 				}
 			},
@@ -181,27 +181,27 @@
 					"ambient": {
 						"sound": "tiny_mb.ambient",
 						"volume": 0.4,
-						"pitch": 1
+						"pitch": 1.4
 					},
 					"attack": {
 						"sound": "tiny_mb.attack",
 						"volume": 0.7,
-						"pitch": 1
+						"pitch": 1.4
 					},
 					"hurt": {
 						"sound": "tiny_mb.hurt",
 						"volume": 0.4,
-						"pitch": 1.2
+						"pitch": 1.3
 					},
 					"death": {
 						"sound": "tiny_mb.death",
 						"volume": 0.6,
-						"pitch": 1.1
+						"pitch": 1.4
 					},
 					"step": {
 						"sound": "tiny_mb_step",
 						"volume": 1,
-						"pitch": 1.1
+						"pitch": 1.3
 					}
 				}
 			},
@@ -212,27 +212,27 @@
 					"ambient": {
 						"sound": "tiny_mb.ambient",
 						"volume": 0.4,
-						"pitch": 1
+						"pitch": 1.4
 					},
 					"attack": {
 						"sound": "tiny_mb.attack",
 						"volume": 0.7,
-						"pitch": 1
+						"pitch": 1.4
 					},
 					"hurt": {
 						"sound": "tiny_mb.hurt",
 						"volume": 0.4,
-						"pitch": 1.2
+						"pitch": 1.3
 					},
 					"death": {
 						"sound": "tiny_mb.death",
 						"volume": 0.6,
-						"pitch": 1.1
+						"pitch": 1.4
 					},
 					"step": {
 						"sound": "tiny_mb_step",
 						"volume": 1,
-						"pitch": 1.1
+						"pitch": 1.3
 					}
 				}
 			},
@@ -257,7 +257,7 @@
 					},
 					"death": {
 						"sound": "infected_mb.death",
-						"volume": 0.55,
+						"volume": 0.50,
 						"pitch": 1
 					}
 				}
