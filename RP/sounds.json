@@ -257,7 +257,7 @@
 					},
 					"death": {
 						"sound": "infected_mb.death",
-						"volume": 0.50,
+						"volume": 0.5,
 						"pitch": 1
 					}
 				}
@@ -325,7 +325,7 @@
 					},
 					"roar": {
 						"sound": "buff_mb.roar",
-						"volume": 1.0,
+						"volume": 1,
 						"pitch": 1
 					},
 					"step": {
@@ -346,7 +346,7 @@
 					},
 					"roar": {
 						"sound": "buff_mb.roar",
-						"volume": 1.0,
+						"volume": 1,
 						"pitch": 1
 					},
 					"step": {
@@ -480,9 +480,9 @@
 			"pitch": 1,
 			"volume": 1.2,
 			"events": {
-				"break": "mb.snow_layer_break",
-				"hit": "mb.snow_layer_hit",
-				"place": "mb.snow_powder_place"
+				"break": "break.suspicious_sand",
+				"hit": "dig.sand",
+				"place": "hit.sand"
 			}
 		}
 	},
