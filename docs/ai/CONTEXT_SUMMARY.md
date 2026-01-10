@@ -2,7 +2,46 @@
 
 ## Recent Changes
 
-### Snow Layer System Archived (Latest)
+### Discovery-Based Knowledge Progression System (Latest)
+- **Knowledge Progression**: Infection knowledge now grows as players discover items and gain experience
+- **Gold Items Added**: Added Gold Ingot and Gold Nugget to items list with progressive discovery-based descriptions
+- **Enhanced Item Descriptions**: Golden Apple, Golden Carrot, and Enchanted Golden Apple now have progressive descriptions based on:
+  - Infection knowledge level (0-3: no knowledge, basic awareness, understanding, expert)
+  - Related item discoveries (gold, golden items, cure items)
+  - Current infection status and cure progress
+  - Permanent immunity status
+- **Major Infection Cure**: Curing major infection now also grants permanent immunity (like minor infection cure)
+  - Both cures grant permanent immunity to minor infection
+  - Major infection cure also grants temporary immunity (5 minutes)
+  - Both cures update codex to mark minor cure as known/completed
+- **Knowledge Level System**: Three-tier knowledge progression:
+  - Level 1 (Basic Awareness): Any infection experience or discovery
+  - Level 2 (Understanding): Multiple discoveries, cure knowledge, or related items
+  - Level 3 (Expert): Deep knowledge from many experiences, both cures known, multiple related items
+- **Progressive Item Information**: All cure-related items now show progressive information:
+  - Basic information if no knowledge
+  - Properties and connections with basic awareness
+  - Cure details with understanding
+  - Expert analysis with expert knowledge
+- **Knowledge Triggers**: Knowledge progression automatically updates when:
+  - Infections are discovered (bear, snow, minor, major)
+  - Cure items are discovered (golden apple, golden carrot, enchanted golden apple, weakness potion)
+  - Gold items are discovered (gold ingot, gold nugget)
+  - Cures are completed
+  - Golden apple infection reduction is discovered
+
+### Minor Infection Starter System Implemented
+- **Minor Infection on Spawn**: Players now spawn with a "minor infection" (10-day timer) that persists through death until cured
+- **Minor Infection Cure**: Requires consuming both a Golden Apple and Golden Carrot separately (any order) to cure and gain permanent immunity
+- **Permanent Immunity**: Once cured from minor infection, players gain permanent immunity - they never get minor infection again on respawn, and require 3 hits (instead of 2) to get infected
+- **Infection Progression**: Minor infection can progress to major infection (2 hits from Maple Bears OR 1 snow consumption)
+- **Infection Types**: System now tracks "minor" (10-day, mild effects) vs "major" (5-day, severe effects) infections
+- **World Intro Sequence**: Added intro sequence that plays once per world with narrative messages and gives basic journal at the end
+- **Journal Updates**: Updated goal screen and infection section to emphasize journal upgrade importance and show minor vs major infection details
+- **Golden Carrot**: Added to codex items section with detailed information about its role in minor infection cure
+- **Status Display**: Updated codex status display to show infection type, cure progress, and permanent immunity status
+
+### Snow Layer System Archived
 - **Snow Layer Falling/Breaking System**: Archived (commented out) the snow layer falling and breaking system in `main.js`. The system that made snow layers fall when placed without support and break when landing on other snow layers has been temporarily disabled. Code is preserved in comments marked with `[ARCHIVED]` for future reference.
 
 ### Sound System Integration

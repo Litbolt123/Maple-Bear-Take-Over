@@ -1,7 +1,7 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTracker.js";
-import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels } from "./main.js";
+import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
@@ -15,9 +15,9 @@ function getSpawnDifficultyValue() {
 
 export function getDefaultCodex() {
     return {
-        infections: { bear: { discovered: false, firstHitAt: 0 }, snow: { discovered: false, firstUseAt: 0 } },
+        infections: { bear: { discovered: false, firstHitAt: 0 }, snow: { discovered: false, firstUseAt: 0 }, minor: { discovered: false }, major: { discovered: false } },
         status: { immuneKnown: false, immuneUntil: 0, bearTimerSeen: false, snowTimerSeen: false },
-        cures: { bearCureKnown: false, bearCureDoneAt: 0 },
+        cures: { bearCureKnown: false, bearCureDoneAt: 0, minorCureKnown: false, minorCureDoneAt: 0 },
         history: { totalInfections: 0, totalCures: 0, firstInfectionAt: 0, lastInfectionAt: 0, lastCureAt: 0 },
         effects: {
             weaknessSeen: false,
@@ -46,7 +46,7 @@ export function getDefaultCodex() {
         },
         // Aggregated metadata by effect id
         symptomsMeta: {},
-        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, basicJournalSeen: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, dustedDirtSeen: false, bookCraftMessageShown: false, goldenAppleSeen: false, enchantedGoldenAppleSeen: false, goldenAppleInfectionReductionDiscovered: false },
+        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, basicJournalSeen: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, dustedDirtSeen: false, bookCraftMessageShown: false, goldenAppleSeen: false, goldenCarrotSeen: false, enchantedGoldenAppleSeen: false, goldenAppleInfectionReductionDiscovered: false, goldSeen: false, goldNuggetSeen: false },
         mobs: { 
             mapleBearSeen: false, 
             infectedBearSeen: false, 
@@ -237,15 +237,52 @@ export function checkKnowledgeProgression(player) {
     const codex = getCodex(player);
     if (!codex.knowledge) codex.knowledge = {};
 
-    // Infection knowledge progression
-    if (codex.history.totalInfections > 0) {
+    // Infection knowledge progression - grows as discoveries are made
+    const hasInfectionExperience = codex.history.totalInfections > 0 || 
+                                   codex.infections?.bear?.discovered || 
+                                   codex.infections?.snow?.discovered ||
+                                   codex.infections?.minor?.discovered ||
+                                   codex.infections?.major?.discovered ||
+                                   (codex.items.snowIdentified && (codex.infections?.bear?.discovered || codex.infections?.snow?.discovered));
+    
+    if (hasInfectionExperience) {
         updateKnowledgeLevel(player, 'infectionLevel', 1); // Basic awareness
-        if (codex.history.totalInfections >= 2) {
-            updateKnowledgeLevel(player, 'infectionLevel', 2); // Understanding
-        }
-        if (codex.history.totalInfections >= 5 || codex.journal?.day20WorldLoreUnlocked) {
-            updateKnowledgeLevel(player, 'infectionLevel', 3); // Expert
-        }
+    }
+    
+    // Understanding level: Multiple discoveries or experiences
+    const currentInfectionKnowledge = codex.knowledge?.infectionLevel || 0;
+    const hasMultipleDiscoveries = (codex.history.totalInfections >= 2) ||
+                                   (codex.infections?.bear?.discovered && codex.infections?.snow?.discovered) ||
+                                   (codex.items.goldenAppleSeen && codex.items.goldenCarrotSeen && currentInfectionKnowledge >= 1) ||
+                                   (codex.cures.bearCureKnown || codex.cures.minorCureKnown) ||
+                                   (codex.items.snowIdentified && codex.history.totalInfections >= 1) ||
+                                   (codex.items.goldenAppleSeen && codex.items.goldenCarrotSeen && hasInfectionExperience) ||
+                                   (codex.infections?.minor?.discovered && hasInfectionExperience) ||
+                                   (codex.infections?.major?.discovered && hasInfectionExperience) ||
+                                   (codex.items.goldenAppleSeen && codex.items.goldenCarrotSeen) ||
+                                   (codex.items.goldSeen && (codex.items.goldenAppleSeen || codex.items.goldenCarrotSeen || codex.items.enchantedGoldenAppleSeen)) ||
+                                   (codex.items.goldNuggetSeen && (codex.items.goldenAppleSeen || codex.items.goldenCarrotSeen)) ||
+                                   (codex.items.weaknessPotionSeen && (codex.items.goldenAppleSeen || codex.items.enchantedGoldenAppleSeen)) ||
+                                   (codex.items.goldenAppleInfectionReductionDiscovered && hasInfectionExperience);
+    
+    if (hasMultipleDiscoveries) {
+        updateKnowledgeLevel(player, 'infectionLevel', 2); // Understanding
+    }
+    
+    // Expert level: Deep knowledge from many experiences
+    const hasExpertKnowledge = (codex.history.totalInfections >= 5) ||
+                               codex.journal?.day20WorldLoreUnlocked ||
+                               (codex.cures.bearCureDoneAt && codex.cures.minorCureDoneAt) ||
+                               (codex.history.totalCures > 0 && codex.history.totalInfections >= 3) ||
+                               (codex.infections?.bear?.discovered && codex.infections?.snow?.discovered && codex.infections?.minor?.discovered && codex.cures.bearCureKnown) ||
+                               (codex.items.goldenAppleSeen && codex.items.goldenCarrotSeen && codex.items.enchantedGoldenAppleSeen && codex.cures.bearCureKnown) ||
+                               (codex.cures.minorCureKnown && codex.cures.bearCureKnown) ||
+                               (codex.items.goldSeen && codex.items.goldNuggetSeen && codex.items.goldenAppleSeen && codex.items.goldenCarrotSeen && codex.items.enchantedGoldenAppleSeen) ||
+                               (codex.items.goldenAppleInfectionReductionDiscovered && codex.items.goldenCarrotSeen && codex.items.goldenAppleSeen && hasInfectionExperience) ||
+                               (codex.cures.bearCureKnown && codex.items.weaknessPotionSeen && codex.items.enchantedGoldenAppleSeen && hasInfectionExperience);
+    
+    if (hasExpertKnowledge) {
+        updateKnowledgeLevel(player, 'infectionLevel', 3); // Expert
     }
 
     // Bear knowledge progression
@@ -687,29 +724,70 @@ export function showCodexBook(player, context) {
         }
         if (hasInfection) {
             if (infectionKnowledge >= 1) {
-            summary.push(`§eStatus: §cINFECTED`);
-            const ticks = infectionState.ticksLeft || 0;
-            const days = Math.ceil(ticks / 24000);
-            const snowCount = infectionState.snowCount || 0;
-            summary.push(`§eTime: §c${formatTicksDuration(ticks)} (§f~${days} day${days !== 1 ? 's' : ''}§c)`);
-            summary.push(`§eSnow consumed: §c${snowCount}`);
-                if (codex.cures.bearCureKnown) summary.push("§7Cure: §fWeakness + Enchanted Golden Apple");
+                // Check infection type
+                const infectionType = infectionState.infectionType || MAJOR_INFECTION_TYPE;
+                const isMinor = infectionType === MINOR_INFECTION_TYPE;
+                
+                // Show infection type
+                if (isMinor) {
+                    summary.push(`§eStatus: §cMINOR INFECTION`);
+                } else {
+                    summary.push(`§eStatus: §cMAJOR INFECTION`);
+                }
+                
+                const ticks = infectionState.ticksLeft || 0;
+                const days = Math.ceil(ticks / 24000);
+                const snowCount = infectionState.snowCount || 0;
+                summary.push(`§eTime: §c${formatTicksDuration(ticks)} (§f~${days} day${days !== 1 ? 's' : ''}§c)`);
+                
+                if (!isMinor) {
+                    // Only show snow count for major infection
+                    summary.push(`§eSnow consumed: §c${snowCount}`);
+                }
+                
+                // Show minor infection cure progress
+                if (isMinor) {
+                    const hasGoldenApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
+                    const hasGoldenCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
+                    summary.push(`§7Minor Cure Progress:`);
+                    summary.push(`§7  Golden Apple: ${hasGoldenApple ? '§a✓' : '§c✗'}`);
+                    summary.push(`§7  Golden Carrot: ${hasGoldenCarrot ? '§a✓' : '§c✗'}`);
+                    if (hasGoldenApple && hasGoldenCarrot) {
+                        summary.push(`§eBoth components consumed! Cure is taking effect...`);
+                    } else {
+                        summary.push(`§7Consume both to gain permanent immunity.`);
+                    }
+                } else {
+                    // Major infection cure info
+                    if (codex.cures.bearCureKnown) summary.push("§7Cure: §fWeakness + Enchanted Golden Apple");
+                }
             } else {
                 summary.push(`§eStatus: §cSomething is wrong with you...`);
                 summary.push(`§7You feel unwell but don't understand why.`);
             }
         } else {
+            // Check if player has permanent immunity
+            const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+            
             // Check if player has ever been infected
             const hasBeenInfected = codex.history.totalInfections > 0;
-            if (hasBeenInfected && infectionKnowledge >= 1) {
+            if (hasPermanentImmunity) {
+                summary.push(`§eStatus: §aHealthy (Permanently Immune)`);
+                summary.push(`§7You are permanently immune to minor infection.`);
+                summary.push(`§7You require 3 hits from Maple Bears to get infected.`);
+            } else if (hasBeenInfected && infectionKnowledge >= 1) {
                 summary.push(`§eStatus: §aHealthy (Previously Infected)`);
             } else {
                 summary.push(`§eStatus: §aHealthy`);
             }
         }
 
-        // Only show immunity if player has been cured and knows about it
-        if (immune && codex.status.immuneKnown) {
+        // Show immunity status
+        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+        if (hasPermanentImmunity) {
+            summary.push("§bImmunity: §aPERMANENT");
+        } else if (immune && codex.status.immuneKnown) {
+            // Temporary immunity from major infection cure
             const end = curedPlayers.get(player.id);
             const remainingMs = Math.max(0, end - Date.now());
             summary.push(`§bImmunity: §fACTIVE (§b${formatMillisDuration(remainingMs)} left§f)`);
@@ -721,7 +799,19 @@ export function showCodexBook(player, context) {
         const bearKnowledge = getKnowledgeLevel(player, 'bearLevel');
         const hitCount = bearHitCount.get(player.id) || 0;
         if (hitCount > 0 && !hasInfection && bearKnowledge >= 1) {
-            summary.push(`§eBear Hits: §f${hitCount}/${HITS_TO_INFECT}`);
+            const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+            const hitsNeeded = hasPermanentImmunity ? IMMUNE_HITS_TO_INFECT : HITS_TO_INFECT;
+            summary.push(`§eBear Hits: §f${hitCount}/${hitsNeeded}`);
+        } else if (hasInfection && infectionKnowledge >= 1) {
+            const infectionType = infectionState.infectionType || MAJOR_INFECTION_TYPE;
+            const isMinor = infectionType === MINOR_INFECTION_TYPE;
+            if (isMinor) {
+                const currentHits = bearHitCount.get(player.id) || 0;
+                if (currentHits > 0) {
+                    summary.push(`§eBear Hits: §f${currentHits}/${MINOR_HITS_TO_INFECT} (until major infection)`);
+                }
+                summary.push(`§7Warning: 2 hits OR 1 snow = Major Infection`);
+            }
         }
 
         try { if (hasInfection) markCodex(player, "status.bearTimerSeen"); if (immune) markCodex(player, "status.immuneKnown"); } catch { }
@@ -840,20 +930,96 @@ export function showCodexBook(player, context) {
     function openInfections() {
         const codex = getCodex(player);
         const lines = [];
+        const infectionState = playerInfection.get(player.id);
+        const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
+        const infectionType = hasInfection ? (infectionState.infectionType || MAJOR_INFECTION_TYPE) : null;
+        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+        const minorInfectionCured = player.getDynamicProperty("mb_minor_infection_cured") === true;
         
-        if (codex.infections.bear.discovered || codex.infections.snow.discovered) {
+        if (codex.infections.bear.discovered || codex.infections.snow.discovered || codex.infections.minor || hasInfection || hasPermanentImmunity) {
             lines.push("§eThe Infection");
+            lines.push("");
             
-            // Infection details (status is shown on main page)
+            // Show current infection status
+            if (hasInfection) {
+                const isMinor = infectionType === MINOR_INFECTION_TYPE;
+                if (isMinor) {
+                    lines.push("§cCurrent Status: Minor Infection (10-day timer)");
+                    lines.push("§7You have a minor infection. Effects are mild (slowness I, weakness I).");
+                    lines.push("§7You can still be cured with a Golden Apple + Golden Carrot.");
+                } else {
+                    lines.push("§4Current Status: Major Infection (5-day timer)");
+                    lines.push("§7You have a major infection. Effects are severe and worsen over time.");
+                    lines.push("§7Cure requires Weakness effect + Enchanted Golden Apple.");
+                }
+                lines.push("");
+            } else if (hasPermanentImmunity) {
+                lines.push("§aCurrent Status: Permanently Immune");
+                lines.push("§7You have cured your minor infection and gained permanent immunity.");
+                lines.push("§7You will never contract minor infection again.");
+                lines.push("§7You now require 3 hits from Maple Bears to get infected.");
+                lines.push("");
+            } else {
+                lines.push("§aCurrent Status: Healthy");
+                lines.push("");
+            }
             
-            lines.push(getCodex(player).cures.bearCureKnown ? "§7Cure: Weakness + Enchanted Golden Apple" : "§8Cure: ???");
-            lines.push("§7Notes: §8Infection advances over time. Snow consumption affects the timer.");
+            // Minor vs Major Infection Section
+            lines.push("§6Infection Types:");
+            lines.push("");
+            lines.push("§eMinor Infection:");
+            lines.push("§7• 10-day timer");
+            lines.push("§7• Mild effects: Slowness I, Weakness I");
+            lines.push("§7• Can be cured with: Golden Apple + Golden Carrot");
+            lines.push("§7• Cure grants: §aPermanent Immunity§7");
+            lines.push("§7• Requires 2 hits from Maple Bears to progress to major");
+            lines.push("§7• OR 1 snow consumption to progress to major");
+            lines.push("");
+            lines.push("§cMajor Infection:");
+            lines.push("§7• 5-day timer");
+            lines.push("§7• Severe effects: Multiple negative status effects");
+            lines.push("§7• Effects worsen over time");
+            lines.push("§7• Can be cured with: Weakness effect + Enchanted Golden Apple");
+            lines.push("§7• Cure grants: §bTemporary Immunity§7 (5 minutes)");
+            lines.push("");
             
-            lines.push("\n§6Infection Mechanics:");
+            // Progression Warning
+            lines.push("§6Progression:");
+            lines.push("§7• Minor infection can progress to major infection:");
+            lines.push("§7  - 2 hits from Maple Bears");
+            lines.push("§7  - OR 1 snow consumption");
+            lines.push("§c• Warning: Minor infection is more easily treatable.");
+            lines.push("§c  Once it becomes major, the cure becomes much more difficult.");
+            lines.push("");
+            
+            // Cure Information
+            lines.push("§6Cure Information:");
+            lines.push("");
+            lines.push("§eMinor Infection Cure:");
+            const hasGoldenApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
+            const hasGoldenCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
+            lines.push(`§7  Golden Apple: ${hasGoldenApple ? '§a✓ Consumed' : '§c✗ Not consumed'}`);
+            lines.push(`§7  Golden Carrot: ${hasGoldenCarrot ? '§a✓ Consumed' : '§c✗ Not consumed'}`);
+            lines.push("§7  Both must be consumed separately (any order)");
+            lines.push("§7  Effect: §aPermanent Immunity§7 - prevents minor infection on respawn");
+            lines.push("");
+            lines.push("§cMajor Infection Cure:");
+            lines.push(codex.cures.bearCureKnown ? "§7  Weakness effect + Enchanted Golden Apple" : "§8  ???");
+            if (codex.cures.bearCureKnown) {
+                lines.push("§7  Effect: §aPermanent Immunity§7 (prevents minor infection on respawn)");
+                lines.push("§7  Also grants: §bTemporary Immunity§7 (5 minutes)");
+                lines.push("§7  Requires: 3 hits from Maple Bears to get infected (instead of 2)");
+            } else {
+                lines.push("§8  ???");
+            }
+            lines.push("");
+            
+            // Infection Mechanics
+            lines.push("§6Infection Mechanics:");
             lines.push("§7• Maple Bears can infect you through attacks");
             lines.push("§7• Infection progresses through multiple stages");
             lines.push("§7• Symptoms worsen as infection advances");
-            lines.push("§7• Snow can slow or accelerate infection");
+            lines.push("§7• Snow consumption affects the timer (major infection only)");
             lines.push("§7• Conversion rate increases with each day");
             lines.push("§7• By Day 20, all mob kills convert to infected variants");
             
@@ -863,6 +1029,9 @@ export function showCodexBook(player, context) {
                 lines.push("§6Infection History:");
                 lines.push(`§7Total Infections: §f${codex.history.totalInfections}`);
                 lines.push(`§7Total Cures: §f${codex.history.totalCures}`);
+                if (minorInfectionCured) {
+                    lines.push(`§7Minor Infection Cured: §aYes (Permanent Immunity)`);
+                }
                 
                 if (codex.history.firstInfectionAt > 0) {
                     const firstDate = new Date(codex.history.firstInfectionAt);
@@ -1460,7 +1629,10 @@ export function showCodexBook(player, context) {
             'potionsSeen': "textures/items/potion_bottle_saturation",
             'weaknessPotionSeen': "textures/items/potion_bottle_saturation",
             'goldenAppleSeen': "textures/items/apple_golden",
+            'goldenCarrotSeen': "textures/items/carrot_golden",
             'enchantedGoldenAppleSeen': "textures/items/apple_golden",
+            'goldSeen': "textures/items/gold_ingot",
+            'goldNuggetSeen': "textures/items/gold_nugget",
             'brewingStandSeen': "textures/items/brewing_stand",
             'dustedDirtSeen': "textures/blocks/dusted_dirt"
         };
@@ -1472,7 +1644,10 @@ export function showCodexBook(player, context) {
             { key: "cureItemsSeen", title: "Cure Items", icon: ITEM_ICONS.cureItemsSeen },
             { key: "potionsSeen", title: "Potions", icon: ITEM_ICONS.potionsSeen },
             { key: "goldenAppleSeen", title: "Golden Apple", icon: ITEM_ICONS.goldenAppleSeen },
+            { key: "goldenCarrotSeen", title: "Golden Carrot", icon: ITEM_ICONS.goldenCarrotSeen },
             { key: "enchantedGoldenAppleSeen", title: "§5Enchanted§f Golden Apple", icon: ITEM_ICONS.enchantedGoldenAppleSeen },
+            { key: "goldSeen", title: "Gold Ingot", icon: ITEM_ICONS.goldSeen },
+            { key: "goldNuggetSeen", title: "Gold Nugget", icon: ITEM_ICONS.goldNuggetSeen },
             { key: "brewingStandSeen", title: "Brewing Stand", icon: ITEM_ICONS.brewingStandSeen },
             { key: "dustedDirtSeen", title: "Dusted Dirt", icon: ITEM_ICONS.dustedDirtSeen }
         ];
@@ -1583,10 +1758,10 @@ export function showCodexBook(player, context) {
                             body = "§eCure Components\n§7Rumors suggest that certain items can reverse infections when used together.\n\n§7Suspected Components:\n§7• Weakness Potion: May weaken the infection\n§7• Enchanted Golden Apple: Provides healing energy\n§7• Timing: Must be used at specific moments" + hintText + "\n\n§8Note: Cure mechanism is not fully understood. Experimentation required.";
                         } else if (codex.cures.bearCureKnown && !hasCured) {
                             // Known cure info
-                            body = "§eCure Components\n§7A combination of items that can reverse bear infections when used together.\n\n§7For Bear Infection:\n§7• Weakness Potion: Temporarily weakens the infection\n§7• Enchanted Golden Apple: Provides healing energy\n§7• Must be consumed while under weakness effect\n\n§7Mechanism:\n§7• Weakness reduces infection strength\n§7• Golden apple provides healing energy\n§7• Combined effect neutralizes infection\n\n§7Notes:\n§7• Bear infection can be cured with proper timing\n§7• Snow infection has no known cure\n§7• Immunity is granted after successful cure\n§7• Cure process is irreversible once begun\n\n§aCure knowledge is precious - use it wisely.";
+                            body = "§eCure Components\n§7A combination of items that can reverse infections when used together.\n\n§6For Major Infection:\n§7• Weakness Potion: Temporarily weakens the infection\n§7• Enchanted Golden Apple: Provides healing energy\n§7• Must be consumed while under weakness effect\n§7• Effect: Grants §aPermanent Immunity§7 (prevents minor infection on respawn)\n§7• Also grants: §bTemporary Immunity§7 (5 minutes)\n§7• Requires 3 hits from Maple Bears to get infected (instead of 2)\n\n§6For Minor Infection:\n§7• Golden Apple: Part of the cure\n§7• Golden Carrot: Part of the cure\n§7• Both must be consumed separately (any order)\n§7• Effect: Grants §aPermanent Immunity§7\n\n§7Mechanism:\n§7• Weakness reduces infection strength\n§7• Golden apple provides healing energy\n§7• Combined effect neutralizes infection\n\n§7Notes:\n§7• Major infection can be cured with proper timing\n§7• Minor infection can be cured with golden apple + golden carrot\n§7• Both cures grant permanent immunity\n§7• Cure process is irreversible once begun\n\n§aCure knowledge is precious - use it wisely.";
                         } else {
                             // Expert cure info
-                            body = "§eCure Components\n§7A sophisticated combination of items that can reverse bear infections through precise biochemical manipulation.\n\n§6For Bear Infection:\n§7• Weakness Potion: Creates temporary vulnerability in infection\n§7• Enchanted Golden Apple: Provides concentrated healing energy\n§7• Critical Timing: Must be consumed while under weakness effect\n\n§6Scientific Mechanism:\n§7• Weakness potion disrupts infection's cellular binding\n§7• Golden apple energy overwhelms infection's defenses\n§7• Combined effect creates complete neutralization\n§7• Process triggers temporary immunity response\n\n§6Advanced Notes:\n§7• Bear infection: Curable with proper procedure\n§7• Snow infection: No known cure mechanism\n§7• Immunity duration: 5 minutes after successful cure\n§7• Cure process: Irreversible once initiated\n§7• Failure risk: High if timing is incorrect\n\n§6Expert Analysis:\n§7• Cure mechanism suggests infection has exploitable weaknesses\n§7• Immunity period indicates temporary resistance\n§7• Snow infection's incurability suggests different mechanism\n§7• Cure knowledge represents critical survival information\n\n§aMastery of cure techniques is essential for long-term survival.";
+                            body = "§eCure Components\n§7A sophisticated combination of items that can reverse infections through precise biochemical manipulation.\n\n§6For Major Infection:\n§7• Weakness Potion: Creates temporary vulnerability in infection\n§7• Enchanted Golden Apple: Provides concentrated healing energy\n§7• Critical Timing: Must be consumed while under weakness effect\n§7• Effect: Grants §aPermanent Immunity§7 (prevents minor infection on respawn)\n§7• Also grants: §bTemporary Immunity§7 (5 minutes)\n§7• Requires 3 hits from Maple Bears to get infected (instead of 2)\n\n§6For Minor Infection:\n§7• Golden Apple: Essential component\n§7• Golden Carrot: Essential component\n§7• Both must be consumed separately (any order)\n§7• Effect: Grants §aPermanent Immunity§7\n\n§6Scientific Mechanism:\n§7• Weakness potion disrupts infection's cellular binding\n§7• Golden apple energy overwhelms infection's defenses\n§7• Combined effect creates complete neutralization\n§7• Process triggers permanent immunity response\n\n§6Advanced Notes:\n§7• Major infection: Curable with proper procedure (weakness + enchanted golden apple)\n§7• Minor infection: Curable with golden apple + golden carrot\n§7• Both cures grant permanent immunity - prevents minor infection on respawn\n§7• Temporary immunity also granted for major infection cure (5 minutes)\n§7• Cure process: Irreversible once initiated\n§7• Failure risk: High if timing is incorrect (for major infection)\n\n§6Expert Analysis:\n§7• Cure mechanism suggests infection has exploitable weaknesses\n§7• Permanent immunity indicates successful cure neutralizes infection permanently\n§7• Temporary immunity from major cure provides additional protection period\n§7• Both cure methods provide permanent immunity to minor infection\n§7• Cure knowledge represents critical survival information\n\n§aMastery of cure techniques is essential for long-term survival.";
                         }
                     } else if (e.key === "potionsSeen") {
                         // Progressive potion information
@@ -1596,35 +1771,268 @@ export function showCodexBook(player, context) {
                             body = "§ePotions\n§7Alchemical concoctions that can alter biological processes. Some may have applications in treating infections.\n\n§7Basic Information:\n§7• Can be brewed using a brewing stand\n§7• Various effects available\n§7• May have therapeutic applications\n\n§8Note: Specific applications require further research.";
                         }
                     } else if (e.key === "goldenAppleSeen") {
-                        // Golden apple information with unlockable infection reduction info
+                        // Golden apple information with progressive discovery-based details
                         const hasDiscoveredReduction = codex.items.goldenAppleInfectionReductionDiscovered;
+                        const infectionState = playerInfection.get(player.id);
+                        const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
+                        const infectionType = hasInfection ? (infectionState.infectionType || MAJOR_INFECTION_TYPE) : null;
+                        const isMinor = infectionType === MINOR_INFECTION_TYPE;
+                        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+                        const hasGoldenApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
+                        const hasGoldenCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
+                        const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
+                        const hasSeenGold = codex.items.goldSeen;
+                        const hasSeenGoldNugget = codex.items.goldNuggetSeen;
+                        const hasSeenGoldenCarrot = codex.items.goldenCarrotSeen;
+                        const hasSeenEnchantedApple = codex.items.enchantedGoldenAppleSeen;
                         
-                        body = "§eGolden Apple\n§7A rare fruit with powerful healing properties. Its golden nature suggests it contains concentrated life energy.\n\n§7Properties:\n§7• Provides significant healing\n§7• Contains concentrated life energy";
+                        body = "§eGolden Apple\n§7A rare fruit with powerful healing properties.";
                         
-                        if (hasDiscoveredReduction) {
-                            body += "\n§7• Reduces infection severity when consumed while infected\n§7• Provides temporary relief from infection symptoms";
-                            body += "\n\n§6Infection Reduction:\n§7• Consuming a golden apple while infected reduces the infection's hold\n§7• The effect is subtle but noticeable\n§7• Does not cure the infection, only reduces its severity\n§7• Multiple apples can provide cumulative relief\n§7• The relief is temporary - the infection continues to progress";
+                        // Progressive information based on discovery and knowledge
+                        if (infectionKnowledge >= 1 || hasDiscoveredReduction || isMinor || hasPermanentImmunity) {
+                            body += "\n\n§7Properties:\n§7• Provides significant healing\n§7• Contains concentrated life energy";
+                            
+                            if (hasSeenGold || hasSeenGoldNugget) {
+                                body += "\n§7• Made from gold, which enhances its properties";
+                            }
+                            
+                            if (infectionKnowledge >= 1 || hasDiscoveredReduction) {
+                                body += "\n§7• Has applications in infection treatment";
+                                
+                                if (hasDiscoveredReduction) {
+                                    body += "\n§7• Reduces infection severity when consumed while infected\n§7• Provides temporary relief from infection symptoms";
+                                    body += "\n\n§6Infection Reduction:\n§7• Consuming a golden apple while infected reduces the infection's hold\n§7• The effect is subtle but noticeable\n§7• Does not cure the infection, only reduces its severity\n§7• Multiple apples can provide cumulative relief\n§7• The relief is temporary - the infection continues to progress";
+                                }
+                            }
+                            
+                            if ((infectionKnowledge >= 1 || isMinor) && hasSeenGoldenCarrot) {
+                                body += "\n\n§6Minor Infection Cure:\n§7• Part of the minor infection cure (along with Golden Carrot)\n§7• Must be consumed separately from Golden Carrot (any order)\n§7• Effect: Grants §aPermanent Immunity§7 when both components are consumed\n§7• Permanent immunity prevents minor infection on respawn\n§7• Permanent immunity requires 3 hits from Maple Bears to get infected (instead of 2)";
+                            }
+                            
+                            if (hasSeenEnchantedApple && infectionKnowledge >= 2) {
+                                body += "\n\n§7Research Connection:\n§7• Can be enhanced into an Enchanted Golden Apple\n§7• Enchanted variant is used for major infection cure\n§7• The gold content plays a crucial role in both variants";
+                            }
+                            
+                            if (hasSeenGold || hasSeenGoldNugget) {
+                                body += "\n\n§6Material Analysis:\n§7• Contains gold, which concentrates life energy\n§7• Gold's properties may enhance its therapeutic effects";
+                            }
+                            
+                            if (isMinor) {
+                                body += "\n\n§6Cure Progress:";
+                                body += `\n§7  Golden Apple: ${hasGoldenApple ? '§a✓ Consumed' : '§c✗ Not consumed'}`;
+                                body += `\n§7  Golden Carrot: ${hasGoldenCarrot ? '§a✓ Consumed' : '§c✗ Not consumed'}`;
+                                if (hasGoldenApple && hasGoldenCarrot) {
+                                    body += "\n§aBoth components consumed! The cure is taking effect...";
+                                } else if (hasGoldenApple && !hasGoldenCarrot) {
+                                    body += "\n§7Consume a Golden Carrot to complete the cure.";
+                                } else {
+                                    body += "\n§7Consume both components to gain permanent immunity.";
+                                }
+                            } else if (hasPermanentImmunity) {
+                                body += "\n\n§aYou have already cured your infection and gained permanent immunity.";
+                            }
+                            
+                            if (infectionKnowledge >= 3 || (hasDiscoveredReduction && infectionKnowledge >= 2)) {
+                                body += "\n\n§6Expert Analysis:\n§7• Golden apples are rare and valuable\n§7• Their healing properties are well-documented\n§7• Has been observed to reduce infection severity\n§7• Not a cure, but provides valuable relief\n§7• Essential component for minor infection cure\n§7• The gold content concentrates life energy\n\n§eThis fruit shows potential in medical applications.";
+                            } else if (infectionKnowledge >= 2 || hasDiscoveredReduction) {
+                                body += "\n\n§7Research Notes:\n§7• Golden apples are rare and valuable\n§7• Their healing properties are well-documented";
+                                if (hasDiscoveredReduction) {
+                                    body += "\n§7• Has been observed to reduce infection severity\n§7• Not a cure, but provides valuable relief";
+                                } else {
+                                    body += "\n§7• May be useful in combination with other treatments";
+                                }
+                            }
                         } else {
-                            body += "\n§7• May have applications in infection treatment";
+                            body += "\n\n§7Properties:\n§7• Provides significant healing\n§7• Contains concentrated life energy";
+                            if (hasSeenGold || hasSeenGoldNugget) {
+                                body += "\n§7• Made from gold, which may enhance its properties";
+                            }
+                            body += "\n\n§7Research Notes:\n§7• Golden apples are rare and valuable\n§7• Their healing properties are well-documented";
+                            body += "\n\n§eThis fruit shows potential in medical applications.";
                         }
+                    } else if (e.key === "goldenCarrotSeen") {
+                        // Golden carrot information with progressive discovery-based details
+                        const infectionState = playerInfection.get(player.id);
+                        const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
+                        const infectionType = hasInfection ? (infectionState.infectionType || MAJOR_INFECTION_TYPE) : null;
+                        const isMinor = infectionType === MINOR_INFECTION_TYPE;
+                        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+                        const hasGoldenApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
+                        const hasGoldenCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
+                        const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
+                        const hasSeenGold = codex.items.goldSeen;
+                        const hasSeenGoldNugget = codex.items.goldNuggetSeen;
+                        const hasSeenGoldenApple = codex.items.goldenAppleSeen;
                         
-                        body += "\n\n§7Research Notes:\n§7• Golden apples are rare and valuable\n§7• Their healing properties are well-documented";
+                        body = "§eGolden Carrot\n§7A rare golden variant of the common carrot.";
                         
-                        if (hasDiscoveredReduction) {
-                            body += "\n§7• Has been observed to reduce infection severity\n§7• Not a cure, but provides valuable relief";
+                        // Progressive information based on discovery and knowledge
+                        if (infectionKnowledge >= 1 || isMinor || hasPermanentImmunity) {
+                            body += "\n\n§7Properties:\n§7• Provides nutritional value\n§7• Contains concentrated life energy";
+                            
+                            if (infectionKnowledge >= 1 || isMinor) {
+                                body += "\n§7• Part of the minor infection cure";
+                            }
+                            
+                            if (infectionKnowledge >= 2 || (isMinor && (hasGoldenApple || hasGoldenCarrot)) || hasPermanentImmunity) {
+                                body += "\n\n§6Minor Infection Cure:\n§7• Must be consumed along with a Golden Apple to cure minor infection\n§7• Both items must be consumed separately (any order)\n§7• Effect: Grants §aPermanent Immunity§7\n§7• Permanent immunity prevents minor infection on respawn\n§7• Permanent immunity requires 3 hits from Maple Bears to get infected (instead of 2)";
+                            } else if (infectionKnowledge >= 1) {
+                                body += "\n\n§7Research Notes:\n§7• Appears to have medical applications\n§7• May be related to infection treatment";
+                            }
+                            
+                            if (hasSeenGold || hasSeenGoldNugget) {
+                                body += "\n\n§6Material Analysis:\n§7• Contains trace amounts of gold\n§7• Golden properties may enhance its therapeutic effects";
+                            }
+                            
+                            if (hasSeenGoldenApple && (infectionKnowledge >= 1 || isMinor)) {
+                                body += "\n\n§7Research Connection:\n§7• Golden Apple + Golden Carrot = Potential Cure\n§7• Both contain concentrated life energy\n§7• Combination may provide synergistic effects";
+                            }
+                            
+                            if (isMinor) {
+                                body += "\n\n§6Cure Progress:";
+                                body += `\n§7  Golden Apple: ${hasGoldenApple ? '§a✓ Consumed' : '§c✗ Not consumed'}`;
+                                body += `\n§7  Golden Carrot: ${hasGoldenCarrot ? '§a✓ Consumed' : '§c✗ Not consumed'}`;
+                                if (hasGoldenApple && hasGoldenCarrot) {
+                                    body += "\n§aBoth components consumed! The cure is taking effect...";
+                                } else {
+                                    body += "\n§7Consume both components to gain permanent immunity.";
+                                }
+                            } else if (hasPermanentImmunity) {
+                                body += "\n\n§aYou have already cured your infection and gained permanent immunity.";
+                            } else if (infectionKnowledge >= 1) {
+                                body += "\n\n§7This item is only effective for minor infections. Major infections require a different cure.";
+                            }
+                            
+                            if (infectionKnowledge >= 3 || hasPermanentImmunity) {
+                                body += "\n\n§6Expert Analysis:\n§7• Golden carrots are valuable and rare\n§7• They have specific applications in minor infection treatment\n§7• When combined with golden apples, they provide permanent immunity\n§7• This is the only known cure for minor infection\n§7• The gold content may play a role in its therapeutic properties\n\n§eThis item is crucial for early infection treatment.";
+                            } else if (infectionKnowledge >= 2) {
+                                body += "\n\n§7Research Notes:\n§7• Golden carrots are valuable and rare\n§7• They have specific applications in minor infection treatment\n§7• Further research may reveal additional properties";
+                            }
                         } else {
-                            body += "\n§7• May be useful in combination with other treatments";
+                            body += "\n\n§7A valuable food item with enhanced nutritional properties.";
+                            if (hasSeenGold || hasSeenGoldNugget) {
+                                body += "\n§7Contains trace amounts of gold, which may enhance its properties.";
+                            }
                         }
+                    } else if (e.key === "goldSeen") {
+                        // Gold ingot information with progressive discovery
+                        const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
+                        const hasSeenGoldenApple = codex.items.goldenAppleSeen;
+                        const hasSeenGoldenCarrot = codex.items.goldenCarrotSeen;
+                        const hasSeenEnchantedApple = codex.items.enchantedGoldenAppleSeen;
+                        const hasSeenGoldNugget = codex.items.goldNuggetSeen;
                         
-                        body += "\n\n§eThis fruit shows potential in medical applications.";
+                        body = "§eGold Ingot\n§7A valuable metal ingot with various applications.";
+                        
+                        if (infectionKnowledge >= 1 || hasSeenGoldenApple || hasSeenGoldenCarrot || hasSeenEnchantedApple) {
+                            body += "\n\n§7Properties:\n§7• Highly valuable material\n§7• Used in crafting valuable items";
+                            
+                            if ((hasSeenGoldenApple || hasSeenGoldenCarrot || hasSeenEnchantedApple) && infectionKnowledge >= 1) {
+                                body += "\n\n§6Medical Applications:\n§7• Gold is used in crafting Golden Apples and Golden Carrots\n§7• These items have important medical applications\n§7• Gold may enhance the therapeutic properties of these items";
+                            }
+                            
+                            if (infectionKnowledge >= 2 && (hasSeenGoldenApple || hasSeenGoldenCarrot)) {
+                                body += "\n\n§7Research Notes:\n§7• Gold appears to concentrate life energy in certain items\n§7• Golden items show promise in infection treatment\n§7• The metal may act as a catalyst for healing processes";
+                            }
+                            
+                            if (hasSeenGoldNugget) {
+                                body += "\n\n§7Material Relationship:\n§7• Can be broken down into Gold Nuggets\n§9 Gold Nuggets can be combined into Gold Ingots";
+                            }
+                            
+                            if (infectionKnowledge >= 3) {
+                                body += "\n\n§6Expert Analysis:\n§7• Gold has unique properties that enhance healing\n§7• Used extensively in medical crafting\n§7• Essential component for cure research\n§7• The metal's conductivity may play a role in energy transfer";
+                            }
+                        } else {
+                            body += "\n\n§7A precious metal commonly used in crafting and trading.";
+                        }
+                    } else if (e.key === "goldNuggetSeen") {
+                        // Gold nugget information with progressive discovery
+                        const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
+                        const hasSeenGold = codex.items.goldSeen;
+                        const hasSeenGoldenApple = codex.items.goldenAppleSeen;
+                        const hasSeenGoldenCarrot = codex.items.goldenCarrotSeen;
+                        
+                        body = "§eGold Nugget\n§7A small piece of valuable gold.";
+                        
+                        if (infectionKnowledge >= 1 || hasSeenGoldenApple || hasSeenGoldenCarrot || hasSeenGold) {
+                            body += "\n\n§7Properties:\n§7• Small quantity of valuable gold\n§7• Can be combined into Gold Ingots";
+                            
+                            if (hasSeenGold) {
+                                body += "\n\n§7Material Relationship:\n§9 Gold Ingots can be broken down into Gold Nuggets\n§7• Gold Nuggets can be combined into Gold Ingots";
+                            }
+                            
+                            if ((hasSeenGoldenApple || hasSeenGoldenCarrot) && infectionKnowledge >= 1) {
+                                body += "\n\n§7Medical Connection:\n§7• Gold nuggets are components used in crafting medical items\n§7• Part of the material chain for cure-related items\n§7• May have applications in infection treatment research";
+                            }
+                            
+                            if (infectionKnowledge >= 2) {
+                                body += "\n\n§7Research Notes:\n§7• Gold nuggets are valuable resources for medical crafting\n§7• Essential for creating gold-based therapeutic items";
+                            }
+                        } else {
+                            body += "\n\n§7A precious material that can be used in crafting.";
+                        }
                     } else if (e.key === "enchantedGoldenAppleSeen") {
-                        // Enchanted golden apple information with subtle hints
-                        let hintText = "";
-                        if (codex.items.weaknessPotionSeen) {
-                            hintText = "\n\n§7Research Connection:\n§7• Weakness + Enchanted Golden Apple = Potential Cure\n§7• Timing appears to be critical\n§7• Both components must be present simultaneously";
-                        }
+                        // Enchanted golden apple information with progressive discovery-based details
+                        const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
+                        const infectionState = playerInfection.get(player.id);
+                        const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
+                        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+                        const hasSeenGold = codex.items.goldSeen;
+                        const hasSeenGoldNugget = codex.items.goldNuggetSeen;
+                        const hasSeenGoldenApple = codex.items.goldenAppleSeen;
+                        const hasSeenGoldenCarrot = codex.items.goldenCarrotSeen;
+                        const hasSeenWeaknessPotion = codex.items.weaknessPotionSeen;
+                        const cureKnown = codex.cures.bearCureKnown;
+                        const hasCured = codex.history.totalCures > 0;
                         
-                        body = "§eEnchanted Golden Apple\n§7An extremely rare and powerful variant of the golden apple, enhanced with magical properties.\n\n§7Enhanced Properties:\n§7• Superior healing capabilities\n§7• Magical enhancement increases potency\n§7• Contains concentrated life energy\n§7• May have unique therapeutic applications\n\n§7Research Notes:\n§7• Enchanted golden apples are extremely rare\n§7• Their enhanced properties may be crucial for treatment\n§7• May be required for certain medical procedures" + hintText + "\n\n§eThis enhanced fruit may be the key to advanced treatments.";
+                        body = "§eEnchanted Golden Apple\n§7An extremely rare and powerful variant of the golden apple.";
+                        
+                        // Progressive information based on discovery and knowledge
+                        if (infectionKnowledge >= 1 || cureKnown || hasCured || hasPermanentImmunity) {
+                            body += "\n\n§7Enhanced Properties:\n§7• Superior healing capabilities\n§7• Magical enhancement increases potency\n§7• Contains concentrated life energy";
+                            
+                            if (hasSeenGold || hasSeenGoldNugget) {
+                                body += "\n§7• Enhanced with gold, which amplifies its properties";
+                            }
+                            
+                            if (infectionKnowledge >= 1 || cureKnown) {
+                                body += "\n§7• Has unique therapeutic applications";
+                                
+                                if (cureKnown || hasCured) {
+                                    body += "\n\n§6Major Infection Cure:\n§7• Part of the major infection cure (along with Weakness effect)\n§7• Must be consumed while under weakness effect\n§7• Effect: Grants §aPermanent Immunity§7 (prevents minor infection on respawn)\n§7• Also grants: §bTemporary Immunity§7 (5 minutes)\n§7• Permanent immunity requires 3 hits from Maple Bears to get infected (instead of 2)";
+                                } else if (infectionKnowledge >= 1) {
+                                    body += "\n\n§7Research Notes:\n§7• May be required for advanced medical procedures\n§7• Appears to have applications in infection treatment";
+                                }
+                            }
+                            
+                            if (hasSeenWeaknessPotion && (infectionKnowledge >= 1 || cureKnown)) {
+                                body += "\n\n§7Research Connection:\n§7• Weakness + Enchanted Golden Apple = Major Infection Cure\n§7• Timing is critical - must consume while under weakness effect\n§7• Both components must be present simultaneously\n§7• The combination provides permanent immunity";
+                            }
+                            
+                            if (hasSeenGoldenApple && infectionKnowledge >= 2) {
+                                body += "\n\n§7Material Relationship:\n§7• Enhanced form of the Golden Apple\n§7• More potent than regular golden apples\n§7• The gold content plays a crucial role in both variants";
+                            }
+                            
+                            if (hasSeenGold || hasSeenGoldNugget) {
+                                body += "\n\n§6Material Analysis:\n§7• Contains concentrated gold, which amplifies life energy\n§7• Gold's properties enhance its therapeutic effects beyond normal golden apples";
+                            }
+                            
+                            if (hasPermanentImmunity) {
+                                body += "\n\n§aYou have already cured your infection and gained permanent immunity.";
+                            }
+                            
+                            if (infectionKnowledge >= 3 || (cureKnown && hasCured)) {
+                                body += "\n\n§6Expert Analysis:\n§7• Enchanted golden apples are extremely rare and valuable\n§7• Their enhanced properties are crucial for major infection treatment\n§7• Essential component for major infection cure\n§7• The magical enhancement concentrates life energy beyond normal apples\n§7• When combined with weakness, provides permanent immunity\n\n§eThis enhanced fruit is the key to advanced infection treatment.";
+                            } else if (infectionKnowledge >= 2 || cureKnown) {
+                                body += "\n\n§7Research Notes:\n§7• Enchanted golden apples are extremely rare\n§7• Their enhanced properties may be crucial for treatment\n§7• May be required for certain medical procedures";
+                            }
+                        } else {
+                            body += "\n\n§7Enhanced Properties:\n§7• Superior healing capabilities\n§7• Magical enhancement increases potency\n§7• Contains concentrated life energy";
+                            if (hasSeenGold || hasSeenGoldNugget) {
+                                body += "\n§7• Enhanced with gold, which may amplify its properties";
+                            }
+                            body += "\n\n§7Research Notes:\n§7• Enchanted golden apples are extremely rare\n§7• Their enhanced properties may be crucial for treatment\n§7• May be required for certain medical procedures\n\n§eThis enhanced fruit may be the key to advanced treatments.";
+                        }
                     } else if (e.key === "brewingStandSeen") {
                         // Brewing stand information
                         body = "§eBrewing Stand\n§7A specialized apparatus for creating alchemical concoctions. Essential for potion production.\n\n§7Function:\n§7• Allows creation of various potions\n§7• Can produce weakness potions\n§7• Essential for alchemical research\n\n§7Research Applications:\n§7• Weakness potions can be brewed here\n§7• Essential for cure research\n§7• Allows experimentation with different concoctions\n\n§eThis apparatus is crucial for developing treatments.";
@@ -3150,7 +3558,7 @@ function playJournalIntroAudio(player) {
 
 function showGoalScreen(player) {
     const form = new ActionFormData().title("§6Your Goal");
-    form.body(`§eThe Infection\n\n§7Your world has been infected by a mysterious white powder. Strange creatures called "Maple Bears" are spreading this infection.\n\n§eYour Objectives:\n§7• Survive the infection.\n§7• Learn about the bears and their behavior.\n§7• Discover how to cure yourself, if you get infected.\n§7• Upgrade this journal to track your progress.\n\n§7The infection gets worse over time. Stay alert!`);
+    form.body(`§eThe Infection\n\n§7Your world has been infected by a mysterious white powder. Strange creatures called "Maple Bears" are spreading this infection.\n\n§eYour Objectives:\n§7• Survive the infection.\n§7• Learn about the bears and their behavior.\n§7• Discover how to cure yourself, if you get infected.\n§7• **§l§eUpgrade this journal to track your progress and find the cure.§r§7**\n§7• Find a way to cure your infection before you degrade.\n\n§cIMPORTANT: §7Upgrading your journal is essential for discovering cures and tracking your infection status. Without the upgraded journal, you won't be able to learn crucial information about infections, cures, and treatments.\n\n§7The infection gets worse over time. Stay alert!`);
     form.button("§8Back");
     form.show(player).then((res) => {
         if (res.canceled) {

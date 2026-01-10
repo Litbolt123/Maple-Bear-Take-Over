@@ -1169,28 +1169,53 @@ world.afterEvents.playerJoin.subscribe((event) => {
                             });
 
                             if (isFirstTimePlayer) {
-                                // First-time player - show welcome message based on current day
-                                const displayInfo = getDayDisplayInfo(currentDay);
-                                if (currentDay < 2) {
-                                    sendPlayerMessage(player, "§aWelcome to a completely normal world...");
-                                    showPlayerTitle(player, "§aWelcome...", undefined, { stayDuration: 40 }, currentDay);
-                                    showPlayerActionbar(player, "Everything seems peaceful here...");
-                                } else {
-                                    sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Welcome to Day ${currentDay}...`);
-                                    showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Welcome...`, undefined, { stayDuration: 40 }, currentDay);
-                                    showPlayerActionbar(player, "The Maple Bear infection continues...");
-                                }
-
-                                // Mark as returning player for future joins
-                                returningPlayers.add(playerName);
-
-                                // Show day info after a delay
+                                // Check if intro sequence is active or has been shown - if so, skip welcome message
+                                // (intro sequence handles the welcome message)
+                                // Also check if intro is currently in progress by waiting a bit longer
+                                const WORLD_INTRO_SEEN_PROPERTY = "mb_world_intro_seen";
+                                const introSeen = world.getDynamicProperty(WORLD_INTRO_SEEN_PROPERTY);
+                                
+                                // Wait additional time to ensure intro sequence has had time to start and mark itself
+                                // The intro sequence takes about 15+ seconds total, so wait at least that long
                                 system.runTimeout(() => {
+                                    if (!player || !player.isValid) return;
+                                    
+                                    // Check again after delay - intro should be seen by now if it was shown
+                                    const introSeenNow = world.getDynamicProperty(WORLD_INTRO_SEEN_PROPERTY);
+                                    
+                                    if (!introSeenNow) {
+                                        // Intro still hasn't been shown - this should be very rare, but skip welcome message anyway
+                                        console.log(`[DAY TRACKER] Skipping welcome message for ${playerName} - intro hasn't been shown yet`);
+                                        return;
+                                    }
+                                    
+                                    // Intro has been shown - now safe to show day-based welcome message
+                                    // But only if enough time has passed since intro (intro takes ~15 seconds)
                                     const displayInfo = getDayDisplayInfo(currentDay);
-                                    sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} It is currently Day ${currentDay}`);
-                                    showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay);
-                                    showPlayerActionbar(player, "The Maple Bear infection continues...");
-                                }, 3000); // 3 second delay
+                                    if (currentDay < 2) {
+                                        sendPlayerMessage(player, "§aWelcome to a completely normal world...");
+                                        showPlayerTitle(player, "§aWelcome...", undefined, { stayDuration: 40 }, currentDay);
+                                        showPlayerActionbar(player, "Everything seems peaceful here...");
+                                    } else {
+                                        sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Welcome to Day ${currentDay}...`);
+                                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Welcome...`, undefined, { stayDuration: 40 }, currentDay);
+                                        showPlayerActionbar(player, "The Maple Bear infection continues...");
+                                    }
+
+                                    // Mark as returning player for future joins
+                                    returningPlayers.add(playerName);
+
+                                    // Show day info after a delay
+                                    system.runTimeout(() => {
+                                        if (!player || !player.isValid) return;
+                                        const displayInfo = getDayDisplayInfo(currentDay);
+                                        sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} It is currently Day ${currentDay}`);
+                                        showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay);
+                                        showPlayerActionbar(player, "The Maple Bear infection continues...");
+                                    }, 3000); // 3 second delay
+                                }, 400); // 20 second delay to ensure intro sequence is completely done (intro takes ~15 seconds)
+                                
+                                console.log(`[DAY TRACKER] Scheduling welcome message check for ${playerName} after intro sequence completes`);
                             } else {
                                 // Returning player - just show the day
                                 const displayInfo = getDayDisplayInfo(currentDay);
