@@ -13,12 +13,13 @@
 				"default": "geometry.flying_mb"
 			},
 			"particle_effects": {
-				"death_dust": "mb:white_dust_particle"			},
+				"death_dust": "mb:white_dust_particle"
+			},
 			"render_controllers": [
 				"controller.render.infected"
 			],
 			"spawn_egg": {
-				"texture": "mb_infected_day20_egg",
+				"texture": "flying_mb_egg",
 				"texture_index": 0
 			},
 			"animations": {
@@ -45,4 +46,3 @@
 		}
 	}
 }
-
