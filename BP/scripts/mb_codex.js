@@ -39,10 +39,15 @@ export function getDefaultCodex() {
             hungerSeen: false,
             miningFatigueSeen: false
         },
+        minorInfectionEffects: {
+            slownessSeen: false,
+            weaknessSeen: false
+        },
         symptomsUnlocks: {
             infectionSymptomsUnlocked: false,
             snowEffectsUnlocked: false,
-            snowTierAnalysisUnlocked: false
+            snowTierAnalysisUnlocked: false,
+            minorInfectionAnalysisUnlocked: false
         },
         // Aggregated metadata by effect id
         symptomsMeta: {},
@@ -642,7 +647,7 @@ export function showCodexBook(player, context) {
 
         // Variant unlock checks are handled when mobs are killed, not when opening codex
     function maskTitle(title, known) {
-        return known ? title : "?".repeat(title.length);
+        return known ? title : "???";
     }
         
         // Get settings with defaults
@@ -722,44 +727,82 @@ export function showCodexBook(player, context) {
             updateKnowledgeLevel(player, 'infectionLevel', 1);
             infectionKnowledge = 1;
         }
+        // Check if player has upgraded to Powdery Journal
+        const hasPowderyJournal = codex.items.snowBookCrafted;
+        
         if (hasInfection) {
             if (infectionKnowledge >= 1) {
                 // Check infection type
                 const infectionType = infectionState.infectionType || MAJOR_INFECTION_TYPE;
                 const isMinor = infectionType === MINOR_INFECTION_TYPE;
                 
-                // Show infection type
+                // Basic status - always show if infected
                 if (isMinor) {
                     summary.push(`§eStatus: §cMINOR INFECTION`);
                 } else {
                     summary.push(`§eStatus: §cMAJOR INFECTION`);
                 }
                 
-                const ticks = infectionState.ticksLeft || 0;
-                const days = Math.ceil(ticks / 24000);
-                const snowCount = infectionState.snowCount || 0;
-                summary.push(`§eTime: §c${formatTicksDuration(ticks)} (§f~${days} day${days !== 1 ? 's' : ''}§c)`);
-                
-                if (!isMinor) {
-                    // Only show snow count for major infection
-                    summary.push(`§eSnow consumed: §c${snowCount}`);
+                // Timer info - progressive: show more detail as player experiences infection
+                // Basic: just "???" if haven't experienced much
+                // Intermediate: show time if have Powdery Journal or experienced for a while
+                const hasExperiencedTimer = hasPowderyJournal || infectionKnowledge >= 2 || codex.status.bearTimerSeen;
+                if (hasExperiencedTimer) {
+                    const ticks = infectionState.ticksLeft || 0;
+                    const days = Math.ceil(ticks / 24000);
+                    summary.push(`§eTime: §c${formatTicksDuration(ticks)} (§f~${days} day${days !== 1 ? 's' : ''}§c)`);
+                } else {
+                    summary.push(`§eTime: §8???`);
                 }
                 
-                // Show minor infection cure progress
-                if (isMinor) {
-                    const hasGoldenApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
-                    const hasGoldenCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
-                    summary.push(`§7Minor Cure Progress:`);
-                    summary.push(`§7  Golden Apple: ${hasGoldenApple ? '§a✓' : '§c✗'}`);
-                    summary.push(`§7  Golden Carrot: ${hasGoldenCarrot ? '§a✓' : '§c✗'}`);
-                    if (hasGoldenApple && hasGoldenCarrot) {
-                        summary.push(`§eBoth components consumed! Cure is taking effect...`);
+                // Snow count - only show if have Powdery Journal AND have consumed snow (experienced it)
+                if (!isMinor && hasPowderyJournal) {
+                    const snowCount = infectionState.snowCount || 0;
+                    const hasConsumedSnow = snowCount > 0 || codex.infections.snow.discovered;
+                    if (hasConsumedSnow) {
+                        summary.push(`§eSnow consumed: §c${snowCount}`);
+                    }
+                }
+                
+                // Cure information - progressive: only show what player has discovered
+                if (hasPowderyJournal) {
+                    // Show minor infection cure progress - only if cure items discovered
+                    if (isMinor) {
+                        const hasGoldenApple = codex.items.goldenAppleSeen;
+                        const hasGoldenCarrot = codex.items.goldenCarrotSeen;
+                        
+                        if (hasGoldenApple && hasGoldenCarrot) {
+                            const hasApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
+                            const hasCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
+                            summary.push(`§7Minor Cure Progress:`);
+                            summary.push(`§7  Golden Apple: ${hasApple ? '§a✓' : '§eDiscovered'}`);
+                            summary.push(`§7  Golden Carrot: ${hasCarrot ? '§a✓' : '§eDiscovered'}`);
+                            if (hasApple && hasCarrot) {
+                                summary.push(`§eBoth components consumed! Cure is taking effect...`);
+                            } else {
+                                summary.push(`§7Consume both to gain permanent immunity.`);
+                            }
+                        } else if (hasGoldenApple || hasGoldenCarrot) {
+                            summary.push(`§7Cure: §8??? (one component discovered)`);
+                        } else {
+                            summary.push(`§7Cure: §8???`);
+                        }
                     } else {
-                        summary.push(`§7Consume both to gain permanent immunity.`);
+                        // Major infection cure info - only if cure items discovered
+                        const hasWeaknessPotion = codex.items.weaknessPotionSeen;
+                        const hasEnchantedApple = codex.items.enchantedGoldenAppleSeen;
+                        
+                        if (hasWeaknessPotion && hasEnchantedApple && codex.cures.bearCureKnown) {
+                            summary.push("§7Cure: §fWeakness + Enchanted Golden Apple");
+                        } else if (hasWeaknessPotion || hasEnchantedApple) {
+                            summary.push("§7Cure: §8??? (one component discovered)");
+                        } else {
+                            summary.push("§7Cure: §8???");
+                        }
                     }
                 } else {
-                    // Major infection cure info
-                    if (codex.cures.bearCureKnown) summary.push("§7Cure: §fWeakness + Enchanted Golden Apple");
+                    // Basic journal - minimal info
+                    summary.push(`§7Cure: §8???`);
                 }
             } else {
                 summary.push(`§eStatus: §cSomething is wrong with you...`);
@@ -782,35 +825,52 @@ export function showCodexBook(player, context) {
             }
         }
 
-        // Show immunity status
+        // Show immunity status - progressive: only show if have experienced immunity or have Powdery Journal with knowledge
         const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
-        if (hasPermanentImmunity) {
-            summary.push("§bImmunity: §aPERMANENT");
-        } else if (immune && codex.status.immuneKnown) {
-            // Temporary immunity from major infection cure
-            const end = curedPlayers.get(player.id);
-            const remainingMs = Math.max(0, end - Date.now());
-            summary.push(`§bImmunity: §fACTIVE (§b${formatMillisDuration(remainingMs)} left§f)`);
-        } else {
-            summary.push("§bImmunity: §7None");
+        const hasExperiencedImmunity = hasPermanentImmunity || (immune && codex.status.immuneKnown);
+        if (hasPowderyJournal && (hasExperiencedImmunity || infectionKnowledge >= 1)) {
+            if (hasPermanentImmunity) {
+                summary.push("§bImmunity: §aPERMANENT");
+            } else if (immune && codex.status.immuneKnown) {
+                // Temporary immunity from major infection cure
+                const end = curedPlayers.get(player.id);
+                const remainingMs = Math.max(0, end - Date.now());
+                summary.push(`§bImmunity: §fACTIVE (§b${formatMillisDuration(remainingMs)} left§f)`);
+            } else if (hasPowderyJournal && infectionKnowledge >= 1) {
+                summary.push("§bImmunity: §7None");
+            }
+        } else if (!hasPowderyJournal && hasExperiencedImmunity) {
+            // Basic journal - only show if actually have immunity
+            if (hasPermanentImmunity) {
+                summary.push("§bImmunity: §aPERMANENT");
+            } else if (immune) {
+                summary.push("§bImmunity: §fACTIVE");
+            }
         }
 
-        // Bear hits - only show if player has bear knowledge
+        // Bear hits - progressive: only show if player has Powdery Journal AND has been hit AND has bear knowledge
         const bearKnowledge = getKnowledgeLevel(player, 'bearLevel');
         const hitCount = bearHitCount.get(player.id) || 0;
-        if (hitCount > 0 && !hasInfection && bearKnowledge >= 1) {
-            const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
-            const hitsNeeded = hasPermanentImmunity ? IMMUNE_HITS_TO_INFECT : HITS_TO_INFECT;
-            summary.push(`§eBear Hits: §f${hitCount}/${hitsNeeded}`);
-        } else if (hasInfection && infectionKnowledge >= 1) {
-            const infectionType = infectionState.infectionType || MAJOR_INFECTION_TYPE;
-            const isMinor = infectionType === MINOR_INFECTION_TYPE;
-            if (isMinor) {
-                const currentHits = bearHitCount.get(player.id) || 0;
-                if (currentHits > 0) {
-                    summary.push(`§eBear Hits: §f${currentHits}/${MINOR_HITS_TO_INFECT} (until major infection)`);
+        const hasBeenHit = hitCount > 0 || codex.infections.bear.discovered;
+        if (hasPowderyJournal && hasBeenHit && bearKnowledge >= 1) {
+            if (hitCount > 0 && !hasInfection) {
+                const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+                const hitsNeeded = hasPermanentImmunity ? IMMUNE_HITS_TO_INFECT : HITS_TO_INFECT;
+                summary.push(`§eBear Hits: §f${hitCount}/${hitsNeeded}`);
+            } else if (hasInfection && infectionKnowledge >= 1) {
+                const infectionType = infectionState.infectionType || MAJOR_INFECTION_TYPE;
+                const isMinor = infectionType === MINOR_INFECTION_TYPE;
+                if (isMinor) {
+                    const currentHits = bearHitCount.get(player.id) || 0;
+                    if (currentHits > 0) {
+                        summary.push(`§eBear Hits: §f${currentHits}/${MINOR_HITS_TO_INFECT} (until major infection)`);
+                    }
+                    // Only show progression warning if player has learned about it
+                    const hasProgressionKnowledge = codex.infections.major.discovered || hasPermanentImmunity;
+                    if (hasProgressionKnowledge) {
+                        summary.push(`§7Warning: 2 hits OR 1 snow = Major Infection`);
+                    }
                 }
-                summary.push(`§7Warning: 2 hits OR 1 snow = Major Infection`);
             }
         }
 
@@ -940,17 +1000,37 @@ export function showCodexBook(player, context) {
             lines.push("§eThe Infection");
             lines.push("");
             
-            // Show current infection status
+            // Show current infection status - progressive based on experience
             if (hasInfection) {
                 const isMinor = infectionType === MINOR_INFECTION_TYPE;
                 if (isMinor) {
-                    lines.push("§cCurrent Status: Minor Infection (10-day timer)");
-                    lines.push("§7You have a minor infection. Effects are mild (slowness I, weakness I).");
-                    lines.push("§7You can still be cured with a Golden Apple + Golden Carrot.");
+                    lines.push("§cCurrent Status: Minor Infection");
+                    if (infectionState.ticksLeft > 0) {
+                        const daysLeft = Math.ceil(infectionState.ticksLeft / 24000);
+                        lines.push(`§7Time remaining: §f${daysLeft} day${daysLeft !== 1 ? 's' : ''}`);
+                    }
+                    lines.push("§7You have a minor infection. Effects are mild.");
+                    
+                    // Only show cure info if cure items discovered
+                    const hasGoldenApple = codex.items.goldenAppleSeen;
+                    const hasGoldenCarrot = codex.items.goldenCarrotSeen;
+                    if (hasGoldenApple && hasGoldenCarrot) {
+                        lines.push("§7You can still be cured with a Golden Apple + Golden Carrot.");
+                    }
                 } else {
-                    lines.push("§4Current Status: Major Infection (5-day timer)");
+                    lines.push("§4Current Status: Major Infection");
+                    if (infectionState.ticksLeft > 0) {
+                        const daysLeft = Math.ceil(infectionState.ticksLeft / 24000);
+                        lines.push(`§7Time remaining: §f${daysLeft} day${daysLeft !== 1 ? 's' : ''}`);
+                    }
                     lines.push("§7You have a major infection. Effects are severe and worsen over time.");
-                    lines.push("§7Cure requires Weakness effect + Enchanted Golden Apple.");
+                    
+                    // Only show cure info if cure items discovered
+                    const hasWeaknessPotion = codex.items.weaknessPotionSeen;
+                    const hasEnchantedApple = codex.items.enchantedGoldenAppleSeen;
+                    if (hasWeaknessPotion && hasEnchantedApple && codex.cures.bearCureKnown) {
+                        lines.push("§7Cure requires Weakness effect + Enchanted Golden Apple.");
+                    }
                 }
                 lines.push("");
             } else if (hasPermanentImmunity) {
@@ -964,55 +1044,161 @@ export function showCodexBook(player, context) {
                 lines.push("");
             }
             
-            // Minor vs Major Infection Section
+            // Minor vs Major Infection Section - gated behind experience
             lines.push("§6Infection Types:");
             lines.push("");
-            lines.push("§eMinor Infection:");
-            lines.push("§7• 10-day timer");
-            lines.push("§7• Mild effects: Slowness I, Weakness I");
-            lines.push("§7• Can be cured with: Golden Apple + Golden Carrot");
-            lines.push("§7• Cure grants: §aPermanent Immunity§7");
-            lines.push("§7• Requires 2 hits from Maple Bears to progress to major");
-            lines.push("§7• OR 1 snow consumption to progress to major");
-            lines.push("");
-            lines.push("§cMajor Infection:");
-            lines.push("§7• 5-day timer");
-            lines.push("§7• Severe effects: Multiple negative status effects");
-            lines.push("§7• Effects worsen over time");
-            lines.push("§7• Can be cured with: Weakness effect + Enchanted Golden Apple");
-            lines.push("§7• Cure grants: §bTemporary Immunity§7 (5 minutes)");
-            lines.push("");
             
-            // Progression Warning
-            lines.push("§6Progression:");
-            lines.push("§7• Minor infection can progress to major infection:");
-            lines.push("§7  - 2 hits from Maple Bears");
-            lines.push("§7  - OR 1 snow consumption");
-            lines.push("§c• Warning: Minor infection is more easily treatable.");
-            lines.push("§c  Once it becomes major, the cure becomes much more difficult.");
-            lines.push("");
+            // Minor Infection - only show if experienced
+            const hasMinorExperience = codex.infections.minor.discovered || isMinor || hasPermanentImmunity;
+            const hasHadMinorInfection = codex.infections.minor.discovered;
+            if (hasMinorExperience) {
+                lines.push("§eMinor Infection:");
+                
+                // Timer info - only show if experienced
+                // Note: Timer is scaled based on day, but we show "10-day timer" as the base concept
+                if (isMinor || hasPermanentImmunity || hasHadMinorInfection) {
+                    lines.push("§7• Timer: Varies by day (scales down as world becomes more infected)");
+                } else {
+                    lines.push("§7• Timer: §8???");
+                }
+                
+                // Effects - only show if experienced
+                const minorEffects = codex.minorInfectionEffects || {};
+                const hasSlowness = minorEffects.slownessSeen;
+                const hasWeakness = minorEffects.weaknessSeen;
+                
+                if (hasSlowness || hasWeakness) {
+                    const effectList = [];
+                    if (hasSlowness) effectList.push("Slowness I");
+                    if (hasWeakness) effectList.push("Weakness I");
+                    lines.push(`§7• Mild effects: ${effectList.join(", ")}`);
+                } else if (isMinor || hasPermanentImmunity) {
+                    lines.push("§7• Mild effects: §8???");
+                }
+                
+                // Cure info - only show if cure items discovered
+                const hasGoldenApple = codex.items.goldenAppleSeen;
+                const hasGoldenCarrot = codex.items.goldenCarrotSeen;
+                
+                if (hasGoldenApple && hasGoldenCarrot) {
+                    lines.push("§7• Can be cured with: Golden Apple + Golden Carrot");
+                    lines.push("§7• Cure grants: §aPermanent Immunity§7");
+                } else if (hasGoldenApple || hasGoldenCarrot) {
+                    lines.push("§7• Cure: §8??? (one component discovered)");
+                } else {
+                    lines.push("§7• Cure: §8???");
+                }
+                
+                // Progression info - only show if learned about it
+                const hasProgressionKnowledge = codex.infections.major.discovered || hasPermanentImmunity;
+                if (hasProgressionKnowledge) {
+                    lines.push("§7• Requires 2 hits from Maple Bears to progress to major");
+                    lines.push("§7• OR 1 snow consumption to progress to major");
+                }
+                
+                lines.push("");
+            } else {
+                lines.push("§eMinor Infection:");
+                lines.push("§7You haven't experienced this type of infection yet.");
+                lines.push("");
+            }
             
-            // Cure Information
+            // Major Infection - only show if experienced
+            const hasMajorExperience = codex.infections.major.discovered || (!isMinor && hasInfection);
+            if (hasMajorExperience) {
+                lines.push("§cMajor Infection:");
+                
+                // Timer info - only show if experienced
+                if (!isMinor && hasInfection) {
+                    lines.push("§7• 5-day timer");
+                } else {
+                    lines.push("§7• Timer: §8???");
+                }
+                
+                // Effects - only show if experienced
+                const hasMajorEffects = Object.values(codex.effects).some(seen => seen);
+                if (hasMajorEffects) {
+                    lines.push("§7• Severe effects: Multiple negative status effects");
+                    lines.push("§7• Effects worsen over time");
+                } else {
+                    lines.push("§7• Effects: §8???");
+                }
+                
+                // Cure info - only show if cure items discovered
+                const hasWeaknessPotion = codex.items.weaknessPotionSeen;
+                const hasEnchantedApple = codex.items.enchantedGoldenAppleSeen;
+                
+                if (hasWeaknessPotion && hasEnchantedApple && codex.cures.bearCureKnown) {
+                    lines.push("§7• Can be cured with: Weakness effect + Enchanted Golden Apple");
+                    lines.push("§7• Cure grants: §bTemporary Immunity§7 (5 minutes)");
+                    lines.push("§7• Also grants: §aPermanent Immunity§7 (prevents minor infection on respawn)");
+                } else if (hasWeaknessPotion || hasEnchantedApple) {
+                    lines.push("§7• Cure: §8??? (one component discovered)");
+                } else {
+                    lines.push("§7• Cure: §8???");
+                }
+                
+                lines.push("");
+            } else {
+                lines.push("§cMajor Infection:");
+                lines.push("§7You haven't experienced this type of infection yet.");
+                lines.push("");
+            }
+            
+            // Progression Warning - only show if both infections experienced
+            if (hasMinorExperience && hasMajorExperience) {
+                lines.push("§6Progression:");
+                lines.push("§7• Minor infection can progress to major infection:");
+                lines.push("§7  - 2 hits from Maple Bears");
+                lines.push("§7  - OR 1 snow consumption");
+                lines.push("§c• Warning: Minor infection is more easily treatable.");
+                lines.push("§c  Once it becomes major, the cure becomes much more difficult.");
+                lines.push("");
+            }
+            
+            // Cure Information - gated behind experience and discovery
             lines.push("§6Cure Information:");
             lines.push("");
-            lines.push("§eMinor Infection Cure:");
-            const hasGoldenApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
-            const hasGoldenCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
-            lines.push(`§7  Golden Apple: ${hasGoldenApple ? '§a✓ Consumed' : '§c✗ Not consumed'}`);
-            lines.push(`§7  Golden Carrot: ${hasGoldenCarrot ? '§a✓ Consumed' : '§c✗ Not consumed'}`);
-            lines.push("§7  Both must be consumed separately (any order)");
-            lines.push("§7  Effect: §aPermanent Immunity§7 - prevents minor infection on respawn");
-            lines.push("");
-            lines.push("§cMajor Infection Cure:");
-            lines.push(codex.cures.bearCureKnown ? "§7  Weakness effect + Enchanted Golden Apple" : "§8  ???");
-            if (codex.cures.bearCureKnown) {
-                lines.push("§7  Effect: §aPermanent Immunity§7 (prevents minor infection on respawn)");
-                lines.push("§7  Also grants: §bTemporary Immunity§7 (5 minutes)");
-                lines.push("§7  Requires: 3 hits from Maple Bears to get infected (instead of 2)");
-            } else {
-                lines.push("§8  ???");
+            
+            // Minor Infection Cure - only show if minor infection experienced AND cure items discovered
+            if (hasMinorExperience) {
+                lines.push("§eMinor Infection Cure:");
+                const hasGoldenApple = codex.items.goldenAppleSeen;
+                const hasGoldenCarrot = codex.items.goldenCarrotSeen;
+                
+                if (hasGoldenApple && hasGoldenCarrot) {
+                    const hasApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
+                    const hasCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
+                    lines.push(`§7  Golden Apple: ${hasApple ? '§a✓ Consumed' : '§eDiscovered'}`);
+                    lines.push(`§7  Golden Carrot: ${hasCarrot ? '§a✓ Consumed' : '§eDiscovered'}`);
+                    lines.push("§7  Both must be consumed separately (any order)");
+                    lines.push("§7  Effect: §aPermanent Immunity§7 - prevents minor infection on respawn");
+                } else if (hasGoldenApple || hasGoldenCarrot) {
+                    lines.push("§7  Components: §8??? (one component discovered)");
+                } else {
+                    lines.push("§7  Components: §8???");
+                }
+                lines.push("");
             }
-            lines.push("");
+            
+            // Major Infection Cure - only show if major infection experienced AND cure items discovered
+            if (hasMajorExperience) {
+                lines.push("§cMajor Infection Cure:");
+                const hasWeaknessPotion = codex.items.weaknessPotionSeen;
+                const hasEnchantedApple = codex.items.enchantedGoldenAppleSeen;
+                
+                if (hasWeaknessPotion && hasEnchantedApple && codex.cures.bearCureKnown) {
+                    lines.push("§7  Weakness effect + Enchanted Golden Apple");
+                    lines.push("§7  Effect: §aPermanent Immunity§7 (prevents minor infection on respawn)");
+                    lines.push("§7  Also grants: §bTemporary Immunity§7 (5 minutes)");
+                    lines.push("§7  Requires: 3 hits from Maple Bears to get infected (instead of 2)");
+                } else if (hasWeaknessPotion || hasEnchantedApple) {
+                    lines.push("§7  Components: §8??? (one component discovered)");
+                } else {
+                    lines.push("§8  ???");
+                }
+                lines.push("");
+            }
             
             // Infection Mechanics
             lines.push("§6Infection Mechanics:");
@@ -1076,11 +1262,16 @@ export function showCodexBook(player, context) {
                                     ((hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0) || hasAnyInfection);
         const showInfectionSymptoms = Object.values(codex.effects).some(seen => seen);
         const showSnowEffects = Object.values(codex.snowEffects).some(seen => seen);
+        const infectionType = hasInfection ? (infectionState.infectionType || MAJOR_INFECTION_TYPE) : null;
+        const hasMinorInfection = infectionType === MINOR_INFECTION_TYPE;
+        const hasHadMinorInfection = codex.infections.minor.discovered;
+        const showMinorInfectionAnalysis = codex.symptomsUnlocks.minorInfectionAnalysisUnlocked || 
+                                          hasMinorInfection || hasHadMinorInfection;
         
         const form = new ActionFormData().title("§6Symptoms");
         
         // Check if any content is available
-        if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects) {
+        if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects && !showMinorInfectionAnalysis) {
             form.body("§7No symptoms have been experienced yet.\n§8You need to experience effects while infected to unlock symptom information.");
             form.button("§8Back");
         } else {
@@ -1091,6 +1282,12 @@ export function showCodexBook(player, context) {
             // Add snow tier analysis at the top if unlocked
             if (showSnowTierAnalysis) {
                 form.button(`§eInfection Level Analysis`);
+                buttonIndex++;
+            }
+            
+            // Add minor infection analysis if unlocked
+            if (showMinorInfectionAnalysis) {
+                form.button("§eMinor Infection Analysis");
                 buttonIndex++;
             }
             
@@ -1116,7 +1313,7 @@ export function showCodexBook(player, context) {
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             
             // If no content available, just go back
-            if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects) {
+            if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects && !showMinorInfectionAnalysis) {
                 openMain();
                 return;
             }
@@ -1128,6 +1325,12 @@ export function showCodexBook(player, context) {
                 return;
             }
             if (showSnowTierAnalysis) currentIndex++;
+            
+            if (showMinorInfectionAnalysis && res.selection === currentIndex) {
+                openMinorInfectionAnalysis();
+                return;
+            }
+            if (showMinorInfectionAnalysis) currentIndex++;
             
             if (showInfectionSymptoms && res.selection === currentIndex) {
                 openInfectionSymptoms();
@@ -1356,6 +1559,122 @@ export function showCodexBook(player, context) {
         form.body(body);
         form.button("§8Back");
         form.show(player).then(() => openSymptoms());
+    }
+
+    function openMinorInfectionAnalysis() {
+        const codex = getCodex(player);
+        const infectionState = playerInfection.get(player.id);
+        const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
+        const infectionType = hasInfection ? (infectionState.infectionType || MAJOR_INFECTION_TYPE) : null;
+        const isMinor = infectionType === MINOR_INFECTION_TYPE;
+        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+        const hasHadMinorInfection = codex.infections.minor.discovered;
+        
+        const form = new ActionFormData().title("§6Minor Infection Analysis");
+        
+        let body = "";
+        
+        // Basic information - always show if minor infection has been experienced
+        if (isMinor || hasHadMinorInfection || hasPermanentImmunity) {
+            body += "§eMinor Infection\n\n";
+            body += "§7You have been infected with a minor infection.\n";
+            
+            // Timer information - progressive revelation
+            if (isMinor && infectionState) {
+                const daysLeft = Math.ceil(infectionState.ticksLeft / 24000);
+                body += `§7Time remaining: §f${daysLeft} day${daysLeft !== 1 ? 's' : ''}\n`;
+            } else if (hasHadMinorInfection || hasPermanentImmunity) {
+                body += "§7Timer: §f10-day timer\n";
+            }
+            
+            body += "\n";
+            
+            // Effects discovered - only show if experienced
+            const minorEffects = codex.minorInfectionEffects || {};
+            const hasSlowness = minorEffects.slownessSeen;
+            const hasWeakness = minorEffects.weaknessSeen;
+            
+            if (hasSlowness || hasWeakness) {
+                body += "§6Effects Experienced:\n";
+                
+                if (hasSlowness) {
+                    body += "§7• §fSlowness§7: Reduces movement speed. Applied periodically (every 4 minutes).\n";
+                }
+                
+                if (hasWeakness) {
+                    body += "§7• §fWeakness§7: Reduces attack damage. Applied periodically (every 4 minutes).\n";
+                }
+                
+                body += "\n";
+            } else if (isMinor) {
+                body += "§7Effects: §fMild effects (slowness, weakness) are applied periodically.\n\n";
+            }
+            
+            // Cure information - only show if cure items have been discovered
+            const hasGoldenApple = codex.items.goldenAppleSeen;
+            const hasGoldenCarrot = codex.items.goldenCarrotSeen;
+            
+            if (hasGoldenApple || hasGoldenCarrot) {
+                body += "§6Cure Information:\n";
+                
+                if (isMinor) {
+                    const hasApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
+                    const hasCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
+                    
+                    body += "§7Cure components:\n";
+                    body += `§7  Golden Apple: ${hasApple ? '§a✓ Consumed' : (hasGoldenApple ? '§eDiscovered' : '§c✗ Not discovered')}\n`;
+                    body += `§7  Golden Carrot: ${hasCarrot ? '§a✓ Consumed' : (hasGoldenCarrot ? '§eDiscovered' : '§c✗ Not discovered')}\n`;
+                    
+                    if (hasApple && hasCarrot) {
+                        body += "\n§aBoth components consumed! The cure is taking effect...\n";
+                    } else if (hasApple || hasCarrot) {
+                        body += "\n§7Consume both components separately (any order) to gain permanent immunity.\n";
+                    } else {
+                        body += "\n§7Both must be consumed separately (any order).\n";
+                        body += "§7Effect: §aPermanent Immunity§7 - prevents minor infection on respawn.\n";
+                    }
+                } else if (hasPermanentImmunity) {
+                    body += "§aYou have already cured your minor infection and gained permanent immunity.\n";
+                    body += "§7You will never contract minor infection again.\n";
+                    body += "§7You now require 3 hits from Maple Bears to get infected (instead of 2).\n";
+                } else {
+                    body += "§7Cure: Golden Apple + Golden Carrot\n";
+                    body += "§7Both must be consumed separately (any order).\n";
+                    body += "§7Effect: §aPermanent Immunity§7 - prevents minor infection on respawn.\n";
+                }
+                
+                body += "\n";
+            } else if (isMinor) {
+                body += "§7Cure: §8???\n";
+                body += "§8You haven't discovered the cure components yet.\n\n";
+            }
+            
+            // Progression information - only show if player has learned about it
+            const hasProgressionKnowledge = hasHadMinorInfection && (codex.infections.major.discovered || hasPermanentImmunity);
+            
+            if (hasProgressionKnowledge) {
+                body += "§6Progression:\n";
+                body += "§7Minor infection can progress to major infection:\n";
+                body += "§7  • 2 hits from Maple Bears\n";
+                body += "§7  • OR 1 snow consumption\n";
+                body += "§cWarning: Minor infection is more easily treatable.\n";
+                body += "§cOnce it becomes major, the cure becomes much more difficult.\n";
+            } else if (isMinor) {
+                body += "§7Progression: §8???\n";
+                body += "§8You haven't learned about progression yet.\n";
+            }
+        } else {
+            body += "§7You haven't experienced minor infection yet.\n";
+            body += "§8Minor infection information will appear here once you experience it.";
+        }
+        
+        form.body(body);
+        form.button("§8Back");
+        form.show(player).then(() => {
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+            openSymptoms();
+        });
     }
 
     function openMobs() {
@@ -1805,7 +2124,9 @@ export function showCodexBook(player, context) {
                                 }
                             }
                             
-                            if ((infectionKnowledge >= 1 || isMinor) && hasSeenGoldenCarrot) {
+                            // Only show minor cure info if player has experienced minor infection
+                            const hasHadMinorInfection = codex.infections.minor.discovered || isMinor || hasPermanentImmunity;
+                            if (hasHadMinorInfection && hasSeenGoldenCarrot) {
                                 body += "\n\n§6Minor Infection Cure:\n§7• Part of the minor infection cure (along with Golden Carrot)\n§7• Must be consumed separately from Golden Carrot (any order)\n§7• Effect: Grants §aPermanent Immunity§7 when both components are consumed\n§7• Permanent immunity prevents minor infection on respawn\n§7• Permanent immunity requires 3 hits from Maple Bears to get infected (instead of 2)";
                             }
                             
@@ -1867,16 +2188,18 @@ export function showCodexBook(player, context) {
                         body = "§eGolden Carrot\n§7A rare golden variant of the common carrot.";
                         
                         // Progressive information based on discovery and knowledge
+                        const hasHadMinorInfection = codex.infections.minor.discovered || isMinor || hasPermanentImmunity;
                         if (infectionKnowledge >= 1 || isMinor || hasPermanentImmunity) {
                             body += "\n\n§7Properties:\n§7• Provides nutritional value\n§7• Contains concentrated life energy";
                             
-                            if (infectionKnowledge >= 1 || isMinor) {
+                            if (hasHadMinorInfection) {
                                 body += "\n§7• Part of the minor infection cure";
                             }
                             
-                            if (infectionKnowledge >= 2 || (isMinor && (hasGoldenApple || hasGoldenCarrot)) || hasPermanentImmunity) {
+                            // Only show detailed cure info if player has experienced minor infection
+                            if (hasHadMinorInfection && (infectionKnowledge >= 2 || (isMinor && (hasGoldenApple || hasGoldenCarrot)) || hasPermanentImmunity)) {
                                 body += "\n\n§6Minor Infection Cure:\n§7• Must be consumed along with a Golden Apple to cure minor infection\n§7• Both items must be consumed separately (any order)\n§7• Effect: Grants §aPermanent Immunity§7\n§7• Permanent immunity prevents minor infection on respawn\n§7• Permanent immunity requires 3 hits from Maple Bears to get infected (instead of 2)";
-                            } else if (infectionKnowledge >= 1) {
+                            } else if (infectionKnowledge >= 1 && !hasHadMinorInfection) {
                                 body += "\n\n§7Research Notes:\n§7• Appears to have medical applications\n§7• May be related to infection treatment";
                             }
                             
@@ -3558,7 +3881,7 @@ function playJournalIntroAudio(player) {
 
 function showGoalScreen(player) {
     const form = new ActionFormData().title("§6Your Goal");
-    form.body(`§eThe Infection\n\n§7Your world has been infected by a mysterious white powder. Strange creatures called "Maple Bears" are spreading this infection.\n\n§eYour Objectives:\n§7• Survive the infection.\n§7• Learn about the bears and their behavior.\n§7• Discover how to cure yourself, if you get infected.\n§7• **§l§eUpgrade this journal to track your progress and find the cure.§r§7**\n§7• Find a way to cure your infection before you degrade.\n\n§cIMPORTANT: §7Upgrading your journal is essential for discovering cures and tracking your infection status. Without the upgraded journal, you won't be able to learn crucial information about infections, cures, and treatments.\n\n§7The infection gets worse over time. Stay alert!`);
+    form.body(`§eThe Infection\n\n§7Your world has been infected by a mysterious white powder. Strange creatures called "Maple Bears" are spreading this infection.\n\n§eYour Objectives:\n§7• Survive the infection.\n§7• Learn about the bears and their behavior.\n§7• Discover how to cure yourself, if you get infected.\n§7• Upgrade this journal to track your progress and find the cure.\n§7• Find a way to cure your infection before you degrade.\n\n§cIMPORTANT: §7Upgrading your journal is essential for discovering cures and tracking your infection status. Without the upgraded journal, you won't be able to learn crucial information about infections, cures, and treatments.\n\n§7The infection gets worse over time. Stay alert!`);
     form.button("§8Back");
     form.show(player).then((res) => {
         if (res.canceled) {
