@@ -2157,6 +2157,7 @@ function handleSnowConsumption(player, item) {
                     fadeOutDuration: 20
                 });
                 
+                // Snow consumption doesn't cause death, so messages are safe to send immediately
                 player.sendMessage("§4§lSOMETHING IS WRONG!");
                 player.sendMessage("§c§lYour infection has worsened dramatically!");
                 player.sendMessage("§7The powder has corrupted you further.");
@@ -4734,14 +4735,13 @@ world.afterEvents.playerSpawn.subscribe((event) => {
         const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE;
         
         if (hasMinorInfection && !infectionState.cured) {
-            // Re-apply minor infection on respawn
+            // Re-apply minor infection on respawn (tag only - effects are applied periodically by timer loop)
             if (!player.hasTag(INFECTED_TAG)) {
                 player.addTag(INFECTED_TAG);
             }
             
-            // Apply mild effects
-            applyEffect(player, "minecraft:slowness", 200, { amplifier: 0 });
-            applyEffect(player, "minecraft:weakness", 200, { amplifier: 0 });
+            // Don't apply effects here - they're applied periodically by the infection timer loop
+            // This prevents effects from being applied immediately on respawn
             
             console.log(`[SPAWN] ${player.name} respawned with minor infection active`);
         } else if (!infectionState && !hasPermanentImmunity) {

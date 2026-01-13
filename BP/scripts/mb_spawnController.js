@@ -151,8 +151,8 @@ const TORPEDO_TYPE = "torpedo";
 
 // Spawn caps for each type (all variants count toward the same cap)
 const ENTITY_TYPE_CAPS = {
-    [TINY_TYPE]: 75,
-    [INFECTED_TYPE]: 50,
+    [TINY_TYPE]: 50,
+    [INFECTED_TYPE]: 35,
     [MINING_TYPE]: 20,
     [FLYING_TYPE]: 30,
     [TORPEDO_TYPE]: 10

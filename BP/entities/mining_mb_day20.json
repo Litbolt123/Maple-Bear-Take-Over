@@ -97,7 +97,7 @@
 		},
 		"components": {
 			"minecraft:inventory": {
-				"inventory_size": 24,
+				"inventory_size": 3,
 				"private": false,
 				"restrict_to_owner": false
 			},
