@@ -6,7 +6,7 @@
 				{
 					"type": "item",
 					"name": "mb:snow",
-					"weight": 95,
+					"weight": 100,
 					"functions": [
 						{
 							"function": "set_count",
@@ -19,7 +19,7 @@
 				},
 				{
 					"type": "empty",
-					"weight": 5
+					"weight": 0
 				}
 			]
 		}
