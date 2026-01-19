@@ -3,6 +3,9 @@ import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { getCodex, getDefaultCodex, markCodex, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, checkKnowledgeProgression } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock } from "./mb_spawnController.js";
+import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
+import { findItem, hasItem } from "./mb_itemFinder.js";
+import { initializeItemRegistry, registerItemHandler } from "./mb_itemRegistry.js";
 import "./mb_spawnController.js";
 import "./mb_miningAI.js";
 import { collectedBlocks } from "./mb_miningAI.js";
@@ -289,6 +292,9 @@ export const HITS_TO_INFECT = 3; // Number of hits required to get infected (for
 export const IMMUNE_HITS_TO_INFECT = 3; // Hits needed when permanently immune (same as HITS_TO_INFECT)
 export const PERMANENT_IMMUNITY_PROPERTY = "mb_permanent_immunity";
 const MINOR_INFECTION_CURED_PROPERTY = "mb_minor_infection_cured";
+const MINOR_REINFECTED_PROPERTY = "mb_minor_reinfected";
+const MINOR_RESPAWNED_PROPERTY = "mb_minor_respawned";
+const MAJOR_INFECTED_BEFORE_PROPERTY = "mb_major_infected_before";
 export const MINOR_CURE_GOLDEN_APPLE_PROPERTY = "mb_minor_cure_golden_apple";
 export const MINOR_CURE_GOLDEN_CARROT_PROPERTY = "mb_minor_cure_golden_carrot";
 const WORLD_INTRO_SEEN_PROPERTY = "mb_world_intro_seen";
@@ -983,7 +989,7 @@ function trackInfectionHistory(player, event) {
         }
         
         // Save updated codex
-        player.setDynamicProperty("mb_codex", JSON.stringify(codex));
+        setPlayerProperty(player, "mb_codex", JSON.stringify(codex));
 
         // Update knowledge progression after infection history change
         try {
@@ -1131,7 +1137,7 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
     }
     
     // Check if intro has been seen - if not, suppress discovery messages until intro completes
-    const introSeen = world.getDynamicProperty(WORLD_INTRO_SEEN_PROPERTY);
+    const introSeen = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
     if (!introSeen && !codex?.items?.snowBookCrafted) {
         console.log(`[DISCOVERY] Suppressing discovery message for ${player?.name} until intro completes (item: ${itemType})`);
         return; // Wait until intro is shown before discovery messages
@@ -1878,13 +1884,13 @@ function cureMinorInfection(player) {
         console.log(`[MINOR CURE] Removed infection state and tag for ${player.name}`);
         
         // Set permanent immunity
-        player.setDynamicProperty(PERMANENT_IMMUNITY_PROPERTY, true);
-        player.setDynamicProperty(MINOR_INFECTION_CURED_PROPERTY, true);
+        setPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY, true);
+        setPlayerProperty(player, MINOR_INFECTION_CURED_PROPERTY, true);
         console.log(`[MINOR CURE] Set permanent immunity for ${player.name}`);
         
         // Clear cure progress properties
-        player.setDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY, undefined);
-        player.setDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY, undefined);
+        setPlayerProperty(player, MINOR_CURE_GOLDEN_APPLE_PROPERTY, undefined);
+        setPlayerProperty(player, MINOR_CURE_GOLDEN_CARROT_PROPERTY, undefined);
         console.log(`[MINOR CURE] Cleared cure progress properties for ${player.name}`);
         
         // Clear mild effects
@@ -1999,12 +2005,12 @@ function handleEnchantedGoldenApple(player, item) {
                 }
 
                 // Grant permanent immunity (curing major infection also grants permanent immunity like minor infection)
-                player.setDynamicProperty(PERMANENT_IMMUNITY_PROPERTY, true);
-                player.setDynamicProperty(MINOR_INFECTION_CURED_PROPERTY, true);
+                setPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY, true);
+                setPlayerProperty(player, MINOR_INFECTION_CURED_PROPERTY, true);
                 
                 // Clear minor cure progress properties (edge case: major cure after minor cure attempt)
-                player.setDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY, undefined);
-                player.setDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY, undefined);
+                setPlayerProperty(player, MINOR_CURE_GOLDEN_APPLE_PROPERTY, undefined);
+                setPlayerProperty(player, MINOR_CURE_GOLDEN_CARROT_PROPERTY, undefined);
                 console.log(`[CURE] Cleared minor cure progress properties for ${player.name} (major cure grants permanent immunity)`);
                 
                 // ALSO grant temporary immunity for 5 minutes (in addition to permanent immunity)
@@ -2052,7 +2058,7 @@ function trackCureAttempt(player) {
 function handleSnowConsumption(player, item) {
     const infectionState = playerInfection.get(player.id);
     const isImmune = isPlayerImmune(player);
-    const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+    const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
     const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE && !infectionState.cured;
     
     // ALWAYS mark snow as discovered and identified when consumed
@@ -2150,30 +2156,40 @@ function handleSnowConsumption(player, item) {
                 player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.75 * volumeMultiplier });
                 player.playSound("mob.wolf.growl", { pitch: 0.7, volume: 0.8 * volumeMultiplier });
                 
-                // Show progression title
-                player.onScreenDisplay.setTitle("§c§lMAJOR INFECTION", {
-                    fadeInDuration: 10,
-                    stayDuration: 60,
-                    fadeOutDuration: 20
-                });
+                // Check if player has been infected with major infection before
+                const hasBeenMajorInfected = getPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY) === true;
                 
-                // Snow consumption doesn't cause death, so messages are safe to send immediately
-                player.sendMessage("§4§lSOMETHING IS WRONG!");
-                player.sendMessage("§c§lYour infection has worsened dramatically!");
-                player.sendMessage("§7The powder has corrupted you further.");
-                
-                // Only show time information if player has Powdery Journal
-                try {
-                    const codex = getCodex(player);
-                    if (codex.items.snowBookCrafted) {
-                        const daysLeft = Math.ceil(preservedTicks / 24000);
-                        if (preservedTicks < maxMajorTicks) {
-                            player.sendMessage(`§7You have ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left.`);
-                        } else {
-                            player.sendMessage("§7Your timer has been reduced to 5 days.");
+                if (hasBeenMajorInfected) {
+                    // Reduced text for subsequent major infections (sounds still play)
+                    player.sendMessage("§cMajor infection.");
+                } else {
+                    // Full text for first major infection
+                    player.onScreenDisplay.setTitle("§c§lMAJOR INFECTION", {
+                        fadeInDuration: 10,
+                        stayDuration: 60,
+                        fadeOutDuration: 20
+                    });
+                    
+                    player.sendMessage("§4§lSOMETHING IS WRONG!");
+                    player.sendMessage("§c§lYour infection has worsened dramatically!");
+                    player.sendMessage("§7The powder has corrupted you further.");
+                    
+                    // Only show time information if player has Powdery Journal
+                    try {
+                        const codex = getCodex(player);
+                        if (codex.items.snowBookCrafted) {
+                            const daysLeft = Math.ceil(preservedTicks / 24000);
+                            if (preservedTicks < maxMajorTicks) {
+                                player.sendMessage(`§7You have ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left.`);
+                            } else {
+                                player.sendMessage("§7Your timer has been reduced to 5 days.");
+                            }
                         }
-                    }
-                } catch { }
+                    } catch { }
+                    
+                    // Mark as having been major infected
+                    setPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY, true);
+                }
         
         console.log(`[SNOW] ${player.name} converted minor infection to major infection by eating snow`);
         
@@ -2223,9 +2239,21 @@ function handleSnowConsumption(player, item) {
         applyEffect(player, "minecraft:nausea", 200, { amplifier: 0 });
         applyEffect(player, "minecraft:mining_fatigue", 200, { amplifier: 0 });
         player.addTag(INFECTED_TAG);
-        player.sendMessage("§8You have been infected. Find a cure.");
         
-        // Scary infection sounds
+        // Check if player has been infected with major infection before
+        const hasBeenMajorInfected = getPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY) === true;
+        
+        if (hasBeenMajorInfected) {
+            // Reduced text for subsequent major infections (sounds still play)
+            player.sendMessage("§cMajor infection.");
+        } else {
+            // Full text for first major infection
+            player.sendMessage("§8You have been infected. Find a cure.");
+            // Mark as having been major infected
+            setPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY, true);
+        }
+        
+        // Scary infection sounds (always play)
         const volumeMultiplier = getPlayerSoundVolume(player);
         player.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.8 * volumeMultiplier });
         player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 0.6 * volumeMultiplier });
@@ -2317,161 +2345,146 @@ function handleSnowConsumption(player, item) {
     }
 }
 
-// Main item consumption handler
-world.afterEvents.itemCompleteUse.subscribe((event) => {
-    const player = event.source;
-    const item = event.itemStack;
+// Register item handlers using Item Registry pattern
+// Note: The registry subscribes to itemCompleteUse, so we don't need the old subscription
+registerItemHandler("minecraft:potion", handlePotion);
+registerItemHandler("minecraft:enchanted_golden_apple", handleEnchantedGoldenApple);
+registerItemHandler("minecraft:golden_apple", handleGoldenApple);
+registerItemHandler("minecraft:golden_carrot", handleGoldenCarrot);
+registerItemHandler(SNOW_ITEM_ID, handleSnowConsumption);
 
-    // Handle potion detection
-    if (item?.typeId === "minecraft:potion") {
-        handlePotion(player, item);
-    }
+// Golden apple handler function
+function handleGoldenApple(player, item) {
+    // Mark normal golden apple as discovered (only first time)
+    try { 
+        const codex = getCodex(player);
+        if (!codex.items.goldenAppleSeen) {
+            markCodex(player, "items.goldenAppleSeen"); 
+            sendDiscoveryMessage(player, codex, "interesting", "golden_apple");
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+            checkKnowledgeProgression(player);
+        }
+    } catch { }
     
-    // Handle enchanted golden apple consumption for cure system
-    if (item?.typeId === "minecraft:enchanted_golden_apple") {
-        handleEnchantedGoldenApple(player, item);
-    }
+    // Check if player has minor infection (not major, not permanently immune)
+    const infectionState = playerInfection.get(player.id);
+    const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
+    const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE && !infectionState.cured;
     
-    // Handle normal golden apple consumption for hint system and infection reduction
-    if (item?.typeId === "minecraft:golden_apple") {
-        // Mark normal golden apple as discovered (only first time)
-        try { 
-            const codex = getCodex(player);
-            if (!codex.items.goldenAppleSeen) {
-                markCodex(player, "items.goldenAppleSeen"); 
-                sendDiscoveryMessage(player, codex, "interesting", "golden_apple");
-                const volumeMultiplier = getPlayerSoundVolume(player);
-                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
-                checkKnowledgeProgression(player);
-            }
-        } catch { }
+    if (hasMinorInfection && !hasPermanentImmunity) {
+        // Track golden apple consumption for minor infection cure
+        setPlayerProperty(player, MINOR_CURE_GOLDEN_APPLE_PROPERTY, true);
         
-        // Check if player has minor infection (not major, not permanently immune)
-        const infectionState = playerInfection.get(player.id);
-        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
-        const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE && !infectionState.cured;
+        // Check if both golden apple and golden carrot have been consumed
+        const hasGoldenApple = getPlayerProperty(player, MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
+        const hasGoldenCarrot = getPlayerProperty(player, MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
         
-        if (hasMinorInfection && !hasPermanentImmunity) {
-            // Track golden apple consumption for minor infection cure
-            // Note: These properties persist across deaths (dynamic properties), so cure progress is preserved
-            player.setDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY, true);
-            
-            // Check if both golden apple and golden carrot have been consumed
-            const hasGoldenApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
-            const hasGoldenCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
-            
-            if (hasGoldenApple && hasGoldenCarrot) {
-                // Both items consumed - cure minor infection
-                cureMinorInfection(player);
+        if (hasGoldenApple && hasGoldenCarrot) {
+            // Both items consumed - cure minor infection
+            cureMinorInfection(player);
+        } else {
+            // Progress message
+            if (hasGoldenCarrot) {
+                player.sendMessage("§eYou've consumed both components. The cure is taking effect...");
             } else {
-                // Progress message
-                if (hasGoldenCarrot) {
-                    player.sendMessage("§eYou've consumed both components. The cure is taking effect...");
-                } else {
-                    player.sendMessage("§7You feel something stirring within you... You may need another component.");
-                }
+                player.sendMessage("§7You feel something stirring within you... You may need another component.");
             }
-            
-            // Do NOT apply current golden apple effects (reduce snow count) if minor infected
-            console.log(`[MINOR CURE] ${player.name} consumed golden apple for minor infection cure (progress: ${hasGoldenApple ? '✓' : '✗'} apple, ${hasGoldenCarrot ? '✓' : '✗'} carrot)`);
-            return;
         }
         
-        // Reduce infection snow count if player has major infection
-        if (infectionState && !infectionState.cured && infectionState.ticksLeft > 0 && (!infectionState.infectionType || infectionState.infectionType === MAJOR_INFECTION_TYPE)) {
-            const reductionAmount = 0.5; // Reduce snow count by 0.5
-            const currentSnowCount = infectionState.snowCount || 0;
-            const newSnowCount = Math.max(0, currentSnowCount - reductionAmount);
-            infectionState.snowCount = newSnowCount;
-            
-            // Update max snow level if needed
-            updateMaxSnowLevel(player, newSnowCount);
-            
-            // Show one-time narrative message and unlock codex info
-            try {
-                const codex = getCodex(player);
-                if (!codex.items.goldenAppleInfectionReductionDiscovered) {
-                    codex.items.goldenAppleInfectionReductionDiscovered = true;
-                    markCodex(player, "items.goldenAppleInfectionReductionDiscovered");
-                    checkKnowledgeProgression(player);
-                    
-                    // Use the standard discovery message pattern
-                    const volumeMultiplier = getPlayerSoundVolume(player);
-                    if (codex.items.snowBookCrafted) {
-                        player.sendMessage("§7Check your journal.");
-                        player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
-                    } else {
-                        player.sendMessage("§7You feel slightly better for a moment after eating the golden apple... This seems important to remember.");
-                        player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
-                    }
-                    
-                    saveCodex(player, codex);
-                }
-            } catch (error) {
-                console.warn(`[GOLDEN APPLE] Error recording discovery:`, error);
-            }
-            
-            console.log(`[GOLDEN APPLE] ${player.name} reduced infection: ${currentSnowCount.toFixed(1)} → ${newSnowCount.toFixed(1)}`);
-        }
+        // Do NOT apply current golden apple effects (reduce snow count) if minor infected
+        console.log(`[MINOR CURE] ${player.name} consumed golden apple for minor infection cure (progress: ${hasGoldenApple ? '✓' : '✗'} apple, ${hasGoldenCarrot ? '✓' : '✗'} carrot)`);
+        return;
     }
     
-    // Handle golden carrot consumption for minor infection cure
-    if (item?.typeId === "minecraft:golden_carrot") {
-        // Mark golden carrot as discovered (only first time)
-        try { 
+    // Reduce infection snow count if player has major infection
+    if (infectionState && !infectionState.cured && infectionState.ticksLeft > 0 && (!infectionState.infectionType || infectionState.infectionType === MAJOR_INFECTION_TYPE)) {
+        const reductionAmount = 0.5; // Reduce snow count by 0.5
+        const currentSnowCount = infectionState.snowCount || 0;
+        const newSnowCount = Math.max(0, currentSnowCount - reductionAmount);
+        infectionState.snowCount = newSnowCount;
+        
+        // Update max snow level if needed
+        updateMaxSnowLevel(player, newSnowCount);
+        
+        // Show one-time narrative message and unlock codex info
+        try {
             const codex = getCodex(player);
-            if (!codex.items.goldenCarrotSeen) {
-                markCodex(player, "items.goldenCarrotSeen"); 
-                sendDiscoveryMessage(player, codex, "interesting", "golden_carrot");
-                const volumeMultiplier = getPlayerSoundVolume(player);
-                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+            if (!codex.items.goldenAppleInfectionReductionDiscovered) {
+                codex.items.goldenAppleInfectionReductionDiscovered = true;
+                markCodex(player, "items.goldenAppleInfectionReductionDiscovered");
+                checkKnowledgeProgression(player);
                 
-                // Update infection knowledge when discovering cure-related items
-                checkKnowledgeProgression(player);
-            }
-        } catch { }
-        
-        // Check if player has minor infection (not major, not permanently immune)
-        const infectionState = playerInfection.get(player.id);
-        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
-        const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE && !infectionState.cured;
-        
-        if (hasMinorInfection && !hasPermanentImmunity) {
-            // Track golden carrot consumption for minor infection cure
-            // Note: These properties persist across deaths (dynamic properties), so cure progress is preserved
-            player.setDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY, true);
-            
-            // Check if both golden apple and golden carrot have been consumed
-            const hasGoldenApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
-            const hasGoldenCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
-            
-            if (hasGoldenApple && hasGoldenCarrot) {
-                // Both items consumed - cure minor infection
-                cureMinorInfection(player);
-            } else {
-                // Progress message
-                if (hasGoldenApple) {
-                    player.sendMessage("§eYou've consumed both components. The cure is taking effect...");
+                // Use the standard discovery message pattern
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                if (codex.items.snowBookCrafted) {
+                    player.sendMessage("§7Check your journal.");
+                    player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
                 } else {
-                    player.sendMessage("§7You feel something stirring within you... You may need another component.");
+                    player.sendMessage("§7You feel slightly better for a moment after eating the golden apple... This seems important to remember.");
+                    player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
                 }
+                
+                saveCodex(player, codex);
             }
-            
-            console.log(`[MINOR CURE] ${player.name} consumed golden carrot for minor infection cure (progress: ${hasGoldenApple ? '✓' : '✗'} apple, ${hasGoldenCarrot ? '✓' : '✗'} carrot)`);
+        } catch (error) {
+            console.warn(`[GOLDEN APPLE] Error recording discovery:`, error);
         }
+        
+        console.log(`[GOLDEN APPLE] ${player.name} reduced infection: ${currentSnowCount.toFixed(1)} → ${newSnowCount.toFixed(1)}`);
     }
+}
+
+// Golden carrot handler function
+function handleGoldenCarrot(player, item) {
+    // Mark golden carrot as discovered (only first time)
+    try { 
+        const codex = getCodex(player);
+        if (!codex.items.goldenCarrotSeen) {
+            markCodex(player, "items.goldenCarrotSeen"); 
+            sendDiscoveryMessage(player, codex, "interesting", "golden_carrot");
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+            
+            // Update infection knowledge when discovering cure-related items
+            checkKnowledgeProgression(player);
+        }
+    } catch { }
     
-    // Handle snow consumption
-    if (item?.typeId === SNOW_ITEM_ID) {
-        handleSnowConsumption(player, item);
+    // Check if player has minor infection (not major, not permanently immune)
+    const infectionState = playerInfection.get(player.id);
+    const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
+    const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE && !infectionState.cured;
+    
+    if (hasMinorInfection && !hasPermanentImmunity) {
+        // Track golden carrot consumption for minor infection cure
+        setPlayerProperty(player, MINOR_CURE_GOLDEN_CARROT_PROPERTY, true);
+        
+        // Check if both golden apple and golden carrot have been consumed
+        const hasGoldenApple = getPlayerProperty(player, MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
+        const hasGoldenCarrot = getPlayerProperty(player, MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
+        
+        if (hasGoldenApple && hasGoldenCarrot) {
+            // Both items consumed - cure minor infection
+            cureMinorInfection(player);
+        } else {
+            // Progress message
+            if (hasGoldenApple) {
+                player.sendMessage("§eYou've consumed both components. The cure is taking effect...");
+            } else {
+                player.sendMessage("§7You feel something stirring within you... You may need another component.");
+            }
+        }
+        
+        console.log(`[MINOR CURE] ${player.name} consumed golden carrot for minor infection cure (progress: ${hasGoldenApple ? '✓' : '✗'} apple, ${hasGoldenCarrot ? '✓' : '✗'} carrot)`);
     }
-});
+}
 
 // Handle player death - clear infection data
 function handlePlayerDeath(player) {
     try {
         // Check if player has permanent immunity
-        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
         
         if (hasPermanentImmunity) {
             // Permanently immune players - normal death handling (no infection on respawn)
@@ -2483,8 +2496,8 @@ function handlePlayerDeath(player) {
             
             // Clear temporary immunity (major infection cure immunity)
             try {
-                player.setDynamicProperty("mb_immunity_end", undefined);
-                player.setDynamicProperty("mb_bear_hit_count", undefined);
+                setPlayerProperty(player, "mb_immunity_end", undefined);
+                setPlayerProperty(player, "mb_bear_hit_count", undefined);
                 // Keep permanent immunity property and minor infection cured property
             } catch (error) {
                 console.warn(`[DEATH] Error clearing properties for permanently immune ${player.name}:`, error);
@@ -2510,8 +2523,8 @@ function handlePlayerDeath(player) {
             curedPlayers.delete(player.id);
             
             try {
-                player.setDynamicProperty("mb_immunity_end", undefined);
-                player.setDynamicProperty("mb_bear_hit_count", undefined);
+                setPlayerProperty(player, "mb_immunity_end", undefined);
+                setPlayerProperty(player, "mb_bear_hit_count", undefined);
                 // Keep infection data and infection type - minor infection persists
             } catch (error) {
                 console.warn(`[DEATH] Error clearing properties for minor infected ${player.name}:`, error);
@@ -2530,12 +2543,12 @@ function handlePlayerDeath(player) {
         
         // Clear dynamic properties on death (but not permanent immunity or minor infection cured - those persist)
         try {
-            player.setDynamicProperty("mb_bear_infection", undefined);
-            player.setDynamicProperty("mb_snow_infection", undefined);
-            player.setDynamicProperty("mb_infection", undefined);
-            player.setDynamicProperty("mb_infection_type", undefined);
-            player.setDynamicProperty("mb_immunity_end", undefined);
-            player.setDynamicProperty("mb_bear_hit_count", undefined);
+            setPlayerProperty(player, "mb_bear_infection", undefined);
+            setPlayerProperty(player, "mb_snow_infection", undefined);
+            setPlayerProperty(player, "mb_infection", undefined);
+            setPlayerProperty(player, "mb_infection_type", undefined);
+            setPlayerProperty(player, "mb_immunity_end", undefined);
+            setPlayerProperty(player, "mb_bear_hit_count", undefined);
             // Keep permanent immunity property if it exists
             // Keep minor infection cured property if it exists
             // Keep first-time tutorial flags so players don't see them again after death
@@ -3533,7 +3546,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
             }
         } catch { }
         // Check if player has permanent immunity
-        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
         
         // Check if player has minor infection
         const infectionState = playerInfection.get(player.id);
@@ -3615,7 +3628,18 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 0.75 * volumeMultiplier });
                 player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.75 * volumeMultiplier });
                 
-                player.sendMessage("§cYour immunity has been overcome! You are now infected with a major infection!");
+                // Check if player has been infected with major infection before
+                const hasBeenMajorInfected = getPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY) === true;
+                
+                if (hasBeenMajorInfected) {
+                    // Reduced text for subsequent major infections (sounds still play)
+                    player.sendMessage("§cMajor infection.");
+                } else {
+                    // Full text for first major infection
+                    player.sendMessage("§cYour immunity has been overcome! You are now infected with a major infection!");
+                    // Mark as having been major infected
+                    setPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY, true);
+                }
                 
                 bearHitCount.delete(player.id);
                 saveInfectionData(player);
@@ -3693,29 +3717,40 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.75 * volumeMultiplier });
                 player.playSound("mob.wolf.growl", { pitch: 0.7, volume: 0.85 * volumeMultiplier });
                 
-                // Show progression title
-                player.onScreenDisplay.setTitle("§c§lMAJOR INFECTION", {
-                    fadeInDuration: 10,
-                    stayDuration: 60,
-                    fadeOutDuration: 20
-                });
+                // Check if player has been infected with major infection before
+                const hasBeenMajorInfected = getPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY) === true;
                 
-                player.sendMessage("§4§lSOMETHING IS WRONG!");
-                player.sendMessage("§c§lYour infection has worsened dramatically!");
-                player.sendMessage("§7The effects are now severe.");
-                
-                // Only show time information if player has Powdery Journal
-                try {
-                    const codex = getCodex(player);
-                    if (codex.items.snowBookCrafted) {
-                        const daysLeft = Math.ceil(preservedTicks / 24000);
-                        if (preservedTicks < maxMajorTicks) {
-                            player.sendMessage(`§7You have ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left.`);
-                        } else {
-                            player.sendMessage("§7Your timer has been reduced to 5 days.");
+                if (hasBeenMajorInfected) {
+                    // Reduced text for subsequent major infections (sounds still play)
+                    player.sendMessage("§cMajor infection.");
+                } else {
+                    // Full text for first major infection
+                    player.onScreenDisplay.setTitle("§c§lMAJOR INFECTION", {
+                        fadeInDuration: 10,
+                        stayDuration: 60,
+                        fadeOutDuration: 20
+                    });
+                    
+                    player.sendMessage("§4§lSOMETHING IS WRONG!");
+                    player.sendMessage("§c§lYour infection has worsened dramatically!");
+                    player.sendMessage("§7The effects are now severe.");
+                    
+                    // Only show time information if player has Powdery Journal
+                    try {
+                        const codex = getCodex(player);
+                        if (codex.items.snowBookCrafted) {
+                            const daysLeft = Math.ceil(preservedTicks / 24000);
+                            if (preservedTicks < maxMajorTicks) {
+                                player.sendMessage(`§7You have ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left.`);
+                            } else {
+                                player.sendMessage("§7Your timer has been reduced to 5 days.");
+                            }
                         }
-                    }
-                } catch { }
+                    } catch { }
+                    
+                    // Mark as having been major infected
+                    setPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY, true);
+                }
                 
                 bearHitCount.delete(player.id);
                 saveInfectionData(player);
@@ -3873,7 +3908,7 @@ system.runInterval(() => {
         }
 
         if (infectionType === MINOR_INFECTION_TYPE) {
-            // Minor infection - apply mild effects periodically
+            // Minor infection - apply random mild effects that worsen over time
             // Don't apply effects during intro sequence
             if (introInProgress.has(id)) {
                 // Skip effect application during intro
@@ -3881,28 +3916,76 @@ system.runInterval(() => {
                 continue;
             }
             
+            // Calculate severity level based on remaining time (similar to major infection)
+            // Minor infection timer scales with world day, so use maxTicks for proper ratio
+            const ratio = Math.max(0, Math.min(1, state.ticksLeft / maxTicks));
+            let severityLevel = 0;
+            if (ratio > 0.75) {
+                severityLevel = 0; // No effects above 75% time remaining
+            } else if (ratio > 0.5) {
+                severityLevel = 1; // Mild effects above 50% time remaining
+            } else if (ratio > 0.2) {
+                severityLevel = 2; // Moderate effects above 20% time remaining
+            } else {
+                severityLevel = 3; // Severe effects below 20% time remaining
+            }
+            
+            // Update max severity if needed
+            if (severityLevel > (state.maxSeverity || 0)) {
+                state.maxSeverity = severityLevel;
+                playerInfection.set(id, state);
+            }
+            
             const nowTick = system.currentTick;
             const lastMinorEffectTick = lastSymptomTick.get(id) ?? 0;
-            const minorEffectCooldown = 4800; // 4 minutes between mild effects
             
-            if (nowTick - lastMinorEffectTick >= minorEffectCooldown) {
-                // Apply mild effects (slowness I, weakness I)
-                applyEffect(player, "minecraft:slowness", 200, { amplifier: 0 });
-                applyEffect(player, "minecraft:weakness", 200, { amplifier: 0 });
+            // Scale cooldown based on severity (more frequent as infection worsens)
+            // Cooldowns are longer than major infection since minor is less severe
+            const cooldown = severityLevel === 0 ? 7200 : severityLevel === 1 ? 4800 : severityLevel === 2 ? 3600 : 2400;
+            
+            if (nowTick - lastMinorEffectTick >= cooldown) {
+                // Define effects by severity level (milder than major infection)
+                const minorEffectsByLevel = [
+                    [], // Level 0: No effects
+                    [
+                        { effect: "minecraft:slowness", duration: 100, amp: 0 },
+                        { effect: "minecraft:weakness", duration: 100, amp: 0 }
+                    ], // Level 1: Mild effects (slowness or weakness)
+                    [
+                        { effect: "minecraft:slowness", duration: 140, amp: 0 },
+                        { effect: "minecraft:weakness", duration: 140, amp: 0 },
+                        { effect: "minecraft:mining_fatigue", duration: 120, amp: 0 }
+                    ], // Level 2: Moderate effects (slowness, weakness, or mining fatigue)
+                    [
+                        { effect: "minecraft:slowness", duration: 180, amp: 1 },
+                        { effect: "minecraft:weakness", duration: 180, amp: 1 },
+                        { effect: "minecraft:mining_fatigue", duration: 160, amp: 1 },
+                        { effect: "minecraft:nausea", duration: 120, amp: 0 }
+                    ] // Level 3: Severe effects (stronger versions or nausea)
+                ];
                 
-                // Track minor infection effects in codex
-                try {
-                    const codex = getCodex(player);
-                    if (!codex.minorInfectionEffects) codex.minorInfectionEffects = { slownessSeen: false, weaknessSeen: false };
-                    markCodex(player, "minorInfectionEffects.slownessSeen");
-                    markCodex(player, "minorInfectionEffects.weaknessSeen");
+                // Randomly choose an effect from the current severity level
+                const options = minorEffectsByLevel[severityLevel];
+                if (options && options.length > 0) {
+                    const chosen = options[Math.floor(Math.random() * options.length)];
+                    applyEffect(player, chosen.effect, chosen.duration, { amplifier: chosen.amp });
                     
-                    // Unlock minor infection analysis when first effect is experienced
-                    if (!codex.symptomsUnlocks.minorInfectionAnalysisUnlocked) {
-                        markCodex(player, "symptomsUnlocks.minorInfectionAnalysisUnlocked");
+                    // Track minor infection effects in codex
+                    try {
+                        const codex = getCodex(player);
+                        if (!codex.minorInfectionEffects) codex.minorInfectionEffects = { slownessSeen: false, weaknessSeen: false };
+                        if (chosen.effect === "minecraft:slowness") markCodex(player, "minorInfectionEffects.slownessSeen");
+                        if (chosen.effect === "minecraft:weakness") markCodex(player, "minorInfectionEffects.weaknessSeen");
+                        if (chosen.effect === "minecraft:nausea") markCodex(player, "effects.nauseaSeen");
+                        if (chosen.effect === "minecraft:mining_fatigue") markCodex(player, "effects.miningFatigueSeen");
+                        
+                        // Unlock minor infection analysis when first effect is experienced
+                        if (!codex.symptomsUnlocks.minorInfectionAnalysisUnlocked) {
+                            markCodex(player, "symptomsUnlocks.minorInfectionAnalysisUnlocked");
+                        }
+                    } catch (error) {
+                        console.warn(`[MINOR INFECTION] Error tracking effects:`, error);
                     }
-                } catch (error) {
-                    console.warn(`[MINOR INFECTION] Error tracking effects:`, error);
                 }
                 
                 lastSymptomTick.set(id, nowTick);
@@ -4083,7 +4166,7 @@ system.runInterval(() => {
             const codex = getCodex(p);
             
             // Skip discovery messages if intro is in progress or not seen yet
-            const introSeen = world.getDynamicProperty(WORLD_INTRO_SEEN_PROPERTY);
+            const introSeen = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
             const introActive = introInProgress.has(p.id);
             const shouldSuppressDiscovery = !introSeen || introActive;
             
@@ -4322,9 +4405,8 @@ system.runInterval(() => {
 // --- Maple Bear Snow Trail and Item Drops ---
 // Leaves occasional snow layers under bears and drops snow items, with per-type frequency and throttling
 const lastSnowTrailTickByEntity = new Map();
-const lastSnowDropTickByEntity = new Map();
 const TRAIL_COOLDOWN_TICKS = 40; // 2s between placements per entity
-const SNOW_DROP_COOLDOWN_TICKS = 200; // 10s between snow item drops per entity
+// Periodic snow drops removed - using death drops via loot tables only
 
 function tryPlaceSnowLayerUnder(entity) {
     try {
@@ -4410,20 +4492,7 @@ function tryPlaceSnowLayerUnder(entity) {
     } catch { }
 }
 
-function tryDropSnowItem(entity) {
-    try {
-                    const dropLocation = { 
-            x: entity.location.x + (Math.random() - 0.5) * 2,
-            y: entity.location.y + 0.5,
-            z: entity.location.z + (Math.random() - 0.5) * 2
-        };
-                    const snowItem = new ItemStack(SNOW_ITEM_ID, 1);
-        entity.dimension.spawnItem(snowItem, dropLocation);
-        
-        // Add particle effect
-        entity.dimension.runCommand(`particle minecraft:snowflake ${Math.floor(dropLocation.x)} ${Math.floor(dropLocation.y)} ${Math.floor(dropLocation.z)}`);
-    } catch { }
-}
+// tryDropSnowItem removed - using death drops via loot tables only
 
 system.runInterval(() => {
     try {
@@ -4489,14 +4558,7 @@ system.runInterval(() => {
                 lastSnowTrailTickByEntity.set(entity.id, nowTick);
             }
 
-            // Snow item drops (only for tiny Maple Bears)
-            if (t === MAPLE_BEAR_ID || t === MAPLE_BEAR_DAY4_ID || t === MAPLE_BEAR_DAY8_ID || t === MAPLE_BEAR_DAY13_ID || t === MAPLE_BEAR_DAY20_ID) {
-                const lastDrop = lastSnowDropTickByEntity.get(entity.id) ?? 0;
-                if (nowTick - lastDrop >= SNOW_DROP_COOLDOWN_TICKS && Math.random() < 0.6) { // 60% chance
-                    tryDropSnowItem(entity);
-                    lastSnowDropTickByEntity.set(entity.id, nowTick);
-                }
-            }
+            // Snow item drops removed - using death drops via loot tables only
         }
     } catch { }
 }, 20); // check every second
@@ -4697,15 +4759,15 @@ world.afterEvents.playerSpawn.subscribe((event) => {
         
         // Check if intro has been shown (fallback in case playerJoin handler missed it)
         // Only check if intro is NOT in progress (to prevent duplicate calls)
-        const introSeen = world.getDynamicProperty(WORLD_INTRO_SEEN_PROPERTY);
+        const introSeen = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
         const introActive = introInProgress.has(player.id);
         console.log(`[SPAWN] Intro seen: ${introSeen}, intro active: ${introActive}`);
         
         if (!introSeen && !introActive) {
             console.log(`[SPAWN] Intro not seen yet, checking if should show for ${player.name}...`);
             // Check if this is first spawn by checking if infection data exists in dynamic properties
-            const hasInfectionData = player.getDynamicProperty("mb_infection");
-            const hasPermanentImmunityCheck = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY);
+            const hasInfectionData = getPlayerProperty(player, "mb_infection");
+            const hasPermanentImmunityCheck = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY);
             const isFirstSpawn = !hasInfectionData && !hasPermanentImmunityCheck && !playerInfection.has(player.id);
             
             console.log(`[SPAWN] First spawn check: hasInfectionData=${!!hasInfectionData}, hasPermanentImmunity=${!!hasPermanentImmunityCheck}, inMap=${playerInfection.has(player.id)}, isFirstSpawn=${isFirstSpawn}`);
@@ -4724,7 +4786,7 @@ world.afterEvents.playerSpawn.subscribe((event) => {
         }
         
         // Check if player has permanent immunity
-        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
         if (hasPermanentImmunity) {
             // Permanently immune players don't get infection on respawn
             return;
@@ -4743,6 +4805,32 @@ world.afterEvents.playerSpawn.subscribe((event) => {
             // Don't apply effects here - they're applied periodically by the infection timer loop
             // This prevents effects from being applied immediately on respawn
             
+            // Check if this is first time respawning with minor infection
+            const hasRespawnedBefore = getPlayerProperty(player, MINOR_RESPAWNED_PROPERTY) === true;
+            
+            if (!hasRespawnedBefore) {
+                // First time respawning with minor infection - show full message with sounds and title
+                player.onScreenDisplay.setTitle("§e§lMINOR INFECTION", {
+                    fadeInDuration: 10,
+                    stayDuration: 60,
+                    fadeOutDuration: 20
+                });
+                
+                player.sendMessage("§eYou are still infected with a minor infection.");
+                player.sendMessage("§7The infection persists even after death.");
+                
+                // Play infection sounds (milder than major infection)
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mob.enderman.portal", { pitch: 0.9, volume: 0.6 * volumeMultiplier });
+                player.playSound("mob.villager.idle", { pitch: 0.8, volume: 0.5 * volumeMultiplier });
+                
+                // Mark as having respawned with minor infection
+                setPlayerProperty(player, MINOR_RESPAWNED_PROPERTY, true);
+            } else {
+                // Subsequent respawns - minimal message
+                player.sendMessage("§eMinor infection.");
+            }
+            
             console.log(`[SPAWN] ${player.name} respawned with minor infection active`);
         } else if (!infectionState && !hasPermanentImmunity) {
             // No infection data and not permanently immune - load data first, then initialize if needed
@@ -4753,7 +4841,7 @@ world.afterEvents.playerSpawn.subscribe((event) => {
             system.runTimeout(() => {
                 if (player && player.isValid) {
                     const stillNoInfection = !playerInfection.has(player.id);
-                    const introSeen = world.getDynamicProperty(WORLD_INTRO_SEEN_PROPERTY);
+                    const introSeen = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
                     if (stillNoInfection && introSeen) {
                         initializeMinorInfection(player);
                     } else if (stillNoInfection && !introSeen) {
@@ -4796,62 +4884,62 @@ function saveInfectionData(player) {
         // Save bear infection
         const infectionData = playerInfection.get(player.id);
         if (infectionData) {
-            player.setDynamicProperty("mb_infection", JSON.stringify(infectionData));
+            setPlayerProperty(player, "mb_infection", JSON.stringify(infectionData));
             // Save infection type separately
             if (infectionData.infectionType) {
-                player.setDynamicProperty("mb_infection_type", infectionData.infectionType);
+                setPlayerProperty(player, "mb_infection_type", infectionData.infectionType);
             } else {
-                player.setDynamicProperty("mb_infection_type", MAJOR_INFECTION_TYPE); // Default for backward compatibility
+                setPlayerProperty(player, "mb_infection_type", MAJOR_INFECTION_TYPE); // Default for backward compatibility
             }
         } else {
-            player.setDynamicProperty("mb_infection", undefined);
-            player.setDynamicProperty("mb_infection_type", undefined);
+            setPlayerProperty(player, "mb_infection", undefined);
+            setPlayerProperty(player, "mb_infection_type", undefined);
         }
 
         // Save permanent immunity
-        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY);
+        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY);
         if (hasPermanentImmunity === undefined || hasPermanentImmunity === null) {
             // Property doesn't exist yet, don't save it
         } else {
-            player.setDynamicProperty(PERMANENT_IMMUNITY_PROPERTY, hasPermanentImmunity);
+            setPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY, hasPermanentImmunity);
         }
         
         // Save minor infection cured status
-        const minorCured = player.getDynamicProperty(MINOR_INFECTION_CURED_PROPERTY);
+        const minorCured = getPlayerProperty(player, MINOR_INFECTION_CURED_PROPERTY);
         if (minorCured !== undefined && minorCured !== null) {
-            player.setDynamicProperty(MINOR_INFECTION_CURED_PROPERTY, minorCured);
+            setPlayerProperty(player, MINOR_INFECTION_CURED_PROPERTY, minorCured);
         }
 
         // Save immunity (temporary immunity from major infection cure)
         const immunityEndTime = curedPlayers.get(player.id);
         if (immunityEndTime) {
-            player.setDynamicProperty("mb_immunity_end", immunityEndTime.toString());
+            setPlayerProperty(player, "mb_immunity_end", immunityEndTime.toString());
         } else {
-            player.setDynamicProperty("mb_immunity_end", undefined);
+            setPlayerProperty(player, "mb_immunity_end", undefined);
         }
 
         // Save hit count
         const hitCount = bearHitCount.get(player.id);
         if (hitCount) {
-            player.setDynamicProperty("mb_bear_hit_count", hitCount.toString());
+            setPlayerProperty(player, "mb_bear_hit_count", hitCount.toString());
         } else {
-            player.setDynamicProperty("mb_bear_hit_count", undefined);
+            setPlayerProperty(player, "mb_bear_hit_count", undefined);
         }
 
         // Save first-time message state
         const firstTime = firstTimeMessages.get(player.id);
         if (firstTime) {
-            player.setDynamicProperty("mb_first_time_messages", JSON.stringify(firstTime));
+            setPlayerProperty(player, "mb_first_time_messages", JSON.stringify(firstTime));
         } else {
-            player.setDynamicProperty("mb_first_time_messages", undefined);
+            setPlayerProperty(player, "mb_first_time_messages", undefined);
         }
 
         // Save maximum snow level
         const maxSnow = maxSnowLevels.get(player.id);
         if (maxSnow) {
-            player.setDynamicProperty("mb_max_snow_level", JSON.stringify(maxSnow));
+            setPlayerProperty(player, "mb_max_snow_level", JSON.stringify(maxSnow));
         } else {
-            player.setDynamicProperty("mb_max_snow_level", undefined);
+            setPlayerProperty(player, "mb_max_snow_level", undefined);
         }
     } catch (error) {
         console.warn(`[SAVE] Error saving infection data for ${player.name}:`, error);
@@ -4931,8 +5019,8 @@ function initializeMinorInfection(player) {
             player.addTag(INFECTED_TAG);
         }
         
-        // Apply mild effects (slowness I, weakness I)
-        applyEffect(player, "minecraft:slowness", 200, { amplifier: 0 });
+        // Apply mild effects (weakness I only - no slowness on spawn)
+        // Slowness is applied periodically by the infection timer loop, not on initialization
         applyEffect(player, "minecraft:weakness", 200, { amplifier: 0 });
         
         // Play infection sounds (milder than major infection, but still noticeable)
@@ -4940,17 +5028,31 @@ function initializeMinorInfection(player) {
         player.playSound("mob.enderman.portal", { pitch: 0.9, volume: 0.6 * volumeMultiplier });
         player.playSound("mob.villager.idle", { pitch: 0.8, volume: 0.5 * volumeMultiplier });
         
+        // Check if player has been reinfected before
+        const hasBeenReinfected = getPlayerProperty(player, MINOR_REINFECTED_PROPERTY) === true;
+        
         // Show infection title (only if not during intro - intro already has dramatic moment)
         if (!introInProgress.has(player.id)) {
-            player.onScreenDisplay.setTitle("§e§lMINOR INFECTION", {
-                fadeInDuration: 10,
-                stayDuration: 60,
-                fadeOutDuration: 20
-            });
-            
-            // Send infection message
-            player.sendMessage("§eYou have been infected with a minor infection.");
-            player.sendMessage("§7The effects are mild, but it can progress to major if not treated.");
+            if (hasBeenReinfected) {
+                // Minimal text for subsequent reinfections
+                player.sendMessage("§eMinor infection.");
+            } else {
+                // Full text for first reinfection
+                player.onScreenDisplay.setTitle("§e§lMINOR INFECTION", {
+                    fadeInDuration: 10,
+                    stayDuration: 60,
+                    fadeOutDuration: 20
+                });
+                
+                player.sendMessage("§eYou have been infected with a minor infection.");
+                player.sendMessage("§7The effects are mild, but it can progress to major if not treated.");
+                
+                // Mark as reinfected for future minimal messages
+                setPlayerProperty(player, MINOR_REINFECTED_PROPERTY, true);
+            }
+        } else if (hasBeenReinfected) {
+            // Even during intro, mark as reinfected if not already
+            setPlayerProperty(player, MINOR_REINFECTED_PROPERTY, true);
         }
         
         // Save to dynamic properties
@@ -4982,45 +5084,45 @@ function initializeMinorInfection(player) {
 function loadInfectionData(player) {
     try {
         // Check if player has permanent immunity first
-        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY);
+        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY);
         if (hasPermanentImmunity === true) {
             console.log(`[LOAD] ${player.name} has permanent immunity - skipping minor infection initialization`);
             // Load hit count but no infection
-            const hitCountStr = player.getDynamicProperty("mb_bear_hit_count");
+            const hitCountStr = getPlayerProperty(player, "mb_bear_hit_count");
             if (hitCountStr) {
                 const hitCount = parseInt(hitCountStr);
                 bearHitCount.set(player.id, hitCount);
             }
             
             // Load temporary immunity if any
-            const immunityEndTimeStr = player.getDynamicProperty("mb_immunity_end");
+            const immunityEndTimeStr = getPlayerProperty(player, "mb_immunity_end");
             if (immunityEndTimeStr) {
                 const immunityEndTime = parseInt(immunityEndTimeStr);
                 const currentTime = Date.now();
                 if (currentTime < immunityEndTime) {
                     curedPlayers.set(player.id, immunityEndTime);
                 } else {
-                    player.setDynamicProperty("mb_immunity_end", undefined);
+                    setPlayerProperty(player, "mb_immunity_end", undefined);
                 }
             }
             return; // Skip infection initialization for permanently immune players
         }
         
         // Load infection data
-        const infectionDataStr = player.getDynamicProperty("mb_infection");
+        const infectionDataStr = getPlayerProperty(player, "mb_infection");
         if (infectionDataStr) {
             const infectionData = JSON.parse(infectionDataStr);
             
             // Load infection type (default to "major" for backward compatibility)
-            const infectionType = player.getDynamicProperty("mb_infection_type") || MAJOR_INFECTION_TYPE;
+            const infectionType = getPlayerProperty(player, "mb_infection_type") || MAJOR_INFECTION_TYPE;
             infectionData.infectionType = infectionType;
 
             // Check if the infection was cured (major infection cure)
             if (infectionData.cured) {
                 console.log(`[LOAD] ${player.name} had cured major infection, not loading active infection`);
                 // Don't load cured major infections back into memory
-                player.setDynamicProperty("mb_infection", undefined);
-                player.setDynamicProperty("mb_infection_type", undefined);
+                setPlayerProperty(player, "mb_infection", undefined);
+                setPlayerProperty(player, "mb_infection_type", undefined);
             } else {
                 // If minor infection, scale timer based on current day
                 if (infectionType === MINOR_INFECTION_TYPE) {
@@ -5052,7 +5154,7 @@ function loadInfectionData(player) {
             // No infection data found - check if intro has been seen
             // If intro hasn't been seen yet, don't initialize minor infection here
             // It will be initialized during the intro sequence at "AND SO ARE YOU!" message
-            const introSeen = world.getDynamicProperty(WORLD_INTRO_SEEN_PROPERTY);
+            const introSeen = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
             if (!hasPermanentImmunity && introSeen) {
                 console.log(`[LOAD] ${player.name} has no infection data and no permanent immunity - initializing minor infection`);
                 initializeMinorInfection(player);
@@ -5062,7 +5164,7 @@ function loadInfectionData(player) {
         }
 
         // Load immunity
-        const immunityEndTimeStr = player.getDynamicProperty("mb_immunity_end");
+        const immunityEndTimeStr = getPlayerProperty(player, "mb_immunity_end");
         if (immunityEndTimeStr) {
             const immunityEndTime = parseInt(immunityEndTimeStr);
             const currentTime = Date.now();
@@ -5071,13 +5173,13 @@ function loadInfectionData(player) {
                 console.log(`[LOAD] Loaded immunity for ${player.name} until ${new Date(immunityEndTime).toLocaleTimeString()}`);
             } else {
                 // Immunity expired, clean up
-                player.setDynamicProperty("mb_immunity_end", undefined);
+                setPlayerProperty(player, "mb_immunity_end", undefined);
                 console.log(`[LOAD] Immunity expired for ${player.name}, cleaned up`);
             }
         }
 
         // Load hit count
-        const hitCountStr = player.getDynamicProperty("mb_bear_hit_count");
+        const hitCountStr = getPlayerProperty(player, "mb_bear_hit_count");
         if (hitCountStr) {
             const hitCount = parseInt(hitCountStr);
             bearHitCount.set(player.id, hitCount);
@@ -5085,7 +5187,7 @@ function loadInfectionData(player) {
         }
 
         // Load first-time message state
-        const firstTimeStr = player.getDynamicProperty("mb_first_time_messages");
+        const firstTimeStr = getPlayerProperty(player, "mb_first_time_messages");
         if (firstTimeStr) {
             try {
                 const firstTime = JSON.parse(firstTimeStr);
@@ -5097,7 +5199,7 @@ function loadInfectionData(player) {
         }
 
         // Load maximum snow level
-        const maxSnowStr = player.getDynamicProperty("mb_max_snow_level");
+        const maxSnowStr = getPlayerProperty(player, "mb_max_snow_level");
         if (maxSnowStr) {
             try {
                 const maxSnow = JSON.parse(maxSnowStr);
@@ -5108,7 +5210,7 @@ function loadInfectionData(player) {
             }
         }
         // Load infection experience
-        const experienceStr = player.getDynamicProperty("mb_infection_experience");
+        const experienceStr = getPlayerProperty(player, "mb_infection_experience");
         if (experienceStr) {
             try {
                 const experience = JSON.parse(experienceStr);
@@ -5378,8 +5480,10 @@ function showWorldIntroSequence(player) {
         
         // Check if player has seen intro before
         const introSeenKey = WORLD_INTRO_SEEN_PROPERTY;
-        const introSeen = world.getDynamicProperty(introSeenKey);
-        console.log(`[INTRO] Checking intro for ${player?.name}: introSeen=${introSeen}`);
+        const introSeenRaw = getWorldProperty(introSeenKey);
+        // Handle boolean values properly - true, "true", or 1 all mean intro is seen
+        const introSeen = introSeenRaw === true || introSeenRaw === "true" || introSeenRaw === 1 || introSeenRaw === "1";
+        console.log(`[INTRO] Checking intro for ${player?.name}: introSeen=${introSeen} (raw=${introSeenRaw}, type=${typeof introSeenRaw})`);
         
         if (introSeen) {
             console.log(`[INTRO] Intro already seen, skipping for ${player?.name}`);
@@ -5388,7 +5492,7 @@ function showWorldIntroSequence(player) {
         
         // Mark intro as in progress AND seen immediately to prevent duplicates from both handlers
         introInProgress.set(player.id, true);
-        world.setDynamicProperty(introSeenKey, true); // Mark as seen immediately to prevent duplicate calls
+        setWorldProperty(introSeenKey, true); // Mark as seen immediately to prevent duplicate calls
         
         // Track journal given flag (will be set when journal is actually given)
         const journalGivenKey = `mb_journal_given_by_intro_${player.id}`;
@@ -5439,7 +5543,7 @@ function showWorldIntroSequence(player) {
             
             // Initialize minor infection at this moment (if not already infected)
             if (!playerInfection.has(player.id)) {
-                const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY);
+                const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY);
                 if (!hasPermanentImmunity) {
                     console.log(`[INTRO] Initializing minor infection for ${player?.name} at "AND SO ARE YOU!" message`);
                     initializeMinorInfection(player);
@@ -5475,7 +5579,7 @@ function showWorldIntroSequence(player) {
                     
                     // Mark journal as seen silently (no discovery message - it's part of intro)
                     const playerKey = `mb_has_basic_journal_${player.id}`;
-                    world.setDynamicProperty(playerKey, true);
+                    setWorldProperty(playerKey, true);
                     
                     // Mark in codex silently (no discovery message during intro)
                     try {
@@ -5488,7 +5592,7 @@ function showWorldIntroSequence(player) {
                     
                     if (!remaining) {
                         // Successfully added - mark journal as given by intro NOW (after successful give)
-                        world.setDynamicProperty(journalGivenKey, true);
+                        setWorldProperty(journalGivenKey, true);
                         
                         // Subtle title only (no chat messages, no sound - sound already played on "Now, take this.")
                         player.onScreenDisplay.setTitle("§6§lBasic Journal", {
@@ -5500,7 +5604,7 @@ function showWorldIntroSequence(player) {
                         console.log(`[INTRO] Journal given to ${player?.name} successfully`);
                     } else {
                         // Inventory full - mark journal as given by intro (we attempted to give it)
-                        world.setDynamicProperty(journalGivenKey, true);
+                        setWorldProperty(journalGivenKey, true);
                         player.dimension.spawnItem(journal, player.location);
                         // No extra sound - already played on "Now, take this."
                         // No chat messages - intro sequence already told them about it
@@ -5543,7 +5647,7 @@ function giveBasicJournalIfNeeded(player) {
         }
         
         const journalGivenKey = `mb_journal_given_by_intro_${player.id}`;
-        const journalGivenByIntro = world.getDynamicProperty(journalGivenKey);
+        const journalGivenByIntro = getWorldProperty(journalGivenKey);
         if (journalGivenByIntro) {
             console.log(`[BASIC JOURNAL] Journal already given by intro for ${player?.name}, skipping`);
             return;
@@ -5551,12 +5655,14 @@ function giveBasicJournalIfNeeded(player) {
         
         // Check if player already received journal using dynamic property
         const playerKey = `mb_has_basic_journal_${player.id}`;
-        if (world.getDynamicProperty(playerKey)) {
+        if (getWorldProperty(playerKey)) {
             return; // Already given
         }
         
         // Check if intro has been shown - if not, intro will give the journal
-        if (!world.getDynamicProperty(WORLD_INTRO_SEEN_PROPERTY)) {
+        const introSeenRaw = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
+        const introSeen = introSeenRaw === true || introSeenRaw === "true" || introSeenRaw === 1 || introSeenRaw === "1";
+        if (!introSeen) {
             console.log(`[BASIC JOURNAL] Intro not seen yet for ${player?.name}, intro will handle journal giving`);
             return; // Intro will handle journal giving
         }
@@ -5565,7 +5671,7 @@ function giveBasicJournalIfNeeded(player) {
         system.runTimeout(() => {
             try {
                 // Check again if intro gave journal in the meantime
-                if (introInProgress.has(player.id) || world.getDynamicProperty(journalGivenKey)) {
+                if (introInProgress.has(player.id) || getWorldProperty(journalGivenKey)) {
                     console.log(`[BASIC JOURNAL] Intro gave journal in meantime for ${player?.name}, skipping`);
                     return;
                 }
@@ -5575,7 +5681,7 @@ function giveBasicJournalIfNeeded(player) {
                 const inventory = player.getComponent("inventory")?.container;
                 if (!inventory) {
                     // Retry after another delay if inventory not ready (but only if intro didn't give it)
-                    if (!introInProgress.has(player.id) && !world.getDynamicProperty(journalGivenKey)) {
+                    if (!introInProgress.has(player.id) && !getWorldProperty(journalGivenKey)) {
                         system.runTimeout(() => giveBasicJournalIfNeeded(player), 40);
                     }
                     return;
@@ -5592,7 +5698,7 @@ function giveBasicJournalIfNeeded(player) {
                 }
                 
                 if (hasJournal) {
-                    world.setDynamicProperty(playerKey, true);
+                    setWorldProperty(playerKey, true);
                     return;
                 }
                 
@@ -5602,7 +5708,7 @@ function giveBasicJournalIfNeeded(player) {
                 
                 if (!remaining) {
                     // Successfully added - show pop-in effect
-                    world.setDynamicProperty(playerKey, true);
+                    setWorldProperty(playerKey, true);
                     
                     // Visual pop-in effect with discovery sound
                     const volumeMultiplier = getPlayerSoundVolume(player);
@@ -5627,7 +5733,7 @@ function giveBasicJournalIfNeeded(player) {
                 } else {
                     // Inventory full - drop it
                     player.dimension.spawnItem(journal, player.location);
-                    world.setDynamicProperty(playerKey, true);
+                    setWorldProperty(playerKey, true);
                     player.sendMessage("§eA journal fell from your inventory!");
                     player.sendMessage("§7Right-click it to open and learn about your world.");
                     player.playSound("random.pop", { pitch: 1.0, volume: 0.5 });
@@ -5676,8 +5782,10 @@ world.afterEvents.playerJoin.subscribe((event) => {
                 loadInfectionData(player);
                 
                 // Check if intro has been shown
-                const introSeen = world.getDynamicProperty(WORLD_INTRO_SEEN_PROPERTY);
-                console.log(`[JOIN MAIN] Intro seen property: ${introSeen} (type: ${typeof introSeen})`);
+                const introSeenRaw = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
+                // Handle boolean values properly - true, "true", or 1 all mean intro is seen
+                const introSeen = introSeenRaw === true || introSeenRaw === "true" || introSeenRaw === 1 || introSeenRaw === "1";
+                console.log(`[JOIN MAIN] Intro seen property: ${introSeen} (raw=${introSeenRaw}, type=${typeof introSeenRaw})`);
                 
                 if (!introSeen) {
                     // Show intro sequence (will handle journal giving)
@@ -5800,15 +5908,19 @@ world.beforeEvents.itemUse.subscribe((event) => {
         system.run(() => {
             // Check if this is the first time opening
             const firstTimeKey = `mb_basic_journal_first_open_${player.id}`;
-            const hasOpenedBefore = world.getDynamicProperty(firstTimeKey);
+            const hasOpenedBefore = getWorldProperty(firstTimeKey);
             
-            if (!hasOpenedBefore) {
-                // First time - show welcome screen
-                showFirstTimeWelcomeScreen(player);
-            } else {
-                // Show normal menu
-                showBasicJournalUI(player);
-            }
+            // ARCHIVED: First-time welcome screen is disabled but code is preserved
+            // if (!hasOpenedBefore) {
+            //     // First time - show welcome screen
+            //     showFirstTimeWelcomeScreen(player);
+            // } else {
+            //     // Show normal menu
+            //     showBasicJournalUI(player);
+            // }
+            
+            // Always show normal menu (welcome screen archived)
+            showBasicJournalUI(player);
         });
         return;
     }
@@ -6094,7 +6206,7 @@ function clearPlayerCodexState(player) {
     if (!player) return;
 
     try {
-        player.setDynamicProperty("mb_codex", JSON.stringify(getDefaultCodex()));
+        setPlayerProperty(player, "mb_codex", JSON.stringify(getDefaultCodex()));
     } catch (err) {
         console.warn(`[MBI] Failed writing default codex for ${player.name}:`, err);
     }
@@ -6111,7 +6223,7 @@ function clearPlayerCodexState(player) {
 
     for (const key of dynamicKeys) {
         try {
-            player.setDynamicProperty(key, undefined);
+            setPlayerProperty(player, key, undefined);
         } catch (err) {
             console.warn(`[MBI] Failed clearing ${key} for ${player.name}:`, err);
         }
@@ -6137,13 +6249,13 @@ function unlockAllContentForDay(day) {
             if (milestoneDay <= day && typeof mbiHandleMilestoneDay === 'function') {
                 // Temporarily set the day to trigger milestone handling
                 const originalDay = getCurrentDay();
-                world.setDynamicProperty("mb_day_count", milestoneDay);
+                setWorldProperty("mb_day_count", milestoneDay);
                 
                 // Handle milestone day
                 mbiHandleMilestoneDay(milestoneDay);
                 
                 // Restore the actual day
-                world.setDynamicProperty("mb_day_count", day);
+                setWorldProperty("mb_day_count", day);
             }
         }
         
@@ -6305,7 +6417,7 @@ function describeSpawnDifficultyLabel(value) {
 
 function applySpawnDifficulty(value, sender) {
     const clamped = Math.max(-5, Math.min(5, value));
-    world.setDynamicProperty(SPAWN_DIFFICULTY_PROPERTY, clamped);
+    setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, clamped);
     sender?.sendMessage?.(`§7[MBI] Spawn difficulty set to ${describeSpawnDifficultyLabel(clamped)} (§f${clamped}§7).`);
 }
 
@@ -6336,7 +6448,7 @@ function executeMbCommand(sender, subcommand, args = []) {
         }
         case "reset_day":
         case "reset_daycount": {
-            world.setDynamicProperty("mb_day_count", 1);
+            setWorldProperty("mb_day_count", 1);
             sender.sendMessage("§7[MBI] Day counter reset to 1.");
             return;
         }
@@ -6402,6 +6514,14 @@ try {
 } catch (err) {
     console.warn("[MBI] Failed to expose debug command bridge:", err);
 }
+
+// --- Initialize Dynamic Property Handler ---
+// Initialize handler early to cache properties
+initializePropertyHandler();
+
+// --- Initialize Item Registry ---
+// Initialize item registry for modular item handlers
+initializeItemRegistry();
 
 // --- Initialize Basic Journal for Existing Players on Script Load ---
 // This ensures players who load into an existing world (not joining) also get the journal

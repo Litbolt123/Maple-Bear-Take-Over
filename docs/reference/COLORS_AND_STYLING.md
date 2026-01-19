@@ -415,7 +415,9 @@ This document lists all color codes and easy-to-change styling elements in the M
 
 ### Infection Messages
 **File:** `BP/scripts/main.js`
-- **Minor Infection**: `§eMinor infection.` (reinfected) or `§eYou have been infected with a minor infection.` (first time) - Lines **5011, 5020**
+- **Minor Infection (Initial)**: `§eYou have been infected with a minor infection.` (first time) or `§eMinor infection.` (reinfected) - Lines **5020, 5027**
+- **Minor Infection (Respawn - First Time)**: `§eYou are still infected with a minor infection.` + `§7The infection persists even after death.` - Lines **4813-4814**
+- **Minor Infection (Respawn - Subsequent)**: `§eMinor infection.` - Line **4820**
 - **Major Infection (from minor)**: `§cMajor infection.` (reinfected) or full dramatic messages (first time) - Lines **2163, 3724**
 - **Major Infection (from snow)**: `§cMajor infection.` (reinfected) or `§8You have been infected. Find a cure.` (first time) - Lines **2247, 2250**
 - **Major Infection (from bear)**: `§cMajor infection.` (reinfected) or `§cYour immunity has been overcome! You are now infected with a major infection!` (first time) - Lines **3635, 3638**
@@ -458,7 +460,8 @@ This document lists all color codes and easy-to-change styling elements in the M
 **File:** `BP/scripts/main.js`
 
 ### Infection Titles
-- **Minor Infection**: `§e§lMINOR INFECTION` - Line **5014**
+- **Minor Infection (Initial)**: `§e§lMINOR INFECTION` - Line **5014**
+- **Minor Infection (Respawn - First Time)**: `§e§lMINOR INFECTION` - Line **4812**
 - **Major Infection**: `§c§lMAJOR INFECTION` - Lines **2166, 3727**
 
 ### Intro Sequence

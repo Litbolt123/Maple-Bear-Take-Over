@@ -1,12 +1,13 @@
 import { system, world } from "@minecraft/server";
-import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
+import { ActionFormData, ModalFormData, FormCancelationReason } from "@minecraft/server-ui";
+import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getPlayerPropertyChunked, setPlayerPropertyChunked, getWorldPropertyChunked, setWorldPropertyChunked } from "./mb_dynamicPropertyHandler.js";
 import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTracker.js";
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
 function getSpawnDifficultyValue() {
-    let rawValue = world.getDynamicProperty(SPAWN_DIFFICULTY_PROPERTY);
+    let rawValue = getWorldProperty(SPAWN_DIFFICULTY_PROPERTY);
     if (typeof rawValue !== "number") {
         rawValue = 0;
     }
@@ -143,7 +144,7 @@ export function getDefaultCodex() {
 
 export function getCodex(player) {
     try {
-        const raw = player.getDynamicProperty("mb_codex");
+        const raw = getPlayerPropertyChunked(player, "mb_codex");
         if (!raw) return getDefaultCodex();
         const parsed = JSON.parse(raw);
         return { ...getDefaultCodex(), ...parsed };
@@ -154,7 +155,7 @@ export function getCodex(player) {
 
 export function saveCodex(player, codex) {
     try {
-        player.setDynamicProperty("mb_codex", JSON.stringify(codex));
+        setPlayerPropertyChunked(player, "mb_codex", JSON.stringify(codex));
     } catch (e) {
         console.warn('Failed to save codex:', e);
     }
@@ -170,7 +171,7 @@ export function getPlayerSoundVolume(player) {
     try {
         // Check Basic Journal settings first (world dynamic property)
         const settingsKey = `mb_player_settings_${player.id}`;
-        const rawSettings = world.getDynamicProperty(settingsKey);
+        const rawSettings = getWorldPropertyChunked(settingsKey);
         
         if (rawSettings) {
             let parsedSettings = rawSettings;
@@ -679,7 +680,7 @@ export function showCodexBook(player, context) {
             
             // Sync with Basic Journal settings if they exist (for backwards compatibility)
             const basicSettingsKey = `mb_player_settings_${player.id}`;
-            const rawBasicSettings = world.getDynamicProperty(basicSettingsKey);
+            const rawBasicSettings = getWorldPropertyChunked(basicSettingsKey);
             if (rawBasicSettings) {
                 let parsedBasicSettings = rawBasicSettings;
                 if (typeof rawBasicSettings === 'string') {
@@ -772,8 +773,8 @@ export function showCodexBook(player, context) {
                         const hasGoldenCarrot = codex.items.goldenCarrotSeen;
                         
                         if (hasGoldenApple && hasGoldenCarrot) {
-                            const hasApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
-                            const hasCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
+                            const hasApple = getPlayerProperty(player, MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
+                            const hasCarrot = getPlayerProperty(player, MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
                             summary.push(`§7Minor Cure Progress:`);
                             summary.push(`§7  Golden Apple: ${hasApple ? '§a✓' : '§eDiscovered'}`);
                             summary.push(`§7  Golden Carrot: ${hasCarrot ? '§a✓' : '§eDiscovered'}`);
@@ -810,7 +811,7 @@ export function showCodexBook(player, context) {
             }
         } else {
             // Check if player has permanent immunity
-            const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+            const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
             
             // Check if player has ever been infected
             const hasBeenInfected = codex.history.totalInfections > 0;
@@ -826,7 +827,7 @@ export function showCodexBook(player, context) {
         }
 
         // Show immunity status - progressive: only show if have experienced immunity or have Powdery Journal with knowledge
-        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
         const hasExperiencedImmunity = hasPermanentImmunity || (immune && codex.status.immuneKnown);
         if (hasPowderyJournal && (hasExperiencedImmunity || infectionKnowledge >= 1)) {
             if (hasPermanentImmunity) {
@@ -854,7 +855,7 @@ export function showCodexBook(player, context) {
         const hasBeenHit = hitCount > 0 || codex.infections.bear.discovered;
         if (hasPowderyJournal && hasBeenHit && bearKnowledge >= 1) {
             if (hitCount > 0 && !hasInfection) {
-                const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+                const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
                 const hitsNeeded = hasPermanentImmunity ? IMMUNE_HITS_TO_INFECT : HITS_TO_INFECT;
                 summary.push(`§eBear Hits: §f${hitCount}/${hitsNeeded}`);
             } else if (hasInfection && infectionKnowledge >= 1) {
@@ -993,8 +994,8 @@ export function showCodexBook(player, context) {
         const infectionState = playerInfection.get(player.id);
         const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
         const infectionType = hasInfection ? (infectionState.infectionType || MAJOR_INFECTION_TYPE) : null;
-        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
-        const minorInfectionCured = player.getDynamicProperty("mb_minor_infection_cured") === true;
+        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
+        const minorInfectionCured = getPlayerProperty(player, "mb_minor_infection_cured") === true;
         
         if (codex.infections.bear.discovered || codex.infections.snow.discovered || codex.infections.minor || hasInfection || hasPermanentImmunity) {
             lines.push("§eThe Infection");
@@ -1167,8 +1168,8 @@ export function showCodexBook(player, context) {
                 const hasGoldenCarrot = codex.items.goldenCarrotSeen;
                 
                 if (hasGoldenApple && hasGoldenCarrot) {
-                    const hasApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
-                    const hasCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
+                    const hasApple = getPlayerProperty(player, MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
+                    const hasCarrot = getPlayerProperty(player, MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
                     lines.push(`§7  Golden Apple: ${hasApple ? '§a✓ Consumed' : '§eDiscovered'}`);
                     lines.push(`§7  Golden Carrot: ${hasCarrot ? '§a✓ Consumed' : '§eDiscovered'}`);
                     lines.push("§7  Both must be consumed separately (any order)");
@@ -1567,7 +1568,7 @@ export function showCodexBook(player, context) {
         const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
         const infectionType = hasInfection ? (infectionState.infectionType || MAJOR_INFECTION_TYPE) : null;
         const isMinor = infectionType === MINOR_INFECTION_TYPE;
-        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
         const hasHadMinorInfection = codex.infections.minor.discovered;
         
         const form = new ActionFormData().title("§6Minor Infection Analysis");
@@ -1618,8 +1619,8 @@ export function showCodexBook(player, context) {
                 body += "§6Cure Information:\n";
                 
                 if (isMinor) {
-                    const hasApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
-                    const hasCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
+                    const hasApple = getPlayerProperty(player, MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
+                    const hasCarrot = getPlayerProperty(player, MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
                     
                     body += "§7Cure components:\n";
                     body += `§7  Golden Apple: ${hasApple ? '§a✓ Consumed' : (hasGoldenApple ? '§eDiscovered' : '§c✗ Not discovered')}\n`;
@@ -1685,7 +1686,7 @@ export function showCodexBook(player, context) {
             { key: "buffBearSeen", title: "Buff Maple Bear", icon: "textures/items/buff_mb_egg" },
             { key: "infectedPigSeen", title: "Infected Pig", icon: "textures/items/infected_pig_spawn_egg" },
             { key: "infectedCowSeen", title: "Infected Cow", icon: "textures/items/infected_cow_egg" },
-            { key: "flyingBearSeen", title: "Flying Maple Bear", icon: "textures/items/flying_mb_egg" },
+            { key: "flyingBearSeen", title: "Flying Maple Bear", icon: "textures/items/flying_mb_egg_texture" },
             { key: "miningBearSeen", title: "Mining Maple Bear", icon: "textures/items/infected_day13_egg" },
             { key: "torpedoBearSeen", title: "Torpedo Maple Bear", icon: "textures/items/infected_day20_egg" }
         ];
@@ -2096,9 +2097,9 @@ export function showCodexBook(player, context) {
                         const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
                         const infectionType = hasInfection ? (infectionState.infectionType || MAJOR_INFECTION_TYPE) : null;
                         const isMinor = infectionType === MINOR_INFECTION_TYPE;
-                        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
-                        const hasGoldenApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
-                        const hasGoldenCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
+                        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
+                        const hasGoldenApple = getPlayerProperty(player, MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
+                        const hasGoldenCarrot = getPlayerProperty(player, MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
                         const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
                         const hasSeenGold = codex.items.goldSeen;
                         const hasSeenGoldNugget = codex.items.goldNuggetSeen;
@@ -2177,9 +2178,9 @@ export function showCodexBook(player, context) {
                         const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
                         const infectionType = hasInfection ? (infectionState.infectionType || MAJOR_INFECTION_TYPE) : null;
                         const isMinor = infectionType === MINOR_INFECTION_TYPE;
-                        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
-                        const hasGoldenApple = player.getDynamicProperty(MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
-                        const hasGoldenCarrot = player.getDynamicProperty(MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
+                        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
+                        const hasGoldenApple = getPlayerProperty(player, MINOR_CURE_GOLDEN_APPLE_PROPERTY) === true;
+                        const hasGoldenCarrot = getPlayerProperty(player, MINOR_CURE_GOLDEN_CARROT_PROPERTY) === true;
                         const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
                         const hasSeenGold = codex.items.goldSeen;
                         const hasSeenGoldNugget = codex.items.goldNuggetSeen;
@@ -2299,7 +2300,7 @@ export function showCodexBook(player, context) {
                         const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
                         const infectionState = playerInfection.get(player.id);
                         const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
-                        const hasPermanentImmunity = player.getDynamicProperty(PERMANENT_IMMUNITY_PROPERTY) === true;
+                        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
                         const hasSeenGold = codex.items.goldSeen;
                         const hasSeenGoldNugget = codex.items.goldNuggetSeen;
                         const hasSeenGoldenApple = codex.items.goldenAppleSeen;
@@ -2912,7 +2913,7 @@ export function showCodexBook(player, context) {
     }
 
     function openSpawnDifficultyMenu() {
-        const currentRaw = Number(world.getDynamicProperty(SPAWN_DIFFICULTY_PROPERTY) ?? 0);
+        const currentRaw = Number(getWorldProperty(SPAWN_DIFFICULTY_PROPERTY) ?? 0);
         const label = getSpawnDifficultyLabel(currentRaw);
         const form = new ActionFormData()
             .title("§cSpawn Difficulty")
@@ -3113,6 +3114,8 @@ export function showCodexBook(player, context) {
         form.button("§fSpawn Controller");
         form.button("§fMain Script");
         form.button("§fBiome Ambience");
+        form.button("§fDynamic Properties");
+        form.button("§fCodex/Knowledge");
         form.button("§8Back");
 
         form.show(player).then((res) => {
@@ -3122,7 +3125,7 @@ export function showCodexBook(player, context) {
                 return openMain();
             }
 
-            if (res.selection === 6) {
+            if (res.selection === 8) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openMain();
@@ -3137,6 +3140,8 @@ export function showCodexBook(player, context) {
                 case 3: return openSpawnDebugMenu(settings);
                 case 4: return openMainDebugMenu(settings);
                 case 5: return openBiomeAmbienceDebugMenu(settings);
+                case 6: return openDynamicPropertyDebugMenu(settings);
+                case 7: return openCodexDebugMenu(settings);
                 default: return openDebugMenu();
             }
         }).catch(() => openMain());
@@ -3247,7 +3252,7 @@ export function showCodexBook(player, context) {
     function openSpawnDebugMenu(settings) {
         const spawn = settings.spawn || {};
         const form = new ActionFormData().title("§bSpawn Controller Debug");
-        form.body(`§7Toggle debug logging for Spawn Controller:\n\n§8Current settings:\n§7• General: ${spawn.general ? "§aON" : "§cOFF"}\n§7• Discovery: ${spawn.discovery ? "§aON" : "§cOFF"}\n§7• Tile Scanning: ${spawn.tileScanning ? "§aON" : "§cOFF"}\n§7• Cache: ${spawn.cache ? "§aON" : "§cOFF"}\n§7• Validation: ${spawn.validation ? "§aON" : "§cOFF"}\n§7• Distance: ${spawn.distance ? "§aON" : "§cOFF"}\n§7• Spacing: ${spawn.spacing ? "§aON" : "§cOFF"}`);
+        form.body(`§7Toggle debug logging for Spawn Controller:\n\n§8Current settings:\n§7• General: ${spawn.general ? "§aON" : "§cOFF"}\n§7• Discovery: ${spawn.discovery ? "§aON" : "§cOFF"}\n§7• Tile Scanning: ${spawn.tileScanning ? "§aON" : "§cOFF"}\n§7• Cache: ${spawn.cache ? "§aON" : "§cOFF"}\n§7• Validation: ${spawn.validation ? "§aON" : "§cOFF"}\n§7• Distance: ${spawn.distance ? "§aON" : "§cOFF"}\n§7• Spacing: ${spawn.spacing ? "§aON" : "§cOFF"}\n§7• Isolated: ${spawn.isolated ? "§aON" : "§cOFF"}`);
         
         form.button(`§${spawn.general ? "a" : "c"}General Logging`);
         form.button(`§${spawn.discovery ? "a" : "c"}Discovery Phase`);
@@ -3256,11 +3261,12 @@ export function showCodexBook(player, context) {
         form.button(`§${spawn.validation ? "a" : "c"}Validation`);
         form.button(`§${spawn.distance ? "a" : "c"}Distance`);
         form.button(`§${spawn.spacing ? "a" : "c"}Spacing`);
+        form.button(`§${spawn.isolated ? "a" : "c"}Isolated Players`);
         form.button(`§${spawn.all ? "a" : "c"}Toggle All`);
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 8) {
+            if (!res || res.canceled || res.selection === 9) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openDebugMenu();
@@ -3268,7 +3274,7 @@ export function showCodexBook(player, context) {
 
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
-            const flags = ["general", "discovery", "tileScanning", "cache", "validation", "distance", "spacing", "all"];
+            const flags = ["general", "discovery", "tileScanning", "cache", "validation", "distance", "spacing", "isolated", "all"];
             if (res.selection < flags.length) {
                 const flagName = flags[res.selection];
                 const newState = toggleDebugFlag("spawn", flagName);
@@ -3286,16 +3292,17 @@ export function showCodexBook(player, context) {
     function openMainDebugMenu(settings) {
         const main = settings.main || {};
         const form = new ActionFormData().title("§bMain Script Debug");
-        form.body(`§7Toggle debug logging for Main Script:\n\n§8Current settings:\n§7• Death Events: ${main.death ? "§aON" : "§cOFF"}\n§7• Mob Conversion: ${main.conversion ? "§aON" : "§cOFF"}\n§7• Infection: ${main.infection ? "§aON" : "§cOFF"}`);
+        form.body(`§7Toggle debug logging for Main Script:\n\n§8Current settings:\n§7• Death Events: ${main.death ? "§aON" : "§cOFF"}\n§7• Mob Conversion: ${main.conversion ? "§aON" : "§cOFF"}\n§7• Infection: ${main.infection ? "§aON" : "§cOFF"}\n§7• Minor Infection: ${main.minorInfection ? "§aON" : "§cOFF"}`);
         
         form.button(`§${main.death ? "a" : "c"}Death Events`);
         form.button(`§${main.conversion ? "a" : "c"}Mob Conversion`);
         form.button(`§${main.infection ? "a" : "c"}Infection`);
+        form.button(`§${main.minorInfection ? "a" : "c"}Minor Infection`);
         form.button(`§${main.all ? "a" : "c"}Toggle All`);
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 4) {
+            if (!res || res.canceled || res.selection === 5) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openDebugMenu();
@@ -3303,7 +3310,7 @@ export function showCodexBook(player, context) {
 
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
-            const flags = ["death", "conversion", "infection", "all"];
+            const flags = ["death", "conversion", "infection", "minorInfection", "all"];
             if (res.selection < flags.length) {
                 const newState = toggleDebugFlag("main", flags[res.selection]);
                 const stateText = newState ? "§aON" : "§cOFF";
@@ -3351,6 +3358,90 @@ export function showCodexBook(player, context) {
                 invalidateDebugCache();
             }
                 return openBiomeAmbienceDebugMenu(getDebugSettings(player));
+        }).catch(() => openDebugMenu());
+    }
+
+    function openDynamicPropertyDebugMenu(settings) {
+        const dp = settings.dynamic_properties || {};
+        const form = new ActionFormData().title("§bDynamic Properties Debug");
+        form.body(`§7Toggle debug logging for Dynamic Property Handler:\n\n§8Current settings:\n§7• Chunking: ${dp.chunking ? "§aON" : "§cOFF"}\n§7• Caching: ${dp.caching ? "§aON" : "§cOFF"}\n§7• Reads: ${dp.reads ? "§aON" : "§cOFF"}\n§7• Writes: ${dp.writes ? "§aON" : "§cOFF"}\n§7• Errors: ${dp.errors ? "§aON" : "§cOFF"}`);
+        
+        form.button(`§${dp.chunking ? "a" : "c"}Chunking`);
+        form.button(`§${dp.caching ? "a" : "c"}Caching`);
+        form.button(`§${dp.reads ? "a" : "c"}Reads`);
+        form.button(`§${dp.writes ? "a" : "c"}Writes`);
+        form.button(`§${dp.errors ? "a" : "c"}Errors`);
+        form.button(`§${dp.all ? "a" : "c"}Toggle All`);
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openDebugMenu();
+            }
+
+            // Back button is at index 6 (after 5 flag buttons + 1 Toggle All button)
+            if (res.selection === 6) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openDebugMenu();
+            }
+
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
+            const flags = ["chunking", "caching", "reads", "writes", "errors", "all"];
+            if (res.selection < flags.length) {
+                const flagName = flags[res.selection];
+                const newState = toggleDebugFlag("dynamic_properties", flagName);
+                const stateText = newState ? "§aON" : "§cOFF";
+                player.sendMessage(`§7[DEBUG] Dynamic Properties ${flagName} debug: ${stateText}`);
+                console.warn(`[DEBUG MENU] Dynamic Properties ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+                invalidateDebugCache();
+            }
+            return openDynamicPropertyDebugMenu(getDebugSettings(player));
+        }).catch(() => openDebugMenu());
+    }
+
+    function openCodexDebugMenu(settings) {
+        const codex = settings.codex || {};
+        const form = new ActionFormData().title("§bCodex/Knowledge Debug");
+        form.body(`§7Toggle debug logging for Codex/Knowledge System:\n\n§8Current settings:\n§7• Progressive: ${codex.progressive ? "§aON" : "§cOFF"}\n§7• Experience: ${codex.experience ? "§aON" : "§cOFF"}\n§7• Flags: ${codex.flags ? "§aON" : "§cOFF"}\n§7• Chunking: ${codex.chunking ? "§aON" : "§cOFF"}\n§7• Saving: ${codex.saving ? "§aON" : "§cOFF"}`);
+        
+        form.button(`§${codex.progressive ? "a" : "c"}Progressive`);
+        form.button(`§${codex.experience ? "a" : "c"}Experience`);
+        form.button(`§${codex.flags ? "a" : "c"}Flags`);
+        form.button(`§${codex.chunking ? "a" : "c"}Chunking`);
+        form.button(`§${codex.saving ? "a" : "c"}Saving`);
+        form.button(`§${codex.all ? "a" : "c"}Toggle All`);
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openDebugMenu();
+            }
+
+            // Back button is at index 6 (after 5 flag buttons + 1 Toggle All button)
+            if (res.selection === 6) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openDebugMenu();
+            }
+
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
+            const flags = ["progressive", "experience", "flags", "chunking", "saving", "all"];
+            if (res.selection < flags.length) {
+                const flagName = flags[res.selection];
+                const newState = toggleDebugFlag("codex", flagName);
+                const stateText = newState ? "§aON" : "§cOFF";
+                player.sendMessage(`§7[DEBUG] Codex/Knowledge ${flagName} debug: ${stateText}`);
+                console.warn(`[DEBUG MENU] Codex/Knowledge ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+                invalidateDebugCache();
+            }
+            return openCodexDebugMenu(getDebugSettings(player));
         }).catch(() => openDebugMenu());
     }
 
@@ -3415,7 +3506,7 @@ export function showCodexBook(player, context) {
                         audioMessages: settings.audioMessages
                     };
                     try {
-                        world.setDynamicProperty(basicSettingsKey, JSON.stringify(basicSettings));
+                        setWorldPropertyChunked(basicSettingsKey, JSON.stringify(basicSettings));
                     } catch (error) {
                         console.warn(`[SETTINGS] Error saving Basic Journal settings:`, error);
                     }
@@ -3598,12 +3689,14 @@ function getDefaultDebugSettings() {
             validation: false,
             distance: false,
             spacing: false,
+            isolated: false,
             all: false
         },
         main: {
             death: false,
             conversion: false,
             infection: false,
+            minorInfection: false,
             all: false
         },
         biome_ambience: {
@@ -3615,6 +3708,22 @@ function getDefaultDebugSettings() {
             cleanup: false,
             errors: false,
             all: false
+        },
+        dynamic_properties: {
+            chunking: false,
+            caching: false,
+            reads: false,
+            writes: false,
+            errors: false,
+            all: false
+        },
+        codex: {
+            progressive: false,
+            experience: false,
+            flags: false,
+            chunking: false,
+            saving: false,
+            all: false
         }
     };
 }
@@ -3623,7 +3732,7 @@ function getDefaultDebugSettings() {
 // NOTE: Debug settings ARE persisted across sessions via dynamic properties
 export function getDebugSettings(player) {
     try {
-        const settingsStr = player.getDynamicProperty("mb_debug_settings");
+        const settingsStr = getPlayerProperty(player, "mb_debug_settings");
         if (settingsStr) {
             const parsed = JSON.parse(settingsStr);
             // Merge with defaults to ensure new flags exist
@@ -3650,7 +3759,7 @@ export function getDebugSettings(player) {
 
 export function saveDebugSettings(player, settings) {
     try {
-        player.setDynamicProperty("mb_debug_settings", JSON.stringify(settings));
+        setPlayerProperty(player, "mb_debug_settings", JSON.stringify(settings));
         // Invalidate cache when settings change
         invalidateDebugCache();
     } catch (error) {
@@ -3693,6 +3802,23 @@ export function isDebugEnabled(category, flag) {
 }
 
 // --- Basic Journal UI Functions ---
+async function forceShow(form, player, maximumRetries = 300) {
+    let response;
+    let retries = 0;
+    do {
+        response = await form.show(player);
+        retries++;
+        if (retries >= maximumRetries) {
+            console.warn("[BASIC JOURNAL] forceShow max retries reached.");
+        }
+    } while (
+        response?.canceled &&
+        response.cancelationReason === FormCancelationReason.UserBusy &&
+        retries < maximumRetries
+    );
+    return response;
+}
+
 export function showBasicJournalUI(player) {
     // Play journal open sound
     const volumeMultiplier = getPlayerSoundVolume(player);
@@ -3774,7 +3900,7 @@ export function showBasicJournalUI(player) {
         }
     }
     
-    form.show(player).then((response) => {
+    forceShow(form, player).then((response) => {
         if (response.canceled) {
             // Play close sound when canceled
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -3792,6 +3918,8 @@ export function showBasicJournalUI(player) {
     });
 }
 
+// ARCHIVED: First-time welcome screen - disabled but preserved for potential future use
+// This function is no longer called but kept in case we want to add an audio intro later
 export function showFirstTimeWelcomeScreen(player) {
     // Play journal open sound
     const volumeMultiplier = getPlayerSoundVolume(player);
@@ -3802,30 +3930,48 @@ export function showFirstTimeWelcomeScreen(player) {
     form.button("§aYes, Play Audio", "textures/items/gold_ingot");
     form.button("§7Skip for Now", "textures/ui/cancel");
     
-    form.show(player).then((response) => {
-        if (response.canceled) {
-            // If canceled, mark as opened and show normal menu
+    forceShow(form, player).then((response) => {
+        try {
+            if (response.canceled) {
+                // If canceled, mark as opened and show normal menu
+                const firstTimeKey = `mb_basic_journal_first_open_${player.id}`;
+                setWorldProperty(firstTimeKey, true);
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_close", { pitch: 1.0, volume: 1.0 * volumeMultiplier });
+                showBasicJournalUI(player);
+                return;
+            }
+            
             const firstTimeKey = `mb_basic_journal_first_open_${player.id}`;
-            world.setDynamicProperty(firstTimeKey, true);
+            setWorldProperty(firstTimeKey, true);
+            
+            // Play page turn sound
             const volumeMultiplier = getPlayerSoundVolume(player);
-            player.playSound("mb.codex_close", { pitch: 1.0, volume: 1.0 * volumeMultiplier });
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+            
+            // Always show the menu first
             showBasicJournalUI(player);
-            return;
+            
+            if (response.selection === 0) {
+                // Play audio intro in the background after showing menu
+                playJournalIntroAudio(player);
+            }
+        } catch (error) {
+            console.warn(`[BASIC JOURNAL] Error handling first-time welcome screen response:`, error);
+            // Fallback: show the menu anyway
+            try {
+                showBasicJournalUI(player);
+            } catch (e) {
+                console.warn(`[BASIC JOURNAL] Error showing basic journal UI:`, e);
+            }
         }
-        
-        const firstTimeKey = `mb_basic_journal_first_open_${player.id}`;
-        world.setDynamicProperty(firstTimeKey, true);
-        
-        // Play page turn sound
-        const volumeMultiplier = getPlayerSoundVolume(player);
-        player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-        
-        // Always show the menu first
-        showBasicJournalUI(player);
-        
-        if (response.selection === 0) {
-            // Play audio intro in the background after showing menu
-            playJournalIntroAudio(player);
+    }).catch((error) => {
+        console.warn(`[BASIC JOURNAL] Error in first-time welcome screen form:`, error);
+        // Fallback: show the menu anyway
+        try {
+            showBasicJournalUI(player);
+        } catch (e) {
+            console.warn(`[BASIC JOURNAL] Error showing basic journal UI:`, e);
         }
     });
 }
@@ -3833,7 +3979,7 @@ export function showFirstTimeWelcomeScreen(player) {
 function playJournalIntroAudio(player) {
     // Check if audio messages are enabled
     const settingsKey = `mb_player_settings_${player.id}`;
-    let rawSettings = world.getDynamicProperty(settingsKey);
+    let rawSettings = getWorldPropertyChunked(settingsKey);
     
     // Parse settings if it's a JSON string
     let settings = null;
@@ -3900,7 +4046,7 @@ function showGoalScreen(player) {
 function showSettingsScreen(player) {
     // Get or create settings
     const settingsKey = `mb_player_settings_${player.id}`;
-    let rawSettings = world.getDynamicProperty(settingsKey);
+    let rawSettings = getWorldPropertyChunked(settingsKey);
     
     // Ensure we have a valid settings object
     let settings = {};
@@ -4001,7 +4147,7 @@ function showSettingsScreen(player) {
             
             try {
                 // Stringify the object for storage (like other dynamic properties in the codebase)
-                world.setDynamicProperty(settingsKey, JSON.stringify(newSettings));
+                setWorldPropertyChunked(settingsKey, JSON.stringify(newSettings));
                 player.sendMessage("§7Settings saved!");
             } catch (error) {
                 console.warn(`[BASIC JOURNAL] Error saving settings:`, error);

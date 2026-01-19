@@ -1,4 +1,5 @@
 import { world, system } from "@minecraft/server";
+import { getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { getCodex, saveCodex, getKnowledgeLevel, hasKnowledge, checkKnowledgeProgression, getPlayerSoundVolume } from "./mb_codex.js";
 
 // Minimal dynamic property test (must be delayed until after startup)
@@ -516,15 +517,13 @@ function showPlayerTitle(player, text, subtitle = undefined, options = {}, day =
             }
             player.onScreenDisplay.setTitle(text, titleOptions);
 
-            // Use infection-based sound if day is provided
-            const volumeMultiplier = getPlayerSoundVolume(player);
-            if (day !== null) {
+            // Use infection-based sound if day is provided (null = silent)
+            if (day !== null && day !== undefined) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
                 const soundConfig = getInfectionSound(day);
                 player.playSound(soundConfig.sound, { pitch: soundConfig.pitch, volume: soundConfig.volume * volumeMultiplier });
-            } else {
-                // Default sound for backwards compatibility
-                player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.5 * volumeMultiplier });
             }
+            // If day is null/undefined, no sound plays (silent mode)
         }
     } catch (error) {
         console.warn("Error showing title to player:", error);
@@ -572,7 +571,7 @@ export function ensureScoreboardExists() {
             const obj = world.scoreboard.getObjective(SCOREBOARD_OBJECTIVE);
             if (obj) {
                 // Get the persisted day count or default to 1
-                const currentDay = world.getDynamicProperty(DAY_COUNT_KEY) ?? 1;
+                const currentDay = getWorldProperty(DAY_COUNT_KEY) ?? 1;
                 obj.setScore(SCOREBOARD_ID, currentDay);
             }
         }
@@ -591,7 +590,7 @@ export function ensureScoreboardExists() {
  */
 export function getCurrentDay() {
     try {
-        const raw = world.getDynamicProperty(DAY_COUNT_KEY);
+        const raw = getWorldProperty(DAY_COUNT_KEY);
         const parsed = parseInt(raw);
         const day = isNaN(parsed) ? 0 : parsed; // Default to day 0
         return day;
@@ -610,7 +609,7 @@ export function setCurrentDay(day) {
         const safeDay = Math.max(0, Math.floor(day)); // Allow day 0
 
         // Update both storage methods
-        world.setDynamicProperty(DAY_COUNT_KEY, safeDay);
+        setWorldProperty(DAY_COUNT_KEY, safeDay);
         const obj = world.scoreboard.getObjective(SCOREBOARD_OBJECTIVE);
         if (obj) {
             obj.setScore(SCOREBOARD_ID, safeDay);
@@ -755,7 +754,7 @@ function startDayCycleLoop() {
     }, 40); // ~every 2 seconds
 
     // Mark that the loop is running
-    world.setDynamicProperty(LOOP_RUNNING_FLAG, true);
+    setWorldProperty(LOOP_RUNNING_FLAG, true);
     console.log("Day cycle loop started successfully");
 }
 
@@ -885,14 +884,14 @@ const MILESTONE_PULSE_FLAG_PREFIX = "mbi_milestone_pulse_"; // e.g. mbi_mileston
 
 function hasMilestonePulseRun(day) {
     try {
-        return !!world.getDynamicProperty(MILESTONE_PULSE_FLAG_PREFIX + String(day));
+        return !!getWorldProperty(MILESTONE_PULSE_FLAG_PREFIX + String(day));
     } catch { }
     return false;
 }
 
 function setMilestonePulseRun(day) {
     try {
-        world.setDynamicProperty(MILESTONE_PULSE_FLAG_PREFIX + String(day), true);
+        setWorldProperty(MILESTONE_PULSE_FLAG_PREFIX + String(day), true);
     } catch { }
 }
 
@@ -1004,7 +1003,7 @@ function isLiquid(typeId) {
 export function initializeDayTracking() {
     try {
         // Check if we've already initialized
-        if (world.getDynamicProperty(INITIALIZED_FLAG)) {
+        if (getWorldProperty(INITIALIZED_FLAG)) {
             console.log("Day tracking already initialized");
             return;
         }
@@ -1074,7 +1073,7 @@ export function initializeDayTracking() {
 
         // Mark as initialized
         system.run(() => {
-            world.setDynamicProperty(INITIALIZED_FLAG, true);
+            setWorldProperty(INITIALIZED_FLAG, true);
         });
 
         // Start the day cycle loop
@@ -1149,8 +1148,12 @@ world.afterEvents.playerJoin.subscribe((event) => {
                 const currentDay = getCurrentDay();
 
                 // Check if this is the first time the world is being initialized
-                const isFirstTimeInit = !world.getDynamicProperty(INITIALIZED_FLAG);
-                const isFirstTimePlayer = !returningPlayers.has(playerName);
+                const isFirstTimeInit = !getWorldProperty(INITIALIZED_FLAG);
+                // Check if player has seen intro - if yes, they're a returning player (even if returningPlayers Set is empty after reload)
+                const WORLD_INTRO_SEEN_PROPERTY = "mb_world_intro_seen";
+                const introSeenRaw = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
+                const introSeen = introSeenRaw === true || introSeenRaw === "true" || introSeenRaw === 1 || introSeenRaw === "1";
+                const isFirstTimePlayer = !introSeen && !returningPlayers.has(playerName);
 
                 // Add an additional delay before showing messages
                 system.runTimeout(() => {
@@ -1161,19 +1164,19 @@ world.afterEvents.playerJoin.subscribe((event) => {
                             // initializeDayTracking already shows the welcome message
                         } else {
                             // Show join message for subsequent joins
-                            const soundConfig = getInfectionSound(currentDay);
-                            const volumeMultiplier = getPlayerSoundVolume(player);
-                            player.playSound(soundConfig.sound, {
-                                pitch: soundConfig.pitch,
-                                volume: soundConfig.volume * volumeMultiplier
-                            });
-
                             if (isFirstTimePlayer) {
+                                // First-time player - play sound now, show message after intro delay
+                                const soundConfig = getInfectionSound(currentDay);
+                                const volumeMultiplier = getPlayerSoundVolume(player);
+                                player.playSound(soundConfig.sound, {
+                                    pitch: soundConfig.pitch,
+                                    volume: soundConfig.volume * volumeMultiplier
+                                });
                                 // Check if intro sequence is active or has been shown - if so, skip welcome message
                                 // (intro sequence handles the welcome message)
                                 // Also check if intro is currently in progress by waiting a bit longer
                                 const WORLD_INTRO_SEEN_PROPERTY = "mb_world_intro_seen";
-                                const introSeen = world.getDynamicProperty(WORLD_INTRO_SEEN_PROPERTY);
+                                const introSeen = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
                                 
                                 // Wait additional time to ensure intro sequence has had time to start and mark itself
                                 // The intro sequence takes about 15+ seconds total, so wait at least that long
@@ -1181,7 +1184,7 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                     if (!player || !player.isValid) return;
                                     
                                     // Check again after delay - intro should be seen by now if it was shown
-                                    const introSeenNow = world.getDynamicProperty(WORLD_INTRO_SEEN_PROPERTY);
+                                    const introSeenNow = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
                                     
                                     if (!introSeenNow) {
                                         // Intro still hasn't been shown - this should be very rare, but skip welcome message anyway
@@ -1205,11 +1208,11 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                     // Mark as returning player for future joins
                                     returningPlayers.add(playerName);
 
-                                    // Show day info after a delay
+                                    // Show day info after a delay (same format as returning players)
                                     system.runTimeout(() => {
                                         if (!player || !player.isValid) return;
                                         const displayInfo = getDayDisplayInfo(currentDay);
-                                        sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} It is currently Day ${currentDay}`);
+                                        sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`);
                                         showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay);
                                         showPlayerActionbar(player, "The Maple Bear infection continues...");
                                     }, 3000); // 3 second delay
@@ -1217,10 +1220,10 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                 
                                 console.log(`[DAY TRACKER] Scheduling welcome message check for ${playerName} after intro sequence completes`);
                             } else {
-                                // Returning player - just show the day
+                                // Returning player - show the day with proper sound immediately
                                 const displayInfo = getDayDisplayInfo(currentDay);
                                 sendPlayerMessage(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`);
-                                showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay);
+                                showPlayerTitle(player, `${displayInfo.color}${displayInfo.symbols} Day ${currentDay}`, undefined, {}, currentDay); // Use currentDay for proper infection sound
                                 showPlayerActionbar(player, "The Maple Bear infection continues...");
                             }
                         }
