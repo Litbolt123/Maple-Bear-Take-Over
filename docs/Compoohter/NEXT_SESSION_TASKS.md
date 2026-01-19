@@ -58,6 +58,42 @@ Torpedo bears are not breaking blocks **directly above them** when they detect a
 
 ---
 
+## ❄️ Dusted Ground Infection Pressure System
+
+### Goal
+Create a lightweight system that increases a player's infection risk based on time spent standing on **dusted dirt** or **snow layers**, with recovery when leaving the blocks.
+
+### Core Behavior
+1. **Standing on Dust/Snow (Minor Infection Track)**
+   - If a player stands/walks on dusted dirt or snow layers for **60 seconds**, send a warning message ("you start to feel off").
+   - After the warning, if they continue for **30 more seconds**, they become **major infected** (or progress to major if already minor).
+   - If they step off the blocks, the timer decreases gradually (**every 2 seconds, reduce by 1 second**) until it returns to 0.
+
+2. **Standing on Dust/Snow While Already Major Infected**
+   - Every **30 seconds** on dust/snow increases the player's **snow level** (same as eating snow or being hit).
+   - If they step off, the timer decreases gradually (**every 4 seconds, reduce by 1 second**) until it returns to 0.
+
+3. **Permanent Minor Immunity Modifier**
+   - If the player has permanent immunity from minor infection, this system should be **half as effective**.
+   - Example: progress is **50% slower**, or required time is **2x** longer before effects occur.
+
+### Additional Area Pressure (Optional)
+Use the **spawn controller's dusted dirt / snow layer scanner** to apply slow pressure when the player remains in a high-density area:
+   - If there are **100+** dusted dirt/snow blocks nearby, the timer should **slowly build** even if the player is not directly standing on them.
+   - Suggested ramp: **10-minute** buildup timer, decreases by **1 second per second** when block density falls below 100.
+
+### Notes
+- This should **not** be heavy on performance (reuse existing block scan logic if possible).
+- The existing dusted dirt discovery message should still fire as the early warning.
+- The system should feel like an **unofficial warning** about infected ground.
+
+### Files Likely Involved
+- `BP/scripts/main.js`
+- `BP/scripts/mb_spawnController.js` (for reuse of dusted dirt/snow layer scanning)
+- Possibly `BP/scripts/mb_utilities.js` (helper timers / state tracking)
+
+---
+
 ## 📋 Implementation Notes
 
 ### For Torpedo Bear Fix:
