@@ -13,6 +13,15 @@ This file tracks all features added, removed, and changes made to the addon.
 ## [Unreleased]
 
 ### Added
+- **Dynamic Property Handler**: Implemented cached dynamic property system (`mb_dynamicPropertyHandler.js`) with lazy loading, batch saving, and chunking support for large properties. All scripts migrated to use new handler functions.
+- **Item Finder Utility**: Created `mb_itemFinder.js` with priority-based inventory search (hotbar → main inventory → offhand).
+- **Item Event Registry**: Created `mb_itemRegistry.js` with modular event registration system for cleaner item consumption handling.
+- **Isolated Player Optimizations**: Enhanced spawn system to detect players far from others (>96 blocks) and optimize resource usage while maintaining spawn balance through compensation.
+- **Minor Infection Random Effects**: Implemented random, severity-scaling effects for minor infection (per-player, not global) with cooldowns that scale with severity level.
+- **Minor Infection Respawn Messaging**: Enhanced respawn experience with full message/title/sounds for first-time respawn, minimal message for subsequent respawns.
+- **Debug Menu Expansions**: Added new debug menus for Dynamic Property Handler and Codex/Knowledge System, expanded existing menus with new flags.
+- **Verification Report**: Created comprehensive verification report documenting all code checks and validation.
+- **Co-Creator Documentation**: Created `docs/Compoohter/` folder with tasks, UI guide, and next session planning.
 - **Variable-sized infected biome generation**: Infected biomes now generate in three size variants (large/medium/small) across all dimensions. Each biome replacement category uses multiple `replace_biomes` entries with different `noise_frequency_scale` values: 0.1 for huge rare biomes, 5 for normal baseline, 80 for tiny scattered patches. This creates natural size variety in biome generation (seed-dependent).
 - **Nether dimension infection**: Infected biome now replaces all 5 vanilla Nether biomes (nether_wastes, crimson_forest, warped_forest, soul_sand_valley, basalt_deltas) with variable sizes at ~0.08 density per biome (slightly lower than overworld for balance). Spawn system supports `netherrack` as a valid spawn block in the Nether dimension.
 - **End dimension infection**: Infected biome now replaces all 5 vanilla End biomes (the_end, end_highlands, end_midlands, end_barrens, small_end_islands) with variable sizes at ~0.06 density per biome (lowest density - End should feel more isolated). Spawn system supports `end_stone` as a valid spawn block in the End dimension.
@@ -24,6 +33,17 @@ This file tracks all features added, removed, and changes made to the addon.
 - **Normal golden apple infection reduction with unlockable journal info**: Eating a normal golden apple now reduces the player's infection "snow" level by 0.5. This provides a way to slow infection progression, though it does not cure the infection (only enchanted golden apple + weakness can cure). Players receive a one-time discovery message when they first discover this property while infected - if they have the journal, they see "Check your journal." Otherwise, they see a narrative message. The information about this property is unlockable in the journal's Items section under "Golden Apple" - it only appears after the player has discovered it through gameplay.
 
 ### Changed
+- **Dynamic Property Access**: All scripts now use cached handler (`getPlayerProperty`, `setPlayerProperty`, `getWorldProperty`, `setWorldProperty`) instead of direct dynamic property calls, improving performance and preventing early execution errors.
+- **Item Consumption Handling**: Refactored to use Item Event Registry pattern for cleaner code organization.
+- **Isolated Player Spawn Optimization**: Reduced resource usage for isolated players (scan radius 75→40, entity queries 45→30, tile limits -40%, cache TTL +50%, skip progressive scanning) with spawn compensation (attempts +25%, chance 1.4x, tile density 1.5x).
+- **Minor Infection Effects**: Changed from fixed effects to random, severity-scaling system with per-player tracking.
+- **Minor Infection Respawn**: Removed immediate slowness on respawn, shortened blindness duration (200→60 ticks), effects now only applied by timer loop.
+- **Infection Progression Messaging**: Reduced message spam - first occurrence shows full text, subsequent occurrences show minimal text.
+- **Intro Sequence**: Fixed to use persistent world property and proper boolean handling, preventing replay for returning players.
+- **Welcome Messages**: Fixed to show current day and sound for returning players, consistent "Day 0" format for first-time players.
+- **First-Time Welcome Screen**: Disabled (archived) - normal journal UI always shown instead.
+- **Mining Bear Inventory**: Reduced from 20/24 slots to 3 slots to reduce lag.
+- **Spawn Caps**: Reduced Tiny Maple Bear cap from 75 to 50, Infected Maple Bear cap from 50 to 35.
 - **Improved Stair Casing**: Enhanced stair creation with better side clearance to prevent getting stuck on stair edges. Stairs now clear adjacent blocks that might block movement, making navigation smoother and less damaging.
 - **Spiral Staircases**: Mining bears can now create spiral staircases for climbs of 4+ blocks. Spiral stairs are more efficient, require less block breaking, and provide easier navigation for tall structures. The spiral rotates around the forward direction, creating a 4-step cycle pattern. Bears automatically choose between regular stairs (for shorter climbs) and spiral stairs (for taller climbs) based on target elevation.
 - **Adaptive Mining Strategy**: Mining bears now evaluate multiple mining options (pitfall, regular stairs, spiral stairs) and choose the most effective one based on the current situation and terrain. Uses a scoring system: Pitfall (Score 10) for targets 3-5 blocks above with breakable blocks underneath, Regular Stair (Score 5) as default for moderate climbs, Spiral Stair (Score 3) for targets 4+ blocks above with viable terrain. Bears adaptively choose the best strategy rather than always using the same approach.
@@ -54,6 +74,17 @@ This file tracks all features added, removed, and changes made to the addon.
 - **Milestone days list**: Updated `MILESTONE_DAYS` array to include days 11, 15, and 17 for Flying Bears, Mining Bears, and Torpedo Bears respectively.
 
 ### Fixed
+- **Early Execution Errors**: Fixed `ReferenceError` for world dynamic properties by implementing lazy loading in dynamic property handler.
+- **Dynamic Property Handler Errors**: Added defensive checks for `player.isValid` and `player.setDynamicProperty` to prevent `TypeError: not a function` errors.
+- **Intro Sequence Replay**: Fixed intro replaying for returning players by using persistent world property and consistent boolean handling.
+- **Returning Player Welcome**: Fixed silent welcome messages - now shows day message and sound immediately on join.
+- **First-Time Player Day Display**: Fixed to show "Day 0" after intro (consistent with returning players).
+- **Back Button Navigation**: Fixed back buttons in new debug menus (Dynamic Property Handler, Codex/Knowledge System) to correctly return to main debug menu.
+- **Flying Maple Bear Egg Texture**: Fixed icon path in items menu from `flying_mb_egg` to `flying_mb_egg_texture`.
+- **Minor Infection Progression**: Fixed edge case where minor-to-major conversion might reset timer incorrectly.
+- **Minor Infection on Bear Hit**: Fixed issue where minor infection progression messages/effects weren't triggering when hit by "maple thrall" (infected bear).
+- **Minor Infection Respawn Effects**: Fixed immediate slowness and long blindness on respawn - effects now only applied by timer loop.
+- **Codex Line Numbers**: Corrected all line number references in co-creator tasks documentation.
 - **Day 8 variant unlock bug**: Fixed issue where day 8+ variants were unlocking on day 5 when players saw bears attack animals. Now, kill-based variant unlocks (3 kills of day 4+ variants) only trigger when the current day is >= 8, ensuring day 8 variants only unlock on day 8 or later. Same fix applied to day 13 and day 20 variant unlocks.
 - **Spiral staircase viability check**: Added `isSpiralStairViable()` function to check if terrain is suitable for spiral staircases before attempting to build them. Spiral stairs are now only used when the terrain has breakable blocks and isn't too obstructed by unbreakable blocks. This prevents bears from attempting spiral stairs on unsuitable terrain (e.g., hillsides with too many unbreakable blocks).
 - **Mining bears not targeting villagers**: Fixed issue where mining bears were not targeting villagers. Updated `getCachedMobs()` in `mb_sharedCache.js` to include both `"mob"` and `"villager"` families in entity queries, allowing mining bears to properly detect and target villagers.

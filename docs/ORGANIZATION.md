@@ -40,16 +40,23 @@ docs/
 │   ├── prompts/                 # Prompt files for AI generation
 │   │   └── maple_bear_condensed_prompts.md
 │   └── testing/                 # Testing documentation
-│       └── TEST_SCENARIOS.md
+│       ├── TEST_SCENARIOS.md
+│       └── TESTING_CHECKLIST.md
 │
 ├── reference/                   # External Documentation Resources
 │   ├── DOCUMENTATION_INDEX.md   # Index of official docs
 │   ├── INDEXING_URLS.md         # URLs to index (verify first)
 │   ├── INDEXING_URLS_VERIFIED.md # Verified URLs approach
-│   └── USEFUL_LINKS.md          # Helpful development links
+│   ├── USEFUL_LINKS.md          # Helpful development links
+│   └── COLORS_AND_STYLING.md    # UI color codes and styling reference
 │
-└── ai/                          # AI Assistant Context
-    └── CONTEXT_SUMMARY.md       # AI's understanding of project
+├── ai/                          # AI Assistant Context
+│   └── CONTEXT_SUMMARY.md       # AI's understanding of project
+│
+└── Compoohter/                  # Co-Creator Resources
+    ├── TASKS_FOR_CO_CREATOR.md  # Task list with file locations
+    ├── UI_CREATION_GUIDE.md     # UI creation guide
+    └── NEXT_SESSION_TASKS.md    # Planned improvements
 ```
 
 ## 🎯 Root-Level Files
@@ -70,6 +77,9 @@ External resources and links for Minecraft Bedrock development. These are refere
 
 ### AI Context (`ai/`)
 Files specifically for AI assistant understanding. These help maintain context across development sessions.
+
+### Co-Creator Resources (`Compoohter/`)
+Documentation for team members working on textures, lore, and design (non-scripting work). Includes task lists with file locations and line numbers, UI creation guides, and planning documents.
 
 ## 🔄 When to Update
 

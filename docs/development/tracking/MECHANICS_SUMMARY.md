@@ -16,8 +16,8 @@
 - **NOT currently buffed** - They spawn as normal infected bears, just with a name tag
 
 ### Snow (White Powder) Consumption Mechanics
-- **First consumption** (not infected): Starts infection with immediate effects (blindness, nausea, mining fatigue)
-- **While infected** - Tier-based system:
+- **First consumption** (not infected): Starts major infection with immediate effects (blindness, nausea, mining fatigue)
+- **While infected** - Tier-based system (major infection only):
   - **Tier 1 (1-5 snow)**: Slows infection, positive effects
   - **Tier 2 (6-10 snow)**: Neutral, no noticeable effect
   - **Tier 3 (11-20 snow)**: Accelerates infection, warning effects
@@ -32,17 +32,45 @@
 - **Status**: Mini-boss level (limited spawns, high health/damage)
 - **Issue**: Gets stuck easily, needs better pathfinding/AI
 
-### Infection Symptoms
-- **Immediate on infection**: Blindness, nausea, mining fatigue (short duration)
-- **Progressive symptoms**: Based on time remaining and snow count
+### Infection System
+- **Infection Types**: Two types tracked separately
+  - **Minor Infection**: 10-day timer (scales with world day), mild effects, persists through death until cured
+  - **Major Infection**: 5-day timer, severe effects, can be cured with Weakness + Enchanted Golden Apple
+- **Minor Infection Effects**: Random, severity-scaling effects (per-player, not global)
+  - Severity 0 (>75% time): No effects
+  - Severity 1 (>50% time): Slowness I or Weakness I (cooldown: 7200 ticks)
+  - Severity 2 (>20% time): Slowness I, Weakness I, or Mining Fatigue I (cooldown: 3600 ticks)
+  - Severity 3 (<20% time): Slowness II, Weakness II, Mining Fatigue II, or Nausea I (cooldown: 2400 ticks)
+  - Milder than major infection (no blindness until very late, lower amplifiers)
+- **Major Infection Effects**: Progressive symptoms based on time remaining and snow count
   - Severity 0: No symptoms (above 75% time)
   - Severity 1: Mild (slowness)
   - Severity 2: Moderate (slowness + hunger)
   - Severity 3: Severe (slowness + weakness + blindness + nausea)
-- **Random symptom application**: Based on cooldown and severity level
-- **Snow tier affects**: Higher snow count = worse symptoms, longer durations
+- **Infection Progression**: Minor can progress to major via:
+  - 2 hits from Maple Bears (any type)
+  - 1 snow consumption
+- **Cure System**:
+  - **Minor Cure**: Golden Apple + Golden Carrot (any order) → Permanent immunity
+  - **Major Cure**: Weakness effect + Enchanted Golden Apple → Temporary immunity (5 min) + Permanent immunity
+- **Permanent Immunity**: Prevents minor infection on respawn, requires 3 hits (instead of 2) to get infected
+- **Respawn Behavior**:
+  - First-time respawn with minor infection: Full message, on-screen title, sounds
+  - Subsequent respawns: Minimal message only
+  - No immediate effects on respawn (effects applied by timer loop only)
 
 ---
+
+### Performance Optimizations
+- **Dynamic Property Handler**: Cached read/write system with lazy loading and batch saving
+- **Isolated Player Optimizations**: Reduced resource usage for players far from others (>96 blocks) with spawn compensation
+- **Shared Caches**: Player and mob caching across all AI scripts
+- **Block Caching**: Mining AI block queries cached for 1 tick
+
+### Intro Sequence & Welcome System
+- **World Intro**: Plays once per world with narrative messages, gives basic journal at end
+- **Welcome Messages**: Returning players see current day + sound immediately, first-time players see "Day 0" after intro
+- **Intro Persistence**: Uses persistent world property to prevent replay
 
 ## 🔧 Needs Implementation/Improvement
 

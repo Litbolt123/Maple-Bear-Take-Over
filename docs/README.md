@@ -46,6 +46,7 @@ Technical documentation, planning, and mechanics organized by category:
 
 #### Testing (`development/testing/`)
 - **[TEST_SCENARIOS.md](development/testing/TEST_SCENARIOS.md)** - Testing scenarios and test cases
+- **[TESTING_CHECKLIST.md](development/testing/TESTING_CHECKLIST.md)** - Testing checklist and verification status
 
 ### `/reference/` - External Documentation Resources
 Links and guides for Minecraft Bedrock development:
@@ -58,12 +59,19 @@ Links and guides for Minecraft Bedrock development:
 Files for AI assistant understanding:
 - **[CONTEXT_SUMMARY.md](ai/CONTEXT_SUMMARY.md)** - AI assistant's current understanding of the project (updated during development)
 
+### `/Compoohter/` - Co-Creator Resources
+Documentation for team members working on textures, lore, and design:
+- **[TASKS_FOR_CO_CREATOR.md](Compoohter/TASKS_FOR_CO_CREATOR.md)** - Detailed task list with file locations and line numbers
+- **[UI_CREATION_GUIDE.md](Compoohter/UI_CREATION_GUIDE.md)** - Guide for creating and modifying UI elements
+- **[NEXT_SESSION_TASKS.md](Compoohter/NEXT_SESSION_TASKS.md)** - Planned improvements for next development session
+
 ---
 
 ## 📄 Root-Level Documents
 
 - **[../README.md](../README.md)** - Main project README
 - **[../TODO.md](../TODO.md)** - Current task list and project status
+- **[../VERIFICATION_REPORT.md](../VERIFICATION_REPORT.md)** - Code verification report (latest changes)
 
 ---
 

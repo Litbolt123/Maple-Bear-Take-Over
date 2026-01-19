@@ -49,11 +49,11 @@ This document contains tasks specifically for team members who work on **texture
 ### Main Page Descriptions
 
 **📍 File Location:** `BP/scripts/mb_codex.js`
-- **Summary Text (Main Page Body)**: Lines **709-879** - `buildSummary()` function
+- **Summary Text (Main Page Body)**: Lines **710-880** - `buildSummary()` function
   - Current status messages, infection info, immunity status
   - Progressive text based on player experience
 - **Welcome Message**: Line **3833** - Basic Journal welcome text (`showBasicJournalUI`)
-  - `"§7Welcome to your world..."`
+  - Note: Line 3833 is the sound call, welcome text is nearby in the function
 - **Journal Info (Items Section)**: Lines **2054-2062** - Progressive journal descriptions
   - Basic (lines 2055-2056): `"A leather-bound journal..."`
   - Intermediate (lines 2057-2059): `"A sophisticated journal..."`
@@ -209,14 +209,14 @@ This document contains tasks specifically for team members who work on **texture
 
 ### Late Lore Content
 
-**📍 File Location:** `BP/scripts/mb_codex.js` - `openLateLore()` function (search around line **2550+**)
+**📍 File Location:** `BP/scripts/mb_codex.js` - `openLateLore()` function (starts at line **2569**)
 
-- **Tiny Vanguard Lore**: Search for `day20TinyLoreUnlocked` - Around line **2580+**
-- **Hollow Procession Lore**: Search for `day20InfectedLoreUnlocked` - Around line **2594+**
+- **Tiny Vanguard Lore**: Line **2581-2587** - `day20TinyLoreUnlocked`
+- **Hollow Procession Lore**: Line **2589-2595** - `day20InfectedLoreUnlocked`
   - Current text: `"Infected Maple Bears move like pallbearers..."`
-- **Skybreaker Notes**: Search for `day20BuffLoreUnlocked` - Around line **2602+**
+- **Skybreaker Notes**: Line **2597-2603** - `day20BuffLoreUnlocked`
   - Current text: `"Buff Maple Bears clear the treeline..."`
-- **World Memory**: Search for `day20WorldLoreUnlocked` - Around line **2610+**
+- **World Memory**: Line **2573-2579** - `day20WorldLoreUnlocked`
 
 22. **Day 20 Lore Sections** - These unlock at endgame. Create/expand:
     - **Tiny Vanguard Lore** - The role of Tiny Maple Bears as scouts
@@ -232,18 +232,18 @@ This document contains tasks specifically for team members who work on **texture
 
 ### Intro Sequence Text (First-Time Player Experience)
 
-**📍 File Location:** `BP/scripts/main.js` - `showWorldIntroSequence()` function (starts at line **5446**)
+**📍 File Location:** `BP/scripts/main.js` - `showWorldIntroSequence()` function (starts at line **5486**)
 
-- **Message 1**: Line **5484** - `"§7Welcome to a completely normal world!"`
-- **Message 2**: Line **5498** - `"§7But... it's not..."`
-- **Message 3**: Line **5505** - `"§cIt's infected..."`
-- **Message 4**: Line **5513** - `"§4And so are YOU!"` (Infection moment)
-- **Message 5**: Line **5530** - `"§7Now, take this."` (Journal given)
-- **Message 6**: Search for around line **5580** - `"§eIt should help you."`
+- **Message 1**: Line **5523** - `"§7Welcome to a completely normal world!"`
+- **Message 2**: Line **5537** - `"§7But... it's not..."`
+- **Message 3**: Line **5543** - `"§cIt's infected..."`
+- **Message 4**: Line **5551** - `"§4And so are YOU!"` (Infection moment)
+- **Message 5**: Line **5569** - `"§7Now, take this."` (Journal given)
+- **Message 6**: Line **5632** - `"§eIt should help you."`
 
 ### Biome & World Lore
 
-**📍 File Location:** `BP/scripts/mb_codex.js` - `openBiomes()` function (search around line **2400+**)
+**📍 File Location:** `BP/scripts/mb_codex.js` - `openBiomes()` function (starts at line **2521**)
 
 24. **Biome Descriptions** - Add lore for:
     - Infected biomes (how they're different)
@@ -407,19 +407,19 @@ This document contains tasks specifically for team members who work on **texture
 ### Quick Reference: All Text Locations
 
 **Main Codex File:** `BP/scripts/mb_codex.js`
-- **Main Page**: Lines 709-879 (`buildSummary()`), Line 3833 (Basic Journal welcome)
+- **Main Page**: Lines 710-880 (`buildSummary()`), Line 3833 (Basic Journal - sound call, welcome text nearby)
 - **Journal Descriptions**: Lines 2054-2062 (progressive descriptions)
 - **Infection Section**: Lines 991-1247 (`openInfections()`)
 - **Mobs Section**: Lines 1681-2400 (`openMobs()`)
 - **Items Section**: Lines 1940-2405 (`openItems()`)
 - **Symptoms Section**: Lines 1249+ (`openSymptoms()`)
-- **Late Lore**: Search for `openLateLore()` around line 2550+
-- **Biomes Section**: Search for `openBiomes()` around line 2400+
-- **Timeline Section**: Search for `openTimeline()` around line 2700+
+- **Late Lore**: Line 2569+ (`openLateLore()`)
+- **Biomes Section**: Line 2521+ (`openBiomes()`)
+- **Timeline Section**: Search for `openTimeline()` function
 
 **Main Script File:** `BP/scripts/main.js`
-- **Intro Sequence**: Lines 5446-5600+ (`showWorldIntroSequence()`)
-  - Messages at: 5484, 5498, 5505, 5513, 5530
+- **Intro Sequence**: Line 5486+ (`showWorldIntroSequence()`)
+  - Messages at: 5523, 5537, 5543, 5551, 5569, 5632
 
 **Other File Locations:**
 - **Texture Files**: `RP/textures/` - See subfolders for items, entity, blocks, etc.
