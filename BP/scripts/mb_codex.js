@@ -3732,7 +3732,7 @@ function getDefaultDebugSettings() {
 // NOTE: Debug settings ARE persisted across sessions via dynamic properties
 export function getDebugSettings(player) {
     try {
-        const settingsStr = getPlayerProperty(player, "mb_debug_settings");
+        const settingsStr = getPlayerPropertyChunked(player, "mb_debug_settings");
         if (settingsStr) {
             const parsed = JSON.parse(settingsStr);
             // Merge with defaults to ensure new flags exist
@@ -3759,7 +3759,7 @@ export function getDebugSettings(player) {
 
 export function saveDebugSettings(player, settings) {
     try {
-        setPlayerProperty(player, "mb_debug_settings", JSON.stringify(settings));
+        setPlayerPropertyChunked(player, "mb_debug_settings", JSON.stringify(settings));
         // Invalidate cache when settings change
         invalidateDebugCache();
     } catch (error) {
@@ -3810,6 +3810,14 @@ async function forceShow(form, player, maximumRetries = 300) {
         retries++;
         if (retries >= maximumRetries) {
             console.warn("[BASIC JOURNAL] forceShow max retries reached.");
+        }
+        // Add delay before retry if UserBusy to avoid tight loop
+        if (
+            response?.canceled &&
+            response.cancelationReason === FormCancelationReason.UserBusy &&
+            retries < maximumRetries
+        ) {
+            await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
         }
     } while (
         response?.canceled &&

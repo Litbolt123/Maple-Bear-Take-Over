@@ -9,6 +9,10 @@ import { world } from "@minecraft/server";
 // Registry: itemTypeId -> handler function
 const itemHandlers = new Map();
 
+// Module-scoped initialization state and subscription handle
+let initialized = false;
+let itemCompleteUseSubscription = null;
+
 /**
  * Register a handler for an item type
  * @param {string} itemTypeId - The item type ID to handle
@@ -33,9 +37,15 @@ export function unregisterItemHandler(itemTypeId) {
 /**
  * Initialize the item registry and subscribe to itemCompleteUse event
  * This should be called once during initialization
+ * Safe to call multiple times - will no-op if already initialized
  */
 export function initializeItemRegistry() {
-    world.afterEvents.itemCompleteUse.subscribe((event) => {
+    // Guard: no-op if already initialized
+    if (initialized) {
+        return;
+    }
+    
+    itemCompleteUseSubscription = world.afterEvents.itemCompleteUse.subscribe((event) => {
         const player = event.source;
         const item = event.itemStack;
         
@@ -50,6 +60,21 @@ export function initializeItemRegistry() {
             }
         }
     });
+    
+    initialized = true;
+}
+
+/**
+ * Dispose/unregister the item registry
+ * Unsubscribes from itemCompleteUse event and cleans up state
+ * Safe to call multiple times
+ */
+export function disposeItemRegistry() {
+    if (itemCompleteUseSubscription) {
+        itemCompleteUseSubscription.unsubscribe();
+        itemCompleteUseSubscription = null;
+    }
+    initialized = false;
 }
 
 /**

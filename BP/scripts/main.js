@@ -989,7 +989,7 @@ function trackInfectionHistory(player, event) {
         }
         
         // Save updated codex
-        setPlayerProperty(player, "mb_codex", JSON.stringify(codex));
+        saveCodex(player, codex);
 
         // Update knowledge progression after infection history change
         try {
@@ -1128,6 +1128,19 @@ function handleInfectionExpiration(player, infectionState) {
     playerInfection.delete(player.id);
 }
 
+// --- Helper: Normalize boolean values from world/player properties ---
+// Handles legacy values like "true"/"false", 1/0, null/undefined and normalizes to true/false
+function normalizeBoolean(value) {
+    if (value === true || value === 1 || value === "1" || value === "true") {
+        return true;
+    }
+    if (value === false || value === 0 || value === "0" || value === "false") {
+        return false;
+    }
+    // null/undefined or any other value defaults to false
+    return false;
+}
+
 // --- Helper: Send contextual discovery message ---
 function sendDiscoveryMessage(player, codex, messageType = "interesting", itemType = "") {
     // Don't show discovery messages during intro sequence
@@ -1137,7 +1150,7 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
     }
     
     // Check if intro has been seen - if not, suppress discovery messages until intro completes
-    const introSeen = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
+    const introSeen = normalizeBoolean(getWorldProperty(WORLD_INTRO_SEEN_PROPERTY));
     if (!introSeen && !codex?.items?.snowBookCrafted) {
         console.log(`[DISCOVERY] Suppressing discovery message for ${player?.name} until intro completes (item: ${itemType})`);
         return; // Wait until intro is shown before discovery messages
@@ -2058,7 +2071,7 @@ function trackCureAttempt(player) {
 function handleSnowConsumption(player, item) {
     const infectionState = playerInfection.get(player.id);
     const isImmune = isPlayerImmune(player);
-    const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
+    const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
     const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE && !infectionState.cured;
     
     // ALWAYS mark snow as discovered and identified when consumed
@@ -2369,7 +2382,7 @@ function handleGoldenApple(player, item) {
     
     // Check if player has minor infection (not major, not permanently immune)
     const infectionState = playerInfection.get(player.id);
-    const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
+    const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
     const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE && !infectionState.cured;
     
     if (hasMinorInfection && !hasPermanentImmunity) {
@@ -2453,7 +2466,7 @@ function handleGoldenCarrot(player, item) {
     
     // Check if player has minor infection (not major, not permanently immune)
     const infectionState = playerInfection.get(player.id);
-    const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
+    const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
     const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE && !infectionState.cured;
     
     if (hasMinorInfection && !hasPermanentImmunity) {
@@ -2484,7 +2497,7 @@ function handleGoldenCarrot(player, item) {
 function handlePlayerDeath(player) {
     try {
         // Check if player has permanent immunity
-        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
+        const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
         
         if (hasPermanentImmunity) {
             // Permanently immune players - normal death handling (no infection on respawn)
@@ -3546,7 +3559,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
             }
         } catch { }
         // Check if player has permanent immunity
-        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
+        const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
         
         // Check if player has minor infection
         const infectionState = playerInfection.get(player.id);
@@ -4166,7 +4179,7 @@ system.runInterval(() => {
             const codex = getCodex(p);
             
             // Skip discovery messages if intro is in progress or not seen yet
-            const introSeen = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
+            const introSeen = normalizeBoolean(getWorldProperty(WORLD_INTRO_SEEN_PROPERTY));
             const introActive = introInProgress.has(p.id);
             const shouldSuppressDiscovery = !introSeen || introActive;
             
@@ -4759,7 +4772,7 @@ world.afterEvents.playerSpawn.subscribe((event) => {
         
         // Check if intro has been shown (fallback in case playerJoin handler missed it)
         // Only check if intro is NOT in progress (to prevent duplicate calls)
-        const introSeen = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
+        const introSeen = normalizeBoolean(getWorldProperty(WORLD_INTRO_SEEN_PROPERTY));
         const introActive = introInProgress.has(player.id);
         console.log(`[SPAWN] Intro seen: ${introSeen}, intro active: ${introActive}`);
         
@@ -4767,7 +4780,7 @@ world.afterEvents.playerSpawn.subscribe((event) => {
             console.log(`[SPAWN] Intro not seen yet, checking if should show for ${player.name}...`);
             // Check if this is first spawn by checking if infection data exists in dynamic properties
             const hasInfectionData = getPlayerProperty(player, "mb_infection");
-            const hasPermanentImmunityCheck = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY);
+            const hasPermanentImmunityCheck = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
             const isFirstSpawn = !hasInfectionData && !hasPermanentImmunityCheck && !playerInfection.has(player.id);
             
             console.log(`[SPAWN] First spawn check: hasInfectionData=${!!hasInfectionData}, hasPermanentImmunity=${!!hasPermanentImmunityCheck}, inMap=${playerInfection.has(player.id)}, isFirstSpawn=${isFirstSpawn}`);
@@ -4786,7 +4799,7 @@ world.afterEvents.playerSpawn.subscribe((event) => {
         }
         
         // Check if player has permanent immunity
-        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
+        const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
         if (hasPermanentImmunity) {
             // Permanently immune players don't get infection on respawn
             return;
@@ -4841,7 +4854,7 @@ world.afterEvents.playerSpawn.subscribe((event) => {
             system.runTimeout(() => {
                 if (player && player.isValid) {
                     const stillNoInfection = !playerInfection.has(player.id);
-                    const introSeen = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
+                    const introSeen = normalizeBoolean(getWorldProperty(WORLD_INTRO_SEEN_PROPERTY));
                     if (stillNoInfection && introSeen) {
                         initializeMinorInfection(player);
                     } else if (stillNoInfection && !introSeen) {
@@ -5084,8 +5097,8 @@ function initializeMinorInfection(player) {
 function loadInfectionData(player) {
     try {
         // Check if player has permanent immunity first
-        const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY);
-        if (hasPermanentImmunity === true) {
+        const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
+        if (hasPermanentImmunity) {
             console.log(`[LOAD] ${player.name} has permanent immunity - skipping minor infection initialization`);
             // Load hit count but no infection
             const hitCountStr = getPlayerProperty(player, "mb_bear_hit_count");
@@ -5154,7 +5167,7 @@ function loadInfectionData(player) {
             // No infection data found - check if intro has been seen
             // If intro hasn't been seen yet, don't initialize minor infection here
             // It will be initialized during the intro sequence at "AND SO ARE YOU!" message
-            const introSeen = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
+            const introSeen = normalizeBoolean(getWorldProperty(WORLD_INTRO_SEEN_PROPERTY));
             if (!hasPermanentImmunity && introSeen) {
                 console.log(`[LOAD] ${player.name} has no infection data and no permanent immunity - initializing minor infection`);
                 initializeMinorInfection(player);
@@ -5481,8 +5494,7 @@ function showWorldIntroSequence(player) {
         // Check if player has seen intro before
         const introSeenKey = WORLD_INTRO_SEEN_PROPERTY;
         const introSeenRaw = getWorldProperty(introSeenKey);
-        // Handle boolean values properly - true, "true", or 1 all mean intro is seen
-        const introSeen = introSeenRaw === true || introSeenRaw === "true" || introSeenRaw === 1 || introSeenRaw === "1";
+        const introSeen = normalizeBoolean(introSeenRaw);
         console.log(`[INTRO] Checking intro for ${player?.name}: introSeen=${introSeen} (raw=${introSeenRaw}, type=${typeof introSeenRaw})`);
         
         if (introSeen) {
@@ -5543,7 +5555,7 @@ function showWorldIntroSequence(player) {
             
             // Initialize minor infection at this moment (if not already infected)
             if (!playerInfection.has(player.id)) {
-                const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY);
+                const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
                 if (!hasPermanentImmunity) {
                     console.log(`[INTRO] Initializing minor infection for ${player?.name} at "AND SO ARE YOU!" message`);
                     initializeMinorInfection(player);
@@ -5647,7 +5659,7 @@ function giveBasicJournalIfNeeded(player) {
         }
         
         const journalGivenKey = `mb_journal_given_by_intro_${player.id}`;
-        const journalGivenByIntro = getWorldProperty(journalGivenKey);
+        const journalGivenByIntro = normalizeBoolean(getWorldProperty(journalGivenKey));
         if (journalGivenByIntro) {
             console.log(`[BASIC JOURNAL] Journal already given by intro for ${player?.name}, skipping`);
             return;
@@ -5655,13 +5667,12 @@ function giveBasicJournalIfNeeded(player) {
         
         // Check if player already received journal using dynamic property
         const playerKey = `mb_has_basic_journal_${player.id}`;
-        if (getWorldProperty(playerKey)) {
+        if (normalizeBoolean(getWorldProperty(playerKey))) {
             return; // Already given
         }
         
         // Check if intro has been shown - if not, intro will give the journal
-        const introSeenRaw = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
-        const introSeen = introSeenRaw === true || introSeenRaw === "true" || introSeenRaw === 1 || introSeenRaw === "1";
+        const introSeen = normalizeBoolean(getWorldProperty(WORLD_INTRO_SEEN_PROPERTY));
         if (!introSeen) {
             console.log(`[BASIC JOURNAL] Intro not seen yet for ${player?.name}, intro will handle journal giving`);
             return; // Intro will handle journal giving
@@ -5671,7 +5682,7 @@ function giveBasicJournalIfNeeded(player) {
         system.runTimeout(() => {
             try {
                 // Check again if intro gave journal in the meantime
-                if (introInProgress.has(player.id) || getWorldProperty(journalGivenKey)) {
+                if (introInProgress.has(player.id) || normalizeBoolean(getWorldProperty(journalGivenKey))) {
                     console.log(`[BASIC JOURNAL] Intro gave journal in meantime for ${player?.name}, skipping`);
                     return;
                 }
@@ -5681,7 +5692,7 @@ function giveBasicJournalIfNeeded(player) {
                 const inventory = player.getComponent("inventory")?.container;
                 if (!inventory) {
                     // Retry after another delay if inventory not ready (but only if intro didn't give it)
-                    if (!introInProgress.has(player.id) && !getWorldProperty(journalGivenKey)) {
+                    if (!introInProgress.has(player.id) && !normalizeBoolean(getWorldProperty(journalGivenKey))) {
                         system.runTimeout(() => giveBasicJournalIfNeeded(player), 40);
                     }
                     return;
@@ -5783,8 +5794,7 @@ world.afterEvents.playerJoin.subscribe((event) => {
                 
                 // Check if intro has been shown
                 const introSeenRaw = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
-                // Handle boolean values properly - true, "true", or 1 all mean intro is seen
-                const introSeen = introSeenRaw === true || introSeenRaw === "true" || introSeenRaw === 1 || introSeenRaw === "1";
+                const introSeen = normalizeBoolean(introSeenRaw);
                 console.log(`[JOIN MAIN] Intro seen property: ${introSeen} (raw=${introSeenRaw}, type=${typeof introSeenRaw})`);
                 
                 if (!introSeen) {

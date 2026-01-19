@@ -1521,6 +1521,7 @@ function isPlayerIsolated(player, allPlayers) {
     
     const playerId = player.id;
     const currentTick = system.currentTick;
+    const playerDimId = player.dimension?.id;
     
     // Check cache (refresh every tick)
     const cached = isolatedPlayerCache.get(playerId);
@@ -1534,11 +1535,11 @@ function isPlayerIsolated(player, allPlayers) {
     for (const otherPlayer of allPlayers) {
         if (!otherPlayer || !otherPlayer.isValid || otherPlayer.id === playerId) continue;
         if (!otherPlayer.location) continue;
+        if (playerDimId && otherPlayer.dimension?.id !== playerDimId) continue;
         
         const dx = otherPlayer.location.x - playerPos.x;
-        const dy = otherPlayer.location.y - playerPos.y;
         const dz = otherPlayer.location.z - playerPos.z;
-        const distSq = dx * dx + dy * dy + dz * dz;
+        const distSq = dx * dx + dz * dz;
         
         if (distSq <= PLAYER_GROUP_OVERLAP_DISTANCE_SQ) {
             nearbyPlayerCount++;

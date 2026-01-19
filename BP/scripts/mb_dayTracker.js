@@ -1175,8 +1175,6 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                 // Check if intro sequence is active or has been shown - if so, skip welcome message
                                 // (intro sequence handles the welcome message)
                                 // Also check if intro is currently in progress by waiting a bit longer
-                                const WORLD_INTRO_SEEN_PROPERTY = "mb_world_intro_seen";
-                                const introSeen = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
                                 
                                 // Wait additional time to ensure intro sequence has had time to start and mark itself
                                 // The intro sequence takes about 15+ seconds total, so wait at least that long

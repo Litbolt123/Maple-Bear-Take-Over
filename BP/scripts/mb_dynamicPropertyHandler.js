@@ -35,6 +35,16 @@ export function initializePropertyHandler() {
             }
         });
         
+        // Save and clear cache when player leaves
+        world.beforeEvents.playerLeave.subscribe((event) => {
+            try {
+                savePlayerProperties(event.player);
+                clearPlayerCache(event.player.id);
+            } catch (error) {
+                console.warn("[PropertyHandler] Error on player leave:", error);
+            }
+        });
+        
         // Load properties for players already in world (delayed to avoid early execution)
         system.runTimeout(() => {
             try {
@@ -102,6 +112,30 @@ function loadPlayerProperties(player) {
     } catch (error) {
         console.warn(`[PropertyHandler] Failed to load properties for ${player.name}:`, error);
     }
+}
+
+/**
+ * Save all dirty properties for a player
+ */
+function savePlayerProperties(player) {
+    const playerId = player.id;
+    const dirtySet = playerDirtyFlags.get(playerId);
+    if (!dirtySet || dirtySet.size === 0) return;
+    
+    const cache = playerPropertyCache.get(playerId);
+    if (!cache) return;
+    
+    for (const key of dirtySet) {
+        try {
+            const value = cache.get(key);
+            if (typeof player.setDynamicProperty === 'function') {
+                player.setDynamicProperty(key, value);
+            }
+        } catch (e) {
+            console.warn(`[PropertyHandler] Failed to save property ${key}:`, e);
+        }
+    }
+    dirtySet.clear();
 }
 
 /**
@@ -406,7 +440,7 @@ function saveAllDirtyProperties() {
                 for (const key of dirtySet) {
                     try {
                         const value = cache.get(key);
-                        if (value !== undefined && typeof player.setDynamicProperty === 'function') {
+                        if (typeof player.setDynamicProperty === 'function') {
                             player.setDynamicProperty(key, value);
                         }
                     } catch (e) {
@@ -430,7 +464,7 @@ function saveAllDirtyProperties() {
             for (const key of dirtyKeys) {
                 try {
                     const value = worldPropertyCache.get(key);
-                    if (value !== undefined && typeof world.setDynamicProperty === 'function') {
+                    if (typeof world.setDynamicProperty === 'function') {
                         world.setDynamicProperty(key, value);
                     }
                 } catch (e) {
@@ -458,6 +492,31 @@ export function saveAllProperties() {
  * Clear cache for a player (when they leave)
  */
 export function clearPlayerCache(playerId) {
+    // Save any dirty properties first
+    const dirtySet = playerDirtyFlags.get(playerId);
+    if (dirtySet && dirtySet.size > 0) {
+        try {
+            const allPlayers = world.getAllPlayers();
+            const player = Array.from(allPlayers).find(p => p && p.id === playerId);
+            if (player) {
+                const cache = playerPropertyCache.get(playerId);
+                if (cache) {
+                    for (const key of dirtySet) {
+                        try {
+                            const value = cache.get(key);
+                            if (typeof player.setDynamicProperty === 'function') {
+                                player.setDynamicProperty(key, value);
+                            }
+                        } catch (e) {
+                            // Ignore save errors during cleanup
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            // Ignore errors during cleanup
+        }
+    }
     playerPropertyCache.delete(playerId);
     playerDirtyFlags.delete(playerId);
 }

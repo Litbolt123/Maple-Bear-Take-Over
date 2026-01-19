@@ -28,6 +28,9 @@ export class Weight {
     }
 
     static randomWeight(weights) {
+        if (!Array.isArray(weights) || weights.length === 0) {
+            throw new TypeError('randomWeight requires a non-empty weights array');
+        }
         const totalWeight = weights.reduce((total, weight) => total + weight.weight, 0);
         const randomWeight = Math.random() * totalWeight;
         let currentWeight = 0;
@@ -94,10 +97,10 @@ export class Placeholder {
     static parse(placeholderText, content, defaultValue = "N/A") {
         return placeholderText.replace(/\{(\w+)\}/g, (_, key) => {
             const value = content[key];
-            if (value) {
-                return typeof value === "function" ? value(key, defaultValue) : value;
+            if (value == null) {
+                return defaultValue;
             }
-            return defaultValue;
+            return typeof value === "function" ? value(key, defaultValue) : value;
         });
     }
 }
