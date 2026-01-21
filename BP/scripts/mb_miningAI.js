@@ -3441,9 +3441,10 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
         }
     }
     
-    // All stairs are cleared - mark locations as protected
-    markStairProtected();
-}
+        // All stairs are cleared - mark locations as protected
+        markStairProtected();
+    }  // <-- Add this closing brace HERE
+}  // <-- Add this closing brace HERE
 
 /**
  * Check if a spiral staircase is viable at the current location
@@ -7530,11 +7531,11 @@ function initializeMiningAI() {
             // Calculate dynamic interval based on bear count
             let dynamicInterval = AI_TICK_INTERVAL_BASE;
             if (totalBearsThisTick < BEAR_COUNT_THRESHOLD_FEW) {
-                dynamicInterval = AI_TICK_INTERVAL_FEW; // 1-4 bears: full speed
+                dynamicInterval = AI_TICK_INTERVAL_FEW;
             } else if (totalBearsThisTick < BEAR_COUNT_THRESHOLD_MEDIUM) {
-                dynamicInterval = AI_TICK_INTERVAL_MEDIUM; // 5-9 bears: medium speed
+                dynamicInterval = AI_TICK_INTERVAL_MEDIUM;
             } else {
-                dynamicInterval = AI_TICK_INTERVAL_BASE; // 10+ bears: slower
+                dynamicInterval = AI_TICK_INTERVAL_BASE;
             }
             
             // Log interval changes
@@ -7543,7 +7544,7 @@ function initializeMiningAI() {
                 lastBearCount = totalBearsThisTick;
             }
             
-            // Log very frequently during startup to verify script is running (only if debug enabled)
+            // Log very frequently during startup to verify script is running
             if (getDebugGeneral()) {
                 if (isStartupPhase && (ticksSinceStart <= 10 || ticksSinceStart % 20 === 0)) {
                     console.warn(`[MINING AI] Script running at world tick ${tick} (${ticksSinceStart} ticks since start)`);
@@ -7553,11 +7554,10 @@ function initializeMiningAI() {
             }
             
             // Determine if we should process bears without targets this tick
-            // Bears with targets always process at full speed (every tick)
             const ticksSinceLastProcess = tick - lastProcessedTick;
             const shouldProcessIdleBears = ticksSinceLastProcess >= dynamicInterval;
             
-            // Log when we actually process AI (only if debug enabled)
+            // Log when we actually process AI
             if (getDebugGeneral() && (isStartupPhase || tick % 40 === 0)) {
                 console.warn(`[MINING AI] Processing AI at tick ${tick} (${ticksSinceStart} ticks since start, interval: ${dynamicInterval} ticks, total bears: ${totalBearsThisTick}, shouldProcessIdle: ${shouldProcessIdleBears})`);
             }
@@ -7571,7 +7571,7 @@ function initializeMiningAI() {
                 lastProcessedTick = tick;
             }
     
-            // AI processing (runs every AI_TICK_INTERVAL ticks)
+            // AI processing
             const activeLeaderIdsThisTick = new Set();
             const activeWorkerIds = new Set();
             
@@ -7579,7 +7579,7 @@ function initializeMiningAI() {
             const allPlayers = getCachedPlayers();
             const playerPositions = getCachedPlayerPositions();
             
-            // Log player count more frequently during startup (only if debug enabled)
+            // Log player count more frequently during startup
             if (getDebugGeneral() && (isStartupPhase || tick % 40 === 0)) {
                 if (allPlayers.length === 0) {
                     console.warn(`[MINING AI] No players found at tick ${tick} (${ticksSinceStart} ticks since start)`);
@@ -7588,187 +7588,178 @@ function initializeMiningAI() {
                 }
             }
             
-            // Player positions already cached in shared cache
-
-    // Process all dimensions
-    for (const dimId of DIMENSION_IDS) {
-        let dimension;
-        try {
-            dimension = world.getDimension(dimId);
-        } // end per-tick processing block
-        catch (error) {
-            console.error(`[MINING AI] Error getting dimension ${dimId}:`, error);
-            continue;
-        }
-        if (!dimension) continue;
-
-        // Process each mining bear type
-        let totalMiningBears = 0;
-        const variantCounts = new Map();
-        const entityMap = new Map(); // Store entities for processing
-        
-        for (const config of MINING_BEAR_TYPES) {
-            let entities;
-            try {
-                entities = dimension.getEntities({ type: config.id });
-            } catch (error) {
-                console.error(`[MINING AI] Error getting entities for ${config.id}:`, error);
-                continue;
-            }
-            
-            const count = entities?.length || 0;
-            if (count > 0) {
-                totalMiningBears += count;
-                variantCounts.set(config.id, count);
-                entityMap.set(config.id, entities);
-            }
-        }
-        
-        // Combined debug logging for all mining bear variants
-        if (getDebugGeneral() && (isStartupPhase || tick % 40 === 0)) {
-            if (totalMiningBears === 0) {
-                console.warn(`[MINING AI] No mining bear entities found in ${dimId} at tick ${tick}`);
-            } else {
-                const variantList = Array.from(variantCounts.entries())
-                    .map(([id, count]) => `${count} ${id}`)
-                    .join(', ');
-                console.warn(`[MINING AI] Found ${totalMiningBears} total mining bear(s) in ${dimId} at tick ${tick} (${variantList})`);
-            }
-        }
-        
-        // Process each mining bear type (using cached entities)
-        for (const config of MINING_BEAR_TYPES) {
-            const entities = entityMap.get(config.id);
-            if (!entities || entities.length === 0) {
-                if (getDebugGeneral() && variantCounts.has(config.id)) {
-                    console.warn(`[MINING AI] WARNING: ${config.id} was counted (${variantCounts.get(config.id)}) but not found in entityMap!`);
-                }
-                continue;
-            }
-            
-            // Performance: Distance-based culling - only process entities near players
-            // Check both normalized and full dimension ID
-            const dimPlayerPositions = playerPositions.get(dimId) || playerPositions.get(`minecraft:${dimId}`) || [];
-            if (dimPlayerPositions.length === 0) {
-                if (getDebugGeneral() && (isStartupPhase || tick % 40 === 0)) {
-                    console.warn(`[MINING AI] No players in ${dimId} (checked: ${dimId} and minecraft:${dimId}), available: ${Array.from(playerPositions.keys()).join(', ')}, skipping`);
-                }
-                continue; // No players in this dimension, skip
-            }
-            
-            if (getDebugGeneral() && (isStartupPhase || tick % 40 === 0)) {
-                console.warn(`[MINING AI] Found ${dimPlayerPositions.length} player positions in ${dimId}`);
-            }
-            
-            const validEntities = [];
-            let invalidCount = 0;
-            let outOfRangeCount = 0;
-            let minDistSq = Infinity;
-            const entityStatus = new Map(); // Track entity status for debugging
-            
-            for (const entity of entities) {
-                const entityId = entity.id;
-                let status = { valid: true, inRange: false, dist: 0 };
-                
-                // Check if entity is valid (handles both function and boolean property)
-                const entityIsValid = typeof entity?.isValid === "function" ? entity.isValid() : Boolean(entity?.isValid);
-                if (!entityIsValid) {
-                    invalidCount++;
-                    status.valid = false;
-                    entityStatus.set(entityId, status);
+            // Process all dimensions
+            for (const dimId of DIMENSION_IDS) {
+                let dimension;
+                try {
+                    dimension = world.getDimension(dimId);
+                } catch (error) {
+                    console.error(`[MINING AI] Error getting dimension ${dimId}:`, error);
                     continue;
                 }
-                
-                // Check if entity is within processing distance of any player
-                const entityLoc = entity.location;
-                let withinRange = false;
-                let closestDist = Infinity;
-                for (const playerPos of dimPlayerPositions) {
-                    const dx = entityLoc.x - playerPos.x;
-                    const dy = entityLoc.y - playerPos.y;
-                    const dz = entityLoc.z - playerPos.z;
-                    const distSq = dx * dx + dy * dy + dz * dz;
-                    const dist = Math.sqrt(distSq);
-                    closestDist = Math.min(closestDist, dist);
-                    minDistSq = Math.min(minDistSq, distSq);
-                    if (distSq <= MAX_PROCESSING_DISTANCE_SQ) {
-                        withinRange = true;
-                        status.inRange = true;
-                        status.dist = dist;
-                        break;
-                    }
-                }
-                
-                if (withinRange) {
-                    validEntities.push(entity);
-                } else {
-                    outOfRangeCount++;
-                    status.dist = closestDist;
-                }
-                entityStatus.set(entityId, status);
-            }
-            
-            // Debug: Log entity status changes
-            if (getDebugGeneral() && entities.length > 0) {
-                const prevStatus = entityStatusCache.get(config.id) || new Map();
-                for (const [entityId, status] of entityStatus.entries()) {
-                    const prev = prevStatus.get(entityId);
-                    if (!prev || prev.valid !== status.valid || prev.inRange !== status.inRange) {
-                        if (tick % 20 === 0) { // Only log every 20 ticks to reduce spam
-                            console.warn(`[MINING AI] Entity ${entityId.substring(0, 8)} status changed: valid=${status.valid}, inRange=${status.inRange}, dist=${status.dist.toFixed(1)} (was: valid=${prev?.valid ?? 'unknown'}, inRange=${prev?.inRange ?? 'unknown'})`);
-                        }
-                    }
-                }
-                entityStatusCache.set(config.id, entityStatus);
-            }
-            
-            if (validEntities.length === 0) {
-                // Log more frequently during startup or occasionally (only if debug enabled)
-                if (getDebugGeneral()) {
-                    const isStartup = tick <= STARTUP_DEBUG_TICKS;
-                    if (isStartup || tick % 40 === 0) {
-                        const minDist = minDistSq !== Infinity ? Math.sqrt(minDistSq).toFixed(1) : "N/A";
-                        console.warn(`[MINING AI] No valid entities within range for ${config.id} in ${dimId} (checked ${entities.length} entities: ${invalidCount} invalid, ${outOfRangeCount} out of range, closest: ${minDist} blocks, max: ${MAX_PROCESSING_DISTANCE})`);
-                    }
-                }
-                continue;
-            }
-            
-            // Log when we find entities (always log if debug enabled, not just every 40 ticks)
-            if (getDebugGeneral()) {
-                console.warn(`[MINING AI] Processing ${validEntities.length} ${config.id} entities in ${dimId} (out of ${entities.length} total)`);
-            }
-            
-            const contexts = [];
+                if (!dimension) continue;
 
-            for (const entity of validEntities) {
-                activeWorkerIds.add(entity.id);
+                // Process each mining bear type
+                let totalMiningBears = 0;
+                const variantCounts = new Map();
+                const entityMap = new Map();
                 
-                // Performance: Use cached target lookup (only refreshes every TARGET_CACHE_TICKS)
-                const liveTarget = findNearestTarget(entity, TARGET_SCAN_RADIUS, true);
-                if (getDebugTarget() && tick % 20 === 0) {
-                    console.warn(`[MINING AI] Context creation: entity=${entity.id.substring(0, 8)}, liveTarget=${!!liveTarget}`);
-                }
-                if (liveTarget) {
-                    updateLastKnownTarget(entity, liveTarget);
-                    if (getDebugTarget() && tick % 20 === 0) {
-                        console.warn(`[MINING AI] Updated last known target for entity ${entity.id.substring(0, 8)}`);
+                for (const config of MINING_BEAR_TYPES) {
+                    let entities;
+                    try {
+                        entities = dimension.getEntities({ type: config.id });
+                    } catch (error) {
+                        console.error(`[MINING AI] Error getting entities for ${config.id}:`, error);
+                        continue;
+                    }
+                    
+                    const count = entities?.length || 0;
+                    if (count > 0) {
+                        totalMiningBears += count;
+                        variantCounts.set(config.id, count);
+                        entityMap.set(config.id, entities);
                     }
                 }
-                const storedTarget = getStoredTargetInfo(entity);
-                if (getDebugTarget() && tick % 20 === 0) {
-                    console.warn(`[MINING AI] Context creation: entity=${entity.id.substring(0, 8)}, storedTarget=${!!storedTarget}`);
+                
+                // Combined debug logging for all mining bear variants
+                if (getDebugGeneral() && (isStartupPhase || tick % 40 === 0)) {
+                    if (totalMiningBears === 0) {
+                        console.warn(`[MINING AI] No mining bear entities found in ${dimId} at tick ${tick}`);
+                    } else {
+                        const variantList = Array.from(variantCounts.entries())
+                            .map(([id, count]) => `${count} ${id}`)
+                            .join(', ');
+                        console.warn(`[MINING AI] Found ${totalMiningBears} total mining bear(s) in ${dimId} at tick ${tick} (${variantList})`);
+                    }
                 }
-                let targetInfo = liveTarget || storedTarget;
+                
+                // Process each mining bear type (using cached entities)
+                for (const config of MINING_BEAR_TYPES) {
+                    const entities = entityMap.get(config.id);
+                    if (!entities || entities.length === 0) {
+                        if (getDebugGeneral() && variantCounts.has(config.id)) {
+                            console.warn(`[MINING AI] WARNING: ${config.id} was counted (${variantCounts.get(config.id)}) but not found in entityMap!`);
+                        }
+                        continue;
+                    }
+                    
+                    // Performance: Distance-based culling - only process entities near players
+                    const dimPlayerPositions = playerPositions.get(dimId) || playerPositions.get(`minecraft:${dimId}`) || [];
+                    if (dimPlayerPositions.length === 0) {
+                        if (getDebugGeneral() && (isStartupPhase || tick % 40 === 0)) {
+                            console.warn(`[MINING AI] No players in ${dimId}, skipping`);
+                        }
+                        continue;
+                    }
+                    
+                    if (getDebugGeneral() && (isStartupPhase || tick % 40 === 0)) {
+                        console.warn(`[MINING AI] Found ${dimPlayerPositions.length} player positions in ${dimId}`);
+                    }
+                    
+                    const validEntities = [];
+                    let invalidCount = 0;
+                    let outOfRangeCount = 0;
+                    let minDistSq = Infinity;
+                    const entityStatus = new Map();
+                    
+                    for (const entity of entities) {
+                        const entityId = entity.id;
+                        let status = { valid: true, inRange: false, dist: 0 };
+                        
+                        // Check if entity is valid
+                        const entityIsValid = typeof entity?.isValid === "function" ? entity.isValid() : Boolean(entity?.isValid);
+                        if (!entityIsValid) {
+                            invalidCount++;
+                            status.valid = false;
+                            entityStatus.set(entityId, status);
+                            continue;
+                        }
+                        
+                        // Check if entity is within processing distance of any player
+                        const entityLoc = entity.location;
+                        let withinRange = false;
+                        let closestDist = Infinity;
+                        for (const playerPos of dimPlayerPositions) {
+                            const dx = entityLoc.x - playerPos.x;
+                            const dy = entityLoc.y - playerPos.y;
+                            const dz = entityLoc.z - playerPos.z;
+                            const distSq = dx * dx + dy * dy + dz * dz;
+                            const dist = Math.sqrt(distSq);
+                            closestDist = Math.min(closestDist, dist);
+                            minDistSq = Math.min(minDistSq, distSq);
+                            if (distSq <= MAX_PROCESSING_DISTANCE_SQ) {
+                                withinRange = true;
+                                status.inRange = true;
+                                status.dist = dist;
+                                break;
+                            }
+                        }
+                        
+                        if (withinRange) {
+                            validEntities.push(entity);
+                        } else {
+                            outOfRangeCount++;
+                            status.dist = closestDist;
+                        }
+                        entityStatus.set(entityId, status);
+                    }
+                    
+                    // Debug: Log entity status changes
+                    if (getDebugGeneral() && entities.length > 0) {
+                        const prevStatus = entityStatusCache.get(config.id) || new Map();
+                        for (const [entityId, status] of entityStatus.entries()) {
+                            const prev = prevStatus.get(entityId);
+                            if (!prev || prev.valid !== status.valid || prev.inRange !== status.inRange) {
+                                if (tick % 20 === 0) {
+                                    console.warn(`[MINING AI] Entity ${entityId.substring(0, 8)} status changed: valid=${status.valid}, inRange=${status.inRange}, dist=${status.dist.toFixed(1)}`);
+                                }
+                            }
+                        }
+                        entityStatusCache.set(config.id, entityStatus);
+                    }
+                    
+                    if (validEntities.length === 0) {
+                        if (getDebugGeneral()) {
+                            const isStartup = tick <= STARTUP_DEBUG_TICKS;
+                            if (isStartup || tick % 40 === 0) {
+                                const minDist = minDistSq !== Infinity ? Math.sqrt(minDistSq).toFixed(1) : "N/A";
+                                console.warn(`[MINING AI] No valid entities within range for ${config.id} in ${dimId} (checked ${entities.length} entities: ${invalidCount} invalid, ${outOfRangeCount} out of range, closest: ${minDist} blocks, max: ${MAX_PROCESSING_DISTANCE})`);
+                            }
+                        }
+                        continue;
+                    }
+                    
+                    // Log when we find entities
+                    if (getDebugGeneral()) {
+                        console.warn(`[MINING AI] Processing ${validEntities.length} ${config.id} entities in ${dimId} (out of ${entities.length} total)`);
+                    }
+                    
+                    const contexts = [];
+                    for (const entity of validEntities) {
+                        activeWorkerIds.add(entity.id);
+                        
+                        // Performance: Use cached target lookup
+                        const liveTarget = findNearestTarget(entity, TARGET_SCAN_RADIUS, true);
+                        if (getDebugTarget() && tick % 20 === 0) {
+                            console.warn(`[MINING AI] Context creation: entity=${entity.id.substring(0, 8)}, liveTarget=${!!liveTarget}`);
+                        }
+                        if (liveTarget) {
+                            updateLastKnownTarget(entity, liveTarget);
+                            if (getDebugTarget() && tick % 20 === 0) {
+                                console.warn(`[MINING AI] Updated last known target for entity ${entity.id.substring(0, 8)}`);
+                            }
+                        }
+                        const storedTarget = getStoredTargetInfo(entity);
+                        if (getDebugTarget() && tick % 20 === 0) {
+                            console.warn(`[MINING AI] Context creation: entity=${entity.id.substring(0, 8)}, storedTarget=${!!storedTarget}`);
+                        }
+                        let targetInfo = liveTarget || storedTarget;
                         
                         // Final validation: Make sure target is not in creative/spectator mode
-                        // (This catches cases where player switched modes after target was stored)
-                        // CRITICAL: Check this BEFORE creating context to avoid processing spectator players
                         if (targetInfo && targetInfo.entity?.typeId === "minecraft:player") {
                             try {
                                 const gameMode = targetInfo.entity.getGameMode();
                                 if (gameMode === "creative" || gameMode === "spectator") {
-                                    // Clear the target and stored target immediately
                                     const oldTargetId = lastKnownTargets.get(entity.id)?.targetId;
                                     if (oldTargetId) {
                                         unregisterBearFromTarget(entity.id, oldTargetId);
@@ -7779,58 +7770,56 @@ function initializeMiningAI() {
                                     if (getDebugTarget() && tick % 20 === 0) {
                                         console.warn(`[MINING AI] Entity ${entity.id.substring(0, 8)}: Cleared target - player in creative/spectator mode`);
                                     }
-                                    // Skip creating context for this entity - don't process spectator/creative players
                                     continue;
                                 }
                             } catch { }
                         }
                 
-                // Log target detection when debug is enabled
-                if (getDebugTarget() && tick % 20 === 0) {
-                    console.warn(`[MINING AI] Entity ${entity.id.substring(0, 8)}: liveTarget=${!!liveTarget}, storedTarget=${!!storedTarget}, hasTarget=${!!targetInfo}`);
-                    if (targetInfo && targetInfo.entity?.location) {
-                        const loc = entity.location;
-                        const targetLoc = targetInfo.entity.location;
-                        const dy = targetLoc.y - loc.y;
-                        const dist = Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z);
-                        console.warn(`[MINING AI] Target info: dist=${dist.toFixed(1)}, dy=${dy.toFixed(1)}, targetType=${targetInfo.entity?.typeId || 'unknown'}`);
-                    } else if (!targetInfo) {
-                        console.warn(`[MINING AI] Entity ${entity.id.substring(0, 8)}: NO TARGET FOUND!`);
-                    }
-                }
-                
-                const elevationIntent = getElevationIntent(entity, targetInfo);
-                const ascending = elevationIntent === "up" ? true : isAscending(entity);
-                contexts.push({
-                    entity,
-                    targetInfo,
-                    ascending,
-                    extraHeight: ascending ? 1 : 0,
-                    role: null,
-                    leaderId: null,
-                    elevationIntent,
-                    followers: 0
-                });
-            }
-
-            if (contexts.length === 0) continue;
-
-            const targetBuckets = new Map();
-            for (const ctx of contexts) {
-                const key = ctx.targetInfo?.entity?.id ?? null;
-                if (!targetBuckets.has(key)) {
-                    targetBuckets.set(key, []);
-                }
-                targetBuckets.get(key).push(ctx);
-            }
-
-            const leaderSummaryById = new Map();
-
-            for (const [targetId, bucket] of targetBuckets.entries()) {
-                if (!targetId) continue;
+                        // Log target detection when debug is enabled
+                        if (getDebugTarget() && tick % 20 === 0) {
+                            console.warn(`[MINING AI] Entity ${entity.id.substring(0, 8)}: liveTarget=${!!liveTarget}, storedTarget=${!!storedTarget}, hasTarget=${!!targetInfo}`);
+                            if (targetInfo && targetInfo.entity?.location) {
+                                const loc = entity.location;
+                                const targetLoc = targetInfo.entity.location;
+                                const dy = targetLoc.y - loc.y;
+                                const dist = Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z);
+                                console.warn(`[MINING AI] Target info: dist=${dist.toFixed(1)}, dy=${dy.toFixed(1)}, targetType=${targetInfo.entity?.typeId || 'unknown'}`);
+                            } else if (!targetInfo) {
+                                console.warn(`[MINING AI] Entity ${entity.id.substring(0, 8)}: NO TARGET FOUND!`);
+                            }
+                        }
                         
-                        // Separate registered bears (can mine) from unregistered bears (can only attack)
-                        // Registered bears can mine, unregistered bears can still attack like normal hostile mobs
+                        const elevationIntent = getElevationIntent(entity, targetInfo);
+                        const ascending = elevationIntent === "up" ? true : isAscending(entity);
+                        contexts.push({
+                            entity,
+                            targetInfo,
+                            ascending,
+                            extraHeight: ascending ? 1 : 0,
+                            role: null,
+                            leaderId: null,
+                            elevationIntent,
+                            followers: 0
+                        });
+                    }
+
+                    if (contexts.length === 0) continue;
+
+                    const targetBuckets = new Map();
+                    for (const ctx of contexts) {
+                        const key = ctx.targetInfo?.entity?.id ?? null;
+                        if (!targetBuckets.has(key)) {
+                            targetBuckets.set(key, []);
+                        }
+                        targetBuckets.get(key).push(ctx);
+                    }
+
+                    const leaderSummaryById = new Map();
+
+                    for (const [targetId, bucket] of targetBuckets.entries()) {
+                        if (!targetId) continue;
+                        
+                        // Separate registered bears from unregistered bears
                         const registeredBears = bucket.filter(ctx => {
                             const bearId = ctx.entity.id;
                             return canBearTarget(bearId, targetId);
@@ -7858,7 +7847,7 @@ function initializeMiningAI() {
                             };
                             leaderSummaryById.set(summary.id, summary);
                             activeLeaderIdsThisTick.add(summary.id);
-
+                            
                             // Assign followers from registered bears only
                             for (let i = 1; i < registeredBears.length; i++) {
                                 const followerCtx = registeredBears[i];
@@ -7879,37 +7868,32 @@ function initializeMiningAI() {
                             }
                         }
                         
-                        // Process unregistered bears (can see/attack but can't mine)
-                        // Give them a role so they can attack, but they won't mine (handled in processContext)
+                        // Process unregistered bears
                         for (const ctx of unregisteredBears) {
-                            // Assign as "leader" role so they can attack, but isActivelyTargeting will be false
-                            // This allows them to attack like normal hostile mobs
                             if (ctx.role === null) {
                                 ctx.role = "leader";
                                 ctx.leaderId = ctx.entity.id;
                                 ctx.followers = 0;
                             }
                         }
-            }
+                    }
 
-            const leaderQueue = [];
-            const followerQueue = [];
-            const idleQueue = [];
+                    const leaderQueue = [];
+                    const followerQueue = [];
+                    const idleQueue = [];
 
-            for (const ctx of contexts) {
-                // Check if should enter passive wandering (2 minutes without seeing target)
-                const lastSeen = lastSeenTargetTick.get(ctx.entity.id) || 0;
-                const timeSinceSeen = tick - lastSeen;
-                if (timeSinceSeen > PASSIVE_WANDER_TICKS && !ctx.targetInfo) {
-                    // Force passive wandering - clear stored target
-                    lastKnownTargets.delete(ctx.entity.id);
-                    lastSeenTargetTick.delete(ctx.entity.id);
-                    ctx.targetInfo = null;
-                }
+                    for (const ctx of contexts) {
+                        // Check if should enter passive wandering
+                        const lastSeen = lastSeenTargetTick.get(ctx.entity.id) || 0;
+                        const timeSinceSeen = tick - lastSeen;
+                        if (timeSinceSeen > PASSIVE_WANDER_TICKS && !ctx.targetInfo) {
+                            // Force passive wandering - clear stored target
+                            lastKnownTargets.delete(ctx.entity.id);
+                            lastSeenTargetTick.delete(ctx.entity.id);
+                            ctx.targetInfo = null;
+                        }
                         
-                        // If role is still null, assign default role based on whether they have a target
-                        // Bears with targets should be leaders (they're targeting on their own)
-                        // Bears without targets will be handled in idleQueue
+                        // If role is still null, assign default role
                         if (ctx.role === null && ctx.targetInfo) {
                             ctx.role = "leader";
                             ctx.leaderId = ctx.entity.id;
@@ -7926,255 +7910,238 @@ function initializeMiningAI() {
                             activeLeaderIdsThisTick.add(summary.id);
                         }
                 
-                // Separate bears with targets (always process) from idle bears (process at interval)
-                const hasTarget = !!ctx.targetInfo;
-                if (hasTarget) {
-                    // Bears with targets always process - add to appropriate queue
-                    if (ctx.role === "leader") {
-                        leaderQueue.push(ctx);
-                    } else if (ctx.role === "follower") {
-                        followerQueue.push(ctx);
-                    } else {
-                        // Has target but no role assigned - treat as leader
-                        ctx.role = "leader";
-                        ctx.leaderId = ctx.entity.id;
-                        ctx.followers = 0;
-                        leaderQueue.push(ctx);
-                    }
-                } else {
-                    // Bears without targets only process at dynamic interval
-                    if (shouldProcessIdleBears) {
-                        idleQueue.push(ctx);
-                    }
-                    // Otherwise skip processing this tick
-                }
-            }
-
-            // Get dynamic mining interval based on current day
-            const miningInterval = getMiningInterval();
-            
-            if (getDebugPitfall() && leaderQueue.length > 0 && tick % 20 === 0) {
-                console.warn(`[PITFALL DEBUG] ${leaderQueue.length} leaders in queue, miningInterval=${miningInterval}`);
-            }
-            
-            for (const ctx of leaderQueue) {
-                // Check if enough time has passed since last mining action for this entity
-                const lastTick = lastMiningTick.get(ctx.entity.id) || 0;
-                const ticksSinceLastMining = tick - lastTick;
-                if (ticksSinceLastMining >= miningInterval) {
-                    if (DEBUG_PITFALL && tick % 20 === 0) {
-                        console.warn(`[PITFALL DEBUG] Processing leader ${ctx.entity.id.substring(0, 8)}, hasTarget=${!!ctx.targetInfo}, role=${ctx.role}`);
-                    }
-                    processContext(ctx, config, tick, leaderSummaryById);
-                    lastMiningTick.set(ctx.entity.id, tick);
-                } else if (DEBUG_PITFALL && tick % 40 === 0) {
-                    console.warn(`[PITFALL DEBUG] Leader ${ctx.entity.id.substring(0, 8)} waiting: ${ticksSinceLastMining}/${miningInterval} ticks`);
-                }
-            }
-            for (const ctx of followerQueue) {
-                // Check if enough time has passed since last mining action for this entity
-                const lastTick = lastMiningTick.get(ctx.entity.id) || 0;
-                if (tick - lastTick >= miningInterval) {
-                    processContext(ctx, config, tick, leaderSummaryById);
-                    lastMiningTick.set(ctx.entity.id, tick);
-                }
-            }
-            for (const ctx of idleQueue) {
-                // Idle bears without targets - they remain stationary and scan
-                // No random wandering, more purposeful behavior
-                // Still process to allow target scanning, but less frequently
-                const lastTick = lastMiningTick.get(ctx.entity.id) || 0;
-                if (tick - lastTick >= miningInterval * 2) {
-                    processContext(ctx, config, tick, leaderSummaryById);
-                    lastMiningTick.set(ctx.entity.id, tick);
-                }
-            }
-        }
-    }
-
-    cleanupLeaderTrails(activeLeaderIdsThisTick);
-            
-            // Clean up block cache periodically (every 10 ticks to prevent memory bloat)
-            if (tick % 10 === 0) {
-                // Remove stale cache entries (older than 2 ticks)
-                for (const [key, cached] of blockCache.entries()) {
-                    if (tick - cached.tick > 2) {
-                        blockCache.delete(key);
-                    }
-                }
-            }
-            
-            // Clean up progress tracking for entities that no longer exist
-            for (const [entityId] of entityProgress.entries()) {
-                if (!activeWorkerIds.has(entityId)) {
-                    entityProgress.delete(entityId);
-                }
-            }
-            
-            // Clean up leader-follower maps for entities that no longer exist
-            for (const [leaderId, followerSet] of leaderFollowerMap.entries()) {
-                if (!activeLeaderIdsThisTick.has(leaderId) && !activeWorkerIds.has(leaderId)) {
-                    // Leader no longer active, clean up followers
-                    for (const followerId of followerSet) {
-                        followerLeaderMap.delete(followerId);
-                    }
-                    leaderFollowerMap.delete(leaderId);
-                } else {
-                    // Clean up followers that no longer exist
-                    for (const followerId of Array.from(followerSet)) {
-                        if (!activeWorkerIds.has(followerId)) {
-                            followerSet.delete(followerId);
-                            followerLeaderMap.delete(followerId);
-                        }
-                    }
-                }
-            }
-            
-            // Clean up build queues for inactive entities
-            for (const entityId of Array.from(buildQueues.keys())) {
-                if (!activeWorkerIds.has(entityId)) {
-                    releasePlan(entityId);
-                }
-            }
-            
-            // Clean up target memory for inactive entities
-            for (const [entityId, entry] of lastKnownTargets.entries()) {
-                if (!activeWorkerIds.has(entityId) && system.currentTick - entry.tick > TARGET_MEMORY_TICKS) {
-                    lastKnownTargets.delete(entityId);
-                    lastSeenTargetTick.delete(entityId);
-                }
-            }
-            
-            // Clean up last seen target tick for inactive entities
-            for (const [entityId] of lastSeenTargetTick.entries()) {
-                if (!activeWorkerIds.has(entityId)) {
-                    lastSeenTargetTick.delete(entityId);
-                }
-            }
-            
-            // Clean up last mining tick for inactive entities
-            for (const [entityId] of lastMiningTick.entries()) {
-                if (!activeWorkerIds.has(entityId)) {
-                    lastMiningTick.delete(entityId);
-                }
-            }
-            
-            // Clean up target coordination - remove dead bears from coordination map
-            // This prevents the "Target is full" issue when bears are killed
-            // Only do expensive target validation every 20 ticks (1 second) to avoid performance issues
-            let activeTargetIds = null;
-            if (tick % 20 === 0) {
-                activeTargetIds = new Set();
-                try {
-                    // Get all players and mobs to check which targets are still alive
-                    const allPlayers = getCachedPlayers();
-                    for (const player of allPlayers) {
-                        const playerIsValid = typeof player.isValid === "function" ? player.isValid() : Boolean(player.isValid);
-                        if (playerIsValid) {
-                            activeTargetIds.add(player.id);
-                        }
-                    }
-                    const dimension = world.getDimension("overworld");
-                    if (dimension) {
-                        const mobs = getCachedMobs(dimension, { x: 0, y: 0, z: 0 }, 1000);
-                        for (const mob of mobs) {
-                            const mobIsValid = typeof mob.isValid === "function" ? mob.isValid() : Boolean(mob.isValid);
-                            if (mobIsValid) {
-                                activeTargetIds.add(mob.id);
+                        // Separate bears with targets from idle bears
+                        const hasTarget = !!ctx.targetInfo;
+                        if (hasTarget) {
+                            // Bears with targets always process - add to appropriate queue
+                            if (ctx.role === "leader") {
+                                leaderQueue.push(ctx);
+                            } else if (ctx.role === "follower") {
+                                followerQueue.push(ctx);
+                            } else {
+                                // Has target but no role assigned - treat as leader
+                                ctx.role = "leader";
+                                ctx.leaderId = ctx.entity.id;
+                                ctx.followers = 0;
+                                leaderQueue.push(ctx);
+                            }
+                        } else {
+                            // Bears without targets only process at dynamic interval
+                            if (shouldProcessIdleBears) {
+                                idleQueue.push(ctx);
                             }
                         }
                     }
-                } catch { }
-            }
-            
-            for (const [targetId, bearSet] of targetCoordination.entries()) {
-                // Check each bear in the set to see if it's still alive
-                for (const bearId of Array.from(bearSet)) {
-                    if (!activeWorkerIds.has(bearId)) {
-                        // Bear is dead - remove it from coordination
-                        bearSet.delete(bearId);
-                        if (getDebugTarget()) {
-                            console.warn(`[MINING AI] Removed dead bear ${bearId.substring(0, 8)} from target ${targetId.substring(0, 8)} coordination`);
+                    
+                    // Get dynamic mining interval based on current day
+                    const miningInterval = getMiningInterval();
+                    
+                    if (getDebugPitfall() && leaderQueue.length > 0 && tick % 20 === 0) {
+                        console.warn(`[PITFALL DEBUG] ${leaderQueue.length} leaders in queue, miningInterval=${miningInterval}`);
+                    }
+                    
+                    for (const ctx of leaderQueue) {
+                        // Check if enough time has passed since last mining action for this entity
+                        const lastTick = lastMiningTick.get(ctx.entity.id) || 0;
+                        const ticksSinceLastMining = tick - lastTick;
+                        if (ticksSinceLastMining >= miningInterval) {
+                            if (DEBUG_PITFALL && tick % 20 === 0) {
+                                console.warn(`[PITFALL DEBUG] Processing leader ${ctx.entity.id.substring(0, 8)}, hasTarget=${!!ctx.targetInfo}, role=${ctx.role}`);
+                            }
+                            processContext(ctx, config, tick, leaderSummaryById);
+                            lastMiningTick.set(ctx.entity.id, tick);
+                        } else if (DEBUG_PITFALL && tick % 40 === 0) {
+                            console.warn(`[PITFALL DEBUG] Leader ${ctx.entity.id.substring(0, 8)} waiting: ${ticksSinceLastMining}/${miningInterval} ticks`);
+                        }
+                    }
+                    for (const ctx of followerQueue) {
+                        // Check if enough time has passed since last mining action for this entity
+                        const lastTick = lastMiningTick.get(ctx.entity.id) || 0;
+                        if (tick - lastTick >= miningInterval) {
+                            processContext(ctx, config, tick, leaderSummaryById);
+                            lastMiningTick.set(ctx.entity.id, tick);
+                        }
+                    }
+                    for (const ctx of idleQueue) {
+                        // Idle bears without targets
+                        const lastTick = lastMiningTick.get(ctx.entity.id) || 0;
+                        if (tick - lastTick >= miningInterval * 2) {
+                            processContext(ctx, config, tick, leaderSummaryById);
+                            lastMiningTick.set(ctx.entity.id, tick);
                         }
                     }
                 }
                 
-                // Clean up if target is dead (only check every 20 ticks) or set is empty
-                if (bearSet.size === 0) {
-                    targetCoordination.delete(targetId);
-                    if (getDebugTarget()) {
-                        console.warn(`[MINING AI] Removed empty target coordination entry for ${targetId.substring(0, 8)}`);
-                    }
-                } else if (activeTargetIds && !activeTargetIds.has(targetId)) {
-                    // Target is dead - clean it up (only check every 20 ticks to avoid performance issues)
-                    targetCoordination.delete(targetId);
-                    if (getDebugTarget()) {
-                        console.warn(`[MINING AI] Removed dead target ${targetId.substring(0, 8)} from coordination`);
+                cleanupLeaderTrails(activeLeaderIdsThisTick);
+                
+                // Clean up block cache periodically
+                if (tick % 10 === 0) {
+                    for (const [key, cached] of blockCache.entries()) {
+                        if (tick - cached.tick > 2) {
+                            blockCache.delete(key);
+                        }
                     }
                 }
-            }
-            
-            // Clean up old log cache entries (older than 200 ticks = 10 seconds)
-            if (tick % 100 === 0) {
-                for (const [logKey, lastLogTick] of targetFullLogCache.entries()) {
-                    if (tick - lastLogTick > 200) {
-                        targetFullLogCache.delete(logKey);
+                
+                // Clean up progress tracking for entities that no longer exist
+                for (const [entityId] of entityProgress.entries()) {
+                    if (!activeWorkerIds.has(entityId)) {
+                        entityProgress.delete(entityId);
+                    }
+                }
+                
+                // Clean up leader-follower maps for entities that no longer exist
+                for (const [leaderId, followerSet] of leaderFollowerMap.entries()) {
+                    if (!activeLeaderIdsThisTick.has(leaderId) && !activeWorkerIds.has(leaderId)) {
+                        for (const followerId of followerSet) {
+                            followerLeaderMap.delete(followerId);
+                        }
+                        leaderFollowerMap.delete(leaderId);
+                    } else {
+                        for (const followerId of Array.from(followerSet)) {
+                            if (!activeWorkerIds.has(followerId)) {
+                                followerSet.delete(followerId);
+                                followerLeaderMap.delete(followerId);
+                            }
+                        }
+                    }
+                }
+                
+                // Clean up build queues for inactive entities
+                for (const entityId of Array.from(buildQueues.keys())) {
+                    if (!activeWorkerIds.has(entityId)) {
+                        releasePlan(entityId);
+                    }
+                }
+                
+                // Clean up target memory for inactive entities
+                for (const [entityId, entry] of lastKnownTargets.entries()) {
+                    if (!activeWorkerIds.has(entityId) && system.currentTick - entry.tick > TARGET_MEMORY_TICKS) {
+                        lastKnownTargets.delete(entityId);
+                        lastSeenTargetTick.delete(entityId);
+                    }
+                }
+                
+                // Clean up last seen target tick for inactive entities
+                for (const [entityId] of lastSeenTargetTick.entries()) {
+                    if (!activeWorkerIds.has(entityId)) {
+                        lastSeenTargetTick.delete(entityId);
+                    }
+                }
+                
+                // Clean up last mining tick for inactive entities
+                for (const [entityId] of lastMiningTick.entries()) {
+                    if (!activeWorkerIds.has(entityId)) {
+                        lastMiningTick.delete(entityId);
+                    }
+                }
+                
+                // Clean up target coordination - remove dead bears from coordination map
+                let activeTargetIds = null;
+                if (tick % 20 === 0) {
+                    activeTargetIds = new Set();
+                    try {
+                        const allPlayers = getCachedPlayers();
+                        for (const player of allPlayers) {
+                            const playerIsValid = typeof player.isValid === "function" ? player.isValid() : Boolean(player.isValid);
+                            if (playerIsValid) {
+                                activeTargetIds.add(player.id);
+                            }
+                        }
+                        const dimension = world.getDimension("overworld");
+                        if (dimension) {
+                            const mobs = getCachedMobs(dimension, { x: 0, y: 0, z: 0 }, 1000);
+                            for (const mob of mobs) {
+                                const mobIsValid = typeof mob.isValid === "function" ? mob.isValid() : Boolean(mob.isValid);
+                                if (mobIsValid) {
+                                    activeTargetIds.add(mob.id);
+                                }
+                            }
+                        }
+                    } catch { }
+                }
+                
+                for (const [targetId, bearSet] of targetCoordination.entries()) {
+                    for (const bearId of Array.from(bearSet)) {
+                        if (!activeWorkerIds.has(bearId)) {
+                            bearSet.delete(bearId);
+                            if (getDebugTarget()) {
+                                console.warn(`[MINING AI] Removed dead bear ${bearId.substring(0, 8)} from target ${targetId.substring(0, 8)} coordination`);
+                            }
+                        }
+                    }
+                    
+                    if (bearSet.size === 0) {
+                        targetCoordination.delete(targetId);
+                        if (getDebugTarget()) {
+                            console.warn(`[MINING AI] Removed empty target coordination entry for ${targetId.substring(0, 8)}`);
+                        }
+                    } else if (activeTargetIds && !activeTargetIds.has(targetId)) {
+                        targetCoordination.delete(targetId);
+                        if (getDebugTarget()) {
+                            console.warn(`[MINING AI] Removed dead target ${targetId.substring(0, 8)} from coordination`);
+                        }
+                    }
+                }
+                
+                // Clean up old log cache entries
+                if (tick % 100 === 0) {
+                    for (const [logKey, lastLogTick] of targetFullLogCache.entries()) {
+                        if (tick - lastLogTick > 200) {
+                            targetFullLogCache.delete(logKey);
+                        }
+                    }
+                }
+                
+                // Clean up build mode state for inactive entities
+                for (const entityId of Array.from(buildModeState.keys())) {
+                    if (!activeWorkerIds.has(entityId)) {
+                        buildModeState.delete(entityId);
+                    }
+                }
+                
+                // Clean up collected blocks for inactive entities
+                for (const entityId of Array.from(collectedBlocks.keys())) {
+                    if (!activeWorkerIds.has(entityId)) {
+                        collectedBlocks.delete(entityId);
+                    }
+                }
+                
+                // Performance: Clean up target cache for inactive entities
+                for (const [entityId] of targetCache.entries()) {
+                    if (!activeWorkerIds.has(entityId)) {
+                        targetCache.delete(entityId);
+                    }
+                }
+                
+                // Clean up old stair work locks
+                const currentTick = system.currentTick;
+                for (const [blockKey, work] of activeStairWork.entries()) {
+                    const ticksSinceWork = currentTick - work.tick;
+                    if (!activeWorkerIds.has(work.entityId) || ticksSinceWork >= STAIR_WORK_LOCK_TICKS * 3) {
+                        activeStairWork.delete(blockKey);
+                    }
+                }
+                
+                // Clean up stair creation target positions for inactive entities
+                for (const [entityId] of stairCreationTargetPos.entries()) {
+                    if (!activeWorkerIds.has(entityId)) {
+                        stairCreationTargetPos.delete(entityId);
+                    }
+                }
+                
+                // Clean up old stair block protections
+                for (const [blockKey, tick] of recentStairBlocks.entries()) {
+                    if (currentTick - tick > 200) {
+                        recentStairBlocks.delete(blockKey);
                     }
                 }
             }
-            
-            // Clean up build mode state for inactive entities
-            for (const entityId of Array.from(buildModeState.keys())) {
-                if (!activeWorkerIds.has(entityId)) {
-                    buildModeState.delete(entityId);
-                }
-            }
-            
-            // Clean up collected blocks for inactive entities
-            for (const entityId of Array.from(collectedBlocks.keys())) {
-                if (!activeWorkerIds.has(entityId)) {
-                    collectedBlocks.delete(entityId);
-                }
-            }
-            
-            // Performance: Clean up target cache for inactive entities
-            for (const [entityId] of targetCache.entries()) {
-                if (!activeWorkerIds.has(entityId)) {
-                    targetCache.delete(entityId);
-                }
-            }
-            
-            // Clean up old stair work locks (expired or from inactive entities)
-            const currentTick = system.currentTick;
-            for (const [blockKey, work] of activeStairWork.entries()) {
-                const ticksSinceWork = currentTick - work.tick;
-                if (!activeWorkerIds.has(work.entityId) || ticksSinceWork >= STAIR_WORK_LOCK_TICKS * 3) {
-                    // Remove if entity is inactive or lock expired long ago (3x lock duration)
-                    activeStairWork.delete(blockKey);
-                }
-            }
-            
-            // Clean up stair creation target positions for inactive entities
-            for (const [entityId] of stairCreationTargetPos.entries()) {
-                if (!activeWorkerIds.has(entityId)) {
-                    stairCreationTargetPos.delete(entityId);
-                }
-            }
-            
-            // Clean up old stair block protections (older than 10 seconds / 200 ticks)
-            for (const [blockKey, tick] of recentStairBlocks.entries()) {
-                if (currentTick - tick > 200) {
-                    recentStairBlocks.delete(blockKey);
-                }
-            }
-            // End of per-tick processing block
-        }
         } catch (error) {
-            // Log errors to help debug
             console.error(`[MINING AI] ERROR in runInterval at tick ${system.currentTick}:`, error);
             console.error(`[MINING AI] Error stack:`, error.stack);
         }
-    }, 1); // Run every tick - bears with targets always process, idle bears process at dynamic interval
+    }, 1);
     
     if (miningAIIntervalId !== null) {
         if (getDebugGeneral()) {
@@ -8189,7 +8156,6 @@ function initializeMiningAI() {
     system.runInterval(() => {
         const now = system.currentTick;
         
-        // Only run cleanup every PATHFINDING_STATE_CLEANUP_INTERVAL ticks
         if (now - lastCleanupTick < PATHFINDING_STATE_CLEANUP_INTERVAL) return;
         lastCleanupTick = now;
         
@@ -8197,7 +8163,6 @@ function initializeMiningAI() {
         for (const [entityId, state] of pathfindingState.entries()) {
             const age = now - state.startTick;
             
-            // Cancel pathfinding operations older than max age
             if (age > PATHFINDING_MAX_AGE_TICKS && state.status === 'in_progress') {
                 if (getDebugPathfinding()) {
                     console.warn(`[MINING AI] Canceling stale pathfinding for entity ${entityId.substring(0, 8)} (age: ${age} ticks)`);
@@ -8206,7 +8171,6 @@ function initializeMiningAI() {
                 continue;
             }
             
-            // Remove completed/failed states older than cache timeout
             if ((state.status === 'completed' || state.status === 'failed') && age > PATHFINDING_CACHE_TICKS) {
                 cleanupPathfindingState(entityId);
                 continue;
@@ -8241,7 +8205,6 @@ function initializeMiningAI() {
                 }
                 
                 if (!entityExists && state.status === 'in_progress') {
-                    // Entity no longer exists, cancel pathfinding
                     if (getDebugPathfinding()) {
                         console.warn(`[MINING AI] Canceling pathfinding for non-existent entity ${entityId.substring(0, 8)}`);
                     }
@@ -8250,7 +8213,7 @@ function initializeMiningAI() {
             } catch { }
         }
         
-        // Process queued pathfinding operations (if under concurrent limit)
+        // Process queued pathfinding operations
         if (pathfindingQueue.size > 0) {
             let activeCount = 0;
             for (const state of pathfindingState.values()) {
@@ -8259,17 +8222,14 @@ function initializeMiningAI() {
             
             const availableSlots = PATHFINDING_MAX_CONCURRENT - activeCount;
             if (availableSlots > 0) {
-                // Process up to availableSlots queued operations
                 const toProcess = Array.from(pathfindingQueue).slice(0, availableSlots);
                 for (const entityId of toProcess) {
                     pathfindingQueue.delete(entityId);
-                    // Note: The entity needs to call findPathToTargetAsync again to start pathfinding
-                    // This cleanup just removes them from queue if they're still waiting
                 }
             }
         }
     }, PATHFINDING_STATE_CLEANUP_INTERVAL);
-}
+}  // <-- THIS CLOSING BRACE WAS MISSING!
 
 /**
  * Handle leader death - promote nearest follower to leader
