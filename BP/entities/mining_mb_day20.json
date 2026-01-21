@@ -56,11 +56,6 @@
 					"y_max_head_rotation": 360,
 					"reach_multiplier": 2
 				},
-				"minecraft:behavior.move_towards_target": {
-					"priority": 2,
-					"speed_multiplier": 1.2,
-					"within_radius": 3
-				},
 				"minecraft:behavior.hurt_by_target": {
 					"priority": 1
 				},
@@ -97,7 +92,7 @@
 		},
 		"components": {
 			"minecraft:inventory": {
-				"inventory_size": 3,
+				"inventory_size": 2,
 				"private": false,
 				"restrict_to_owner": false
 			},
@@ -248,10 +243,6 @@
 				"can_break_doors": true,
 				"avoid_portals": true,
 				"is_amphibious": true
-			},
-			"minecraft:behavior.random_stroll": {
-				"priority": 3,
-				"speed_multiplier": 1
 			},
 			"minecraft:behavior.look_at_player": {
 				"priority": 5,

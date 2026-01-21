@@ -32,7 +32,7 @@ function debugLog(category, message, ...args) {
     if (category === 'spawn') {
         // Check codex debug settings for spawn debug
         if (isDebugEnabled('spawn', 'general') || isDebugEnabled('spawn', 'all')) {
-            console.warn(`[SPAWN DEBUG] ${message}`, ...args);
+        console.warn(`[SPAWN DEBUG] ${message}`, ...args);
         }
         // Tile scanning is a separate flag
         if ((isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) && (message.includes('tile') || message.includes('Tile') || message.includes('scan'))) {
@@ -57,7 +57,7 @@ function debugLog(category, message, ...args) {
     } else if (category === 'cache') {
         // Cache debug
         if (isDebugEnabled('spawn', 'cache') || isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
-            console.warn(`[CACHE DEBUG] ${message}`, ...args);
+        console.warn(`[CACHE DEBUG] ${message}`, ...args);
         }
     } else if (category === 'groups') {
         // Groups debug can use spawn general
@@ -70,7 +70,7 @@ function debugLog(category, message, ...args) {
             // Only suppress if this exact message was already logged in this exact tick
             // This allows the message to log on every tick, but prevents duplicates within the same tick
             if (lastTick !== now) {
-                console.warn(`[GROUP DEBUG] ${message}`, ...args);
+        console.warn(`[GROUP DEBUG] ${message}`, ...args);
                 debugMessageLastTick.set(messageKey, now);
             }
         }
@@ -654,7 +654,7 @@ function getFlyingSpawnLocation(settings, dimension, tile) {
         // Ensure desiredY is still within bounds after lifting
         desiredY = Math.min(desiredY, bounds.max);
         desiredY = Math.max(desiredY, bounds.min);
-        
+
         if (!skyIsClear(dimension, baseX, baseZ, Math.floor(desiredY) + 1, settings.skyClearance)) {
             return null;
         }
@@ -1749,7 +1749,7 @@ export function registerDustedDirtBlock(x, y, z, dimension = null) {
     
     const entry = { 
         x: Math.floor(x), 
-        y: Math.floor(y),
+        y: Math.floor(y), 
         z: Math.floor(z), 
         tick: system.currentTick,
         dimension: dimensionId,
@@ -1773,6 +1773,30 @@ export function registerDustedDirtBlock(x, y, z, dimension = null) {
 export function unregisterDustedDirtBlock(x, y, z) {
     const key = `${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`;
     dustedDirtCache.delete(key);
+}
+
+export function countNearbyDustedDirtBlocks(center, dimension, radius, limit = 100) {
+    if (!center) return 0;
+    const dimensionId = typeof dimension === "string" ? dimension : dimension?.id;
+    if (!dimensionId) return 0;
+    
+    const radiusSq = radius * radius;
+    let count = 0;
+    
+    for (const value of dustedDirtCache.values()) {
+        if (value?.chunkKey && !activeChunks.has(value.chunkKey)) continue;
+        if (value?.dimension && value.dimension !== dimensionId) continue;
+        
+        const dx = value.x - center.x;
+        const dy = value.y - center.y;
+        const dz = value.z - center.z;
+        if ((dx * dx + dy * dy + dz * dz) <= radiusSq) {
+            count++;
+            if (count >= limit) break;
+        }
+    }
+    
+    return count;
 }
 
 // Export function to manually test a block position (for debugging)
@@ -2171,7 +2195,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     
     // Trim old chunks periodically
     trimOldChunks();
-    
+
     // Validate cache periodically
     validateDustedDirtCache(dimension);
 
@@ -2271,10 +2295,10 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     blockQueryCount++;
                     if (blockQueryCount < queryLimit) {
                         if (isAirOrWater(blockAbove) && isAirOrWater(blockTwoAbove)) {
-                            const tileKey = `${value.x},${value.y},${value.z}`;
-                            if (!seen.has(tileKey)) {
-                                seen.add(tileKey);
-                                cachedTiles.push({ x: value.x, y: value.y, z: value.z });
+                        const tileKey = `${value.x},${value.y},${value.z}`;
+                        if (!seen.has(tileKey)) {
+                            seen.add(tileKey);
+                            cachedTiles.push({ x: value.x, y: value.y, z: value.z });
                                 cacheValidated++;
                                 if (isDebugEnabled('spawn', 'cache') || isDebugEnabled('spawn', 'all')) {
                                     if (cacheValidated <= 5) { // Only log first few to avoid spam
@@ -3109,7 +3133,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
             const yLevelsToCheck = yScanOrder.length > 0 ? yScanOrder : (() => {
                 // Fallback: default top-to-bottom if scan order not determined
                 const fallback = [];
-                for (let y = clampedYStart; y >= clampedYEnd; y--) {
+            for (let y = clampedYStart; y >= clampedYEnd; y--) {
                     fallback.push(y);
                 }
                 return fallback;
@@ -4088,10 +4112,10 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
             }
             
             if (cache && !needsRescan) {
-                const dx = playerPos.x - cache.center.x;
-                const dz = playerPos.z - cache.center.z;
-                movedSq = dx * dx + dz * dz;
-                const timeSinceLastScan = now - lastBlockScanTick;
+            const dx = playerPos.x - cache.center.x;
+            const dz = playerPos.z - cache.center.z;
+            movedSq = dx * dx + dz * dz;
+            const timeSinceLastScan = now - lastBlockScanTick;
                 const scanCooldown = getBlockScanCooldown(totalPlayerCount);
                 const cacheAge = now - cache.tick;
                 
@@ -4102,7 +4126,7 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
                     needsRescan = true;
                     debugLog('spawn', `${player.name}: Marked cache as stale (moved ${Math.sqrt(movedSq).toFixed(1)} blocks)`);
                 } else if (cacheAge > CACHE_TICK_TTL || timeSinceLastScan >= scanCooldown) {
-                    needsRescan = true;
+                needsRescan = true;
                 }
             }
         }
@@ -4304,10 +4328,10 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
     }
     spacing = Math.max(2, spacing);
 
-        const sampled = sampleTiles(validTiles, MAX_CANDIDATES_PER_SCAN);
-        const spacedTiles = filterTilesWithSpacing(sampled, spacing, MAX_SPACED_TILES);
-        
-        // Debug: show spacing info
+    const sampled = sampleTiles(validTiles, MAX_CANDIDATES_PER_SCAN);
+    const spacedTiles = filterTilesWithSpacing(sampled, spacing, MAX_SPACED_TILES);
+    
+    // Debug: show spacing info
         if ((isDebugEnabled('spawn', 'spacing') || isDebugEnabled('spawn', 'all')) && spacedTiles.length > 0) {
             const avgDist = calculateAverageSpacing(spacedTiles);
             console.warn(`[SPAWN DEBUG] ${player.name}: ${spacedTiles.length} spaced tiles (spacing: ${spacing.toFixed(1)}, avg dist: ${avgDist.toFixed(1)} blocks, group: ${isGroupCache}), sampled: ${sampled.length}, valid: ${validTiles.length}`);
@@ -4749,7 +4773,7 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
         if (settings) {
             const airTiles = generateAirSpawnTiles(dimension, playerPos, settings.minAbsoluteY, settings.minAbsoluteY + 60, 20);
             if (Array.isArray(airTiles)) {
-                pool.push(...airTiles);
+            pool.push(...airTiles);
             }
         }
     }
@@ -4995,7 +5019,7 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
                 if (triedFallback) {
                     debugLog('spawn', `${config.id} failed, spawned fallback ${entityIdToSpawn} at (${Math.floor(spawnLocation.x)}, ${Math.floor(spawnLocation.y)}, ${Math.floor(spawnLocation.z)})`);
                 } else {
-                    debugLog('spawn', `${config.id} spawned at (${Math.floor(spawnLocation.x)}, ${Math.floor(spawnLocation.y)}, ${Math.floor(spawnLocation.z)})`);
+                debugLog('spawn', `${config.id} spawned at (${Math.floor(spawnLocation.x)}, ${Math.floor(spawnLocation.y)}, ${Math.floor(spawnLocation.z)})`);
                 }
                 lastSpawnTickByType.set(key, system.currentTick);
                 removeTileFromCache(player.id, candidate);
@@ -5018,12 +5042,12 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
                         if (existingType === "mb:snow_layer" || existingType === "minecraft:snow_layer") {
                             // Already has snow layer, skip placement to avoid stacking
                         } else if (snowBlock && snowBlock.isAir !== undefined && !snowBlock.isAir && snowBlock.isLiquid !== undefined && !snowBlock.isLiquid && aboveBlock.isAir !== undefined && aboveBlock.isAir) {
-                            // Place snow if the block below is solid and the space above (where entity spawns) is air
-                            // Use custom snow layer if available, otherwise vanilla
-                            try {
-                                aboveBlock.setType("mb:snow_layer");
-                            } catch {
-                                aboveBlock.setType("minecraft:snow_layer");
+                    // Place snow if the block below is solid and the space above (where entity spawns) is air
+                        // Use custom snow layer if available, otherwise vanilla
+                        try {
+                            aboveBlock.setType("mb:snow_layer");
+                        } catch {
+                            aboveBlock.setType("minecraft:snow_layer");
                             }
                         }
                     }
@@ -5075,12 +5099,12 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
             // Only log if we haven't exceeded the silent threshold (to reduce spam, but keep trying to spawn)
             const currentFailureInfo = entitySpawnFailures.get(config.id);
             if (currentFailureInfo && currentFailureInfo.failureCount < MAX_FAILURES_BEFORE_SILENT) {
-                errorLog(`Failed to spawn ${config.id}`, error, {
-                    location: spawnLocation,
-                    player: player.name,
-                    dimension: dimension.id,
-                    config: config.id
-                });
+            errorLog(`Failed to spawn ${config.id}`, error, {
+                location: spawnLocation,
+                player: player.name,
+                dimension: dimension.id,
+                config: config.id
+            });
             }
         }
     }
@@ -5429,7 +5453,7 @@ system.runInterval(() => {
         if (isIsolated && (isDebugEnabled('spawn', 'isolated') || isDebugEnabled('spawn', 'all'))) {
             debugLog('spawn', `${player.name} is isolated (${isolationInfo.nearbyPlayerCount} nearby players) - using optimized spawn system`);
         }
-        
+
         let tileInfo;
         try {
             tileInfo = getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCache, dimensionPlayers, dimensionPlayerCount, isTightGroupMode, isIsolated);
@@ -5457,7 +5481,7 @@ system.runInterval(() => {
             const tilesCountData = debugMessageCounts.get(tilesMessageKey);
             if (!tilesCountData) {
                 // First occurrence - log immediately
-                debugLog('spawn', `Using ${density} dusted tiles near ${player.name}; ${spacedTiles.length} after spacing filter (d=${spacing})`);
+        debugLog('spawn', `Using ${density} dusted tiles near ${player.name}; ${spacedTiles.length} after spacing filter (d=${spacing})`);
                 debugMessageCounts.set(tilesMessageKey, { count: 1, firstTick: now, lastTick: now });
             } else {
                 // Repeated message - increment count
@@ -5491,7 +5515,7 @@ system.runInterval(() => {
             
             if (!countData) {
                 // First occurrence - log immediately and track
-                debugLog('spawn', `No valid spawn tiles for ${player.name} (density: ${density}, spaced: ${spacedTiles.length})`);
+            debugLog('spawn', `No valid spawn tiles for ${player.name} (density: ${density}, spaced: ${spacedTiles.length})`);
                 debugMessageCounts.set(noTilesMessageKey, { count: 1, firstTick: now, lastTick: now });
                 debugMessageLastTick.set(noTilesMessageKey, now);
             } else {
@@ -5835,12 +5859,12 @@ system.runInterval(() => {
                     // Defensively access properties in case player/dimension became invalid
                     const playerName = (player && typeof player.name !== 'undefined') ? player.name : 'unknown';
                     const dimensionId = (dimension && typeof dimension.id !== 'undefined') ? dimension.id : 'unknown';
-                    errorLog(`Error attempting spawn for ${config.id}`, error, {
+                errorLog(`Error attempting spawn for ${config.id}`, error, {
                         player: playerName,
-                        config: config.id,
-                        currentDay,
+                    config: config.id,
+                    currentDay,
                         dimension: dimensionId
-                    });
+                });
                 }
             }
         }

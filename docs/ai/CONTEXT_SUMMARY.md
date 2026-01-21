@@ -2,6 +2,10 @@
 
 ## Recent Changes (Latest Session)
 
+### Day Milestones & Infection Rate Update
+- **Infection Rate Refactor**: Replaced hard-coded day checks with `INFECTION_RATE_STEPS` in `BP/scripts/main.js`, adding day 11/15/17 steps and a 100% cap at day 20.
+- **Codex Milestones**: Updated milestone list in `BP/scripts/mb_codex.js` to include day 11, 15, and 17 (escalation, mining bears, torpedo bears).
+
 ### Performance & Architecture Improvements
 - **Dynamic Property Handler**: Implemented `mb_dynamicPropertyHandler.js` with cached read/write system and batch saving
   - Lazy loading for world properties to avoid early execution errors

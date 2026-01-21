@@ -575,6 +575,56 @@ function breakBlocksInPath(entity, direction, config) {
     return broken;
 }
 
+function breakBlocksAboveEntity(entity, maxHeight, config) {
+    const dimension = entity?.dimension;
+    if (!dimension) return 0;
+    const loc = entity.location;
+    const entityX = Math.floor(loc.x);
+    const entityY = Math.floor(loc.y);
+    const entityZ = Math.floor(loc.z);
+    const minY = config.minY || MIN_STRUCTURE_Y;
+    const breakLimit = Math.max(1, Math.min(maxHeight, config.breaksPerTick ?? 3));
+    let broken = 0;
+    
+    for (let dy = 1; dy <= maxHeight; dy++) {
+        if (broken >= breakLimit) break;
+        const targetY = entityY + dy;
+        if (targetY < minY) continue;
+        
+        let block;
+        try {
+            block = dimension.getBlock({ x: entityX, y: targetY, z: entityZ });
+        } catch {
+            continue;
+        }
+        if (!block) continue;
+        
+        const typeId = block.typeId;
+        if (typeId === "minecraft:air" || typeId === "minecraft:cave_air" || typeId === "minecraft:void_air") {
+            continue;
+        }
+        if (UNBREAKABLE_BLOCKS.has(typeId)) continue;
+        
+        const breakCount = getBreakCount(entity);
+        if (breakCount >= config.maxBlocks) {
+            checkTorpedoExhaustion(entity, config);
+            continue;
+        }
+        
+        try {
+            block.setType("minecraft:air");
+            playBreakSound(dimension, entityX, targetY, entityZ, typeId);
+            incrementBreakCount(entity);
+            broken++;
+            if (checkTorpedoExhaustion(entity, config)) break;
+        } catch {
+            // ignore
+        }
+    }
+    
+    return broken;
+}
+
 function adjustAltitude(entity, config) {
     const loc = entity.location;
     const minY = config.minY || MIN_STRUCTURE_Y;
@@ -1308,6 +1358,17 @@ function initializeTorpedoAI() {
                     
                     if (getDebugTargeting()) {
                         console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} found target: type=${targetInfo.entity?.typeId || 'unknown'}, isPlayer=${isPlayer}, horizDist=${horizDist.toFixed(1)}, dy=${dy.toFixed(1)}, mode=${state.mode}, cooldown=${state.cooldown}, diveCooldown=${state.diveCooldown} - TARGETING DEBUG`);
+                    }
+                    
+                    // If target is above and close horizontally, break blocks directly above to reach them
+                    if (dy > 1.5 && horizDist <= 2.5) {
+                        const maxHeight = Math.min(3, Math.floor(dy));
+                        if (maxHeight > 0) {
+                            const brokenAbove = breakBlocksAboveEntity(entity, maxHeight, config);
+                            if (getDebugBlockBreaking() && brokenAbove > 0) {
+                                console.warn(`[TORPEDO AI] Entity ${entity.id.substring(0, 8)} broke ${brokenAbove} blocks above (target above), total=${getBreakCount(entity)}`);
+                            }
+                        }
                     }
                     
                     // If in dive mode, check if we should continue diving or return to cruise

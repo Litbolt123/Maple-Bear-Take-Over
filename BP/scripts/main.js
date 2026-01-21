@@ -2,7 +2,7 @@ import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraf
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { getCodex, getDefaultCodex, markCodex, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, checkKnowledgeProgression } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
-import { registerDustedDirtBlock, unregisterDustedDirtBlock } from "./mb_spawnController.js";
+import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { findItem, hasItem } from "./mb_itemFinder.js";
 import { initializeItemRegistry, registerItemHandler } from "./mb_itemRegistry.js";
@@ -104,6 +104,25 @@ const SNOW_ITEM_ID = "mb:snow";
 const INFECTED_TAG = "mb_infected";
 const INFECTED_CORPSE_ID = "mb:infected_corpse";
 const SNOW_LAYER_BLOCK = "minecraft:snow_layer";
+const INFECTED_GROUND_BLOCKS = new Set(["mb:dusted_dirt", "mb:snow_layer", "minecraft:snow_layer"]);
+
+// Adaptive checking intervals (like biome ambience system)
+const GROUND_CHECK_INTERVAL_ON = 20; // Every 1 second when on infected ground (more frequent)
+const GROUND_CHECK_INTERVAL_OFF = 60; // Every 3 seconds when off infected ground (less frequent)
+const GROUND_EXPOSURE_SECONDS_PER_TICK = 2; // Seconds gained per tick when on ground
+const GROUND_WARNING_SECONDS = 60;
+const GROUND_MINOR_WARNING_SECONDS = 10; // Warning for minor infection players (earlier warning)
+const GROUND_INFECTION_SECONDS = 90;
+const GROUND_DECAY_SECONDS_PER_TICK = 1; // Every check when off, reduce by 1 second
+const GROUND_MAJOR_SNOW_INTERVAL_SECONDS = 90; // Increased from 30 to 90 seconds
+const GROUND_MAJOR_SNOW_INCREASE_AMOUNT = 0.25; // Increase snow level by 0.25 instead of 1
+const GROUND_MAJOR_DECAY_SECONDS_PER_TICK = 0.5; // Every check when off, reduce by 0.5 seconds
+
+const AMBIENT_PRESSURE_RADIUS = 32;
+const AMBIENT_PRESSURE_THRESHOLD = 100;
+const AMBIENT_WARNING_SECONDS = 600; // 10 minutes
+const AMBIENT_INFECTION_SECONDS = 630; // 10 minutes + 30 seconds
+const AMBIENT_DECAY_SECONDS_PER_TICK = 2; // Every 1 second, reduce by 1 second (2s interval -> -2)
 
 // Biome check optimization
 const BIOME_CHECK_COOLDOWN = 200; // 10 seconds in ticks (200 ticks = 10 seconds)
@@ -134,36 +153,31 @@ function getBiomeIdAt(dimension, location) {
 }
 
 // Progressive Infection Rate System Constants
-const INFECTION_RATE_CONFIG = {
-    DAY_2_RATE: 0.20,    // 20% on day 2
-    DAY_3_RATE: 0.30,    // 30% on day 3
-    DAY_4_RATE: 0.40,    // 40% on day 4
-    DAY_5_RATE: 0.40,    // 40% on day 5
-    DAY_6_RATE: 0.50,    // 50% on day 6
-    DAY_7_RATE: 0.50,    // 50% on day 7
-    DAY_8_RATE: 0.60,    // 60% on day 8
-    RATE_INCREASE: 0.10, // 10% increase every 2 days
-    RATE_INTERVAL: 2,    // Every 2 days (changed from 5 to reach 100% by day 20)
-    MAX_RATE: 1.0        // Cap at 100%
-};
+const INFECTION_RATE_STEPS = [
+    { day: 2, rate: 0.20 }, // 20% on day 2
+    { day: 3, rate: 0.30 }, // 30% on day 3
+    { day: 4, rate: 0.40 }, // 40% on day 4
+    { day: 5, rate: 0.40 }, // 40% on day 5
+    { day: 6, rate: 0.50 }, // 50% on day 6
+    { day: 7, rate: 0.50 }, // 50% on day 7
+    { day: 8, rate: 0.60 }, // 60% on day 8
+    { day: 11, rate: 0.70 }, // 70% on day 11
+    { day: 15, rate: 0.80 }, // 80% on day 15
+    { day: 17, rate: 0.90 }, // 90% on day 17
+    { day: 20, rate: 1.00 }  // 100% on day 20+
+];
 
 function getInfectionRate(day) {
     if (day < 2) return 0; // No infection before day 2
-    if (day === 2) return INFECTION_RATE_CONFIG.DAY_2_RATE;
-    if (day === 3) return INFECTION_RATE_CONFIG.DAY_3_RATE;
-    if (day === 4) return INFECTION_RATE_CONFIG.DAY_4_RATE;
-    if (day === 5) return INFECTION_RATE_CONFIG.DAY_5_RATE;
-    if (day === 6) return INFECTION_RATE_CONFIG.DAY_6_RATE;
-    if (day === 7) return INFECTION_RATE_CONFIG.DAY_7_RATE;
-    if (day === 8) return INFECTION_RATE_CONFIG.DAY_8_RATE;
-    
-    // After day 8, increase by 10% every 2 days until reaching 100% at day 20
-    const daysAfter8 = day - 8;
-    const rateIncrease = Math.floor(daysAfter8 / INFECTION_RATE_CONFIG.RATE_INTERVAL) * INFECTION_RATE_CONFIG.RATE_INCREASE;
-    const baseRate = INFECTION_RATE_CONFIG.DAY_8_RATE;
-    const finalRate = Math.min(baseRate + rateIncrease, INFECTION_RATE_CONFIG.MAX_RATE);
-    
-    return finalRate;
+    let currentRate = 0;
+    for (const step of INFECTION_RATE_STEPS) {
+        if (day >= step.day) {
+            currentRate = step.rate;
+        } else {
+            break;
+        }
+    }
+    return currentRate;
 }
 
 // --- Player Codex (Unlock System) ---
@@ -283,6 +297,7 @@ export const bearHitCount = new Map(); // playerId -> hitCount (tracks hits befo
 const firstTimeMessages = new Map(); // playerId -> { hasBeenHit: false, hasBeenInfected: false, snowTier: 0 }
 export const maxSnowLevels = new Map(); // playerId -> { maxLevel: 0, achievedAt: timestamp }
 const infectionExperience = new Map(); // playerId -> { bearInfected, snowInfected, maxSeverity, effectsSeen }
+const groundExposureState = new Map(); // playerId -> { groundSeconds, groundWarningSent, ambientSeconds, ambientWarningSent, majorSeconds }
 const INFECTION_TICKS = 24000 * 5; // 5 Minecraft days
 const MINOR_INFECTION_TICKS = 24000 * 10; // 10 Minecraft days
 export const MINOR_INFECTION_TYPE = "minor";
@@ -967,6 +982,301 @@ function updateMaxSnowLevel(player, snowCount) {
             if (snowCount >= 50) markCodex(player, "items.snowTier50Reached");
         } catch { }
     }
+}
+
+function getGroundExposureState(playerId) {
+    const existing = groundExposureState.get(playerId);
+    if (existing) return existing;
+    const created = {
+        groundSeconds: 0,
+        groundWarningSent: false,
+        minorGroundWarningSent: false, // Track if minor infection warning was sent
+        ambientSeconds: 0,
+        ambientWarningSent: false,
+        majorSeconds: 0,
+        majorGroundMessagesSent: 0, // Track how many messages sent for major infection ground exposure
+        biomeSeconds: 0,
+        biomeWarningSent: false
+    };
+    groundExposureState.set(playerId, created);
+    if (isDebugEnabled("ground_infection", "timer") || isDebugEnabled("ground_infection", "all")) {
+        const player = Array.from(world.getAllPlayers()).find(p => p.id === playerId);
+        if (player) {
+            console.warn(`[GROUND INFECTION DEBUG] Created new exposure state for ${player.name}`);
+        }
+    }
+    return created;
+}
+
+function isStandingOnInfectedGround(player) {
+    try {
+        const dimension = player.dimension;
+        const loc = player.location;
+        const x = Math.floor(loc.x);
+        const z = Math.floor(loc.z);
+        const blockBelowY = Math.floor(loc.y - 1);
+        const blockAtFeetY = Math.floor(loc.y);
+        
+        // Check if player is in water or boat - if so, only count if actually walking on the block underwater
+        const blockAtPlayer = dimension.getBlock({ x, y: Math.floor(loc.y), z });
+        const isInWater = blockAtPlayer && (blockAtPlayer.typeId.includes("water") || blockAtPlayer.typeId.includes("flowing_water"));
+        const isInBoat = player.riding && player.riding.typeId && player.riding.typeId.includes("boat");
+        
+        // If in boat or water in air (not walking on block underwater), don't count
+        if (isInBoat || (isInWater && blockAtPlayer && blockAtPlayer.isAir)) {
+            if (isDebugEnabled("ground_infection", "groundCheck") || isDebugEnabled("ground_infection", "all")) {
+                console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Not on ground (boat: ${isInBoat}, water: ${isInWater})`);
+            }
+            return { onGround: false, blockType: null, speedMultiplier: 1 };
+        }
+        
+        const blockBelow = dimension.getBlock({ x, y: blockBelowY, z });
+        const blockAtFeet = dimension.getBlock({ x, y: blockAtFeetY, z });
+        
+        // Prioritize block at feet (snow layer) over block below (dusted dirt)
+        // This ensures snow layer is detected when on top of dusted dirt
+        if (blockAtFeet && INFECTED_GROUND_BLOCKS.has(blockAtFeet.typeId)) {
+            const isSnowLayer = blockAtFeet.typeId === "mb:snow_layer" || blockAtFeet.typeId === "minecraft:snow_layer";
+            if (isDebugEnabled("ground_infection", "groundCheck") || isDebugEnabled("ground_infection", "all")) {
+                console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Standing on ${blockAtFeet.typeId} at feet (speed multiplier: ${isSnowLayer ? 2 : 1})`);
+            }
+            return { onGround: true, blockType: blockAtFeet.typeId, speedMultiplier: isSnowLayer ? 2 : 1 };
+        }
+        // Check block below only if nothing at feet
+        if (blockBelow && INFECTED_GROUND_BLOCKS.has(blockBelow.typeId)) {
+            const isSnowLayer = blockBelow.typeId === "mb:snow_layer" || blockBelow.typeId === "minecraft:snow_layer";
+            if (isDebugEnabled("ground_infection", "groundCheck") || isDebugEnabled("ground_infection", "all")) {
+                console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Standing on ${blockBelow.typeId} (speed multiplier: ${isSnowLayer ? 2 : 1})`);
+            }
+            return { onGround: true, blockType: blockBelow.typeId, speedMultiplier: isSnowLayer ? 2 : 1 };
+        }
+        
+        if (isDebugEnabled("ground_infection", "groundCheck") || isDebugEnabled("ground_infection", "all")) {
+            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Not on infected ground`);
+        }
+        return { onGround: false, blockType: null, speedMultiplier: 1 };
+    } catch (error) {
+        if (isDebugEnabled("ground_infection", "groundCheck") || isDebugEnabled("ground_infection", "all")) {
+            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Error checking ground: ${error}`);
+        }
+        return { onGround: false, blockType: null, speedMultiplier: 1 };
+    }
+}
+
+// Helper: Check if player is in infected biome
+function isInInfectedBiome(player) {
+    try {
+        const biomeId = getBiomeIdAt(player.dimension, player.location);
+        return biomeId && (biomeId === "mb:infected_biome" || biomeId.includes("infected_biome"));
+    } catch {
+        return false;
+    }
+}
+
+function applyMajorInfectionFromGround(player, infectionState) {
+    if (isDebugEnabled("ground_infection", "timer") || isDebugEnabled("ground_infection", "all")) {
+        console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Applying major infection from ground`);
+    }
+    // Reset major ground message counter when infection is applied
+    const state = getGroundExposureState(player.id);
+    state.majorGroundMessagesSent = 0;
+    
+    const hasBeenMajorInfected = getPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY) === true;
+    const volumeMultiplier = getPlayerSoundVolume(player);
+    
+    if (infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE && !infectionState.cured) {
+        const currentTicksLeft = infectionState.ticksLeft || 0;
+        const maxMajorTicks = INFECTION_TICKS;
+        const preservedTicks = Math.min(currentTicksLeft, maxMajorTicks);
+        
+        playerInfection.set(player.id, {
+            ticksLeft: preservedTicks,
+            cured: false,
+            hitCount: infectionState.hitCount || 0,
+            snowCount: 0,
+            infectionType: MAJOR_INFECTION_TYPE,
+            minorInfectionCured: infectionState.minorInfectionCured || false,
+            source: "ground",
+            maxSeverity: 0,
+            lastTierMessage: 0,
+            lastDecayTick: system.currentTick,
+            warningSent: false,
+            lastActiveTick: system.currentTick
+        });
+        
+        applyEffect(player, "minecraft:blindness", 200, { amplifier: 0 });
+        applyEffect(player, "minecraft:nausea", 200, { amplifier: 0 });
+        applyEffect(player, "minecraft:mining_fatigue", 200, { amplifier: 0 });
+        
+        trackInfectionHistory(player, "minor_to_major");
+        
+        player.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.85 * volumeMultiplier });
+        player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 0.75 * volumeMultiplier });
+        player.playSound("mob.enderman.teleport", { pitch: 1.0, volume: 0.7 * volumeMultiplier });
+        player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.75 * volumeMultiplier });
+        player.playSound("mob.wolf.growl", { pitch: 0.7, volume: 0.8 * volumeMultiplier });
+        
+        if (hasBeenMajorInfected) {
+            player.sendMessage("§cMajor infection.");
+        } else {
+            player.onScreenDisplay.setTitle("§c§lMAJOR INFECTION", {
+                fadeInDuration: 10,
+                stayDuration: 60,
+                fadeOutDuration: 20
+            });
+            player.sendMessage("§4§lSOMETHING IS WRONG!");
+            player.sendMessage("§c§lYour infection has worsened dramatically!");
+            player.sendMessage("§7The ground itself feels corrupted.");
+            setPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY, true);
+        }
+        
+        try { 
+            markCodex(player, "infections.major.discovered");
+            markCodex(player, "biomes.minorToMajorFromGround"); // Track that minor converted to major from ground
+            checkKnowledgeProgression(player);
+        } catch { }
+        
+        saveInfectionData(player);
+        return;
+    }
+    
+    if (!infectionState || infectionState.cured) {
+        curedPlayers.delete(player.id);
+        player.removeTag("mb_immune_hit_message");
+        
+        playerInfection.set(player.id, {
+            ticksLeft: INFECTION_TICKS,
+            cured: false,
+            hitCount: 0,
+            snowCount: 0,
+            infectionType: MAJOR_INFECTION_TYPE,
+            minorInfectionCured: normalizeBoolean(getPlayerProperty(player, MINOR_INFECTION_CURED_PROPERTY)),
+            source: "ground",
+            maxSeverity: 0,
+            lastTierMessage: 0,
+            lastDecayTick: system.currentTick,
+            warningSent: false,
+            lastActiveTick: system.currentTick
+        });
+        
+        applyEffect(player, "minecraft:blindness", 200, { amplifier: 0 });
+        applyEffect(player, "minecraft:nausea", 200, { amplifier: 0 });
+        applyEffect(player, "minecraft:mining_fatigue", 200, { amplifier: 0 });
+        player.addTag(INFECTED_TAG);
+        
+        if (hasBeenMajorInfected) {
+            player.sendMessage("§cMajor infection.");
+        } else {
+            player.sendMessage("§8You have been infected. Find a cure.");
+            setPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY, true);
+        }
+        
+        player.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.8 * volumeMultiplier });
+        player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 0.6 * volumeMultiplier });
+        player.playSound("mob.enderman.teleport", { pitch: 1.0, volume: 0.4 * volumeMultiplier });
+        player.playSound("mob.zombie.ambient", { pitch: 0.8, volume: 0.6 * volumeMultiplier });
+        
+        try { 
+            markCodex(player, "infections.major.discovered"); 
+            checkKnowledgeProgression(player);
+        } catch { }
+        
+        trackInfectionHistory(player, "infected");
+        saveInfectionData(player);
+    }
+}
+
+function applySnowExposureIncrease(player, infectionState, fromGround = false) {
+    if (!infectionState || infectionState.cured) return;
+    
+    if (fromGround && (isDebugEnabled("ground_infection", "warnings") || isDebugEnabled("ground_infection", "all"))) {
+        console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Snow exposure increase from ground (current snow: ${infectionState.snowCount || 0})`);
+    }
+    
+    // For ground exposure, increase by fractional amount instead of whole number
+    const increaseAmount = fromGround ? GROUND_MAJOR_SNOW_INCREASE_AMOUNT : 1;
+    const snowCount = (infectionState.snowCount || 0) + increaseAmount;
+    infectionState.snowCount = snowCount;
+    
+    const timeEffect = getSnowTimeEffect(snowCount);
+    infectionState.ticksLeft = Math.max(0, Math.min(INFECTION_TICKS, infectionState.ticksLeft + timeEffect));
+    
+    updateMaxSnowLevel(player, snowCount);
+    
+    const currentTier = snowCount <= 5 ? 1 : snowCount <= 10 ? 2 : snowCount <= 20 ? 3 : snowCount <= 50 ? 4 : snowCount <= 100 ? 5 : 6;
+    
+    // If from ground exposure, show limited messages (1-2) then go silent, play subtle sound
+    if (fromGround) {
+        const state = getGroundExposureState(player.id);
+        const messagesSent = state.majorGroundMessagesSent || 0;
+        
+        // Only send 1-2 vague messages before going silent
+        if (messagesSent < 2) {
+            if (messagesSent === 0) {
+                player.sendMessage("§7Something feels wrong about this ground...");
+            } else if (messagesSent === 1) {
+                player.sendMessage("§7The ground underneath feels like its seeping into me...");
+            }
+            state.majorGroundMessagesSent = messagesSent + 1;
+            try {
+                markCodex(player, "biomes.dustedDirtGroundEffectSeen");
+                markCodex(player, "biomes.snowLayerGroundEffectSeen");
+                if (messagesSent === 0) {
+                    markCodex(player, "biomes.majorGroundWarningSeen"); // Track first warning from ground
+                }
+                markCodex(player, "biomes.majorSnowIncreaseFromGround"); // Track snow increase from ground
+            } catch { }
+        } else {
+            // Still mark knowledge even if no message sent
+            try {
+                markCodex(player, "biomes.majorSnowIncreaseFromGround"); // Track snow increase from ground
+            } catch { }
+        }
+        
+        // Always play subtle ambient sound when snow increases from ground
+        const volumeMultiplier = getPlayerSoundVolume(player);
+        try {
+            // Very subtle, ambient sound - low pitch, low volume
+            player.playSound("mob.enderman.portal", { pitch: 0.3, volume: 0.15 * volumeMultiplier });
+        } catch { }
+    } else if (currentTier > (infectionState.lastTierMessage || 0)) {
+        // Normal tier messages (from eating snow, being hit, etc.)
+        let message = "";
+        if (snowCount <= 5) {
+            message = "§eThe substance seems to slow down the infection...";
+        } else if (snowCount <= 10) {
+            message = "§eThe substance seems to have no noticeable effect anymore...";
+        } else if (snowCount <= 20) {
+            message = "§cThe substance seems to... be accelerating the infection!?";
+        } else if (snowCount <= 50) {
+            message = "§4The substance seems to heavily affect you and continues to accelerate the infection...";
+        } else if (snowCount <= 100) {
+            message = "§4The substance seems to have nearly taken over you completely...";
+        } else {
+            message = "§0How are you even here? The 'snow' seems to consume all...";
+        }
+        
+        infectionState.lastTierMessage = currentTier;
+        player.sendMessage(message);
+        
+        const volumeMultiplier = getPlayerSoundVolume(player);
+        if (snowCount <= 5) {
+            player.playSound("random.levelup", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+        } else if (snowCount <= 10) {
+            player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.5 * volumeMultiplier });
+        } else if (snowCount <= 20) {
+            player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 0.6 * volumeMultiplier });
+        } else if (snowCount <= 50) {
+            player.playSound("mob.wither.ambient", { pitch: 0.7, volume: 0.7 * volumeMultiplier });
+        } else if (snowCount <= 100) {
+            player.playSound("mob.wither.spawn", { pitch: 0.6, volume: 0.8 * volumeMultiplier });
+        } else {
+            player.playSound("mob.enderman.stare", { pitch: 0.6, volume: 0.7 * volumeMultiplier });
+        }
+    }
+    
+    applySnowTierEffects(player, snowCount);
+    saveInfectionData(player);
 }
 
 // --- Helper: Track infection history ---
@@ -4262,7 +4572,7 @@ system.runInterval(() => {
                     const it = inv.getItem(i);
                     if (it && it.typeId === "mb:dusted_dirt") { 
                         try { 
-                            markCodex(p, "items.dustedDirtSeen"); 
+                            markCodex(p, "biomes.dustedDirtSeen"); // Only mark biomes version, removed from items 
                             if (!shouldSuppressDiscovery) {
                                 sendDiscoveryMessage(p, codex, "interesting");
                                 const volumeMultiplier = getPlayerSoundVolume(p);
@@ -4362,6 +4672,506 @@ system.runInterval(() => {
         }
     } catch { }
 }, 40); // Changed from 20 to 40 ticks for better performance
+
+// Track players who need frequent checking (on infected ground)
+const playersOnInfectedGround = new Set(); // playerId -> true
+
+// Check if player is airborne (not on solid ground)
+// Optimized: only does detailed check (1-3 blocks) if player was recently on infected ground
+// Otherwise uses simple check (1 block) for better performance
+function isPlayerAirborne(player, wasOnInfectedGround = false) {
+    try {
+        const dimension = player.dimension;
+        const loc = player.location;
+        const x = Math.floor(loc.x);
+        const z = Math.floor(loc.z);
+        const feetY = loc.y; // Player's Y position (feet level)
+        
+        // If player was recently on infected ground, do detailed check (1-3 blocks below)
+        // This handles cases where player is jumping/running and Y position fluctuates
+        if (wasOnInfectedGround) {
+            for (let offset = 1; offset <= 3; offset++) {
+                const checkY = Math.floor(feetY - offset);
+                const block = dimension.getBlock({ x, y: checkY, z });
+                
+                // If we find a solid block (not air, not liquid), player is standing on something
+                if (block && block.typeId !== "minecraft:air" && !block.isLiquid) {
+                    return false; // Player is not airborne
+                }
+            }
+        } else {
+            // Simple check: just check 1 block below (faster for players not on infected ground)
+            const checkY = Math.floor(feetY - 1);
+            const block = dimension.getBlock({ x, y: checkY, z });
+            
+            if (block && block.typeId !== "minecraft:air" && !block.isLiquid) {
+                return false; // Player is not airborne
+            }
+        }
+        
+        // If no solid blocks found below, player is airborne
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+// --- Ground Exposure Infection Pressure - Adaptive Checking System ---
+// Slow check loop: Detects state changes and tracks which players need frequent checking
+system.runInterval(() => {
+    for (const player of world.getAllPlayers()) {
+        try {
+            if (introInProgress.has(player.id)) continue;
+            
+            const gameMode = player.getGameMode?.();
+            if (gameMode === "creative" || gameMode === "spectator") {
+                playersOnInfectedGround.delete(player.id);
+                continue;
+            }
+            
+            const groundCheck = isStandingOnInfectedGround(player);
+            const onInfectedGround = groundCheck.onGround;
+            // Check if player was recently on infected ground (for optimized airborne check)
+            // Use state timers to determine if they were recently exposed, even if not currently tracked
+            const state = getGroundExposureState(player.id);
+            const wasOnInfectedGround = playersOnInfectedGround.has(player.id) || onInfectedGround || state.groundSeconds > 0 || state.majorSeconds > 0;
+            const isAirborne = isPlayerAirborne(player, wasOnInfectedGround);
+            
+            // Track players on infected ground for fast checking
+            // Also keep tracking if airborne but still above infected ground (handles jumping)
+            let shouldTrack = false;
+            let detectedBlockType = groundCheck.blockType;
+            
+            if (onInfectedGround && !isAirborne) {
+                // Player is directly on infected ground
+                shouldTrack = true;
+            } else if (isAirborne && wasOnInfectedGround) {
+                // Player is airborne but was recently on infected ground - check if still above it
+                // Always check if they have active timers OR were recently tracked
+                const dimension = player.dimension;
+                const loc = player.location;
+                const x = Math.floor(loc.x);
+                const z = Math.floor(loc.z);
+                
+                // Check blocks 1-3 below player to see if infected ground is there
+                for (let offset = 1; offset <= 3; offset++) {
+                    const checkY = Math.floor(loc.y - offset);
+                    try {
+                        const block = dimension.getBlock({ x, y: checkY, z });
+                        if (block && INFECTED_GROUND_BLOCKS.has(block.typeId)) {
+                            shouldTrack = true;
+                            detectedBlockType = block.typeId;
+                            break;
+                        }
+                    } catch { }
+                }
+            } else if (!onInfectedGround && !isAirborne && wasOnInfectedGround) {
+                // Player is not airborne and not on infected ground, but was recently on it
+                // Check if they're still above infected ground (within 3 blocks)
+                const dimension = player.dimension;
+                const loc = player.location;
+                const x = Math.floor(loc.x);
+                const z = Math.floor(loc.z);
+                
+                // Check blocks 1-3 below player to see if infected ground is there
+                for (let offset = 1; offset <= 3; offset++) {
+                    const checkY = Math.floor(loc.y - offset);
+                    try {
+                        const block = dimension.getBlock({ x, y: checkY, z });
+                        if (block && INFECTED_GROUND_BLOCKS.has(block.typeId)) {
+                            shouldTrack = true;
+                            detectedBlockType = block.typeId;
+                            break;
+                        }
+                    } catch { }
+                }
+            }
+            
+            if (shouldTrack) {
+                const wasTracked = playersOnInfectedGround.has(player.id);
+                playersOnInfectedGround.add(player.id);
+                if (!wasTracked && (isDebugEnabled("ground_infection", "timer") || isDebugEnabled("ground_infection", "all"))) {
+                    console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Started tracking (on ${detectedBlockType || "infected ground"})`);
+                }
+            } else {
+                const wasTracked = playersOnInfectedGround.has(player.id);
+                playersOnInfectedGround.delete(player.id);
+                if (wasTracked && (isDebugEnabled("ground_infection", "timer") || isDebugEnabled("ground_infection", "all"))) {
+                    console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Stopped tracking (off ground: ${!onInfectedGround}, airborne: ${isAirborne})`);
+                }
+            }
+        } catch { }
+    }
+}, GROUND_CHECK_INTERVAL_OFF); // Slow check every 3 seconds
+
+// Fast check loop: Processes ground exposure for players on infected ground (more frequent)
+system.runInterval(() => {
+    // Only check players who are on infected ground
+    if (playersOnInfectedGround.size === 0) return;
+    
+    for (const player of world.getAllPlayers()) {
+        try {
+            if (!playersOnInfectedGround.has(player.id)) continue;
+            if (introInProgress.has(player.id)) continue;
+            
+            const gameMode = player.getGameMode?.();
+            if (gameMode === "creative" || gameMode === "spectator") {
+                playersOnInfectedGround.delete(player.id);
+                continue;
+            }
+            
+            const infectionState = playerInfection.get(player.id);
+            const isMajorInfected = infectionState && infectionState.infectionType === MAJOR_INFECTION_TYPE && !infectionState.cured;
+            const hasTemporaryImmunity = isPlayerImmune(player);
+            const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
+            const gainMultiplier = hasPermanentImmunity ? 0.5 : 1;
+            
+            const state = getGroundExposureState(player.id);
+            const groundCheck = isStandingOnInfectedGround(player);
+            const onInfectedGround = groundCheck.onGround;
+            const wasOnInfectedGround = true; // Player is in fast check loop, so they were on infected ground
+            const isAirborne = isPlayerAirborne(player, wasOnInfectedGround);
+            const groundSpeedMultiplier = groundCheck.speedMultiplier || 1;
+            
+            // If airborne, check if still above infected ground
+            let stillAboveInfected = false;
+            let airborneBlockType = null;
+            if (isAirborne) {
+                // Check if player is still above infected ground (within 3 blocks)
+                const dimension = player.dimension;
+                const loc = player.location;
+                const x = Math.floor(loc.x);
+                const z = Math.floor(loc.z);
+                
+                // Check blocks 1-3 below player to see if infected ground is there
+                for (let offset = 1; offset <= 3; offset++) {
+                    const checkY = Math.floor(loc.y - offset);
+                    try {
+                        const block = dimension.getBlock({ x, y: checkY, z });
+                        if (block && INFECTED_GROUND_BLOCKS.has(block.typeId)) {
+                            stillAboveInfected = true;
+                            airborneBlockType = block.typeId;
+                            break;
+                        }
+                    } catch { }
+                }
+                
+                if (!stillAboveInfected) {
+                    // Not above infected ground anymore, remove from tracking
+                    playersOnInfectedGround.delete(player.id);
+                    if (isDebugEnabled("ground_infection", "timer") || isDebugEnabled("ground_infection", "all")) {
+                        console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Removed from fast check (airborne and not above infected ground)`);
+                    }
+                    continue;
+                }
+                // If stillAboveInfected is true, continue processing below to increase timer
+            }
+            
+            // If no longer on infected ground and not airborne above infected ground, remove from fast check set
+            if (!onInfectedGround && !stillAboveInfected) {
+                playersOnInfectedGround.delete(player.id);
+                if (isDebugEnabled("ground_infection", "timer") || isDebugEnabled("ground_infection", "all")) {
+                    console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Removed from fast check (no longer on ground)`);
+                }
+                continue;
+            }
+            
+            // Check for ambient pressure (nearby dusted dirt/snow blocks)
+            let ambientActive = false;
+            let ambientCount = 0;
+            try {
+                ambientCount = countNearbyDustedDirtBlocks(player.location, player.dimension, AMBIENT_PRESSURE_RADIUS, AMBIENT_PRESSURE_THRESHOLD);
+                ambientActive = ambientCount >= AMBIENT_PRESSURE_THRESHOLD;
+                if ((isDebugEnabled("ground_infection", "ambient") || isDebugEnabled("ground_infection", "all")) && ambientActive) {
+                    console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Ambient pressure active (${ambientCount} blocks >= ${AMBIENT_PRESSURE_THRESHOLD})`);
+                }
+            } catch { }
+            
+            // Check if player is in infected biome (gradual infection pressure)
+            const inInfectedBiome = isInInfectedBiome(player);
+            const BIOME_PRESSURE_RATE = 0.1; // Very slow - 10x slower than direct ground contact
+            const BIOME_PRESSURE_INTERVAL_SECONDS = 300; // 5 minutes in biome to trigger infection
+            
+            if (!isMajorInfected && !hasTemporaryImmunity) {
+                // Ambient pressure from nearby blocks
+                const oldAmbient = state.ambientSeconds;
+                if (ambientActive) {
+                    state.ambientSeconds = Math.min(AMBIENT_INFECTION_SECONDS, state.ambientSeconds + (GROUND_EXPOSURE_SECONDS_PER_TICK * gainMultiplier));
+                } else {
+                    state.ambientSeconds = Math.max(0, state.ambientSeconds - AMBIENT_DECAY_SECONDS_PER_TICK);
+                }
+                if ((isDebugEnabled("ground_infection", "ambient") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.ambientSeconds - oldAmbient) > 0.01) {
+                    console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Ambient timer ${ambientActive ? "increased" : "decayed"} ${oldAmbient.toFixed(1)}s -> ${state.ambientSeconds.toFixed(1)}s (multiplier: ${gainMultiplier})`);
+                }
+                
+                // Biome ambient pressure (very slow)
+                const oldBiome = state.biomeSeconds || 0;
+                if (inInfectedBiome) {
+                    if (!state.biomeSeconds) state.biomeSeconds = 0;
+                    state.biomeSeconds = Math.min(BIOME_PRESSURE_INTERVAL_SECONDS, state.biomeSeconds + (GROUND_EXPOSURE_SECONDS_PER_TICK * BIOME_PRESSURE_RATE * gainMultiplier));
+                    
+                    if ((isDebugEnabled("ground_infection", "biome") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.biomeSeconds - oldBiome) > 0.01) {
+                        console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Biome timer increased ${oldBiome.toFixed(1)}s -> ${state.biomeSeconds.toFixed(1)}s`);
+                    }
+                    
+                    if (state.biomeSeconds >= BIOME_PRESSURE_INTERVAL_SECONDS) {
+                        // Being in infected biome for 5 minutes causes minor progression
+                        // This is a very gentle effect - just warn player
+                        if (!state.biomeWarningSent) {
+                            if (isDebugEnabled("ground_infection", "warnings") || isDebugEnabled("ground_infection", "all")) {
+                                console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Biome warning triggered`);
+                            }
+                            player.sendMessage("§7The air itself feels tainted...");
+                            state.biomeWarningSent = true;
+                            try {
+                                markCodex(player, "biomes.biomeAmbientPressureSeen");
+                            } catch { }
+                        }
+                        // Reset biome timer but keep warning flag
+                        state.biomeSeconds = 0;
+                    }
+                } else {
+                    // Decay biome pressure when leaving biome
+                    if (state.biomeSeconds) {
+                        state.biomeSeconds = Math.max(0, state.biomeSeconds - AMBIENT_DECAY_SECONDS_PER_TICK);
+                        if ((isDebugEnabled("ground_infection", "biome") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.biomeSeconds - oldBiome) > 0.01) {
+                            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Biome timer decayed ${oldBiome.toFixed(1)}s -> ${state.biomeSeconds.toFixed(1)}s`);
+                        }
+                        if (state.biomeSeconds === 0) {
+                            state.biomeWarningSent = false; // Reset warning when fully decayed
+                        }
+                    }
+                }
+                
+                // Ground exposure (when on ground OR airborne above infected ground)
+                if (onInfectedGround || stillAboveInfected) {
+                    const oldGround = state.groundSeconds;
+                    // Determine block type and speed multiplier
+                    let activeBlockType = groundCheck.blockType;
+                    let activeSpeedMultiplier = groundSpeedMultiplier;
+                    
+                    // If airborne but above infected ground, use the detected block type
+                    if (stillAboveInfected && airborneBlockType) {
+                        activeBlockType = airborneBlockType;
+                        // Snow layers tick 2x faster
+                        activeSpeedMultiplier = (airborneBlockType === "mb:snow_layer" || airborneBlockType === "minecraft:snow_layer") ? 2 : 1;
+                    }
+                    
+                    // Apply speed multiplier (2x for snow layers)
+                    state.groundSeconds += (GROUND_EXPOSURE_SECONDS_PER_TICK * gainMultiplier * activeSpeedMultiplier);
+                    
+                    if ((isDebugEnabled("ground_infection", "timer") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.groundSeconds - oldGround) > 0.01) {
+                        const status = stillAboveInfected ? "airborne above" : "on";
+                        console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Ground timer ${oldGround.toFixed(1)}s -> ${state.groundSeconds.toFixed(1)}s (${status} ${activeBlockType}, speed: ${activeSpeedMultiplier}x, multiplier: ${gainMultiplier})`);
+                    }
+                    
+                    // Check if player has minor infection and send early warning
+                    const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE && !infectionState.cured;
+                    if (hasMinorInfection && !state.minorGroundWarningSent && state.groundSeconds >= GROUND_MINOR_WARNING_SECONDS) {
+                        if (isDebugEnabled("ground_infection", "warnings") || isDebugEnabled("ground_infection", "all")) {
+                            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Minor infection ground warning triggered at ${state.groundSeconds.toFixed(1)}s`);
+                        }
+                        player.sendMessage("§eThe ground beneath you feels wrong...");
+                        state.minorGroundWarningSent = true;
+                        try {
+                            // Mark codex entries for ground infection discovery
+                            if (groundCheck.blockType === "mb:dusted_dirt") {
+                                markCodex(player, "biomes.dustedDirtSeen");
+                            } else if (groundCheck.blockType === "mb:snow_layer" || groundCheck.blockType === "minecraft:snow_layer") {
+                                markCodex(player, "biomes.snowLayerSeen");
+                            }
+                        } catch { }
+                    }
+                    
+                    if (!state.groundWarningSent && state.groundSeconds >= GROUND_WARNING_SECONDS) {
+                        if (isDebugEnabled("ground_infection", "warnings") || isDebugEnabled("ground_infection", "all")) {
+                            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Ground warning triggered at ${state.groundSeconds.toFixed(1)}s`);
+                        }
+                        player.sendMessage("§eYou start to feel off...");
+                        state.groundWarningSent = true;
+                        try {
+                            // Mark codex entries for ground infection discovery
+                            if (groundCheck.blockType === "mb:dusted_dirt") {
+                                markCodex(player, "biomes.dustedDirtSeen");
+                            } else if (groundCheck.blockType === "mb:snow_layer" || groundCheck.blockType === "minecraft:snow_layer") {
+                                markCodex(player, "biomes.snowLayerSeen");
+                            }
+                        } catch { }
+                    }
+                    
+                    if (!state.ambientWarningSent && state.ambientSeconds >= AMBIENT_WARNING_SECONDS) {
+                        if (isDebugEnabled("ground_infection", "warnings") || isDebugEnabled("ground_infection", "all")) {
+                            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Ambient warning triggered at ${state.ambientSeconds.toFixed(1)}s`);
+                        }
+                        player.sendMessage("§eYou start to feel off...");
+                        state.ambientWarningSent = true;
+                    }
+                    
+                    if (state.groundSeconds >= GROUND_INFECTION_SECONDS || state.ambientSeconds >= AMBIENT_INFECTION_SECONDS) {
+                        if (isDebugEnabled("ground_infection", "timer") || isDebugEnabled("ground_infection", "all")) {
+                            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: INFECTION TRIGGERED! Ground: ${state.groundSeconds.toFixed(1)}s/${GROUND_INFECTION_SECONDS}s, Ambient: ${state.ambientSeconds.toFixed(1)}s/${AMBIENT_INFECTION_SECONDS}s`);
+                        }
+                        applyMajorInfectionFromGround(player, infectionState);
+                        state.groundSeconds = 0;
+                        state.ambientSeconds = 0;
+                        state.groundWarningSent = false;
+                        state.minorGroundWarningSent = false;
+                        state.ambientWarningSent = false;
+                    }
+                }
+            } else {
+                const oldAmbient = state.ambientSeconds;
+                state.ambientSeconds = Math.max(0, state.ambientSeconds - AMBIENT_DECAY_SECONDS_PER_TICK);
+                if ((isDebugEnabled("ground_infection", "decay") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.ambientSeconds - oldAmbient) > 0.01) {
+                    console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Ambient decayed (immune) ${oldAmbient.toFixed(1)}s -> ${state.ambientSeconds.toFixed(1)}s`);
+                }
+                if (state.biomeSeconds) {
+                    const oldBiome = state.biomeSeconds;
+                    state.biomeSeconds = Math.max(0, state.biomeSeconds - AMBIENT_DECAY_SECONDS_PER_TICK);
+                    if ((isDebugEnabled("ground_infection", "decay") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.biomeSeconds - oldBiome) > 0.01) {
+                        console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Biome decayed (immune) ${oldBiome.toFixed(1)}s -> ${state.biomeSeconds.toFixed(1)}s`);
+                    }
+                }
+            }
+            
+            if (isMajorInfected && !hasTemporaryImmunity) {
+                if (onInfectedGround || stillAboveInfected) {
+                    const oldMajor = state.majorSeconds;
+                    // Determine block type and speed multiplier
+                    let activeBlockType = groundCheck.blockType;
+                    let activeSpeedMultiplier = groundSpeedMultiplier;
+                    
+                    // If airborne but above infected ground, use the detected block type
+                    if (stillAboveInfected && airborneBlockType) {
+                        activeBlockType = airborneBlockType;
+                        // Snow layers tick 2x faster
+                        activeSpeedMultiplier = (airborneBlockType === "mb:snow_layer" || airborneBlockType === "minecraft:snow_layer") ? 2 : 1;
+                    }
+                    
+                    // Apply speed multiplier (2x for snow layers)
+                    state.majorSeconds += (GROUND_EXPOSURE_SECONDS_PER_TICK * gainMultiplier * activeSpeedMultiplier);
+                    
+                    if ((isDebugEnabled("ground_infection", "timer") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.majorSeconds - oldMajor) > 0.01) {
+                        const status = stillAboveInfected ? "airborne above" : "on";
+                        console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Major timer ${oldMajor.toFixed(1)}s -> ${state.majorSeconds.toFixed(1)}s (${status} ${activeBlockType}, speed: ${activeSpeedMultiplier}x)`);
+                    }
+                    
+                    while (state.majorSeconds >= GROUND_MAJOR_SNOW_INTERVAL_SECONDS) {
+                        if (isDebugEnabled("ground_infection", "warnings") || isDebugEnabled("ground_infection", "all")) {
+                            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Major infection snow increase triggered`);
+                        }
+                        state.majorSeconds -= GROUND_MAJOR_SNOW_INTERVAL_SECONDS;
+                        applySnowExposureIncrease(player, infectionState, true); // fromGround = true
+                    }
+                }
+            }
+        } catch { }
+    }
+}, GROUND_CHECK_INTERVAL_ON); // Fast check every 1 second when on infected ground
+
+// Decay loop: Processes decay for players off infected ground (less frequent)
+system.runInterval(() => {
+    for (const player of world.getAllPlayers()) {
+        try {
+            if (playersOnInfectedGround.has(player.id)) continue; // Skip players being handled by fast loop
+            if (introInProgress.has(player.id)) continue;
+            
+            const gameMode = player.getGameMode?.();
+            if (gameMode === "creative" || gameMode === "spectator") continue;
+            
+            const infectionState = playerInfection.get(player.id);
+            const isMajorInfected = infectionState && infectionState.infectionType === MAJOR_INFECTION_TYPE && !infectionState.cured;
+            const hasTemporaryImmunity = isPlayerImmune(player);
+            
+            const state = getGroundExposureState(player.id);
+            const groundCheck = isStandingOnInfectedGround(player);
+            const onInfectedGround = groundCheck.onGround;
+            // Check if player was recently on infected ground (for optimized airborne check)
+            // Use state timers to determine if they were recently exposed, even if not currently tracked
+            const wasOnInfectedGround = playersOnInfectedGround.has(player.id) || onInfectedGround || state.groundSeconds > 0 || state.majorSeconds > 0;
+            const isAirborne = isPlayerAirborne(player, wasOnInfectedGround);
+            
+            // If airborne, check if still above infected ground before pausing decay
+            if (isAirborne) {
+                // If player has active timers and is airborne, check if they're still above infected ground
+                // This handles jumping - if still above infected block, don't decay
+                if (wasOnInfectedGround && (state.groundSeconds > 0 || state.majorSeconds > 0)) {
+                    // Check if player is still above infected ground (within 2 blocks vertically)
+                    const dimension = player.dimension;
+                    const loc = player.location;
+                    const x = Math.floor(loc.x);
+                    const z = Math.floor(loc.z);
+                    let stillAboveInfected = false;
+                    
+                    // Check blocks 1-3 below player to see if infected ground is there
+                    for (let offset = 1; offset <= 3; offset++) {
+                        const checkY = Math.floor(loc.y - offset);
+                        try {
+                            const block = dimension.getBlock({ x, y: checkY, z });
+                            if (block && INFECTED_GROUND_BLOCKS.has(block.typeId)) {
+                                stillAboveInfected = true;
+                                break;
+                            }
+                        } catch { }
+                    }
+                    
+                    if (stillAboveInfected) {
+                        // Still above infected ground, pause decay
+                        if ((isDebugEnabled("ground_infection", "decay") || isDebugEnabled("ground_infection", "all")) && (state.groundSeconds > 0 || state.ambientSeconds > 0 || state.majorSeconds > 0)) {
+                            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Decay paused (airborne but above infected ground)`);
+                        }
+                        continue;
+                    }
+                }
+                
+                // Not above infected ground, allow decay to continue
+                if ((isDebugEnabled("ground_infection", "decay") || isDebugEnabled("ground_infection", "all")) && (state.groundSeconds > 0 || state.ambientSeconds > 0 || state.majorSeconds > 0)) {
+                    console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Decay paused (airborne)`);
+                }
+                continue;
+            }
+            
+            // Apply decay when off infected ground
+            if (!onInfectedGround && !hasTemporaryImmunity) {
+                const oldGround = state.groundSeconds;
+                const oldAmbient = state.ambientSeconds;
+                state.groundSeconds = Math.max(0, state.groundSeconds - GROUND_DECAY_SECONDS_PER_TICK);
+                state.ambientSeconds = Math.max(0, state.ambientSeconds - AMBIENT_DECAY_SECONDS_PER_TICK);
+                
+                if ((isDebugEnabled("ground_infection", "decay") || isDebugEnabled("ground_infection", "all")) && (Math.abs(state.groundSeconds - oldGround) > 0.01 || Math.abs(state.ambientSeconds - oldAmbient) > 0.01)) {
+                    console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Decay applied - Ground: ${oldGround.toFixed(1)}s -> ${state.groundSeconds.toFixed(1)}s, Ambient: ${oldAmbient.toFixed(1)}s -> ${state.ambientSeconds.toFixed(1)}s`);
+                }
+                
+                if (state.biomeSeconds) {
+                    const oldBiome = state.biomeSeconds;
+                    state.biomeSeconds = Math.max(0, state.biomeSeconds - AMBIENT_DECAY_SECONDS_PER_TICK);
+                    if ((isDebugEnabled("ground_infection", "decay") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.biomeSeconds - oldBiome) > 0.01) {
+                        console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Biome decayed ${oldBiome.toFixed(1)}s -> ${state.biomeSeconds.toFixed(1)}s`);
+                    }
+                    if (state.biomeSeconds === 0) {
+                        state.biomeWarningSent = false;
+                    }
+                }
+            }
+            
+            if (isMajorInfected && !onInfectedGround) {
+                const oldMajor = state.majorSeconds;
+                state.majorSeconds = Math.max(0, state.majorSeconds - GROUND_MAJOR_DECAY_SECONDS_PER_TICK);
+                if ((isDebugEnabled("ground_infection", "decay") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.majorSeconds - oldMajor) > 0.01) {
+                    console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Major decayed ${oldMajor.toFixed(1)}s -> ${state.majorSeconds.toFixed(1)}s`);
+                }
+            } else if (hasTemporaryImmunity) {
+                const oldGround = state.groundSeconds;
+                const oldMajor = state.majorSeconds;
+                state.groundSeconds = Math.max(0, state.groundSeconds - GROUND_DECAY_SECONDS_PER_TICK);
+                state.majorSeconds = Math.max(0, state.majorSeconds - GROUND_MAJOR_DECAY_SECONDS_PER_TICK);
+                if ((isDebugEnabled("ground_infection", "decay") || isDebugEnabled("ground_infection", "all")) && (Math.abs(state.groundSeconds - oldGround) > 0.01 || Math.abs(state.majorSeconds - oldMajor) > 0.01)) {
+                    console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Decay applied (temporary immunity) - Ground: ${oldGround.toFixed(1)}s -> ${state.groundSeconds.toFixed(1)}s, Major: ${oldMajor.toFixed(1)}s -> ${state.majorSeconds.toFixed(1)}s`);
+                }
+            }
+        } catch { }
+    }
+}, GROUND_CHECK_INTERVAL_OFF); // Decay check every 3 seconds when off ground
 
 // --- Immunity Cleanup System ---
 system.runInterval(() => {

@@ -52,7 +52,7 @@ export function getDefaultCodex() {
         },
         // Aggregated metadata by effect id
         symptomsMeta: {},
-        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, basicJournalSeen: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, dustedDirtSeen: false, bookCraftMessageShown: false, goldenAppleSeen: false, goldenCarrotSeen: false, enchantedGoldenAppleSeen: false, goldenAppleInfectionReductionDiscovered: false, goldSeen: false, goldNuggetSeen: false },
+        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, basicJournalSeen: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, bookCraftMessageShown: false, goldenAppleSeen: false, goldenCarrotSeen: false, enchantedGoldenAppleSeen: false, goldenAppleInfectionReductionDiscovered: false, goldSeen: false, goldNuggetSeen: false },
         mobs: { 
             mapleBearSeen: false, 
             infectedBearSeen: false, 
@@ -123,7 +123,17 @@ export function getDefaultCodex() {
             // Message tracking flags for Day 20+
             day20MessageShown: false
         },
-        biomes: { infectedBiomeSeen: false },
+        biomes: {
+            infectedBiomeSeen: false,
+            dustedDirtSeen: false,
+            snowLayerSeen: false,
+            dustedDirtGroundEffectSeen: false,
+            snowLayerGroundEffectSeen: false,
+            biomeAmbientPressureSeen: false,
+            minorToMajorFromGround: false, // Minor infection converted to major from ground exposure
+            majorGroundWarningSeen: false, // Major infection warning from ground exposure
+            majorSnowIncreaseFromGround: false // Snow level increased from ground exposure with major infection
+        },
         knowledge: {
             // Knowledge levels: 0 = no knowledge, 1 = basic awareness, 2 = understanding, 3 = expert
             infectionLevel: 0,        // Knowledge about the infection itself
@@ -918,9 +928,9 @@ export function showCodexBook(player, context) {
             buttonActions.push(() => openItems());
         }
         
-        const hasAnyBiomes = codex.biomes.infectedBiomeSeen;
+        const hasAnyBiomes = codex.biomes.infectedBiomeSeen || codex.biomes.dustedDirtSeen || codex.biomes.snowLayerSeen;
         if (hasAnyBiomes) {
-            buttons.push("§fBiomes");
+            buttons.push("§fBiomes and Blocks");
             buttonActions.push(() => openBiomes());
         }
         
@@ -1953,8 +1963,7 @@ export function showCodexBook(player, context) {
             'enchantedGoldenAppleSeen': "textures/items/apple_golden",
             'goldSeen': "textures/items/gold_ingot",
             'goldNuggetSeen': "textures/items/gold_nugget",
-            'brewingStandSeen': "textures/items/brewing_stand",
-            'dustedDirtSeen': "textures/blocks/dusted_dirt"
+            'brewingStandSeen': "textures/items/brewing_stand"
         };
         
         const entries = [
@@ -1968,8 +1977,7 @@ export function showCodexBook(player, context) {
             { key: "enchantedGoldenAppleSeen", title: "§5Enchanted§f Golden Apple", icon: ITEM_ICONS.enchantedGoldenAppleSeen },
             { key: "goldSeen", title: "Gold Ingot", icon: ITEM_ICONS.goldSeen },
             { key: "goldNuggetSeen", title: "Gold Nugget", icon: ITEM_ICONS.goldNuggetSeen },
-            { key: "brewingStandSeen", title: "Brewing Stand", icon: ITEM_ICONS.brewingStandSeen },
-            { key: "dustedDirtSeen", title: "Dusted Dirt", icon: ITEM_ICONS.dustedDirtSeen }
+            { key: "brewingStandSeen", title: "Brewing Stand", icon: ITEM_ICONS.brewingStandSeen }
         ];
         
         // Calculate infection status from context
@@ -2360,37 +2368,6 @@ export function showCodexBook(player, context) {
                     } else if (e.key === "brewingStandSeen") {
                         // Brewing stand information
                         body = "§eBrewing Stand\n§7A specialized apparatus for creating alchemical concoctions. Essential for potion production.\n\n§7Function:\n§7• Allows creation of various potions\n§7• Can produce weakness potions\n§7• Essential for alchemical research\n\n§7Research Applications:\n§7• Weakness potions can be brewed here\n§7• Essential for cure research\n§7• Allows experimentation with different concoctions\n\n§eThis apparatus is crucial for developing treatments.";
-                    } else if (e.key === "dustedDirtSeen") {
-                        // Enhanced dusted dirt information
-                        const currentDay = getCurrentDay ? getCurrentDay() : 0;
-                        body = "§eDusted Dirt\n§7A mysterious block covered in white powder. This appears to be the primary spawning ground for Maple Bears.\n\n";
-                        
-                        body += "§6Properties:\n";
-                        body += "§7• Covered in white particulate matter\n";
-                        body += "§7• Maple Bears spawn exclusively on this block\n";
-                        body += "§7• Spreads when Maple Bears kill mobs\n";
-                        body += "§7• Mining toughness similar to regular dirt\n";
-                        body += "§7• Can be broken and collected\n\n";
-                        
-                        body += "§6Spreading Mechanism:\n";
-                        body += "§7• When Maple Bears kill mobs, dusted dirt spreads nearby\n";
-                        body += "§7• Spread radius increases with day progression\n";
-                        body += "§7• Conversion rate increases over time\n";
-                        if (currentDay >= 20) {
-                            body += "§7• By Day 20+, spread is significantly enhanced\n";
-                        }
-                        if (currentDay >= 25) {
-                            body += "§7• Post-victory: Spread intensifies dramatically\n";
-                        }
-                        
-                        body += "\n§6Research Notes:\n";
-                        body += "§7• Origin: Created when Maple Bears kill creatures\n";
-                        body += "§7• Also created by placing snow layers on dirt\n";
-                        body += "§7• The dust appears to be the same substance as 'Snow'\n";
-                        body += "§7• Blocks must have air above them for spawning\n";
-                        body += "§7• Spawning occurs within 15-48 blocks of players\n\n";
-                        
-                        body += "§cWarning: This block is dangerous. Avoid areas with heavy dusted dirt coverage.";
                     }
                 }
                 new ActionFormData().title(`§6Items: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
@@ -2520,13 +2497,16 @@ export function showCodexBook(player, context) {
     
     function openBiomes() {
         const codex = getCodex(player);
-        const form = new ActionFormData().title("§6Biomes");
+        const form = new ActionFormData().title("§6Biomes and Blocks");
         
-        let body = "§7Biomes discovered:\n\n";
+        let body = "§7Biomes and blocks discovered:\n\n";
         
         const biomeKnowledge = getKnowledgeLevel(player, 'biomeLevel');
+        let hasEntries = false;
 
+        // Infected Biome Entry
         if (codex.biomes.infectedBiomeSeen) {
+            hasEntries = true;
             if (biomeKnowledge >= 2) {
                 // Advanced knowledge - show detailed biome data
                 body += "§fInfected Biome\n§7A corrupted landscape where the Maple Bear infection thrives. The ground is covered in a layer of white dust, and the very air feels heavy with an unsettling presence.\n\n";
@@ -2545,6 +2525,18 @@ export function showCodexBook(player, context) {
                         body += `\n§6Expert Notes:\n§7This biome appears to be the epicenter of the infection. The white dust seems to be both a symptom and a vector of the corruption.`;
                     }
                 }
+                
+                // Show ambient pressure info if discovered
+                if (codex.biomes.biomeAmbientPressureSeen) {
+                    body += `\n§6Ambient Effects:\n§7Merely being present in this biome gradually affects you. The air itself carries the infection, though at a much slower rate than direct contact with corrupted blocks.`;
+                    
+                    // Progressive knowledge about ground exposure
+                    if (codex.biomes.minorToMajorFromGround || codex.biomes.majorGroundWarningSeen) {
+                        body += `\n\n§6Ground Exposure:\n§7Standing directly on corrupted blocks accelerates the infection far more than ambient exposure. The ground itself is the primary vector of corruption.`;
+                    }
+                    
+                    body += `\n`;
+                }
             } else if (biomeKnowledge >= 1) {
                 // Basic knowledge
                 body += "§fInfected Biome\n§7A corrupted landscape where strange creatures thrive. The ground is covered in a layer of white dust, and the very air feels heavy with an unsettling presence.";
@@ -2552,8 +2544,63 @@ export function showCodexBook(player, context) {
                 // Minimal knowledge
                 body += "§fCorrupted Biome\n§7You've discovered a strange area where the land itself seems wrong. White dust covers the ground, and you feel uneasy here.";
             }
-        } else {
-            body += "§8No biomes discovered yet.";
+            body += "\n\n";
+        }
+
+        // Dusted Dirt Entry
+        if (codex.biomes.dustedDirtSeen) {
+            hasEntries = true;
+            body += "§fDusted Dirt\n";
+            if (codex.biomes.dustedDirtGroundEffectSeen) {
+                body += "§7Corrupted soil that spreads infection through direct contact. Standing on this block for extended periods will worsen your infection. The dust clings to your feet.";
+                
+                // Progressive knowledge based on experience
+                if (codex.biomes.minorToMajorFromGround) {
+                    body += "\n\n§6Your Experience:\n§7You've learned firsthand that prolonged exposure to this corrupted ground can escalate a minor infection into something far worse. The corruption seeps deeper with each passing moment.";
+                }
+                
+                if (codex.biomes.majorGroundWarningSeen) {
+                    body += "\n\n§6Advanced Knowledge:\n§7Even with a major infection, standing on this ground continues to worsen your condition. The corruption builds slowly but relentlessly.";
+                }
+                
+                if (codex.biomes.majorSnowIncreaseFromGround) {
+                    body += "\n\n§6Critical Discovery:\n§7The ground itself seems to feed the infection within you. Your 'snow' level increases gradually while exposed, making the corruption more severe.";
+                }
+                
+                body += "\n\n";
+            } else {
+                body += "§7Corrupted soil found in infected biomes. The white dust covering it seems unnatural.\n\n";
+            }
+        }
+
+        // Snow Layer Entry
+        if (codex.biomes.snowLayerSeen) {
+            hasEntries = true;
+            body += "§fInfected Snow Layer\n";
+            if (codex.biomes.snowLayerGroundEffectSeen) {
+                body += "§7Corrupted snow that spreads infection faster than dusted dirt. Walking through these layers accelerates the infection process. The cold seems to intensify the corruption.";
+                
+                // Progressive knowledge based on experience
+                if (codex.biomes.minorToMajorFromGround) {
+                    body += "\n\n§6Your Experience:\n§7You've learned firsthand that prolonged exposure to these corrupted layers can escalate a minor infection into something far worse. The corruption spreads twice as fast here.";
+                }
+                
+                if (codex.biomes.majorGroundWarningSeen) {
+                    body += "\n\n§6Advanced Knowledge:\n§7Even with a major infection, walking through these layers continues to worsen your condition. The corruption builds faster than on dusted dirt.";
+                }
+                
+                if (codex.biomes.majorSnowIncreaseFromGround) {
+                    body += "\n\n§6Critical Discovery:\n§7These snow layers feed the infection within you more aggressively than dusted dirt. Your 'snow' level increases more rapidly while exposed.";
+                }
+                
+                body += "\n\n";
+            } else {
+                body += "§7Strange snow layers found in infected areas. They appear similar to normal snow but something feels wrong about them.\n\n";
+            }
+        }
+
+        if (!hasEntries) {
+            body += "§8No biomes or blocks discovered yet.";
         }
         
         form.body(body);
@@ -2719,8 +2766,11 @@ export function showCodexBook(player, context) {
             { day: 2, name: "Tiny Maple Bears emerge", reached: currentDay >= 2 },
             { day: 4, name: "Infected variants appear", reached: currentDay >= 4 },
             { day: 8, name: "Flying Bears arrive", reached: currentDay >= 8 },
+            { day: 11, name: "Threat escalation", reached: currentDay >= 11 },
             { day: 13, name: "Buff Bears arrive", reached: currentDay >= 13 },
-            { day: 20, name: "Escalation begins", reached: currentDay >= 20 },
+            { day: 15, name: "Mining Bears arrive", reached: currentDay >= 15 },
+            { day: 17, name: "Torpedo Bears arrive", reached: currentDay >= 17 },
+            { day: 20, name: "Escalation begins", reached: currentDay >= 20, isEscalation: true },
             { day: 25, name: "Victory threshold", reached: currentDay >= 25, isVictory: true }
         ];
         
@@ -2731,6 +2781,18 @@ export function showCodexBook(player, context) {
                     body += `§aDay ${milestone.day}: §7${milestone.name}\n`;
                 } else {
                     body += `§eDay ${milestone.day}: §7${milestone.name} §a✓\n`;
+                }
+                
+                // Show Day 20 infection rate knowledge (higher level knowledge)
+                if (milestone.isEscalation && milestone.day === 20) {
+                    const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
+                    if (infectionKnowledge >= 3) {
+                        body += `\n§6Day 20 Knowledge:\n`;
+                        body += `§7At Day 20, the infection reaches maximum conversion rate (100%). Bear attacks and snow consumption become far more dangerous. The infection spreads faster and more efficiently at this stage.`;
+                    } else if (infectionKnowledge >= 2) {
+                        body += `\n§6Day 20 Knowledge:\n`;
+                        body += `§7At Day 20, the infection reaches its peak intensity. Conversion rates are maximized.`;
+                    }
                 }
             } else if (milestone.day === currentDay + 1) {
                 // Show next milestone as "coming soon"
@@ -3116,6 +3178,7 @@ export function showCodexBook(player, context) {
         form.button("§fBiome Ambience");
         form.button("§fDynamic Properties");
         form.button("§fCodex/Knowledge");
+        form.button("§fGround Infection Timer");
         form.button("§8Back");
 
         form.show(player).then((res) => {
@@ -3125,7 +3188,7 @@ export function showCodexBook(player, context) {
                 return openMain();
             }
 
-            if (res.selection === 8) {
+            if (res.selection === 9) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openMain();
@@ -3142,6 +3205,7 @@ export function showCodexBook(player, context) {
                 case 5: return openBiomeAmbienceDebugMenu(settings);
                 case 6: return openDynamicPropertyDebugMenu(settings);
                 case 7: return openCodexDebugMenu(settings);
+                case 8: return openGroundInfectionDebugMenu(settings);
                 default: return openDebugMenu();
             }
         }).catch(() => openMain());
@@ -3445,6 +3509,49 @@ export function showCodexBook(player, context) {
         }).catch(() => openDebugMenu());
     }
 
+    function openGroundInfectionDebugMenu(settings) {
+        const ground = settings.ground_infection || {};
+        const form = new ActionFormData().title("§bGround Infection Timer Debug");
+        form.body(`§7Toggle debug logging for Ground Infection Timer:\n\n§8Current settings:\n§7• Timer: ${ground.timer ? "§aON" : "§cOFF"}\n§7• Ground Check: ${ground.groundCheck ? "§aON" : "§cOFF"}\n§7• Ambient Pressure: ${ground.ambient ? "§aON" : "§cOFF"}\n§7• Biome Pressure: ${ground.biome ? "§aON" : "§cOFF"}\n§7• Decay: ${ground.decay ? "§aON" : "§cOFF"}\n§7• Warnings: ${ground.warnings ? "§aON" : "§cOFF"}`);
+        
+        form.button(`§${ground.timer ? "a" : "c"}Timer Updates`);
+        form.button(`§${ground.groundCheck ? "a" : "c"}Ground Detection`);
+        form.button(`§${ground.ambient ? "a" : "c"}Ambient Pressure`);
+        form.button(`§${ground.biome ? "a" : "c"}Biome Pressure`);
+        form.button(`§${ground.decay ? "a" : "c"}Decay Logic`);
+        form.button(`§${ground.warnings ? "a" : "c"}Warning Messages`);
+        form.button(`§${ground.all ? "a" : "c"}Toggle All`);
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openDebugMenu();
+            }
+
+            // Back button is at index 7 (after 6 flag buttons + 1 Toggle All button)
+            if (res.selection === 7) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openDebugMenu();
+            }
+
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
+            const flags = ["timer", "groundCheck", "ambient", "biome", "decay", "warnings", "all"];
+            if (res.selection < flags.length) {
+                const flagName = flags[res.selection];
+                const newState = toggleDebugFlag("ground_infection", flagName);
+                const stateText = newState ? "§aON" : "§cOFF";
+                player.sendMessage(`§7[DEBUG] Ground Infection Timer ${flagName} debug: ${stateText}`);
+                console.warn(`[DEBUG MENU] Ground Infection Timer ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+                invalidateDebugCache();
+            }
+            return openGroundInfectionDebugMenu(getDebugSettings(player));
+        }).catch(() => openDebugMenu());
+    }
+
     function openSettings() {
         const settings = getSettings();
         const codex = getCodex(player);
@@ -3582,8 +3689,7 @@ export function showCodexBook(player, context) {
                 { key: "snowIdentified", title: "Snow Identified", section: "Items" },
                 { key: "snowBookCrafted", title: "Powdery Journal", section: "Items" },
                 { key: "cureItemsSeen", title: "Cure Items", section: "Items" },
-                { key: "brewingStandSeen", title: "Brewing Stand", section: "Items" },
-                { key: "dustedDirtSeen", title: "Dusted Dirt", section: "Items" }
+                { key: "brewingStandSeen", title: "Brewing Stand", section: "Items" }
             ];
             for (const entry of itemEntries) {
                 if (entry.title.toLowerCase().includes(searchTerm) && codex.items[entry.key]) {
@@ -3723,6 +3829,15 @@ function getDefaultDebugSettings() {
             flags: false,
             chunking: false,
             saving: false,
+            all: false
+        },
+        ground_infection: {
+            timer: false,
+            groundCheck: false,
+            ambient: false,
+            biome: false,
+            decay: false,
+            warnings: false,
             all: false
         }
     };
