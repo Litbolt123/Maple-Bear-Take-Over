@@ -49,7 +49,37 @@
 				]
 			},
 			"minecraft:loot": "loot_tables/blocks/snow_layer.json",
-			"tag:minecraft:is_shovel_item_destructible": {}
+			"tag:minecraft:is_shovel_item_destructible": {},
+			"minecraft:placement_filter": {
+				"conditions": [
+					{
+						"allowed_faces": ["up"],
+						"block_filter": [
+							{
+								"test": "is_block_name",
+								"subject": "other",
+								"operator": "!=",
+								"value": "mb:snow_layer"
+							},
+							{
+								"test": "is_block_name",
+								"subject": "other",
+								"operator": "!=",
+								"value": "minecraft:grass"
+							},
+							{
+								"test": "is_block_name",
+								"subject": "other",
+								"operator": "!=",
+								"value": "minecraft:tallgrass"
+							}
+						]
+					},
+					{
+						"allowed_faces": ["down", "north", "south", "east", "west"]
+					}
+				]
+			}
 		}
 	}
 }
