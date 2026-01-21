@@ -329,7 +329,7 @@
                 "size": [
                   "70% - 22px",
                   "100%"
-                ], // Gamepad helpers have max size of 30% and the back button is 20px
+                ], 
                 "offset": [
                   20,
                   -1
@@ -407,7 +407,7 @@
       }
     ]
   },
-  // left side
+
   "selector_area": {
     "type": "panel",
     "offset": [
@@ -444,7 +444,6 @@
       }
     ]
   },
-  // divider between two sides
   "section_divider": {
     "type": "image",
     "offset": [
@@ -460,7 +459,6 @@
     "layer": 3,
     "texture": "textures/ui/HowToPlayDivider"
   },
-  // contains right side
   "content_area_wrapper": {
     "type": "panel",
     "offset": [
@@ -480,7 +478,6 @@
       }
     ]
   },
-  // right side
   "content_area": {
     "type": "panel",
     "size": [
@@ -536,7 +533,6 @@
       "10px"
     ]
   },
-  // gamepad helpers
   "gamepad_bumper_helpers": {
     "type": "stack_panel",
     "orientation": "horizontal",

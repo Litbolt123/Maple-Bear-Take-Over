@@ -2860,7 +2860,12 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
     
     // Before building stairs, check if we're too close to recently built stairs (prevent overlapping)
     // This prevents the bear from building stairs in locations that overlap with recently built stairs
+    // BUT: If the bear is stuck and needs to mine upward, allow building stairs even if protected blocks are nearby
     if (targetIsAbove) {
+        // Check if entity is stuck - if stuck, allow building stairs even with nearby protected blocks
+        const progress = entityProgress.get(entityId);
+        const isStuck = progress && progress.stuckTicks >= 2;
+        
         // Check if any of the 3-block pattern positions have nearby protected blocks
         const checkPositions = [
             { x: baseX, y: baseY + 2, z: baseZ }, // Block above head
@@ -2869,19 +2874,52 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
         ];
         
         let tooCloseToProtectedStairs = false;
+        const exactMatches = []; // Track which positions have exact matches
+        
         for (const pos of checkPositions) {
+            // First check if there's a protected block in the exact same location
+            const exactKey = `${pos.x},${pos.y},${pos.z}`;
+            const exactStairTick = recentStairBlocks.get(exactKey);
+            if (exactStairTick !== undefined && (currentTick - exactStairTick) < 200) {
+                exactMatches.push(pos);
+                if (getDebugGeneral() || getDebugMining()) {
+                    console.warn(`[MINING AI] carveStair (UPWARD): Exact protected stair block at (${pos.x}, ${pos.y}, ${pos.z}) - skipping this position`);
+                }
+                // Don't break - this is the exact block we want to build, and it's already protected
+                // Skip this position but continue checking others
+                continue;
+            }
+            
+            // Then check for nearby protected blocks (but not exact matches)
             if (hasNearbyProtectedBlocks(pos.x, pos.y, pos.z, 1)) {
                 tooCloseToProtectedStairs = true;
                 if (getDebugGeneral() || getDebugMining()) {
-                    console.warn(`[MINING AI] carveStair (UPWARD): Too close to protected stairs at (${pos.x}, ${pos.y}, ${pos.z}) - skipping stair building this tick`);
+                    console.warn(`[MINING AI] carveStair (UPWARD): Too close to protected stairs at (${pos.x}, ${pos.y}, ${pos.z})`);
                 }
                 break;
             }
         }
         
-        // If too close to protected stairs, skip building stairs this tick (bear should move forward first)
-        if (tooCloseToProtectedStairs) {
+        // If all positions have exact matches, skip building (we're trying to build in the same place)
+        if (exactMatches.length === checkPositions.length) {
+            if (getDebugGeneral() || getDebugMining()) {
+                console.warn(`[MINING AI] carveStair (UPWARD): All positions are exact protected stair blocks - skipping stair building this tick`);
+            }
+            return; // All positions are exact matches - skip to avoid breaking same stairs
+        }
+        
+        // If too close to protected stairs AND not stuck, skip building stairs this tick
+        // If stuck, allow building stairs even with nearby protected blocks (they might be from a different location)
+        if (tooCloseToProtectedStairs && !isStuck) {
+            if (getDebugGeneral() || getDebugMining()) {
+                console.warn(`[MINING AI] carveStair (UPWARD): Too close to protected stairs and not stuck - skipping stair building this tick`);
+            }
             return; // Skip building stairs - wait for protection to expire or move further away
+        } else if (tooCloseToProtectedStairs && isStuck) {
+            if (getDebugGeneral() || getDebugMining()) {
+                console.warn(`[MINING AI] carveStair (UPWARD): Too close to protected stairs BUT entity is stuck - allowing stair building to proceed`);
+            }
+            // Continue - allow building stairs even with nearby protected blocks when stuck
         }
     }
     
