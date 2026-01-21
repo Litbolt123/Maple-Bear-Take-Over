@@ -9,12 +9,12 @@ This document contains tasks specifically for team members who work on **texture
 ### Missing or Inconsistent Textures
 
 1. **Codex UI Icons** -  Consider creating custom icons for:
- Dusted Dirt Block Item Icon 16x16
+Dusted Dirt Block Item Icon 16x16 ✅
 
 2. **Texture Consistency Check** - Verify all mob egg textures match their entity textures:
    - Check that all day variant eggs (Day 4, 8, 13, 20) have proper textures
    - Ensure texture paths in `item_texture.json` match actual files
-   - Some eggs might be using incorrect texture references (e.g., Day 20 variants using Day 13 textures)
+   - Some eggs might be using incorrect texture references (e.g., Day 20 variants using Day 13 textures) ✅
 
 3. **Particle Textures** - Review and potentially improve:
    - `white_dust_particle.png` - Could be enhanced for biome ambience
@@ -22,7 +22,7 @@ This document contains tasks specifically for team members who work on **texture
 
 4. **Block Textures** - Check and improve:
    - `dusted_dirt.png` - Ensure it looks infected/corrupted
-   - `'snow'_layer.png` - Should look like mysterious powder, not normal snow
+   - `'snow'_layer.png` - Should look like mysterious powder, not normal snow ✅
 
 ### Texture Improvements
 
