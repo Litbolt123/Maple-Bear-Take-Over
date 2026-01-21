@@ -767,7 +767,29 @@ function clearBlock(dimension, x, y, z, digContext, entity = null, targetInfo = 
     const blockKey = `${x},${y},${z}`;
     const currentTick = system.currentTick;
     const stairTick = recentStairBlocks.get(blockKey);
-    if (stairTick !== undefined && (currentTick - stairTick) < 200) { // Protect for 10 seconds (200 ticks)
+    
+    // CRITICAL: If this is a protected step block (the block the bear stands on when building upward stairs),
+    // NEVER break it, even if stuck or target moved. The bear needs this block to step/jump onto.
+    // Step blocks are at (stepX, baseY, stepZ) where baseY is the bear's current Y level
+    if (stairTick !== undefined && (currentTick - stairTick) < 200) {
+        // Check if this is a step block (at foot level) when building upward stairs
+        if (entity && targetInfo && targetInfo.entity?.location) {
+            const entityY = Math.floor(entity.location.y);
+            const targetY = targetInfo.entity.location.y;
+            const dy = targetY - entity.location.y;
+            
+            // CRITICAL: If target is above (dy > 1) and this block is at the bear's foot level (y == entityY),
+            // this is a step block that the bear needs to stand on - NEVER break it, regardless of other conditions
+            // This check happens BEFORE the "far above" exception, so step blocks are always protected
+            if (dy > 1 && y === entityY) {
+                if (getDebugPitfall() || getDebugMining()) {
+                    console.warn(`[PITFALL DEBUG] clearBlock: Refusing to break protected step block at (${x}, ${y}, ${z}) - bear needs this to stand on (dy=${dy.toFixed(1)})`);
+                }
+                return false; // Never break step blocks when building upward stairs - this is absolute
+            }
+        }
+        
+        // For other protected blocks, check if we should allow breaking
         // Check if entity is stuck - if stuck, allow breaking protected stairs to escape
         let isStuck = false;
         if (entity) {
@@ -831,20 +853,42 @@ function clearBlock(dimension, x, y, z, digContext, entity = null, targetInfo = 
                     const targetLocForProtection = targetInfo.entity?.location;
                     const currentDyToTarget = targetLocForProtection ? (targetLocForProtection.y - entity.location.y) : 0;
                     
-                    // If target is currently above (currentDyToTarget > 1), be very strict about protection
-                    // Only break protected stairs if target moved significantly below OR entity is genuinely stuck
+                    // If target is currently above (currentDyToTarget > 1), be strict about protection
+                    // BUT: If target is significantly above (dy > 5), allow breaking protected blocks that are blocking the upward path
+                    // EXCEPT: NEVER break step blocks (at foot level) - they are always protected
                     if (currentDyToTarget > 1) {
-                        // Building upward stairs - only break if target moved significantly below or entity is stuck
-                        // Do NOT break just because path is blocked - the protected blocks ARE the path!
-                        if (dy < -2 || isStuck) {
+                        const entityY = Math.floor(entity.location.y);
+                        const isStepBlock = y === entityY; // Step blocks are at foot level
+                        
+                        // CRITICAL: NEVER break step blocks, even if target is far above or entity is stuck
+                        // Step blocks are the foundation of the stairs - breaking them destroys the path
+                        if (isStepBlock) {
+                            if (getDebugPitfall()) {
+                                console.warn(`[PITFALL DEBUG] clearBlock: Refusing to break protected step block at (${x}, ${y}, ${z}) - step blocks are always protected (dy=${currentDyToTarget.toFixed(1)})`);
+                            }
+                            return false; // Step blocks are ALWAYS protected - never break them
+                        }
+                        
+                        // Building upward stairs - allow breaking NON-STEP blocks if:
+                        // 1. Target moved significantly below (more than 2 blocks) - stairs no longer needed
+                        // 2. Entity is stuck - emergency escape (but NOT step blocks)
+                        // 3. Target is significantly above (dy > 5) AND block is directly blocking upward path (y > entity.y)
+                        //    This allows breaking protected blocks ABOVE that are blocking the way up when target is far above
+                        const blockIsAboveEntity = y > entityY;
+                        const targetIsFarAbove = currentDyToTarget > 5;
+                        const shouldAllowBreaking = dy < -2 || isStuck || (targetIsFarAbove && blockIsAboveEntity);
+                        
+                        if (shouldAllowBreaking) {
                             if (getDebugPitfall()) {
                                 if (isStuck) {
                                     console.warn(`[PITFALL DEBUG] clearBlock: Allowing stair break (building upward) - entity is stuck`);
-                                } else {
+                                } else if (dy < -2) {
                                     console.warn(`[PITFALL DEBUG] clearBlock: Allowing stair break (building upward) - target moved below (dy=${dy.toFixed(1)})`);
+                                } else if (targetIsFarAbove && blockIsAboveEntity) {
+                                    console.warn(`[PITFALL DEBUG] clearBlock: Allowing stair break (building upward) - target is far above (dy=${currentDyToTarget.toFixed(1)}) and block is blocking upward path (y=${y} > entity.y=${entityY})`);
                                 }
                             }
-                            // Remove protection for this block since target changed position or entity is stuck
+                            // Remove protection for this block since we need to break it to reach target
                             recentStairBlocks.delete(blockKey);
                             // Continue to break the block
                         } else {
@@ -2768,35 +2812,74 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
 
     const entityId = entity.id;
     const currentTick = system.currentTick;
-    const stepX = baseX + dirX;
-    const stepZ = baseZ + dirZ;
+    let stepX = baseX + dirX; // Use let so we can modify if needed
+    let stepZ = baseZ + dirZ; // Use let so we can modify if needed
     
     // Coordinate with other bears: Check if another bear is already working on this stair location
-    const stepKey = `${stepX},${baseY},${stepZ}`;
+    // stepKey and landingKey will be recalculated after protection check if stepX/stepZ change
+    let stepKey = `${stepX},${baseY},${stepZ}`;
     // Define landingKey early so it's always available for protection marking
-    const landingX = stepX + dirX;
-    const landingZ = stepZ + dirZ;
-    const landingKey = `${landingX},${baseY + 1},${landingZ}`;
+    let landingX = stepX + dirX;
+    let landingZ = stepZ + dirZ;
+    let landingKey = `${landingX},${baseY + 1},${landingZ}`;
     
     // Helper function to mark both stair locations as protected
+    // ONLY protects solid blocks (not air) - we don't want to protect air blocks
     const markStairProtected = () => {
-        recentStairBlocks.set(stepKey, currentTick);
-        recentStairBlocks.set(landingKey, currentTick);
+        // Only protect step block if it's solid (the block the bear stands on)
+        const stepBlock = getBlock(dimension, stepX, baseY, stepZ);
+        if (stepBlock && isSolidBlock(stepBlock) && !AIR_BLOCKS.has(stepBlock.typeId)) {
+            recentStairBlocks.set(stepKey, currentTick);
+        } else {
+            // Step block is air - remove protection if it exists
+            if (recentStairBlocks.has(stepKey)) {
+                recentStairBlocks.delete(stepKey);
+            }
+        }
+        
+        // Only protect landing block if it's solid
+        const landingBlock = getBlock(dimension, landingX, baseY + 1, landingZ);
+        if (landingBlock && isSolidBlock(landingBlock) && !AIR_BLOCKS.has(landingBlock.typeId)) {
+            recentStairBlocks.set(landingKey, currentTick);
+        } else {
+            // Landing block is air - remove protection if it exists
+            if (recentStairBlocks.has(landingKey)) {
+                recentStairBlocks.delete(landingKey);
+            }
+        }
     };
     
     // Helper function to mark a specific block as protected (for individual cleared blocks)
+    // ONLY protects solid blocks (not air) - we don't want to protect air blocks
     const markBlockProtected = (x, y, z) => {
-        const blockKey = `${x},${y},${z}`;
-        recentStairBlocks.set(blockKey, currentTick);
-        // Also mark nearby blocks (within 1 block horizontally) as protected to prevent overlapping stairs
-        for (let dx = -1; dx <= 1; dx++) {
-            for (let dz = -1; dz <= 1; dz++) {
-                if (dx === 0 && dz === 0) continue; // Skip the block itself (already marked)
-                const nearbyKey = `${x + dx},${y},${z + dz}`;
-                // Only mark if not already protected (to preserve older protection times)
-                if (!recentStairBlocks.has(nearbyKey)) {
-                    recentStairBlocks.set(nearbyKey, currentTick);
+        const block = getBlock(dimension, x, y, z);
+        // Only protect if it's actually a solid block (not air)
+        if (block && isSolidBlock(block) && !AIR_BLOCKS.has(block.typeId)) {
+            const blockKey = `${x},${y},${z}`;
+            recentStairBlocks.set(blockKey, currentTick);
+            // Also mark nearby SOLID blocks (within 1 block horizontally) as protected to prevent overlapping stairs
+            // But only if they're actually solid blocks, not air
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dz = -1; dz <= 1; dz++) {
+                    if (dx === 0 && dz === 0) continue; // Skip the block itself (already marked)
+                    const nearbyX = x + dx;
+                    const nearbyZ = z + dz;
+                    const nearbyBlock = getBlock(dimension, nearbyX, y, nearbyZ);
+                    // Only protect nearby blocks if they're solid (not air)
+                    if (nearbyBlock && isSolidBlock(nearbyBlock) && !AIR_BLOCKS.has(nearbyBlock.typeId)) {
+                        const nearbyKey = `${nearbyX},${y},${nearbyZ}`;
+                        // Only mark if not already protected (to preserve older protection times)
+                        if (!recentStairBlocks.has(nearbyKey)) {
+                            recentStairBlocks.set(nearbyKey, currentTick);
+                        }
+                    }
                 }
+            }
+        } else {
+            // Block is air or not solid - remove protection if it exists
+            const blockKey = `${x},${y},${z}`;
+            if (recentStairBlocks.has(blockKey)) {
+                recentStairBlocks.delete(blockKey);
             }
         }
     };
@@ -2858,13 +2941,14 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
         console.warn(`[MINING AI] carveStair called: targetIsAbove=${targetIsAbove}, dy=${targetDy.toFixed(1)}, baseY=${baseY}, stepX=${stepX}, stepZ=${stepZ}`);
     }
     
+    // Get stuck status for use in protection checks and individual block checks
+    const progress = entityProgress.get(entityId);
+    const isStuck = progress && progress.stuckTicks >= 2;
+    
     // Before building stairs, check if we're too close to recently built stairs (prevent overlapping)
     // This prevents the bear from building stairs in locations that overlap with recently built stairs
     // BUT: If the bear is stuck and needs to mine upward, allow building stairs even if protected blocks are nearby
     if (targetIsAbove) {
-        // Check if entity is stuck - if stuck, allow building stairs even with nearby protected blocks
-        const progress = entityProgress.get(entityId);
-        const isStuck = progress && progress.stuckTicks >= 2;
         
         // Check if any of the 3-block pattern positions have nearby protected blocks
         const checkPositions = [
@@ -2900,26 +2984,66 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
             }
         }
         
-        // If all positions have exact matches, skip building (we're trying to build in the same place)
+        // If all positions have exact matches, we're trying to build at the same location where we already built stairs
+        // Instead of skipping, try building stairs ONE STEP FURTHER FORWARD to continue the stair sequence
         if (exactMatches.length === checkPositions.length) {
             if (getDebugGeneral() || getDebugMining()) {
-                console.warn(`[MINING AI] carveStair (UPWARD): All positions are exact protected stair blocks - skipping stair building this tick`);
+                console.warn(`[MINING AI] carveStair (UPWARD): All positions are exact protected stair blocks - trying next step forward instead`);
             }
-            return; // All positions are exact matches - skip to avoid breaking same stairs
+            // Try building stairs one step further forward (the next step in the sequence)
+            const nextStepX = stepX + dirX;
+            const nextStepZ = stepZ + dirZ;
+            const nextStepKey = `${nextStepX},${baseY},${nextStepZ}`;
+            
+            // Check if the next step forward is also protected
+            const nextStepProtected = recentStairBlocks.has(nextStepKey) && 
+                                     (currentTick - recentStairBlocks.get(nextStepKey)) < 200;
+            
+            if (nextStepProtected) {
+                // Next step is also protected - the bear might be standing on it
+                // In this case, we should wait for the bear to move forward, or try building even further ahead
+                // For now, skip this tick to avoid breaking the stair the bear is standing on
+                if (getDebugGeneral() || getDebugMining()) {
+                    console.warn(`[MINING AI] carveStair (UPWARD): Next step forward is also protected - bear may be standing on it, skipping this tick`);
+                }
+                return;
+            }
+            
+            // Next step forward is not protected - build stairs there instead
+            // Update stepX and stepZ to the next position, and recalculate keys
+            stepX = nextStepX;
+            stepZ = nextStepZ;
+            stepKey = `${stepX},${baseY},${stepZ}`;
+            landingX = stepX + dirX;
+            landingZ = stepZ + dirZ;
+            landingKey = `${landingX},${baseY + 1},${landingZ}`;
+            // Reset "too close" flag since we've moved to a new location
+            tooCloseToProtectedStairs = false;
+            if (getDebugGeneral() || getDebugMining()) {
+                console.warn(`[MINING AI] carveStair (UPWARD): Building stairs at next step forward (${stepX}, ${baseY}, ${stepZ}) instead`);
+            }
+            // Continue with the updated stepX and stepZ - the individual block checks will handle protection
         }
         
-        // If too close to protected stairs AND not stuck, skip building stairs this tick
-        // If stuck, allow building stairs even with nearby protected blocks (they might be from a different location)
-        if (tooCloseToProtectedStairs && !isStuck) {
-            if (getDebugGeneral() || getDebugMining()) {
-                console.warn(`[MINING AI] carveStair (UPWARD): Too close to protected stairs and not stuck - skipping stair building this tick`);
+        // CRITICAL: When target is above, we NEED to build stairs to reach it
+        // Allow building stairs even with nearby protected blocks (they might be from a different location or previous attempt)
+        // Only skip if we're trying to break the exact same protected blocks (checked above)
+        // The individual block checks will still skip exact matches, but allow breaking nearby blocks
+        if (tooCloseToProtectedStairs) {
+            if (isStuck) {
+                if (getDebugGeneral() || getDebugMining()) {
+                    console.warn(`[MINING AI] carveStair (UPWARD): Too close to protected stairs BUT entity is stuck - allowing stair building to proceed`);
+                }
+                // Continue - allow building stairs even with nearby protected blocks when stuck
+            } else {
+                // Not stuck, but target is above - still allow building stairs
+                // Nearby protected blocks might be from a different location or previous failed attempt
+                // The individual block checks will handle skipping exact matches
+                if (getDebugGeneral() || getDebugMining()) {
+                    console.warn(`[MINING AI] carveStair (UPWARD): Too close to protected stairs but target is above (dy=${targetDy.toFixed(1)}) - allowing stair building to proceed (will skip exact matches)`);
+                }
+                // Continue - allow building stairs, individual checks will skip exact matches
             }
-            return; // Skip building stairs - wait for protection to expire or move further away
-        } else if (tooCloseToProtectedStairs && isStuck) {
-            if (getDebugGeneral() || getDebugMining()) {
-                console.warn(`[MINING AI] carveStair (UPWARD): Too close to protected stairs BUT entity is stuck - allowing stair building to proceed`);
-            }
-            // Continue - allow building stairs even with nearby protected blocks when stuck
         }
     }
     
@@ -2942,6 +3066,33 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
         // 3. Block above the forward block (stepX, baseY + 2, stepZ) - headroom in front
         // Then bear jumps up and forward into that space, increasing Y level by 1, and repeats
         
+        // CRITICAL: Protect the step block location (stepX, baseY, stepZ) BEFORE any mining
+        // This is the block the bear will stand on after jumping up - it must NOT be broken
+        // The step block should remain intact so the bear can step/jump onto it
+        // ONLY protect if it's actually a solid block (not air) - we don't want to protect air blocks
+        const stepBlockKey = `${stepX},${baseY},${stepZ}`;
+        const stepBlock = getBlock(dimension, stepX, baseY, stepZ);
+        const stepBlockIsSolid = stepBlock && isSolidBlock(stepBlock) && !AIR_BLOCKS.has(stepBlock.typeId);
+        
+        if (stepBlockIsSolid) {
+            // Only protect if it's actually a solid block (the step the bear will stand on)
+            if (!recentStairBlocks.has(stepBlockKey) || (currentTick - recentStairBlocks.get(stepBlockKey)) >= 200) {
+                // Step block is not protected or protection expired - protect it now
+                recentStairBlocks.set(stepBlockKey, currentTick);
+                if (getDebugGeneral() || getDebugMining()) {
+                    console.warn(`[MINING AI] carveStair (UPWARD): Protecting step block at (${stepX}, ${baseY}, ${stepZ}) - bear will stand on this`);
+                }
+            }
+        } else {
+            // Step block is air or not solid - remove protection if it exists (don't protect air)
+            if (recentStairBlocks.has(stepBlockKey)) {
+                recentStairBlocks.delete(stepBlockKey);
+                if (getDebugGeneral() || getDebugMining()) {
+                    console.warn(`[MINING AI] carveStair (UPWARD): Step block at (${stepX}, ${baseY}, ${stepZ}) is air - removing protection`);
+                }
+            }
+        }
+        
         // FIRST: Break block above head (baseX, baseY + 2, baseZ) - headroom above current position
         if (digContext.cleared < digContext.max) {
             // CRITICAL: Check if this block OR nearby blocks are protected (part of previously built stairs) BEFORE trying to break it
@@ -2949,15 +3100,17 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
             const blockAboveHeadStairTick = recentStairBlocks.get(blockAboveHeadKey);
             const hasNearbyProtected = hasNearbyProtectedBlocks(baseX, baseY + 2, baseZ);
             if (blockAboveHeadStairTick !== undefined && (currentTick - blockAboveHeadStairTick) < 200) {
-                // This block is part of a protected stair - skip it
+                // This block is part of a protected stair - skip it (even when stuck, don't break exact same block)
                 if (getDebugGeneral() || getDebugMining()) {
                     console.warn(`[MINING AI] carveStair (UPWARD): Skipping protected stair block above head (${baseX}, ${baseY + 2}, ${baseZ})`);
                 }
                 // Continue to next block check
-            } else if (hasNearbyProtected) {
+            } else if (hasNearbyProtected && !isStuck && targetDy <= 3) {
                 // Nearby blocks are protected - skip to avoid breaking recently built stairs
+                // BUT: If target is significantly above (dy > 3) or stuck, allow breaking anyway
+                // When target is far above, we need to build stairs even if nearby blocks are protected
                 if (getDebugGeneral() || getDebugMining()) {
-                    console.warn(`[MINING AI] carveStair (UPWARD): Skipping block above head (${baseX}, ${baseY + 2}, ${baseZ}) - nearby protected blocks detected`);
+                    console.warn(`[MINING AI] carveStair (UPWARD): Skipping block above head (${baseX}, ${baseY + 2}, ${baseZ}) - nearby protected blocks detected (dy=${targetDy.toFixed(1)})`);
                 }
                 // Continue to next block check
             } else {
@@ -2990,13 +3143,13 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
             const blockInFrontStairTick = recentStairBlocks.get(blockInFrontKey);
             const hasNearbyProtected = hasNearbyProtectedBlocks(stepX, baseY + 1, stepZ);
             if (blockInFrontStairTick !== undefined && (currentTick - blockInFrontStairTick) < 200) {
-                // This block is part of a protected stair - skip it
+                // This block is part of a protected stair - skip it (even when stuck, don't break exact same block)
                 if (getDebugGeneral() || getDebugMining()) {
                     console.warn(`[MINING AI] carveStair (UPWARD): Skipping protected stair block in front at head level (${stepX}, ${baseY + 1}, ${stepZ})`);
                 }
                 // Continue to next block check
-            } else if (hasNearbyProtected) {
-                // Nearby blocks are protected - skip to avoid breaking recently built stairs
+            } else if (hasNearbyProtected && !isStuck) {
+                // Nearby blocks are protected - skip to avoid breaking recently built stairs (unless stuck)
                 if (getDebugGeneral() || getDebugMining()) {
                     console.warn(`[MINING AI] carveStair (UPWARD): Skipping block in front at head level (${stepX}, ${baseY + 1}, ${stepZ}) - nearby protected blocks detected`);
                 }
@@ -3033,15 +3186,17 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
             const blockAboveFrontStairTick = recentStairBlocks.get(blockAboveFrontKey);
             const hasNearbyProtected = hasNearbyProtectedBlocks(stepX, baseY + 2, stepZ);
             if (blockAboveFrontStairTick !== undefined && (currentTick - blockAboveFrontStairTick) < 200) {
-                // This block is part of a protected stair - skip it
+                // This block is part of a protected stair - skip it (even when stuck, don't break exact same block)
                 if (getDebugGeneral() || getDebugMining()) {
                     console.warn(`[MINING AI] carveStair (UPWARD): Skipping protected stair block above forward block (${stepX}, ${baseY + 2}, ${stepZ})`);
                 }
                 // Continue to next block check
-            } else if (hasNearbyProtected) {
+            } else if (hasNearbyProtected && !isStuck && targetDy <= 3) {
                 // Nearby blocks are protected - skip to avoid breaking recently built stairs
+                // BUT: If target is significantly above (dy > 3) or stuck, allow breaking anyway
+                // When target is far above, we need to build stairs even if nearby blocks are protected
                 if (getDebugGeneral() || getDebugMining()) {
-                    console.warn(`[MINING AI] carveStair (UPWARD): Skipping block above forward block (${stepX}, ${baseY + 2}, ${stepZ}) - nearby protected blocks detected`);
+                    console.warn(`[MINING AI] carveStair (UPWARD): Skipping block above forward block (${stepX}, ${baseY + 2}, ${stepZ}) - nearby protected blocks detected (dy=${targetDy.toFixed(1)})`);
                 }
                 // Continue to next block check
             } else {
@@ -7278,33 +7433,37 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                         const dy = targetLoc.y - loc.y;
                         const { x: dirX, z: dirZ } = resolveDirection(entity, directionOverride);
                         
-                        // CRITICAL: Always apply movement when target is above (dy > 1) AND we broke at least 1 block
-                        // The bear MUST jump into the cleared space to actually ascend
+                        // CRITICAL: Apply movement when target is above (dy > 1) 
+                        // Movement is needed either if we broke blocks OR if the forward path is already clear
+                        // If the path is already prepared (previous stairs), the bear should move forward/up to use them
                         const dimension = entity.dimension;
-                        if (dimension && (dirX !== 0 || dirZ !== 0) && dy > 1 && digContext.cleared > 0) {
+                        if (dimension && (dirX !== 0 || dirZ !== 0) && dy > 1) {
                             const baseX = Math.floor(loc.x);
                             const baseY = Math.floor(loc.y);
                             const baseZ = Math.floor(loc.z);
                             const stepX = baseX + dirX;
                             const stepZ = baseZ + dirZ;
                             
-                            // Check if ANY of the stair blocks are clear (don't need all 3 to be clear)
+                            // Check if ANY of the stair blocks are clear (we might have cleared them this tick)
                             const blockAboveHead = getBlock(dimension, baseX, baseY + 2, baseZ);
                             const blockInFront = getBlock(dimension, stepX, baseY + 1, stepZ);
                             const blockAboveFront = getBlock(dimension, stepX, baseY + 2, stepZ);
                             
-                            // Check if at least one of the stair blocks is clear (we broke at least one)
+                            // Check if at least one of the stair blocks is clear
                             const hasClearedSpace = (!blockAboveHead || AIR_BLOCKS.has(blockAboveHead.typeId)) ||
                                                    (!blockInFront || AIR_BLOCKS.has(blockInFront.typeId)) ||
                                                    (!blockAboveFront || AIR_BLOCKS.has(blockAboveFront.typeId));
                             
-                            // Check if the forward space is clear enough to move into
+                            // Check if the forward space is clear enough to move into (path is already prepared)
                             const forwardBlockAtHead = getBlock(dimension, stepX, baseY + 1, stepZ);
                             const forwardBlockAbove = getBlock(dimension, stepX, baseY + 2, stepZ);
                             const forwardSpaceIsClear = (!forwardBlockAtHead || AIR_BLOCKS.has(forwardBlockAtHead.typeId)) && 
                                                         (!forwardBlockAbove || AIR_BLOCKS.has(forwardBlockAbove.typeId));
                             
-                            // Apply movement if we cleared at least one block OR if forward space is clear
+                            // CRITICAL: Apply movement if:
+                            // 1. We cleared at least one block this tick, OR
+                            // 2. The forward path is already clear (previous stairs were built, bear should use them)
+                            // This allows the bear to continue moving forward/up even when no blocks need breaking
                             if (hasClearedSpace || forwardSpaceIsClear) {
                                 try {
                                     // Strong forward impulse to move into the cleared space
@@ -7353,8 +7512,8 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                         } else if (getDebugGeneral() || getDebugMining()) {
                             if (dy <= 1) {
                                 console.warn(`[MINING AI] Skipped movement after stairs - target not above (dy=${dy.toFixed(1)})`);
-                            } else if (digContext.cleared === 0) {
-                                console.warn(`[MINING AI] Skipped movement after stairs - no blocks cleared yet (cleared=${digContext.cleared})`);
+                            } else if (!hasClearedSpace && !forwardSpaceIsClear) {
+                                console.warn(`[MINING AI] Skipped movement after stairs - forward path not clear (dy=${dy.toFixed(1)}, cleared=${digContext.cleared}, forwardSpaceClear=${forwardSpaceIsClear}, hasClearedSpace=${hasClearedSpace})`);
                             } else {
                                 console.warn(`[MINING AI] Skipped movement after stairs (dy=${dy.toFixed(1)}, dirX=${dirX}, dirZ=${dirZ}, cleared=${digContext.cleared})`);
                             }
