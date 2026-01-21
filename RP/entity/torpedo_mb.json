@@ -3,9 +3,15 @@
 	"minecraft:client_entity": {
 		"description": {
 			"identifier": "mb:torpedo_mb",
-			"materials": { "default": "enderman" },
-			"textures": { "default": "textures/entity/infected_day13" },
-			"geometry": { "default": "geometry.infected" },
+			"materials": {
+				"default": "enderman"
+			},
+			"textures": {
+				"default": "textures/entity/infected_day13"
+			},
+			"geometry": {
+				"default": "geometry.infected"
+			},
 			"particle_effects": {
 				"death_dust": "mb:white_dust_particle"
 			},
@@ -13,7 +19,7 @@
 				"controller.render.infected"
 			],
 			"spawn_egg": {
-				"texture": "mb_infected_day13_egg",
+				"texture": "TORPEDO_EGG",
 				"texture_index": 0
 			},
 			"animations": {
@@ -42,13 +48,20 @@
 			},
 			"scripts": {
 				"animate": [
-					{ "look_at_target": true },
-					{ "infected_controller": true },
-					{ "attack_controller": true },
-					{ "death_particles": "!query.is_alive" }
+					{
+						"look_at_target": true
+					},
+					{
+						"infected_controller": true
+					},
+					{
+						"attack_controller": true
+					},
+					{
+						"death_particles": "!query.is_alive"
+					}
 				]
 			}
 		}
 	}
 }
-

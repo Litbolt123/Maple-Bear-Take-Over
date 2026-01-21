@@ -68,6 +68,16 @@
 			"textures": [
 				"textures/items/Infected_human_miner2_egg"
 			]
+		},
+		"TORPEDO_EGG": {
+			"textures": [
+				"textures/items/TORPEDO_MB_EGG"
+			]
+		},
+		"TORPEDO_EGG_day20": {
+			"textures": [
+				"textures/items/TORPEDO_MB_EGG_day20"
+			]
 		}
 	}
 }
