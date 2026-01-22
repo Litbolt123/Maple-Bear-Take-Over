@@ -2,7 +2,7 @@
 	"format_version": "1.20.80",
 	"minecraft:client_entity": {
 		"description": {
-			"identifier": "mb:mb_day4",
+			"identifier": "mb:mb_day04",
 			"materials": {
 				"default": "enderman"
 			},
@@ -19,7 +19,7 @@
 				"controller.render.mb"
 			],
 			"spawn_egg": {
-				"texture": "mb_mb_day4_egg",
+				"texture": "mb_mb_day04_egg",
 				"texture_index": 0
 			},
 			"scripts": {

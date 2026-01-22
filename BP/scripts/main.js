@@ -78,13 +78,13 @@ function applyEffect(target, effectId, duration, options = {}, trackSkip = true)
 }
 
 // Constants for Maple Bear behavior
-const MAPLE_BEAR_ID = "mb:mb";
-const MAPLE_BEAR_DAY4_ID = "mb:mb_day4";
-const MAPLE_BEAR_DAY8_ID = "mb:mb_day8";
+const MAPLE_BEAR_ID = "mb:mb_day00";
+const MAPLE_BEAR_DAY4_ID = "mb:mb_day04";
+const MAPLE_BEAR_DAY8_ID = "mb:mb_day08";
 const MAPLE_BEAR_DAY13_ID = "mb:mb_day13";
 const MAPLE_BEAR_DAY20_ID = "mb:mb_day20";
 const INFECTED_BEAR_ID = "mb:infected";
-const INFECTED_BEAR_DAY8_ID = "mb:infected_day8";
+const INFECTED_BEAR_DAY8_ID = "mb:infected_day08";
 const INFECTED_BEAR_DAY13_ID = "mb:infected_day13";
 const INFECTED_BEAR_DAY20_ID = "mb:infected_day20";
 const BUFF_BEAR_ID = "mb:buff_mb";
@@ -1632,7 +1632,7 @@ function convertMobToMapleBear(deadMob, killer) {
             });
             let totalBearCount = 0;
             let buffBearCount = 0;
-            const mbTypePrefixes = ["mb:mb", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+            const mbTypePrefixes = ["mb:mb_day00", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
             
             for (const nearby of nearbyEntities) {
                 const typeId = nearby.typeId;
@@ -1678,7 +1678,7 @@ function convertMobToMapleBear(deadMob, killer) {
             // console.log(`[CONVERSION] Tiny bear detected (${killerType}), current day: ${currentDay}`);
             if (currentDay < 4) {
                 // Before day 4: Tiny Maple Bears always spawn tiny Maple Bears (regardless of victim size)
-                newBearType = MAPLE_BEAR_ID; // Always spawn tiny Maple Bear (mb:mb)
+                newBearType = MAPLE_BEAR_ID; // Always spawn tiny Maple Bear (mb:mb_day00)
                 bearSize = "tiny";
                 // console.log(`[CONVERSION] Pre-day 4: Tiny bear spawning tiny bear (${newBearType})`);
             } else if (currentDay >= 4 && currentDay < 8) {
@@ -2947,7 +2947,7 @@ function handleMobConversion(entity, killer) {
             });
             let totalBearCount = 0;
             let buffBearCount = 0;
-            const mbTypePrefixes = ["mb:mb", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+            const mbTypePrefixes = ["mb:mb_day00", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
             
             for (const nearby of nearbyEntities) {
                 const typeId = nearby.typeId;

@@ -153,16 +153,16 @@ If you try to use these in `sounds.json`, you'll get errors like:
 **CRITICAL**: You must add sounds for ALL entity variants (day 4, day 8, day 13, day 20, etc.):
 
 ```json
-"mb:mb": { ... },
-"mb:mb_day4": { ... },
-"mb:mb_day8": { ... },
+"mb:mb_day00": { ... },
+"mb:mb_day04": { ... },
+"mb:mb_day08": { ... },
 "mb:mb_day13": { ... },
 "mb:mb_day20": { ... }
 ```
 
 **Always use the full template format** for consistency and adjustability:
 ```json
-"mb:mb_day4": {
+"mb:mb_day04": {
   "volume": 1,
   "pitch": 1,
   "events": {
@@ -305,7 +305,7 @@ RP/sounds/tiny_mb/
           }
         }
       },
-      "mb:mb_day4": {
+      "mb:mb_day04": {
         "volume": 1,
         "pitch": 1,
         "events": {

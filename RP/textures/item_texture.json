@@ -23,13 +23,13 @@
 		"mb_basic_journal": {
 			"textures": "textures/items/basic_journal"
 		},
-		"mb_mb_day4_egg": {
+		"mb_mb_day04_egg": {
 			"textures": "textures/items/mb_day4"
 		},
-		"mb_mb_day8_egg": {
+		"mb_mb_day08_egg": {
 			"textures": "textures/items/mb_day8"
 		},
-		"mb_infected_day8_egg": {
+		"mb_infected_day08_egg": {
 			"textures": "textures/items/infected_day8_egg"
 		},
 		"mb_infected_pig_egg": {

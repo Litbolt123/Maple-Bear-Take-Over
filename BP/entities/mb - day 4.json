@@ -2,7 +2,7 @@
 	"format_version": "1.21.80",
 	"minecraft:entity": {
 		"description": {
-			"identifier": "mb:mb_day4",
+			"identifier": "mb:mb_day04",
 			"is_spawnable": true,
 			"is_summonable": true,
 			"is_experimental": false,

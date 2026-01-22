@@ -905,13 +905,13 @@ function pickSpawnTypeForDay(day) {
         return ["mb:mb_day13", "mb:infected_day13", "mb:buff_mb_day13"];
     }
     if (day >= 8) {
-        return ["mb:mb_day8", "mb:infected_day8", "mb:flying_mb"]; // flying bears now spawn on day 8 (was buff bears)
+        return ["mb:mb_day08", "mb:infected_day08", "mb:flying_mb"]; // flying bears now spawn on day 8 (was buff bears)
     }
     if (day >= 4) {
-        return ["mb:mb_day4", "mb:infected"]; // no buff yet
+        return ["mb:mb_day04", "mb:infected"]; // no buff yet
     }
     // Day 2
-    return ["mb:mb"]; // tiny bears only
+    return ["mb:mb_day00"]; // tiny bears only
 }
 
 function runMilestoneSpawnPulse(day) {

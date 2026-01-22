@@ -57,7 +57,7 @@ This document is designed to be given to an AI assistant that will create detail
 
 ## Bear Types and Their Characteristics
 
-### 1. Tiny Maple Bears (mb:mb, mb:mb_day4, mb:mb_day8, mb:mb_day13, mb:mb_day20)
+### 1. Tiny Maple Bears (mb:mb_day00, mb:mb_day04, mb:mb_day08, mb:mb_day13, mb:mb_day20)
 - **Spawn**: Day 2+
 - **Size**: Less than one block tall
 - **Health**: 1 HP
@@ -70,7 +70,7 @@ This document is designed to be given to an AI assistant that will create detail
   - Less intimidating but unsettling
   - Should sound like a small corrupted creature
 
-### 2. Infected Maple Bears (mb:infected, mb:infected_day8, mb:infected_day13, mb:infected_day20)
+### 2. Infected Maple Bears (mb:infected, mb:infected_day08, mb:infected_day13, mb:infected_day20)
 - **Spawn**: Day 4+
 - **Size**: Same as human
 - **Health**: 30 HP

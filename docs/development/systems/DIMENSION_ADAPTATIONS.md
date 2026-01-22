@@ -13,12 +13,12 @@ Maple Bears have evolved to survive in all three dimensions (Overworld, Nether, 
 Bears in the Nether gain fire resistance based on their day variant. The system is implemented in `BP/scripts/mb_dimensionAdaptation.js`.
 
 #### Day 4 and Earlier Variants
-- **Variants**: `mb:mb`, `mb:mb_day4`, `mb:infected`
+- **Variants**: `mb:mb_day00`, `mb:mb_day04`, `mb:infected`
 - **Fire Resistance**: None
 - **Behavior**: These early-stage bears have no protection from fire or lava in the Nether
 
 #### Day 8-17 Variants (Time-Based Adaptation)
-- **Variants**: `mb:mb_day8`, `mb:mb_day13`, `mb:infected_day8`, `mb:infected_day13`, `mb:buff_mb`, `mb:buff_mb_day13`, `mb:flying_mb`, `mb:flying_mb_day15`, `mb:mining_mb`, `mb:torpedo_mb`
+- **Variants**: `mb:mb_day08`, `mb:mb_day13`, `mb:infected_day08`, `mb:infected_day13`, `mb:buff_mb`, `mb:buff_mb_day13`, `mb:flying_mb`, `mb:flying_mb_day15`, `mb:mining_mb`, `mb:torpedo_mb`
 - **Fire Resistance**: Fire Resistance I (temporary)
 - **Time Requirement**: Must spend 200 ticks (10 seconds) in Nether before gaining fire resistance
 - **Duration**: 20 seconds (400 ticks), then expires

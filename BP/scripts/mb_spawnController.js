@@ -117,13 +117,13 @@ function errorLog(message, error = null, context = {}) {
 // SECTION 2: ENTITY TYPE CONSTANTS
 // ============================================================================
 
-const TINY_BEAR_ID = "mb:mb";
-const DAY4_BEAR_ID = "mb:mb_day4";
-const DAY8_BEAR_ID = "mb:mb_day8";
+const TINY_BEAR_ID = "mb:mb_day00";
+const DAY4_BEAR_ID = "mb:mb_day04";
+const DAY8_BEAR_ID = "mb:mb_day08";
 const DAY13_BEAR_ID = "mb:mb_day13";
 const DAY20_BEAR_ID = "mb:mb_day20";
 const INFECTED_BEAR_ID = "mb:infected";
-const INFECTED_BEAR_DAY8_ID = "mb:infected_day8";
+const INFECTED_BEAR_DAY8_ID = "mb:infected_day08";
 const INFECTED_BEAR_DAY13_ID = "mb:infected_day13";
 const INFECTED_BEAR_DAY20_ID = "mb:infected_day20";
 const BUFF_BEAR_ID = "mb:buff_mb";
@@ -4480,7 +4480,7 @@ function getBatchEntityCounts(dimension, players, totalPlayerCount = 1) {
     // Batch check: Get entities for all players at once using a larger radius
     try {
         const maxRadius = Math.max(...SPAWN_CONFIGS.map(c => c.spreadRadius));
-        const mbTypePrefixes = ["mb:mb", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+        const mbTypePrefixes = ["mb:mb_day00", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
         
         // Calculate center point of all players for batch query
         let centerX = 0, centerZ = 0;
@@ -4602,7 +4602,7 @@ function getEntityCountsForPlayer(player, dimension, playerPos, totalPlayerCount
             // Isolated players use reduced query radius (30 blocks instead of 45+)
             const baseMaxRadius = Math.max(...SPAWN_CONFIGS.map(c => c.spreadRadius));
             const maxRadius = isIsolated ? 30 : baseMaxRadius;
-            const mbTypePrefixes = ["mb:mb", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+            const mbTypePrefixes = ["mb:mb_day00", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
             
             // Use filter to reduce entity processing overhead
             const allNearbyEntities = dimension.getEntities({

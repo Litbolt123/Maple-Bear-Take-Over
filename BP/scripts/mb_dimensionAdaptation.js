@@ -22,13 +22,13 @@ const DAY13_FIRE_RESISTANCE_THRESHOLD = 200; // Day 13 variants need 200 ticks (
 
 // Bear entity type IDs grouped by fire resistance level
 const BEAR_ENTITY_IDS = new Set([
-    "mb:mb",
-    "mb:mb_day4",
-    "mb:mb_day8",
+    "mb:mb_day00",
+    "mb:mb_day04",
+    "mb:mb_day08",
     "mb:mb_day13",
     "mb:mb_day20",
     "mb:infected",
-    "mb:infected_day8",
+    "mb:infected_day08",
     "mb:infected_day13",
     "mb:infected_day20",
     "mb:buff_mb",
@@ -45,17 +45,17 @@ const BEAR_ENTITY_IDS = new Set([
 
 // Day 4 and earlier variants - No fire resistance
 const DAY4_VARIANTS = new Set([
-    "mb:mb",           // Day 2
-    "mb:mb_day4",       // Day 4
+    "mb:mb_day00",           // Day 0
+    "mb:mb_day04",       // Day 4
     "mb:infected"       // Day 4
 ]);
 
 // Day 8-17 variants (day 13 level) - Fire Resistance I (some immunity)
 // Includes all variants that spawn between day 4 and day 20
 const DAY13_VARIANTS = new Set([
-    "mb:mb_day8",           // Day 8
+    "mb:mb_day08",           // Day 8
     "mb:mb_day13",          // Day 13
-    "mb:infected_day8",     // Day 8
+    "mb:infected_day08",     // Day 8
     "mb:infected_day13",    // Day 13
     "mb:buff_mb",           // Day 13
     "mb:buff_mb_day13",     // Day 20 spawn but day13 variant
