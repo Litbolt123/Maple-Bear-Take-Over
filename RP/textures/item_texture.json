@@ -88,6 +88,11 @@
 			"textures": [
 				"textures/items/flying_mb_egg_day20"
 			]
+		},
+		"mb_buff_mb_day8_egg": {
+			"textures": [
+				"textures/items/buff_mb_day8_egg"
+			]
 		}
 	}
 }

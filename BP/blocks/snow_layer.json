@@ -10,7 +10,7 @@
 		},
 		"sound": "mb:snow_layer",
 		"components": {
-			"minecraft:display_name": "'Snow' Layer",
+			"minecraft:display_name": "\"Snow\" layer",
 			"minecraft:destructible_by_mining": {
 				"seconds_to_destroy": 0.1
 			},
@@ -53,7 +53,9 @@
 			"minecraft:placement_filter": {
 				"conditions": [
 					{
-						"allowed_faces": ["up"],
+						"allowed_faces": [
+							"up"
+						],
 						"block_filter": [
 							{
 								"test": "is_block_name",
@@ -76,7 +78,13 @@
 						]
 					},
 					{
-						"allowed_faces": ["down", "north", "south", "east", "west"]
+						"allowed_faces": [
+							"down",
+							"north",
+							"south",
+							"east",
+							"west"
+						]
 					}
 				]
 			}
