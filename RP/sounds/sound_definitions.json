@@ -27,7 +27,7 @@
 		},
 		"ambient.infected": {
 			"__use_legacy_max_distance": false,
-			"category": "ambient",
+			"category": "hostile",
 			"min_distance": 0,
 			"max_distance": 32,
 			"sounds": [
@@ -47,7 +47,7 @@
 		},
 		"mob.infected_pig.boost": {
 			"__use_legacy_max_distance": true,
-			"category": "neutral",
+			"category": "hostile",
 			"min_distance": 0,
 			"max_distance": 20,
 			"sounds": [
@@ -60,7 +60,7 @@
 		},
 		"mob.infected_pig.death": {
 			"__use_legacy_max_distance": true,
-			"category": "neutral",
+			"category": "hostile",
 			"min_distance": 0,
 			"max_distance": 20,
 			"sounds": [
@@ -69,7 +69,7 @@
 		},
 		"mob.infected_pig.say": {
 			"__use_legacy_max_distance": true,
-			"category": "neutral",
+			"category": "hostile",
 			"min_distance": 0,
 			"max_distance": 20,
 			"sounds": [
@@ -83,7 +83,7 @@
 		},
 		"mob.infected_pig.step": {
 			"__use_legacy_max_distance": true,
-			"category": "neutral",
+			"category": "hostile",
 			"min_distance": 0,
 			"max_distance": 20,
 			"sounds": [
@@ -96,7 +96,7 @@
 		},
 		"mob.infected_cow.hurt": {
 			"__use_legacy_max_distance": true,
-			"category": "neutral",
+			"category": "hostile",
 			"min_distance": 0,
 			"max_distance": 20,
 			"sounds": [
@@ -107,7 +107,7 @@
 		},
 		"mob.infected_cow.milk": {
 			"__use_legacy_max_distance": true,
-			"category": "neutral",
+			"category": "hostile",
 			"min_distance": 0,
 			"max_distance": 20,
 			"sounds": [
@@ -118,7 +118,7 @@
 		},
 		"mob.infected_cow.say": {
 			"__use_legacy_max_distance": true,
-			"category": "neutral",
+			"category": "hostile",
 			"min_distance": 0,
 			"max_distance": 20,
 			"sounds": [
@@ -129,7 +129,7 @@
 		},
 		"mob.infected_cow.step": {
 			"__use_legacy_max_distance": true,
-			"category": "neutral",
+			"category": "hostile",
 			"min_distance": 0,
 			"max_distance": 20,
 			"sounds": [
@@ -365,12 +365,12 @@
 			"sounds": [
 				{
 					"name": "sounds/buff_mb/buff_mb_roar",
-					"volume": 1.0
+					"volume": 1
 				}
 			]
 		},
 		"buff_mb.nearby_1": {
-			"category": "ambient",
+			"category": "hostile",
 			"min_distance": 0,
 			"max_distance": 32,
 			"sounds": [
@@ -381,7 +381,7 @@
 			]
 		},
 		"buff_mb.nearby_2": {
-			"category": "ambient",
+			"category": "hostile",
 			"min_distance": 0,
 			"max_distance": 32,
 			"sounds": [
