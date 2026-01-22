@@ -19,7 +19,7 @@
 				"controller.render.infected"
 			],
 			"spawn_egg": {
-				"texture": "flying_mb_egg",
+				"texture": "flying_mb_egg_day15",
 				"texture_index": 0
 			},
 			"animations": {

@@ -78,6 +78,16 @@
 			"textures": [
 				"textures/items/TORPEDO_MB_EGG_day20"
 			]
+		},
+		"flying_mb_egg_day15": {
+			"textures": [
+				"textures/items/flying_mb_egg_day15"
+			]
+		},
+		"flying_mb_egg_day20": {
+			"textures": [
+				"textures/items/flying_mb_egg_day20"
+			]
 		}
 	}
 }
