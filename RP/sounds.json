@@ -32,27 +32,6 @@
 					}
 				}
 			},
-			"mb:buff_mb": {
-				"volume": 1,
-				"pitch": 1,
-				"events": {
-					"hurt": {
-						"sound": "generic_bear_hurt",
-						"volume": 0.8,
-						"pitch": 0.4
-					},
-					"roar": {
-						"sound": "buff_mb.roar",
-						"volume": 1,
-						"pitch": 1
-					},
-					"step": {
-						"sound": "buff_mb_step",
-						"volume": 1,
-						"pitch": 1
-					}
-				}
-			},
 			"mb:infected": {
 				"volume": 1,
 				"pitch": 1,
@@ -314,6 +293,36 @@
 					}
 				}
 			},
+			"mb:buff_mb": {
+				"volume": 1,
+				"pitch": 1,
+				"events": {
+					"hurt": {
+						"sound": "generic_bear_hurt",
+						"volume": 0.8,
+						"pitch": 0.4
+					},
+					"roar": {
+						"sound": "buff_mb.roar",
+						"volume": 1,
+						"pitch": 1
+					},
+					"step": {
+						"sound": "buff_mb_step",
+						"volume": 1,
+						"pitch": 1
+					},
+					"ambient": {
+						"sound": "buff_mb_ambient",
+						"volume": [
+							1
+						],
+						"pitch": [
+							1.2
+						]
+					}
+				}
+			},
 			"mb:buff_mb_day13": {
 				"volume": 1,
 				"pitch": 1,
@@ -332,6 +341,15 @@
 						"sound": "buff_mb_step",
 						"volume": 1,
 						"pitch": 1
+					},
+					"ambient": {
+						"sound": "buff_mb_ambient",
+						"volume": [
+							1
+						],
+						"pitch": [
+							1.6
+						]
 					}
 				}
 			},
@@ -353,6 +371,15 @@
 						"sound": "buff_mb_step",
 						"volume": 1,
 						"pitch": 1
+					},
+					"ambient": {
+						"sound": "buff_mb_ambient",
+						"volume": [
+							1
+						],
+						"pitch": [
+							2
+						]
 					}
 				}
 			},

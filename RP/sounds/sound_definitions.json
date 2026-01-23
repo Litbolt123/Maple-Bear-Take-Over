@@ -25,6 +25,52 @@
 				}
 			]
 		},
+		"buff_mb_ambient": {
+			"category": "hostile",
+			"__use_legacy_max_distance": true,
+			"sounds": [
+				"sounds/buff_mb/fart_toot_buff_mb",
+				"sounds/buff_mb/grumble1_buff_mb",
+				"sounds/buff_mb/grumble2_buff_mb",
+				"sounds/buff_mb/grumble3_buff_mb",
+				"sounds/buff_mb/grumble4_buff_mb",
+				"sounds/buff_mb/grumble5_buff_mb",
+				"sounds/buff_mb/grumble6_buff_mb"
+			]
+		},
+		"buff_mb.nearby_2": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				{
+					"name": "sounds/buff_mb/buff_mb_nearby_2",
+					"volume": 0.75
+				}
+			]
+		},
+		"buff_mb.roar": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 48,
+			"sounds": [
+				{
+					"name": "sounds/buff_mb/buff_mb_roar",
+					"volume": 1
+				}
+			]
+		},
+		"buff_mb.nearby_1": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				{
+					"name": "sounds/buff_mb/buff_mb_nearby_1",
+					"volume": 0.75
+				}
+			]
+		},
 		"ambient.infected": {
 			"__use_legacy_max_distance": false,
 			"category": "hostile",
@@ -355,39 +401,6 @@
 				{
 					"name": "sounds/infected_mb/infected_mb_death",
 					"volume": 0.8
-				}
-			]
-		},
-		"buff_mb.roar": {
-			"category": "hostile",
-			"min_distance": 0,
-			"max_distance": 48,
-			"sounds": [
-				{
-					"name": "sounds/buff_mb/buff_mb_roar",
-					"volume": 1
-				}
-			]
-		},
-		"buff_mb.nearby_1": {
-			"category": "hostile",
-			"min_distance": 0,
-			"max_distance": 32,
-			"sounds": [
-				{
-					"name": "sounds/buff_mb/buff_mb_nearby_1",
-					"volume": 0.75
-				}
-			]
-		},
-		"buff_mb.nearby_2": {
-			"category": "hostile",
-			"min_distance": 0,
-			"max_distance": 32,
-			"sounds": [
-				{
-					"name": "sounds/buff_mb/buff_mb_nearby_2",
-					"volume": 0.75
 				}
 			]
 		},
