@@ -13,6 +13,76 @@
 				}
 			]
 		},
+		"tiny_mb.ambient": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 16,
+			"sounds": [
+				"sounds/tiny_mb/grunt1_tiny_mb",
+				"sounds/tiny_mb/grunt2_tiny_mb",
+				"sounds/tiny_mb/grunt3_tiny_mb",
+				"sounds/tiny_mb/grunt4_tiny_mb",
+				"sounds/tiny_mb/tiny_mb_giggle1",
+				"sounds/tiny_mb/tiny_mb_giggle2",
+				"sounds/tiny_mb/tiny_mb_giggle3",
+				"sounds/tiny_mb/tiny_mb_giggle4"
+			]
+		},
+		"tiny_mb.attack": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 16,
+			"sounds": [
+				"sounds/tiny_mb/tiny_mb_attack",
+				"sounds/tiny_mb/tiny_mb_attack1",
+				"sounds/tiny_mb/tiny_mb_attack10",
+				"sounds/tiny_mb/tiny_mb_attack11",
+				"sounds/tiny_mb/tiny_mb_attack12",
+				"sounds/tiny_mb/tiny_mb_attack13",
+				"sounds/tiny_mb/tiny_mb_attack14",
+				"sounds/tiny_mb/tiny_mb_attack2",
+				"sounds/tiny_mb/tiny_mb_attack3",
+				"sounds/tiny_mb/tiny_mb_attack4",
+				"sounds/tiny_mb/tiny_mb_attack5",
+				"sounds/tiny_mb/tiny_mb_attack6",
+				"sounds/tiny_mb/tiny_mb_attack7",
+				"sounds/tiny_mb/tiny_mb_attack8",
+				"sounds/tiny_mb/tiny_mb_attack9"
+			]
+		},
+		"tiny_mb.hurt": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 16,
+			"sounds": [
+				"sounds/tiny_mb/tiny_mb_hurt7",
+				"sounds/tiny_mb/tiny_mb_hurt6",
+				"sounds/tiny_mb/tiny_mb_hurt5",
+				"sounds/tiny_mb/tiny_mb_hurt4",
+				"sounds/tiny_mb/tiny_mb_hurt3",
+				"sounds/tiny_mb/tiny_mb_hurt2",
+				"sounds/tiny_mb/tiny_mb_hurt1",
+				"sounds/tiny_mb/tiny_mb_hurt"
+			]
+		},
+		"tiny_mb.death": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/tiny_mb/tiny_mb_death",
+				"sounds/tiny_mb/tiny_mb_death1",
+				"sounds/tiny_mb/tiny_mb_death10",
+				"sounds/tiny_mb/tiny_mb_death2",
+				"sounds/tiny_mb/tiny_mb_death3",
+				"sounds/tiny_mb/tiny_mb_death4",
+				"sounds/tiny_mb/tiny_mb_death5",
+				"sounds/tiny_mb/tiny_mb_death6",
+				"sounds/tiny_mb/tiny_mb_death7",
+				"sounds/tiny_mb/tiny_mb_death8",
+				"sounds/tiny_mb/tiny_mb_death9"
+			]
+		},
 		"buff_mb_step": {
 			"category": "hostile",
 			"min_distance": 0,
@@ -302,50 +372,6 @@
 				{
 					"name": "sounds/Dusted Journal/dusted_journal_turn_page",
 					"volume": 1
-				}
-			]
-		},
-		"tiny_mb.ambient": {
-			"category": "hostile",
-			"min_distance": 0,
-			"max_distance": 16,
-			"sounds": [
-				{
-					"name": "sounds/tiny_mb/tiny_mb_ambient",
-					"volume": 0.6
-				}
-			]
-		},
-		"tiny_mb.attack": {
-			"category": "hostile",
-			"min_distance": 0,
-			"max_distance": 16,
-			"sounds": [
-				{
-					"name": "sounds/tiny_mb/tiny_mb_attack",
-					"volume": 0.7
-				}
-			]
-		},
-		"tiny_mb.hurt": {
-			"category": "hostile",
-			"min_distance": 0,
-			"max_distance": 16,
-			"sounds": [
-				{
-					"name": "sounds/tiny_mb/tiny_mb_hurt",
-					"volume": 0.6
-				}
-			]
-		},
-		"tiny_mb.death": {
-			"category": "hostile",
-			"min_distance": 0,
-			"max_distance": 20,
-			"sounds": [
-				{
-					"name": "sounds/tiny_mb/tiny_mb_death",
-					"volume": 0.6
 				}
 			]
 		},
