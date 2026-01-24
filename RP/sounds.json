@@ -222,7 +222,7 @@
 					"ambient": {
 						"sound": "infected_mb.ambient",
 						"volume": 0.45,
-						"pitch": 1
+						"pitch": 0.9
 					},
 					"attack": {
 						"sound": "infected_mb.attack",
@@ -248,7 +248,7 @@
 					"ambient": {
 						"sound": "infected_mb.ambient",
 						"volume": 0.45,
-						"pitch": 1
+						"pitch": 0.8
 					},
 					"attack": {
 						"sound": "infected_mb.attack",
@@ -274,7 +274,7 @@
 					"ambient": {
 						"sound": "infected_mb.ambient",
 						"volume": 0.45,
-						"pitch": 1
+						"pitch": 0.6
 					},
 					"attack": {
 						"sound": "infected_mb.attack",

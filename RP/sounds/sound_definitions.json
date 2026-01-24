@@ -141,26 +141,6 @@
 				}
 			]
 		},
-		"ambient.infected": {
-			"__use_legacy_max_distance": false,
-			"category": "hostile",
-			"min_distance": 0,
-			"max_distance": 32,
-			"sounds": [
-				{
-					"name": "sounds/infected_mb/Dust_choked_roar1",
-					"volume": 1
-				},
-				{
-					"name": "sounds/infected_mb/Dust_choked_roar2",
-					"volume": 1
-				},
-				{
-					"name": "sounds/infected_mb/Dust_choked_roar3",
-					"volume": 1
-				}
-			]
-		},
 		"mob.infected_pig.boost": {
 			"__use_legacy_max_distance": true,
 			"category": "hostile",
@@ -380,10 +360,29 @@
 			"min_distance": 0,
 			"max_distance": 32,
 			"sounds": [
-				{
-					"name": "sounds/infected_mb/infected_mb_ambient",
-					"volume": 0.8
-				}
+				"sounds/infected_mb/infected_mb_ambient",
+				"sounds/infected_mb/infected_mb_ambient1",
+				"sounds/infected_mb/infected_mb_ambient12",
+				"sounds/infected_mb/infected_mb_ambient13",
+				"sounds/infected_mb/infected_mb_ambient14",
+				"sounds/infected_mb/infected_mb_ambient15",
+				"sounds/infected_mb/infected_mb_ambient16",
+				"sounds/infected_mb/infected_mb_ambient17",
+				"sounds/infected_mb/infected_mb_ambient18",
+				"sounds/infected_mb/infected_mb_ambient19",
+				"sounds/infected_mb/infected_mb_ambient2",
+				"sounds/infected_mb/infected_mb_ambient20",
+				"sounds/infected_mb/infected_mb_ambient21",
+				"sounds/infected_mb/infected_mb_ambient22",
+				"sounds/infected_mb/infected_mb_ambient3",
+				"sounds/infected_mb/infected_mb_ambient4",
+				"sounds/infected_mb/infected_mb_ambient5",
+				"sounds/infected_mb/infected_mb_ambient6",
+				"sounds/infected_mb/infected_mb_ambient7",
+				"sounds/infected_mb/infected_mb_ambient8",
+				"sounds/infected_mb/infected_mb_ambient9",
+				"sounds/infected_mb/infected_mb_ambient10",
+				"sounds/infected_mb/infected_mb_ambient11"
 			]
 		},
 		"infected_mb.attack": {
