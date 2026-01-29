@@ -2,6 +2,13 @@
 
 ## Recent Changes (Latest Session)
 
+### Spiral Stair Descending Pattern (carveSpiralStair)
+- **`blocksToMine` now branches on `goingDown`** in `BP/scripts/mb_miningAI.js` (~5512–5527).
+- **Ascending** (unchanged): above head `(bearX, bearY+2, bearZ)`, in front at head `(frontX_final, bearY+1, frontZ_final)`, above front `(frontX_final, bearY+2, frontZ_final)`.
+- **Descending** (new): front floor `(frontX_final, bearY-1, frontZ_final)`, headroom `(frontX_final, bearY, frontZ_final)`, headroom above `(frontX_final, bearY+1, frontZ_final)` at the lower level.
+- Front floor is the future foothold; `isSpiralBlockProtected` skips it, so we never mine it. The two headroom blocks are mined to clear space for the next step down.
+- Existing loops over `blocksToMine` (work-lock check, mine-in-order) are unchanged; they use the same variable and thus already process the descending list when `goingDown` is true.
+
 ### Day Milestones & Infection Rate Update
 - **Infection Rate Refactor**: Replaced hard-coded day checks with `INFECTION_RATE_STEPS` in `BP/scripts/main.js`, adding day 11/15/17 steps and a 100% cap at day 20.
 - **Codex Milestones**: Updated milestone list in `BP/scripts/mb_codex.js` to include day 11, 15, and 17 (escalation, mining bears, torpedo bears).

@@ -300,6 +300,8 @@ const activeStairWork = new Map();
 const STAIR_WORK_LOCK_TICKS = 200; // Lock stair blocks for 2 seconds (40 ticks) to prevent conflicts between multiple bears
 const SPIRAL_STAIR_THRESHOLD = 4; // Use spiral stairs if need to climb 4+ blocks
 const SPIRAL_STAIR_RADIUS = 2; // Spiral staircase radius (2 blocks = 5x5 area)
+// ARCHIVED: All spiral stair (ascending and descending) disabled until fixed. Normal stairs are kept and used. Set to false to re-enable spiral.
+const SPIRAL_STAIRS_ARCHIVED = true;
 
 // Spiral staircase state tracking
 // Map: entityId -> { centerPillar: {x,y,z}, currentDirection: {x,z}, spiralStep: number, lastStepFoothold: {x,y,z}, initialized: boolean }
@@ -3515,35 +3517,40 @@ function distanceSq(a, b) {
 }
 
 function clearForwardTunnel(entity, tunnelHeight, extraHeight, startOffset, digContext, ascending, depth = 1, directionOverride = null, shouldTunnelDown = false, targetInfo = null) {
-    // Make bear look at target when mining
+    // Tunnel mining: bear looks at player (target)
     if (targetInfo && targetInfo.entity?.location) {
         try {
             const targetLoc = targetInfo.entity.location;
-            entity.lookAt({
-                x: targetLoc.x,
-                y: targetLoc.y + 1.5,
-                z: targetLoc.z
-            });
+            entity.lookAt({ x: targetLoc.x, y: targetLoc.y + 1.5, z: targetLoc.z });
         } catch { }
     }
-    
     const dimension = entity?.dimension;
     if (!dimension) {
         // console.warn(`[MINING AI] clearForwardTunnel: No dimension`);
         return;
     }
 
-    // CRITICAL: Do NOT run this function when target is above - it breaks blocks at foot level
-    // Only run when target is at same Y level or below
+    // CRITICAL: Only skip forward tunnel when target is SIGNIFICANTLY above (dy > 1.5) to avoid false positives
+    // When on same level (dy <= 1.5) and close, mine forward instead of building stairs
     if (targetInfo && targetInfo.entity?.location) {
         const loc = entity.location;
         const dy = targetInfo.entity.location.y - loc.y;
-        if (dy > 1) {
-            // Target is above - skip this function entirely, let carveStair handle upward movement
+        const horizontalDist = Math.hypot(targetInfo.entity.location.x - loc.x, targetInfo.entity.location.z - loc.z);
+        const isOnSameLevel = Math.abs(dy) <= 1.5;
+        const isCloseHorizontally = horizontalDist <= 6;
+        
+        // Only skip when target is significantly above AND not (same level and close)
+        if (dy > 1.5 && !(isOnSameLevel && isCloseHorizontally)) {
+            // Target is significantly above - skip forward tunnel, let carveStair handle upward movement
             if (getDebugGeneral() || getDebugMining()) {
                 console.warn(`[MINING AI] clearForwardTunnel: Skipping - target is above (dy=${dy.toFixed(1)}), use carveStair instead`);
             }
             return;
+        } else if (isOnSameLevel && isCloseHorizontally) {
+            // On same level and close - mine forward horizontally
+            if (getDebugGeneral() || getDebugMining()) {
+                console.warn(`[MINING AI] clearForwardTunnel: Same level and close (dy=${dy.toFixed(1)}, dist=${horizontalDist.toFixed(1)}) - mining forward horizontally`);
+            }
         }
     }
 
@@ -3557,7 +3564,6 @@ function clearForwardTunnel(entity, tunnelHeight, extraHeight, startOffset, digC
         // console.warn(`[MINING AI] clearForwardTunnel: No direction (dirX=${dirX}, dirZ=${dirZ})`);
         return;
     }
-    
     // console.warn(`[MINING AI] clearForwardTunnel: entity=${entity.id.substring(0, 8)}, dir=(${dirX}, ${dirZ}), depth=${depth}, cleared=${digContext.cleared}/${digContext.max}`);
 
     const height = tunnelHeight + extraHeight;
@@ -5354,18 +5360,7 @@ function isSpiralBlockProtected(blockX, blockY, blockZ, centerPillar, lastStepFo
  * @param {Object} targetInfo - Optional target info (used to determine direction)
  */
 function carveSpiralStair(entity, tunnelHeight, digContext, directionOverride = null, targetInfo = null) {
-    // Make bear look at target when mining
-    if (targetInfo && targetInfo.entity?.location) {
-        try {
-            const targetLoc = targetInfo.entity.location;
-            entity.lookAt({
-                x: targetLoc.x,
-                y: targetLoc.y + 1.5,
-                z: targetLoc.z
-            });
-        } catch { }
-    }
-    
+    // Bear focuses on mining; lookAt is set below to the block we're mining (not the target)
     // Determine if we're going up or down based on target position
     let goingDown = false;
     if (targetInfo && targetInfo.entity?.location) {
@@ -5388,20 +5383,35 @@ function carveSpiralStair(entity, tunnelHeight, digContext, directionOverride = 
     const entityId = entity.id;
     const currentTick = system.currentTick;
     
+    // Helper: center pillar is 1x1 - check that single block is solid (not air)
+    const isCenterPillarSolid = (cx, cz, y) => {
+        const b = getBlock(dimension, cx, y, cz);
+        return !!(b && isSolidBlock(b) && !AIR_BLOCKS.has(b.typeId));
+    };
+    // Find center pillar 1x1 (single block) that is solid (not air)
+    // CRITICAL: Center pillar must NOT be the bear's position - bear spirals around the pillar, not inside it
+    const notBearPosition = (cx, cz) => (cx !== bearX || cz !== bearZ);
+    const rightDir = goingDown ? rotateDirectionCounterClockwise({ x: dirX, z: dirZ }) : rotateDirectionClockwise({ x: dirX, z: dirZ });
+    const leftDir = goingDown ? rotateDirectionClockwise({ x: dirX, z: dirZ }) : rotateDirectionCounterClockwise({ x: dirX, z: dirZ });
+    const rx = Math.round(rightDir.x) || 1, rz = Math.round(rightDir.z) || 0;
+    const lx = Math.round(leftDir.x) || -1, lz = Math.round(leftDir.z) || 0;
+    const pillarCandidates = [
+        { cx: bearX + rx, cz: bearZ + rz, n: 0 },
+        { cx: bearX + lx, cz: bearZ + lz, n: 0 },
+        { cx: bearX + dirX, cz: bearZ + dirZ, n: 0 },
+        { cx: bearX - dirX, cz: bearZ - dirZ, n: 0 }
+    ]
+        .filter(p => notBearPosition(p.cx, p.cz))
+        .map(p => ({ ...p, n: isCenterPillarSolid(p.cx, p.cz, bearY) ? 1 : 0 }));
+    // Fallback: if all candidates were bear position (empty) or none solid, use offset so pillar is never (bearX, bearZ)
+    const bestPillar = pillarCandidates.find(p => p.n >= 1) || pillarCandidates[0] || { cx: bearX + (dirX !== 0 ? dirX : 1), cz: bearZ + (dirZ !== 0 ? dirZ : 0), n: 0 };
+    const centerPillarX = bestPillar.cx;
+    const centerPillarZ = bestPillar.cz;
+    
     // Get or initialize spiral state
     let state = spiralStairState.get(entityId);
     if (!state || !state.initialized) {
-        // Initialize spiral state
-        // Center pillar: 2x2 block to the right of bear's facing direction
-        // The center pillar is 2x2, starting at the block to the right
-        const rightDir = goingDown ? rotateDirectionCounterClockwise({ x: dirX, z: dirZ }) : rotateDirectionClockwise({ x: dirX, z: dirZ });
-        // Normalize right direction to get integer offsets
-        const rightX = Math.round(rightDir.x);
-        const rightZ = Math.round(rightDir.z);
-        // If right direction is zero (shouldn't happen), use perpendicular
-        const centerPillarX = rightX !== 0 ? bearX + rightX : bearX + 1;
-        const centerPillarZ = rightZ !== 0 ? bearZ + rightZ : bearZ;
-        
+        // Initialize spiral state (center pillar already chosen above with at least one solid block)
         state = {
             centerPillar: { x: centerPillarX, y: bearY, z: centerPillarZ },
             currentDirection: { x: dirX, z: dirZ },
@@ -5413,40 +5423,45 @@ function carveSpiralStair(entity, tunnelHeight, digContext, directionOverride = 
         spiralStairState.set(entityId, state);
         
         if (getDebugGeneral()) {
-            console.warn(`[MINING AI] carveSpiralStair: Initialized spiral state, centerPillar=(${centerPillarX},${bearY},${centerPillarZ}), goingDown=${goingDown}`);
+            console.warn(`[MINING AI] carveSpiralStair: Initialized spiral state, centerPillar=(${centerPillarX},${bearY},${centerPillarZ}), solidCount=${bestPillar.n}, goingDown=${goingDown}`);
         }
     } else {
-        // Update last used tick
-        state.lastUsedTick = currentTick;
-    }
-    
-    // Check if state is stale (not used for a while)
-    if (currentTick - state.lastUsedTick > SPIRAL_STATE_RESET_TICKS) {
-        // Reset state
-        state.initialized = false;
-        spiralStairState.delete(entityId);
-        // Re-initialize
-        const rightDir = goingDown ? rotateDirectionCounterClockwise({ x: dirX, z: dirZ }) : rotateDirectionClockwise({ x: dirX, z: dirZ });
-        const rightX = Math.round(rightDir.x);
-        const rightZ = Math.round(rightDir.z);
-        const centerPillarX = rightX !== 0 ? bearX + rightX : bearX + 1;
-        const centerPillarZ = rightZ !== 0 ? bearZ + rightZ : bearZ;
-        state = {
-            centerPillar: { x: centerPillarX, y: bearY, z: centerPillarZ },
-            currentDirection: { x: dirX, z: dirZ },
-            spiralStep: 0,
-            lastStepFoothold: null,
-            initialized: true,
-            lastUsedTick: currentTick
-        };
-        spiralStairState.set(entityId, state);
-        
-        if (getDebugGeneral()) {
-            console.warn(`[MINING AI] carveSpiralStair: Reset stale spiral state, centerPillar=(${centerPillarX},${bearY},${centerPillarZ})`);
+        // Check if state is stale (not used for a while) BEFORE updating lastUsedTick
+        // This allows us to detect long gaps between uses
+        if (currentTick - state.lastUsedTick > SPIRAL_STATE_RESET_TICKS) {
+            // Reset state and re-pick center pillar (may have been air)
+            state.initialized = false;
+            spiralStairState.delete(entityId);
+            state = {
+                centerPillar: { x: centerPillarX, y: bearY, z: centerPillarZ },
+                currentDirection: { x: dirX, z: dirZ },
+                spiralStep: 0,
+                lastStepFoothold: null,
+                initialized: true,
+                lastUsedTick: currentTick
+            };
+            spiralStairState.set(entityId, state);
+            
+            if (getDebugGeneral()) {
+                console.warn(`[MINING AI] carveSpiralStair: Reset stale spiral state, centerPillar=(${centerPillarX},${bearY},${centerPillarZ}), solidCount=${bestPillar.n}`);
+            }
+        } else {
+            // State is not stale, update last used tick after the check
+            state.lastUsedTick = currentTick;
+            spiralStairState.set(entityId, state);
         }
     }
     
-    const centerPillar = state.centerPillar;
+    let centerPillar = state.centerPillar;
+    // CRITICAL: Bear must not be in the pillar - if bear moved onto center pillar, re-pick pillar beside bear
+    if (centerPillar.x === bearX && centerPillar.z === bearZ) {
+        state.centerPillar = { x: centerPillarX, y: bearY, z: centerPillarZ };
+        centerPillar = state.centerPillar;
+        spiralStairState.set(entityId, state);
+        if (getDebugGeneral()) {
+            console.warn(`[MINING AI] carveSpiralStair: Bear was in pillar - re-picked center pillar to (${centerPillar.x},${centerPillar.y},${centerPillar.z})`);
+        }
+    }
     let currentDir = state.currentDirection;
     const spiralStep = state.spiralStep;
     const lastStepFoothold = state.lastStepFoothold;
@@ -5456,35 +5471,15 @@ function carveSpiralStair(entity, tunnelHeight, digContext, directionOverride = 
     const frontZ = bearZ + currentDir.z;
     
     // CRITICAL: Never break the center pillar!
-    // Center pillar is 2x2, so check all 4 blocks
-    const centerPillarBlocks = [
-        { x: centerPillar.x, z: centerPillar.z },
-        { x: centerPillar.x + 1, z: centerPillar.z },
-        { x: centerPillar.x, z: centerPillar.z + 1 },
-        { x: centerPillar.x + 1, z: centerPillar.z + 1 }
-    ];
-    
-    let wouldBreakCenter = false;
-    for (const cpBlock of centerPillarBlocks) {
-        if (frontX === cpBlock.x && frontZ === cpBlock.z) {
-            wouldBreakCenter = true;
-            break;
-        }
-    }
+    // Center pillar is 1x1 (single block)
+    const wouldBreakCenter = frontX === centerPillar.x && frontZ === centerPillar.z;
     
     if (wouldBreakCenter) {
         // Would break center - rotate direction and try again
         const rotatedDir = goingDown ? rotateDirectionCounterClockwise(currentDir) : rotateDirectionClockwise(currentDir);
         const newFrontX = bearX + rotatedDir.x;
         const newFrontZ = bearZ + rotatedDir.z;
-        
-        let stillWouldBreak = false;
-        for (const cpBlock of centerPillarBlocks) {
-            if (newFrontX === cpBlock.x && newFrontZ === cpBlock.z) {
-                stillWouldBreak = true;
-                break;
-            }
-        }
+        const stillWouldBreak = newFrontX === centerPillar.x && newFrontZ === centerPillar.z;
         
         if (!stillWouldBreak) {
             currentDir = rotatedDir;
@@ -5499,27 +5494,72 @@ function carveSpiralStair(entity, tunnelHeight, digContext, directionOverride = 
     }
     
     // Recalculate front position with updated direction
-    const frontX_final = bearX + currentDir.x;
-    const frontZ_final = bearZ + currentDir.z;
+    let frontX_final = bearX + currentDir.x;
+    let frontZ_final = bearZ + currentDir.z;
     
     // Calculate future step foothold (next step after jumping)
     // For ascending: future foothold is at (frontX, bearY, frontZ) - same Y level as current feet
     // For descending: future foothold is at (frontX, bearY - 1, frontZ) - one Y level down
-    const futureFoothold = goingDown ? 
+    // CRITICAL: Step block must be solid - if already air, stair cannot be climbed; try rotated direction
+    let futureFoothold = goingDown ?
         { x: frontX_final, y: bearY - 1, z: frontZ_final } :
         { x: frontX_final, y: bearY, z: frontZ_final };
     
-    // Mining pattern based on implementation plan:
-    // Step 1: Mine block above head (bearX, bearY + 2, bearZ)
-    // Step 2: Mine block in front at head level (frontX, bearY + 1, frontZ)
-    // Step 3: Mine block above that (frontX, bearY + 2, frontZ)
+    const stepBlockAt = (fx, fz) => {
+        const sy = goingDown ? bearY - 1 : bearY;
+        const b = getBlock(dimension, fx, sy, fz);
+        return b && isSolidBlock(b) && !AIR_BLOCKS.has(b.typeId);
+    };
+    let tryDir = currentDir;
+    let stepIsSolid = stepBlockAt(frontX_final, frontZ_final);
+    for (let rot = 0; rot < 4 && !stepIsSolid; rot++) {
+        tryDir = goingDown ? rotateDirectionCounterClockwise(tryDir) : rotateDirectionClockwise(tryDir);
+        const fx = bearX + tryDir.x, fz = bearZ + tryDir.z;
+        if (stepBlockAt(fx, fz)) {
+            stepIsSolid = true;
+            currentDir = tryDir;
+            state.currentDirection = currentDir;
+            frontX_final = fx;
+            frontZ_final = fz;
+            futureFoothold = goingDown ? { x: fx, y: bearY - 1, z: fz } : { x: fx, y: bearY, z: fz };
+            if (getDebugGeneral()) {
+                console.warn(`[MINING AI] carveSpiralStair: Step was air, using rotated direction (${currentDir.x},${currentDir.z}), step now solid at (${fx},${futureFoothold.y},${fz})`);
+            }
+            break;
+        }
+    }
+    if (!stepIsSolid) {
+        if (getDebugGeneral() || getDebugMining()) {
+            console.warn(`[MINING AI] carveSpiralStair: No solid step in any direction - skipping mine (would create unclimbable stair)`);
+        }
+        spiralStairState.set(entityId, state);
+        // Fall through to upward scan / climb impulse below
+    }
     
-    const blocksToMine = [
-        { x: bearX, y: bearY + 2, z: bearZ, name: "above head" },
-        { x: frontX_final, y: bearY + 1, z: frontZ_final, name: "in front at head level" },
-        { x: frontX_final, y: bearY + 2, z: frontZ_final, name: "above front" }
-    ];
-    
+    // Mining pattern: branch on goingDown.
+    // Ascending: clear above head and in front at head level (same Y) for next step up.
+    // Descending: clear front floor and headroom at lower level (frontX_final, frontZ_final, bearY-1 / bearY) for next step down.
+    const blocksToMine = goingDown
+        ? [
+            { x: frontX_final, y: bearY - 1, z: frontZ_final, name: "front floor" },
+            { x: frontX_final, y: bearY, z: frontZ_final, name: "headroom" },
+            { x: frontX_final, y: bearY + 1, z: frontZ_final, name: "headroom above" }
+          ]
+        : [
+            { x: bearX, y: bearY + 2, z: bearZ, name: "above head" },
+            { x: frontX_final, y: bearY + 1, z: frontZ_final, name: "in front at head level" },
+            { x: frontX_final, y: bearY + 2, z: frontZ_final, name: "above front" }
+          ];
+    // Focus on mining: look at the block in front at head level (not at target)
+    try {
+        entity.lookAt({
+            x: frontX_final + 0.5,
+            y: bearY + 1.5,
+            z: frontZ_final + 0.5
+        });
+    } catch { }
+    // Only mine when we have a solid step to land on (otherwise stair would be unclimbable)
+    if (stepIsSolid) {
     // Check if another bear is working on these blocks
     for (const block of blocksToMine) {
         const blockKey = `${block.x},${block.y},${block.z}`;
@@ -5527,11 +5567,13 @@ function carveSpiralStair(entity, tunnelHeight, digContext, directionOverride = 
         if (existingWork && existingWork.entityId !== entityId) {
             const ticksSinceWork = currentTick - existingWork.tick;
             if (ticksSinceWork < STAIR_WORK_LOCK_TICKS) {
-                return; // Another bear is working on this
+                stepIsSolid = false; // Treat as skip so we fall through to scan/impulse
+                break;
             }
         }
     }
     
+    if (stepIsSolid) {
     // Mine blocks in order
     for (const block of blocksToMine) {
         if (digContext.cleared >= digContext.max) break;
@@ -5553,11 +5595,8 @@ function carveSpiralStair(entity, tunnelHeight, digContext, directionOverride = 
                     activeStairWork.set(blockKey, { entityId, tick: currentTick });
                 }
                 
-                // Protect center pillar blocks
-                for (const cpBlock of centerPillarBlocks) {
-                    const cpKey = `${cpBlock.x},${centerPillar.y},${cpBlock.z}`;
-                    recentStairBlocks.set(cpKey, currentTick);
-                }
+                // Protect center pillar (1x1 single block)
+                recentStairBlocks.set(`${centerPillar.x},${centerPillar.y},${centerPillar.z}`, currentTick);
                 
                 // Protect future foothold
                 if (futureFoothold) {
@@ -5611,9 +5650,83 @@ function carveSpiralStair(entity, tunnelHeight, digContext, directionOverride = 
             }
         }
     }
+    } // end if (stepIsSolid) - mining loop
+    } // end if (stepIsSolid) - only mine when step is solid
     
-    // If we get here, all blocks are mined or not breakable
-    // Update state anyway
+    // If we get here, the 3 fixed spiral positions were air (open shaft). Only mine in current step direction (front + above bear), never 3x3.
+    // So we only ever carve one step, then climb it; spiral by rotating direction each step.
+    const clearedBeforeScan = digContext.cleared;
+    const isCenterPillarBlock = (cx, cz) => cx === centerPillar.x && cz === centerPillar.z;
+    if (!goingDown && digContext.cleared < digContext.max) {
+        const maxScanY = Math.min(bearY + 3, targetInfo?.entity?.location?.y != null ? Math.floor(targetInfo.entity.location.y) + 2 : bearY + 3);
+        // Only 2 columns: current position (headroom above) and FRONT (step direction). No 3x3 — one step at a time.
+        const stepCols = [{ x: bearX, z: bearZ }, { x: frontX_final, z: frontZ_final }].filter(c => !isCenterPillarBlock(c.x, c.z));
+        for (let scanY = bearY + 1; scanY <= maxScanY && digContext.cleared < digContext.max; scanY++) {
+            for (const col of stepCols) {
+                if (isSpiralBlockProtected(col.x, scanY, col.z, centerPillar, lastStepFoothold, futureFoothold)) continue;
+                const blockObj = getBlock(dimension, col.x, scanY, col.z);
+                if (blockObj && isBreakableBlock(blockObj) && isSolidBlock(blockObj)) {
+                    if (canSeeBlock(entity, col.x, scanY, col.z, targetInfo)) {
+                        const blockKey = `${col.x},${scanY},${col.z}`;
+                        const existingWork = activeStairWork.get(blockKey);
+                        if (!existingWork || existingWork.entityId === entityId || (currentTick - existingWork.tick) >= STAIR_WORK_LOCK_TICKS) {
+                            activeStairWork.set(blockKey, { entityId, tick: currentTick });
+                            clearBlock(dimension, col.x, scanY, col.z, digContext, entity, targetInfo);
+                            if (getDebugGeneral() || getDebugMining()) {
+                                console.warn(`[MINING AI] carveSpiralStair: Mined one step at (${col.x}, ${scanY}, ${col.z}) - open shaft (front/head only)`);
+                            }
+                            const newDir = rotateDirectionClockwise(currentDir);
+                            state.currentDirection = newDir;
+                            state.spiralStep = (spiralStep + 1) % 4;
+                            try {
+                                entity.applyImpulse({ x: currentDir.x * 0.10, z: currentDir.z * 0.10, y: 0.08 });
+                            } catch { }
+                            spiralStairState.set(entityId, state);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        // No block in front or above — point spiral toward nearest block in 3x3 so next tick we mine one step there
+        let bestDir = null;
+        let bestDist = 999;
+        for (let i = -1; i <= 1; i++) {
+            for (let j = -1; j <= 1; j++) {
+                if (i === 0 && j === 0) continue;
+                const cx = bearX + i, cz = bearZ + j;
+                if (isCenterPillarBlock(cx, cz)) continue;
+                for (let h = 1; h <= 3; h++) {
+                    const blockObj = getBlock(dimension, cx, bearY + h, cz);
+                    if (blockObj && isBreakableBlock(blockObj) && isSolidBlock(blockObj)) {
+                        const dist = Math.abs(i) + Math.abs(j);
+                        if (dist < bestDist) {
+                            bestDist = dist;
+                            // Nearest cardinal so spiral direction points at this column
+                            bestDir = Math.abs(i) >= Math.abs(j)
+                                ? { x: Math.sign(i) || 1, z: 0 }
+                                : { x: 0, z: Math.sign(j) || 1 };
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        if (bestDir && (bestDir.x !== currentDir.x || bestDir.z !== currentDir.z)) {
+            state.currentDirection = bestDir;
+            spiralStairState.set(entityId, state);
+        }
+    }
+    // Apply climb impulse so bear moves up; next tick we mine one step in (possibly rotated) front
+    if (!goingDown && digContext.cleared === clearedBeforeScan && targetInfo?.entity?.location) {
+        try {
+            entity.applyImpulse({ x: currentDir.x * 0.12, z: currentDir.z * 0.12, y: 0.10 });
+            if (getDebugGeneral() || getDebugMovement()) {
+                console.warn(`[MINING AI] carveSpiralStair: Open shaft - climb impulse (mine one step next tick)`);
+            }
+        } catch { }
+    }
+    
     spiralStairState.set(entityId, state);
 }
 
@@ -5989,15 +6102,12 @@ function isTargetOnPillarOrBridge(entity, targetInfo) {
 // Break blocks under an elevated target (like a pillar) when close enough
 // Also breaks blocks under targets for pitfall creation
 function breakBlocksUnderTarget(entity, targetInfo, digContext) {
-    // Make bear look at target when mining
+    // Focus on mining: look at the block under target (what we're breaking), not at the target
     if (targetInfo && targetInfo.entity?.location) {
         try {
             const targetLoc = targetInfo.entity.location;
-            entity.lookAt({
-                x: targetLoc.x,
-                y: targetLoc.y + 1.5,
-                z: targetLoc.z
-            });
+            const bx = Math.floor(targetLoc.x), bz = Math.floor(targetLoc.z), by = Math.floor(targetLoc.y) - 1;
+            entity.lookAt({ x: bx + 0.5, y: by + 0.5, z: bz + 0.5 });
         } catch { }
     }
     
@@ -6048,22 +6158,19 @@ function breakBlocksUnderTarget(entity, targetInfo, digContext) {
         return; // Too far - need to move closer before trying pitfall
     }
     
-    // If target is too high above (dy > 5) and not on pillar, pitfall won't work well
-    // This check is already handled in strategy determination, but add safety check here too
-    if (dy > 5 && !isOnPillar) {
+    // If target is too high above (dy > 5) and not on pillar and not "bear under player in reach", pitfall won't work well
+    const bearUnderPlayerInReach = dy > 0 && dy <= 5 && distance <= 3;
+    if (dy > 5 && !isOnPillar && !bearUnderPlayerInReach) {
         if (getDebugPitfall()) {
             console.warn(`[PITFALL DEBUG] breakBlocksUnderTarget: Target too high (dy=${dy.toFixed(1)} > 5) - pitfall not effective, should use stairs`);
         }
         return; // Too high for pitfall - should use stairs instead
     }
     
-    // CRITICAL: Do NOT break blocks under target when target is above (dy > 1)
-    // Only break blocks under target when target is at same level or below (dy <= 1)
-    // EXPANDED CONDITIONS: Break blocks under target if:
-    // 1. Target is on a pillar/bridge AND at same level or below (dy <= 1) - HIGHEST PRIORITY
-    // 2. OR: within 8 blocks horizontally AND target is at same level or below (dy <= 1)
-    // Do NOT use pitfall for targets above (dy > 1) - stairs are needed instead
-    const shouldBreakUnder = dy <= 1 && (isOnPillar || (distance <= 8 && dy <= 1));
+    // Break blocks under target if:
+    // 1. Target on pillar/same level or below (dy <= 1), OR
+    // 2. Bear under player within reach (dy > 0, distance <= 3) — mine blocks under player's feet so they fall
+    const shouldBreakUnder = (dy <= 1 && (isOnPillar || (distance <= 8 && dy <= 1))) || bearUnderPlayerInReach;
     
     if (shouldBreakUnder) {
         if (getDebugPitfall()) {
@@ -7109,9 +7216,12 @@ function determineMiningStrategy(entity, targetInfo, tick) {
                 optimalPosition = calculateOptimalAttackPosition(entity, targetInfo);
             }
         } else if (dy > 1) {
-            // Target is above (more than 1 block) - prioritize stairs/tunnel strategy
-            // This ensures bears build upward tunnels instead of trying pitfall when target is high
-            if (dy >= HIGH_TARGET_THRESHOLD) {
+            // Target is above (more than 1 block)
+            // When bear is under player within reach (horizontalDist <= 3), use pitfall — mine blocks under player so they fall
+            if (dy <= 5 && horizontalDist <= 3) {
+                strategy = "pitfall";
+                optimalPosition = { x: targetLoc.x, y: Math.floor(targetLoc.y) - 2, z: targetLoc.z };
+            } else if (dy >= HIGH_TARGET_THRESHOLD) {
                 // Target is very high above (10+ blocks) - stairs are essential
                 strategy = "tunnel";
             } else if (dy > 5) {
@@ -9057,31 +9167,42 @@ function processContext(ctx, config, tick, leaderSummaryById) {
             if (targetInfo && targetInfo.entity?.location) {
                 targetDy = targetInfo.entity.location.y - loc.y;
             }
-            // CRITICAL: If target is above (dy > 1), ALWAYS build stairs to reach same Y level, regardless of horizontal position
-            // Even if inefficient, we need to reach the target's Y level. If direct path is blocked, tunnel horizontally to find space.
-            // This ensures the bear always works toward the target's Y level, even if it means going out of the way.
-            if (targetDy > 1) {
-                // Always force stair building when target is above - must reach same Y level
-                // If path is clear, we can still move closer while building stairs, but stairs are priority
+            // CRITICAL: Only build stairs when target is SIGNIFICANTLY above (dy > 1.5) to avoid false positives from floating point precision
+            // When on same level (dy <= 1.5) and close horizontally (<= 6 blocks), mine forward instead of building stairs
+            const horizontalDistDebug = targetInfo?.entity?.location ? Math.hypot(targetInfo.entity.location.x - loc.x, targetInfo.entity.location.z - loc.z) : 0;
+            const isOnSameLevel = Math.abs(targetDy) <= 1.5;
+            const isCloseHorizontally = horizontalDistDebug <= 6;
+            
+            // Only force stairs when target is significantly above AND (far horizontally OR not close)
+            // When on same level and close, don't build stairs - mine forward instead
+            if (targetDy > 1.5 && !(isOnSameLevel && isCloseHorizontally)) {
+                // Target is significantly above - build stairs to reach same Y level
                 ascending = true;
                 ascendGoal = true;
                 needsStairsOrRamps = true;
                 if (getDebugMining() || getDebugGeneral()) {
-                    const horizontalDistDebug = targetInfo?.entity?.location ? Math.hypot(targetInfo.entity.location.x - loc.x, targetInfo.entity.location.z - loc.z) : 0;
                     console.warn(`[MINING AI] Force stair building: targetDy=${targetDy.toFixed(1)}, horizontalDist=${horizontalDistDebug.toFixed(1)}, canReachByWalking=${canReachByWalking}`);
                 }
+            } else if (isOnSameLevel && isCloseHorizontally) {
+                // On same level and close - don't build stairs, mine forward instead
+                if (getDebugMining() || getDebugGeneral()) {
+                    console.warn(`[MINING AI] Same level and close (dy=${targetDy.toFixed(1)}, dist=${horizontalDistDebug.toFixed(1)}) - mining forward instead of stairs`);
+                }
+                // Clear stair flags so we don't build stairs
+                ascending = false;
+                ascendGoal = false;
+                needsStairsOrRamps = false;
             }
             const shouldBuildStairs = (ascending || ascendGoal || needsStairsOrRamps || (isStuck && stuckDirectionOverride && stuckDirectionOverride.y === 1));
             
-            // CRITICAL: When target is above (dy > 1), ALWAYS build stairs to reach same Y level
-            // Even if path is clear, we still need stairs to reach the target's Y level
-            // Only skip stairs if target is NOT above (dy <= 0) and shouldMoveCloser=true
-            // IMPORTANT: Reaching the target's Y level is always priority, even if inefficient
+            // CRITICAL: When on same level (dy <= 1.5) and close (<= 6 blocks), NEVER build stairs - mine forward instead
+            // This prevents mining down/up when bear should just mine forward horizontally
+            const skipStairsForSameLevel = isOnSameLevel && isCloseHorizontally;
             const skipStairsForMovement = shouldMoveCloser && targetDy <= 0; // Only skip if target is NOT above
             
             if (getDebugMining() || getDebugGeneral()) {
                 const horizontalDistDebug = targetInfo?.entity?.location ? Math.hypot(targetInfo.entity.location.x - loc.x, targetInfo.entity.location.z - loc.z) : 0;
-                console.warn(`[MINING AI] Stair building decision: shouldBuildStairs=${shouldBuildStairs}, skipStairsForMovement=${skipStairsForMovement}, targetDy=${targetDy.toFixed(1)}, horizontalDist=${horizontalDistDebug.toFixed(1)}, ascending=${ascending}, ascendGoal=${ascendGoal}, needsStairsOrRamps=${needsStairsOrRamps}, shouldMoveCloser=${shouldMoveCloser}, digContext.cleared=${digContext.cleared}/${digContext.max}`);
+                console.warn(`[MINING AI] Stair building decision: shouldBuildStairs=${shouldBuildStairs}, skipStairsForSameLevel=${skipStairsForSameLevel}, skipStairsForMovement=${skipStairsForMovement}, targetDy=${targetDy.toFixed(1)}, horizontalDist=${horizontalDistDebug.toFixed(1)}, ascending=${ascending}, ascendGoal=${ascendGoal}, needsStairsOrRamps=${needsStairsOrRamps}, shouldMoveCloser=${shouldMoveCloser}, digContext.cleared=${digContext.cleared}/${digContext.max}`);
                 if (targetInfo?.entity?.location) {
                     const targetLoc = targetInfo.entity.location;
                     console.warn(`[MINING AI] Stair decision TARGET: (${targetLoc.x.toFixed(2)}, ${targetLoc.y.toFixed(2)}, ${targetLoc.z.toFixed(2)}) | BEAR: (${loc.x.toFixed(2)}, ${loc.y.toFixed(2)}, ${loc.z.toFixed(2)})`);
@@ -9090,10 +9211,11 @@ function processContext(ctx, config, tick, leaderSummaryById) {
             
             if (getDebugMining() || getDebugGeneral()) {
                 const horizontalDistDebug = targetInfo?.entity?.location ? Math.hypot(targetInfo.entity.location.x - loc.x, targetInfo.entity.location.z - loc.z) : 0;
-                console.warn(`[MINING AI] Stair building decision: shouldBuildStairs=${shouldBuildStairs}, skipStairsForMovement=${skipStairsForMovement}, targetDy=${targetDy.toFixed(1)}, horizontalDist=${horizontalDistDebug.toFixed(1)}, ascending=${ascending}, ascendGoal=${ascendGoal}, needsStairsOrRamps=${needsStairsOrRamps}, shouldMoveCloser=${shouldMoveCloser}`);
+                console.warn(`[MINING AI] Stair building decision: shouldBuildStairs=${shouldBuildStairs}, skipStairsForSameLevel=${skipStairsForSameLevel}, skipStairsForMovement=${skipStairsForMovement}, targetDy=${targetDy.toFixed(1)}, horizontalDist=${horizontalDistDebug.toFixed(1)}, ascending=${ascending}, ascendGoal=${ascendGoal}, needsStairsOrRamps=${needsStairsOrRamps}, shouldMoveCloser=${shouldMoveCloser}`);
             }
             
-            if (shouldBuildStairs && !skipStairsForMovement && digContext.cleared < digContext.max) {
+            // Skip stair building entirely when on same level and close - mine forward instead
+            if (shouldBuildStairs && !skipStairsForMovement && !skipStairsForSameLevel && digContext.cleared < digContext.max) {
                 // Adaptive mining strategy: Evaluate all options and pick the best one
                 // Priority order: Pitfall > Regular Stairs > Spiral Stairs
                 let chosenAction = null;
@@ -9107,38 +9229,28 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                     const horizontalDist = Math.hypot(dx, dz);
                     
                     // OPTION 1: Pitfall creation (breaking blocks under target)
-                    // Best when: Target is on a pillar/bridge OR at reasonable height (3-5 blocks) and close
-                    // Pitfall is NOT effective for high targets (5+ blocks) - use stairs instead
+                    // Use when: (1) Target on pillar/same level (dy <= 1), OR (2) Bear under player within reach (dy > 0, horizontalDist <= 3)
                     const pillarInfo = isTargetOnPillarOrBridge(entity, targetInfo);
                     const isOnPillar = pillarInfo !== null;
-                    // Only consider pitfall if:
-                    // CRITICAL: Do NOT use pitfall when target is above (dy > 1)
-                    // Pitfall breaks blocks under target, which is counterproductive when target is above
-                    // Only use pitfall when target is at same level or below (dy <= 1)
-                    // 1. Target is on a pillar/bridge AND at same level or below (dy <= 1), OR
-                    // 2. Target is at same level or slightly below (dy <= 1)
-                    // Do NOT use pitfall for targets above (dy > 1) - stairs are needed instead
-                    const shouldConsiderPitfall = dy <= 1 && ((isOnPillar && dy <= 1) || (dy <= 1 && horizontalDist <= 4));
+                    const bearUnderPlayerInReach = dy > 0 && dy <= 5 && horizontalDist <= 3;
+                    const shouldConsiderPitfall = (dy <= 1 && ((isOnPillar && dy <= 1) || (dy <= 1 && horizontalDist <= 4))) || bearUnderPlayerInReach;
                     
-                    if (shouldConsiderPitfall && (strategy === "pitfall" || strategy === "hybrid_pitfall" || isOnPillar)) {
-                        // Check if there are blocks to break under the target
+                    if (shouldConsiderPitfall && (strategy === "pitfall" || strategy === "hybrid_pitfall" || isOnPillar || bearUnderPlayerInReach)) {
+                        // Check if there are blocks to break under the target (under player's feet)
                         const targetX = Math.floor(targetLoc.x);
                         const targetY = Math.floor(targetLoc.y);
                         const targetZ = Math.floor(targetLoc.z);
                         let pitfallScore = 0;
                         
-                        // Check for breakable blocks under target
-                        // For pillars, check a wider area (3x3); for normal, just directly under
                         const checkRadius = isOnPillar ? 1 : 0;
                         const maxDepth = isOnPillar ? 15 : 5;
                         
-                        for (let dx = -checkRadius; dx <= checkRadius; dx++) {
-                            for (let dz = -checkRadius; dz <= checkRadius; dz++) {
+                        for (let dxi = -checkRadius; dxi <= checkRadius; dxi++) {
+                            for (let dzi = -checkRadius; dzi <= checkRadius; dzi++) {
                                 for (let y = targetY - 1; y >= Math.max(targetY - maxDepth, Math.floor(loc.y) - 2); y--) {
-                                    const block = getBlock(entity.dimension, targetX + dx, y, targetZ + dz);
+                                    const block = getBlock(entity.dimension, targetX + dxi, y, targetZ + dzi);
                                     if (isBreakableBlock(block) && isSolidBlock(block)) {
-                                        // Higher score for pillars (more strategic)
-                                        pitfallScore = isOnPillar ? 12 : 8; // Reduced from 15/10 to prefer stairs more
+                                        pitfallScore = bearUnderPlayerInReach ? 15 : (isOnPillar ? 12 : 8);
                                         break;
                                     }
                                 }
@@ -9153,75 +9265,48 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                         }
                     }
                     
-                    // OPTION 2: Spiral stairs (upward) - CHECK FIRST - 3x3 area for vertical ascent
-                    // Use when:
-                    // 1. Player is directly above (horizontalDist < 1) - spiral stairs allow vertical ascent in 3x3 area
-                    // 2. OR normal stairs cannot be built effectively (e.g., player is 10 blocks above and 5 blocks away horizontally)
-                    //    This happens when vertical distance is much greater than horizontal distance, making direct stairs inefficient
-                    // CRITICAL: Check spiral stairs BEFORE regular stairs - spiral stairs are better for vertical ascents
-                    const horizontalDistSpiral = targetInfo?.entity?.location ? Math.hypot(targetInfo.entity.location.x - loc.x, targetInfo.entity.location.z - loc.z) : 0;
-                    const isDirectlyAbove = horizontalDistSpiral < 1 && dy > 0;
-                    const cannotBuildNormalStairs = dy >= SPIRAL_STAIR_THRESHOLD && dy > horizontalDistSpiral * 1.5; // Vertical distance is 1.5x horizontal distance
-                    
-                    // Also use spiral stairs when going straight up (dy is large relative to horizontal distance)
-                    // This prevents "flying upwards and mining a line of blocks" - use spiral stairs instead
-                    const goingStraightUp = dy >= SPIRAL_STAIR_THRESHOLD && horizontalDistSpiral <= 2; // Going mostly straight up
-                    
-                    if (dy >= SPIRAL_STAIR_THRESHOLD && (isDirectlyAbove || cannotBuildNormalStairs || goingStraightUp)) {
-                        if (getDebugGeneral() || getDebugMining()) {
-                            console.warn(`[MINING AI] Checking spiral stairs: dy=${dy.toFixed(1)}, horizontalDist=${horizontalDistSpiral.toFixed(1)}, isDirectlyAbove=${isDirectlyAbove}, goingStraightUp=${goingStraightUp}, cannotBuildNormalStairs=${cannotBuildNormalStairs}`);
-                        }
-                        
-                        // CRITICAL: When directly above or going straight up, skip forward path check in isSpiralStairViable
-                        // The bear needs to mine UPWARD in a spiral, not forward - forward path check is irrelevant
-                        // Pass targetInfo so it can check blocks up to target Y level
-                        const spiralViable = isSpiralStairViable(entity, config.tunnelHeight, directionOverride, false, isDirectlyAbove || goingStraightUp, targetInfo);
-                        
-                        if (getDebugGeneral() || getDebugMining()) {
-                            console.warn(`[MINING AI] Spiral stair viability check: viable=${spiralViable}, skipForwardPathCheck=${isDirectlyAbove || goingStraightUp}`);
-                        }
-                        
-                        if (spiralViable) {
-                            // Higher score for very high targets - spiral stairs work better in 3x3 area
-                            let spiralScore = 3; // Base score
-                            if (isDirectlyAbove) {
-                                spiralScore = 20; // Highest priority when directly above - spiral stairs are essential
-                            } else if (goingStraightUp) {
-                                spiralScore = 18; // Very high priority when going straight up - prevents line mining
-                            } else if (dy >= HIGH_TARGET_THRESHOLD) {
-                                spiralScore = 16; // High priority for very high targets - 3x3 area is essential
-                            } else if (dy > 5) {
-                                spiralScore = 12; // Medium-high priority for high targets
+                    // OPTION 2: Spiral stairs (upward) — ARCHIVED until fixed. Set SPIRAL_STAIRS_ARCHIVED = false to re-enable.
+                    if (!SPIRAL_STAIRS_ARCHIVED) {
+                        const horizontalDistSpiral = targetInfo?.entity?.location ? Math.hypot(targetInfo.entity.location.x - loc.x, targetInfo.entity.location.z - loc.z) : 0;
+                        const isDirectlyAbove = horizontalDistSpiral < 1 && dy > 0;
+                        const cannotBuildNormalStairs = dy >= SPIRAL_STAIR_THRESHOLD && dy > horizontalDistSpiral * 1.5;
+                        const goingStraightUp = dy >= SPIRAL_STAIR_THRESHOLD && horizontalDistSpiral <= 2;
+                        const bearFartherDownOutOfReach = dy >= SPIRAL_STAIR_THRESHOLD && dy > 0 && horizontalDistSpiral > 3;
+                        if (dy >= SPIRAL_STAIR_THRESHOLD && (isDirectlyAbove || cannotBuildNormalStairs || goingStraightUp || bearFartherDownOutOfReach)) {
+                            if (getDebugGeneral() || getDebugMining()) {
+                                console.warn(`[MINING AI] Checking spiral stairs: dy=${dy.toFixed(1)}, horizontalDist=${horizontalDistSpiral.toFixed(1)}, isDirectlyAbove=${isDirectlyAbove}, goingStraightUp=${goingStraightUp}, cannotBuildNormalStairs=${cannotBuildNormalStairs}, bearFartherDownOutOfReach=${bearFartherDownOutOfReach}`);
                             }
-                            if (spiralScore > actionScore) {
-                                actionScore = spiralScore;
-                                chosenAction = "spiral_stair";
-                                if (getDebugGeneral() || getDebugMining()) {
-                                    console.warn(`[MINING AI] Spiral stairs chosen: score=${spiralScore}, actionScore=${actionScore}, isDirectlyAbove=${isDirectlyAbove}, goingStraightUp=${goingStraightUp}`);
+                            const skipForwardPathCheck = isDirectlyAbove || goingStraightUp || bearFartherDownOutOfReach;
+                            const spiralViable = isSpiralStairViable(entity, config.tunnelHeight, directionOverride, false, skipForwardPathCheck, targetInfo);
+                            if (getDebugGeneral() || getDebugMining()) {
+                                console.warn(`[MINING AI] Spiral stair viability check: viable=${spiralViable}, skipForwardPathCheck=${skipForwardPathCheck}`);
+                            }
+                            const spiralWouldCreatePitfall = dy > 0 && horizontalDistSpiral <= 3;
+                            if (spiralViable && !spiralWouldCreatePitfall) {
+                                let spiralScore = 3;
+                                if (isDirectlyAbove) { spiralScore = 20; } else if (goingStraightUp) { spiralScore = 18; } else if (bearFartherDownOutOfReach) { spiralScore = 14; } else if (dy >= HIGH_TARGET_THRESHOLD) { spiralScore = 16; } else if (dy > 5) { spiralScore = 12; }
+                                if (spiralScore > actionScore) {
+                                    actionScore = spiralScore;
+                                    chosenAction = "spiral_stair";
+                                    if (getDebugGeneral() || getDebugMining()) {
+                                        console.warn(`[MINING AI] Spiral stairs chosen: score=${spiralScore}, actionScore=${actionScore}, isDirectlyAbove=${isDirectlyAbove}, goingStraightUp=${goingStraightUp}, bearFartherDownOutOfReach=${bearFartherDownOutOfReach}`);
+                                    }
                                 }
                             }
                         }
                     }
                     
-                    // OPTION 3: Regular stairs
-                    // Good for: All climbs, especially high targets (5+ blocks)
-                    // Create stairs proactively when target is above, even while moving horizontally
-                    // This ensures stairs are built on the way to the target, not just when directly below
-                    // BUT: Only use regular stairs if spiral stairs weren't chosen (spiral stairs are better for vertical ascents)
+                    // OPTION 3: Regular stairs — outrank spiral when spiral is re-enabled (scores > spiral max 20)
                     if (dy > 1 && chosenAction !== "spiral_stair") {
-                        // Regular stairs are always viable (they adapt to terrain)
-                        // Higher score if target is significantly above (more planning needed)
-                        // Prefer stairs over pitfall for high targets (dy > 5)
-                        // For very high targets (10+ blocks), stairs are essential
-                        let regularStairScore = 5; // Base score
+                        let regularStairScore = 18; // Base score (above spiral max when re-enabled)
                         if (dy >= HIGH_TARGET_THRESHOLD) {
-                            regularStairScore = 15; // Highest priority for very high targets (10+ blocks)
+                            regularStairScore = 25; // Highest priority for very high targets (10+ blocks)
                         } else if (dy > 5) {
-                            regularStairScore = 10; // High score for high targets - stairs are better than pitfall
+                            regularStairScore = 22; // High score for high targets
                         } else if (dy > 3) {
-                            regularStairScore = 8; // Higher score for moderate heights
+                            regularStairScore = 20; // Moderate heights
                         } else {
-                            regularStairScore = 6; // Base score for low heights
+                            regularStairScore = 18; // Low heights
                         }
                         if (regularStairScore > actionScore) {
                             actionScore = regularStairScore;
@@ -9239,21 +9324,10 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                     if (getDebugGeneral() || getDebugPitfall()) {
                         console.warn(`[MINING AI] After breakBlocksUnderTarget: cleared=${digContext.cleared}/${digContext.max}`);
                     }
-                } else if (chosenAction === "spiral_stair") {
+                } else if (chosenAction === "spiral_stair" && !SPIRAL_STAIRS_ARCHIVED) {
                     if (getDebugGeneral()) {
                         const dy = targetInfo?.entity?.location ? (targetInfo.entity.location.y - loc.y) : 0;
                         console.warn(`[MINING AI] Chosen action: SPIRAL_STAIR (dy=${dy.toFixed(1)}, threshold=${SPIRAL_STAIR_THRESHOLD}) - Score: 3`);
-                    }
-                    // Make bear look at target when mining
-                    if (targetInfo && targetInfo.entity?.location) {
-                        try {
-                            const targetLoc = targetInfo.entity.location;
-                            entity.lookAt({
-                                x: targetLoc.x,
-                                y: targetLoc.y + 1.5,
-                                z: targetLoc.z
-                            });
-                        } catch { }
                     }
                     carveSpiralStair(entity, config.tunnelHeight, digContext, directionOverride, targetInfo);
                     if (getDebugGeneral()) console.warn(`[MINING AI] After carveSpiralStair: cleared=${digContext.cleared}/${digContext.max}`);
@@ -9268,18 +9342,14 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                     if (targetInfo && targetInfo.entity?.location) {
                         const targetLoc = targetInfo.entity.location;
                         const horizontalDistRegular = Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z);
-                        
-                        // Make bear look at target when mining
+                        // Stairs mining: bear looks at player (target)
                         try {
                             entity.lookAt({
                                 x: targetLoc.x,
-                                y: targetLoc.y + 1.5, // Look at target's eye level
+                                y: targetLoc.y + 1.5,
                                 z: targetLoc.z
                             });
-                        } catch {
-                            // Silently fail if lookAt doesn't work
-                        }
-                        
+                        } catch { }
                         // Check if bear should stop mining
                         const hasClearPath = checkClearPathToTarget(entity, targetInfo);
                         const dy = targetLoc.y - loc.y;
@@ -9874,43 +9944,29 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                     let chosenDescendAction = "ramp";
                     let descendActionScore = 0;
                     
-                    // OPTION 1: Spiral stairs (for deep descents) - stair-like descent
-                    // Use when:
-                    // 1. Player is directly below (horizontalDist < 1) - spiral stairs allow vertical descent in 3x3 area
-                    // 2. OR normal stairs cannot be built effectively (e.g., player is 10 blocks below and 5 blocks away horizontally)
-                    //    This happens when vertical distance is much greater than horizontal distance, making direct stairs inefficient
-                    const isDirectlyBelow = horizontalDist < 1 && dy < 0;
-                    const cannotBuildNormalStairsDown = dy <= -SPIRAL_STAIR_THRESHOLD && Math.abs(dy) > horizontalDist * 1.5; // Vertical distance is 1.5x horizontal distance
-                    
-                    // Better for: Deep descents (4+ blocks), close horizontally, terrain is suitable
-                    // Leaders should prioritize spiral stairs so followers can follow
-                    const isLeader = role === "leader" && followerCount > 0;
-                    if (dy <= -SPIRAL_STAIR_THRESHOLD && (isDirectlyBelow || cannotBuildNormalStairsDown)) {
-                        // CRITICAL: When directly below, skip forward path check - bear needs to mine DOWNWARD in a spiral
-                        // Pass targetInfo so it can check blocks down to target Y level
-                        if (isSpiralStairViable(entity, config.tunnelHeight, directionOverride, true, isDirectlyBelow, targetInfo)) {
-                            // Leaders with followers get higher priority for spiral stairs (stair-like descent)
-                            let spiralScore = isLeader ? 10 : 6; // Higher score for leaders - allows followers to follow
-                            if (isDirectlyBelow) {
-                                spiralScore = 15; // Highest priority when directly below - spiral stairs are essential
-                            }
-                            if (spiralScore > descendActionScore) {
-                                descendActionScore = spiralScore;
-                                chosenDescendAction = "spiral_stair";
+                    // OPTION 1: Spiral stairs (for deep descents) — ARCHIVED until fixed. Set SPIRAL_STAIRS_ARCHIVED = false to re-enable.
+                    if (!SPIRAL_STAIRS_ARCHIVED) {
+                        const isDirectlyBelow = horizontalDist < 1 && dy < 0;
+                        const cannotBuildNormalStairsDown = dy <= -SPIRAL_STAIR_THRESHOLD && Math.abs(dy) > horizontalDist * 1.5;
+                        const isLeader = role === "leader" && followerCount > 0;
+                        const descendWouldCreatePitfall = dy < 0 && horizontalDist <= 3;
+                        if (dy <= -SPIRAL_STAIR_THRESHOLD && (isDirectlyBelow || cannotBuildNormalStairsDown) && !descendWouldCreatePitfall) {
+                            if (isSpiralStairViable(entity, config.tunnelHeight, directionOverride, true, isDirectlyBelow, targetInfo)) {
+                                let spiralScore = isLeader ? 10 : 6;
+                                if (isDirectlyBelow) { spiralScore = 15; }
+                                if (spiralScore > descendActionScore) {
+                                    descendActionScore = spiralScore;
+                                    chosenDescendAction = "spiral_stair";
+                                }
                             }
                         }
-                    }
-                    
-                    // Also prefer spiral stairs for leaders even if not deep descent (2+ blocks)
-                    // This ensures leaders create stair-like paths that followers can use
-                    if (isLeader && dy <= -2 && horizontalDist <= 12) {
-                        // Skip forward path check for leaders - they need to create spiral paths
-                        // Pass targetInfo so it can check blocks down to target Y level
-                        if (isSpiralStairViable(entity, config.tunnelHeight, directionOverride, true, false, targetInfo)) {
-                            const spiralScore = 8; // High priority for leaders - stair-like descent works better
-                            if (spiralScore > descendActionScore) {
-                                descendActionScore = spiralScore;
-                                chosenDescendAction = "spiral_stair";
+                        if (isLeader && dy <= -2 && horizontalDist <= 12 && horizontalDist > 3 && !descendWouldCreatePitfall) {
+                            if (isSpiralStairViable(entity, config.tunnelHeight, directionOverride, true, false, targetInfo)) {
+                                const spiralScore = 8;
+                                if (spiralScore > descendActionScore) {
+                                    descendActionScore = spiralScore;
+                                    chosenDescendAction = "spiral_stair";
+                                }
                             }
                         }
                     }
@@ -9923,8 +9979,8 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                         chosenDescendAction = "ramp";
                     }
                     
-                    // Execute the chosen descending action
-                    if (chosenDescendAction === "spiral_stair") {
+                    // Execute the chosen descending action (spiral archived — use ramp when spiral would have been chosen)
+                    if (chosenDescendAction === "spiral_stair" && !SPIRAL_STAIRS_ARCHIVED) {
                         if (getDebugGeneral()) {
                             console.warn(`[MINING AI] Chosen descending action: SPIRAL_STAIR (dy=${dy.toFixed(1)}, threshold=${SPIRAL_STAIR_THRESHOLD}) - Score: ${descendActionScore}`);
                         }
