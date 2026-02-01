@@ -315,7 +315,8 @@ const MINOR_RESPAWNED_PROPERTY = "mb_minor_respawned";
 const MAJOR_INFECTED_BEFORE_PROPERTY = "mb_major_infected_before";
 export const MINOR_CURE_GOLDEN_APPLE_PROPERTY = "mb_minor_cure_golden_apple";
 export const MINOR_CURE_GOLDEN_CARROT_PROPERTY = "mb_minor_cure_golden_carrot";
-const WORLD_INTRO_SEEN_PROPERTY = "mb_world_intro_seen";
+const WORLD_INTRO_SEEN_PROPERTY = "mb_world_intro_seen"; // legacy; intro is now per-player
+const PLAYER_INTRO_SEEN_PROPERTY = "mb_intro_seen"; // per-player: has this player ever seen the intro
 
 // Track intro state to prevent duplicates and suppress discovery messages during intro
 const introInProgress = new Map(); // playerId -> true when intro is showing
@@ -1462,8 +1463,8 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
         return; // Skip discovery messages during intro
     }
     
-    // Check if intro has been seen - if not, suppress discovery messages until intro completes
-    const introSeen = normalizeBoolean(getWorldProperty(WORLD_INTRO_SEEN_PROPERTY));
+    // Check if this player has seen intro - if not, suppress discovery messages until intro completes
+    const introSeen = normalizeBoolean(getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY));
     if (!introSeen && !codex?.items?.snowBookCrafted) {
         console.log(`[DISCOVERY] Suppressing discovery message for ${player?.name} until intro completes (item: ${itemType})`);
         return; // Wait until intro is shown before discovery messages
@@ -4535,8 +4536,8 @@ system.runInterval(() => {
             if (!inv) continue;
             const codex = getCodex(p);
             
-            // Skip discovery messages if intro is in progress or not seen yet
-            const introSeen = normalizeBoolean(getWorldProperty(WORLD_INTRO_SEEN_PROPERTY));
+            // Skip discovery messages if intro is in progress or not seen yet (per-player)
+            const introSeen = normalizeBoolean(getPlayerProperty(p, PLAYER_INTRO_SEEN_PROPERTY));
             const introActive = introInProgress.has(p.id);
             const shouldSuppressDiscovery = !introSeen || introActive;
             
@@ -5628,9 +5629,9 @@ world.afterEvents.playerSpawn.subscribe((event) => {
         
         console.log(`[SPAWN] Player ${player.name} spawned`);
         
-        // Check if intro has been shown (fallback in case playerJoin handler missed it)
+        // Check if this player has seen intro (fallback in case playerJoin handler missed it)
         // Only check if intro is NOT in progress (to prevent duplicate calls)
-        const introSeen = normalizeBoolean(getWorldProperty(WORLD_INTRO_SEEN_PROPERTY));
+        const introSeen = normalizeBoolean(getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY));
         const introActive = introInProgress.has(player.id);
         console.log(`[SPAWN] Intro seen: ${introSeen}, intro active: ${introActive}`);
         
@@ -5712,7 +5713,7 @@ world.afterEvents.playerSpawn.subscribe((event) => {
             system.runTimeout(() => {
                 if (player && player.isValid) {
                     const stillNoInfection = !playerInfection.has(player.id);
-                    const introSeen = normalizeBoolean(getWorldProperty(WORLD_INTRO_SEEN_PROPERTY));
+                    const introSeen = normalizeBoolean(getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY));
                     if (stillNoInfection && introSeen) {
                         initializeMinorInfection(player);
                     } else if (stillNoInfection && !introSeen) {
@@ -6022,10 +6023,10 @@ function loadInfectionData(player) {
                 }
             }
         } else {
-            // No infection data found - check if intro has been seen
+            // No infection data found - check if this player has seen intro
             // If intro hasn't been seen yet, don't initialize minor infection here
             // It will be initialized during the intro sequence at "AND SO ARE YOU!" message
-            const introSeen = normalizeBoolean(getWorldProperty(WORLD_INTRO_SEEN_PROPERTY));
+            const introSeen = normalizeBoolean(getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY));
             if (!hasPermanentImmunity && introSeen) {
                 console.log(`[LOAD] ${player.name} has no infection data and no permanent immunity - initializing minor infection`);
                 initializeMinorInfection(player);
@@ -6349,20 +6350,20 @@ function showWorldIntroSequence(player) {
             return; // Already showing
         }
         
-        // Check if player has seen intro before
-        const introSeenKey = WORLD_INTRO_SEEN_PROPERTY;
-        const introSeenRaw = getWorldProperty(introSeenKey);
+        // Check if this player has seen intro before (per-player: each new player gets full intro)
+        const introSeenKey = PLAYER_INTRO_SEEN_PROPERTY;
+        const introSeenRaw = getPlayerProperty(player, introSeenKey);
         const introSeen = normalizeBoolean(introSeenRaw);
         console.log(`[INTRO] Checking intro for ${player?.name}: introSeen=${introSeen} (raw=${introSeenRaw}, type=${typeof introSeenRaw})`);
         
         if (introSeen) {
-            console.log(`[INTRO] Intro already seen, skipping for ${player?.name}`);
-            return; // Already shown
+            console.log(`[INTRO] Intro already seen by this player, skipping for ${player?.name}`);
+            return; // Already shown to this player
         }
         
-        // Mark intro as in progress AND seen immediately to prevent duplicates from both handlers
+        // Mark intro as in progress AND seen for this player immediately to prevent duplicates
         introInProgress.set(player.id, true);
-        setWorldProperty(introSeenKey, true); // Mark as seen immediately to prevent duplicate calls
+        setPlayerProperty(player, introSeenKey, true); // Mark as seen for this player
         
         // Track journal given flag (will be set when journal is actually given)
         const journalGivenKey = `mb_journal_given_by_intro_${player.id}`;
@@ -6529,8 +6530,8 @@ function giveBasicJournalIfNeeded(player) {
             return; // Already given
         }
         
-        // Check if intro has been shown - if not, intro will give the journal
-        const introSeen = normalizeBoolean(getWorldProperty(WORLD_INTRO_SEEN_PROPERTY));
+        // Check if this player has seen intro - if not, intro will give the journal
+        const introSeen = normalizeBoolean(getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY));
         if (!introSeen) {
             console.log(`[BASIC JOURNAL] Intro not seen yet for ${player?.name}, intro will handle journal giving`);
             return; // Intro will handle journal giving
@@ -6650,10 +6651,10 @@ world.afterEvents.playerJoin.subscribe((event) => {
                 console.log(`[JOIN MAIN] ✓ Player ${player.name} found! Loading infection data and checking intro...`);
                 loadInfectionData(player);
                 
-                // Check if intro has been shown
-                const introSeenRaw = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
+                // Check if this player has seen intro (per-player: each new player gets full intro)
+                const introSeenRaw = getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY);
                 const introSeen = normalizeBoolean(introSeenRaw);
-                console.log(`[JOIN MAIN] Intro seen property: ${introSeen} (raw=${introSeenRaw}, type=${typeof introSeenRaw})`);
+                console.log(`[JOIN MAIN] Intro seen for this player: ${introSeen} (raw=${introSeenRaw}, type=${typeof introSeenRaw})`);
                 
                 if (!introSeen) {
                     // Show intro sequence (will handle journal giving)

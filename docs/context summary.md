@@ -2,6 +2,29 @@
 
 **Date:** 2026-02-01
 
+## Intro: per-player so each new player gets full intro
+
+Previously the intro was tracked with a **world** property (`mb_world_intro_seen`), so once any player had seen the intro in that world, no other player ever got it. Requirement: **each player who has not joined a world before should get the full intro.**
+
+### Changes made
+
+1. **main.js**
+   - Added **PLAYER_INTRO_SEEN_PROPERTY** (`mb_intro_seen`) — per-player dynamic property meaning "this player has seen the intro."
+   - **showWorldIntroSequence**: checks/sets **getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY)** instead of world property, so only that player is marked as having seen the intro.
+   - **Player join handler**: uses **getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY)** to decide whether to show intro for this player.
+   - **Discovery suppression**, **spawn fallback**, **minor infection init**, **giveBasicJournalIfNeeded**: all now use the **player’s** intro-seen flag (getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY)) so behavior is per-player.
+   - Left WORLD_INTRO_SEEN_PROPERTY in place as legacy; intro logic no longer uses it.
+
+2. **mb_dayTracker.js**
+   - Import **getPlayerProperty** from `mb_dynamicPropertyHandler.js`.
+   - "First-time player" and welcome-message timing now use **getPlayerProperty(player, "mb_intro_seen")** so each player is classified by whether **they** have seen the intro.
+
+Result: Every player who joins and has not seen the intro before gets the full intro sequence; returning players skip it. State is stored per player (dynamic property), not per world.
+
+---
+
+**Date:** 2026-02-01
+
 ## Mining AI: cleanup lastBlockBreakTick to prevent unbounded memory growth (mb_miningAI.js)
 
 The per-entity Map **lastBlockBreakTick** (lines 267–269) was never cleared; only **lastMiningTick** was pruned in the existing cleanup routine. Inactive entity IDs could accumulate in **lastBlockBreakTick** and cause memory growth.

@@ -1,5 +1,5 @@
 import { world, system } from "@minecraft/server";
-import { getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
+import { getWorldProperty, setWorldProperty, getPlayerProperty } from "./mb_dynamicPropertyHandler.js";
 import { getCodex, saveCodex, getKnowledgeLevel, hasKnowledge, checkKnowledgeProgression, getPlayerSoundVolume } from "./mb_codex.js";
 
 // Minimal dynamic property test (must be delayed until after startup)
@@ -1149,9 +1149,9 @@ world.afterEvents.playerJoin.subscribe((event) => {
 
                 // Check if this is the first time the world is being initialized
                 const isFirstTimeInit = !getWorldProperty(INITIALIZED_FLAG);
-                // Check if player has seen intro - if yes, they're a returning player (even if returningPlayers Set is empty after reload)
-                const WORLD_INTRO_SEEN_PROPERTY = "mb_world_intro_seen";
-                const introSeenRaw = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
+                // Check if this player has seen intro - if yes, they're a returning player (per-player: each new player gets full intro)
+                const PLAYER_INTRO_SEEN_PROPERTY = "mb_intro_seen";
+                const introSeenRaw = getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY);
                 const introSeen = introSeenRaw === true || introSeenRaw === "true" || introSeenRaw === 1 || introSeenRaw === "1";
                 const isFirstTimePlayer = !introSeen && !returningPlayers.has(playerName);
 
@@ -1181,10 +1181,11 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                 system.runTimeout(() => {
                                     if (!player || !player.isValid) return;
                                     
-                                    // Check again after delay - intro should be seen by now if it was shown
-                                    const introSeenNow = getWorldProperty(WORLD_INTRO_SEEN_PROPERTY);
+                                    // Check again after delay - intro should be seen by this player now if it was shown
+                                    const introSeenNow = getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY);
+                                    const introSeenNowNorm = introSeenNow === true || introSeenNow === "true" || introSeenNow === 1 || introSeenNow === "1";
                                     
-                                    if (!introSeenNow) {
+                                    if (!introSeenNowNorm) {
                                         // Intro still hasn't been shown - this should be very rare, but skip welcome message anyway
                                         console.log(`[DAY TRACKER] Skipping welcome message for ${playerName} - intro hasn't been shown yet`);
                                         return;
