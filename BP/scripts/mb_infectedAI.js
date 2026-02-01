@@ -235,9 +235,8 @@ function runInfectedAI() {
         let processedCount = 0;
 
         for (const player of players) {
-            if (!player?.location?.dimension || processedCount >= MAX_INFECTED_PER_TICK) break;
-            const dimension = player.dimension;
-            const center = player.location;
+            if (!player?.location || !player?.dimension || processedCount >= MAX_INFECTED_PER_TICK) break;
+            const dimension = player.dimension;            const center = player.location;
 
             for (const typeId of INFECTED_TYPES) {
                 if (processedCount >= MAX_INFECTED_PER_TICK) break;
