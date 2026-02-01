@@ -2333,7 +2333,7 @@ function steerAlongPath(entity, path, targetInfo, config) {
 function getNextStepBlockTowardTarget(loc, targetLoc, dimension, entity) {
     const horizontalDist = Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z);
     const tick = system.currentTick;
-    const logDebug = (getDebugGeneral() || getDebugMining()) || (tick % 40 === 0);
+    const logDebug = getDebugGeneral() || getDebugMining();
     if (logDebug) {
         const dy = targetLoc.y - loc.y;
         console.warn(`[MINING AI] getNextStep: Finding step toward TARGET: (${targetLoc.x.toFixed(2)}, ${targetLoc.y.toFixed(2)}, ${targetLoc.z.toFixed(2)}) | BEAR: (${loc.x.toFixed(2)}, ${loc.y.toFixed(2)}, ${loc.z.toFixed(2)}) | dist=${horizontalDist.toFixed(1)}, dy=${dy.toFixed(1)}`);
@@ -2667,7 +2667,7 @@ function getNextStepBlockTowardTargetDown(loc, targetLoc, dimension) {
     const downHead2 = getBlock(dimension, stepX, downY + 2, stepZ);
     const downHeadroom = (!downHead1 || AIR_BLOCKS.has(downHead1.typeId)) && (!downHead2 || AIR_BLOCKS.has(downHead2.typeId));
     const tick = system.currentTick;
-    const logDebug = (getDebugGeneral() || getDebugMining()) || (tick % 40 === 0);
+    const logDebug = getDebugGeneral() || getDebugMining();
     if (logDebug) {
         console.warn(`[MINING AI] getNextStepDown: immediate check: step(${stepX},${downY},${stepZ})=${downBlock?.typeId ?? 'null'} solid=${downSolid} headroom(${downY+1},${downY+2})=(${downHead1?.typeId ?? 'null'},${downHead2?.typeId ?? 'null'}) clear=${downHeadroom} frontClear=${frontClear}`);
     }
@@ -2896,7 +2896,7 @@ function steerTowardStep(entity, pathfindX, pathfindY, pathfindZ, sameLevelStep 
     }
 
     const tick = system.currentTick;
-    const logDebug = (getDebugGeneral() || getDebugMining()) || (tick % 40 === 0);
+    const logDebug = getDebugGeneral() || getDebugMining();
     if (logDebug) {
         console.warn(`[MINING AI] steerTowardStep: bear=(${loc.x.toFixed(2)},${loc.y.toFixed(2)},${loc.z.toFixed(2)}) target=(${pathfindX.toFixed(2)},${pathfindY.toFixed(2)},${pathfindZ.toFixed(2)}) dy=${dy.toFixed(2)} stepAbove=${stepAbove} sameLevel=${sameLevelStep} impulse=(${impulseX.toFixed(3)},${verticalImpulse.toFixed(3)},${impulseZ.toFixed(3)})`);
     }
@@ -9651,7 +9651,7 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                                 
                                 // Debug: log detailed step info when applying movement (every 40 ticks or with debug flag)
                                 const tick = system.currentTick;
-                                const logStepInfo = (getDebugGeneral() || getDebugMining()) || (tick % 40 === 0);
+                                const logStepInfo = getDebugGeneral() || getDebugMining();
                                 if (logStepInfo && (stepReady || hasClearedSpace)) {
                                     const stepBlock = getBlock(dimension, stepX, stepY, stepZ);
                                     const stepBlockType = stepBlock?.typeId ?? 'null';
@@ -9685,7 +9685,7 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                                 if (stepReady || hasClearedSpace) {
                                     try {
                                         const tick = system.currentTick;
-                                        const logStairMove = (getDebugGeneral() || getDebugMining()) || (tick % 40 === 0);
+                                        const logStairMove = getDebugGeneral() || getDebugMining();
                                         const logStepDecision = logStairMove;
                                         
                                         // Debug: log the decision
@@ -10035,7 +10035,7 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                                 const { stepX, stepY, stepZ, stepIsSolid, headroomClear, pathfindX, pathfindY, pathfindZ } = nextDown;
                                 const stepReady = stepIsSolid && headroomClear;
                                 const tick = system.currentTick;
-                                const logDescend = (getDebugGeneral() || getDebugMining()) || (tick % 40 === 0);
+                                const logDescend = getDebugGeneral() || getDebugMining();
                                 if (logDescend) {
                                     console.warn(`[MINING AI] Descend step check: step=(${stepX},${stepY},${stepZ}) solid=${stepIsSolid} headroom=${headroomClear} stepReady=${stepReady}`);
                                 }

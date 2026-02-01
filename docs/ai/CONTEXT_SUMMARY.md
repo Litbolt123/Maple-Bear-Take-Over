@@ -2,6 +2,18 @@
 
 ## Recent Changes (Latest Session)
 
+### Snow Layer Placement: No Stacking, Replace Grass/Small Blocks (Jan 31)
+- **Problem**: Snow layers were placed on top of other snow layers and on grass/small blocks, making things look messy.
+- **Desired behavior**: (1) Never place snow on top of existing snow layers. (2) Replace grass and other small/non-full blocks with snow instead of stacking.
+- **main.js – `tryPlaceSnowLayerUnder`**: If the block under the entity is already a snow layer, return (don’t place). In the “replace grass with snow” branch, if the block above is already snow, return so we don’t create snow-on-snow. Grass/flowers/etc. are still replaced by snow when the space above is not snow.
+- **main.js – death explosion**: Already checked for snow at placement level and skipped; no change.
+- **main.js – conversion spawn**: Before placing snow at spawn, skip if the block below is already a snow layer (don’t place on snow).
+- **mb_torpedoAI.js – explosion**: At the start of each column, if the block at `topSolidY + 1` is a snow layer, skip the column so we never place or replace in a way that stacks snow.
+- **mb_spawnController.js – spawn**: Skip snow placement when the block below the spawn is already a snow layer.
+- **Replaceable-by-snow list**: Unchanged; grass_block, grass, tall_grass, fern, flowers, vines, lily pad, etc. are still replaced by snow when appropriate (and not creating snow-on-snow).
+- **Debug**: Toggleable “Snow Placement” (Main) and “Block Placement” (Torpedo) in Debug Menu. “Replace foliage above” logic so grass/tall_grass above solid block is replaced instead of snow stacking on top.
+- **2-block-tall plants (implemented) (lilac, sunflower, rose_bush, peony, large_fern)**: (1) Lilacs (and other 2-block plants) were broken when only the bottom block was replaced; top block left floating. (2) Snow was placed “in the middle” because the “top solid” search can find the upper half of the plant. Fix: treat 2-block plants as a unit—either replace both blocks (bottom → snow, top → air) or skip them; and when top solid is the upper half of a 2-block plant, consider the block below and replace/skip accordingly so snow isn’t placed in the middle.
+
 ### Script Toggles & Beta Features (Jan 31)
 - **Developer Tools – Script Toggles**: New "Script Toggles" menu in Developer Tools (Dusted Journal/Basic Journal with cheats). Toggle on/off: Mining AI, Infected AI, Flying AI, Torpedo AI, Biome Ambience. Use to quickly disable scripts if something breaks.
 - **Settings – Beta Features**: New "Beta Features" section in Settings for both books. **Owner** = first player to join the world (set on playerSpawn when no owner exists). **Can edit** = owner OR anyone with `mb_cheats` tag.

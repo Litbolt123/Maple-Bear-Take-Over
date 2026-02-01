@@ -106,6 +106,25 @@ const INFECTED_TAG = "mb_infected";
 const INFECTED_CORPSE_ID = "mb:infected_corpse";
 const SNOW_LAYER_BLOCK = "minecraft:snow_layer";
 const INFECTED_GROUND_BLOCKS = new Set(["mb:dusted_dirt", "mb:snow_layer", "minecraft:snow_layer"]);
+// Blocks that should be replaced by snow (grass, flowers, foliage) - used for death/torpedo snow placement
+const SNOW_REPLACEABLE_BLOCKS = new Set([
+    "minecraft:grass_block", "minecraft:grass", "minecraft:short_grass", "minecraft:tall_grass", "minecraft:double_tall_grass", "minecraft:fern", "minecraft:large_fern",
+    "minecraft:dandelion", "minecraft:poppy", "minecraft:blue_orchid", "minecraft:allium", "minecraft:azure_bluet", "minecraft:red_tulip",
+    "minecraft:orange_tulip", "minecraft:white_tulip", "minecraft:pink_tulip", "minecraft:oxeye_daisy", "minecraft:cornflower", "minecraft:lily_of_the_valley",
+    "minecraft:sunflower", "minecraft:lilac", "minecraft:rose_bush", "minecraft:peony", "minecraft:dead_bush", "minecraft:cactus",
+    "minecraft:sweet_berry_bush", "minecraft:nether_sprouts", "minecraft:warped_roots", "minecraft:crimson_roots", "minecraft:small_dripleaf",
+    "minecraft:big_dripleaf", "minecraft:big_dripleaf_stem", "minecraft:spore_blossom", "minecraft:glow_lichen", "minecraft:moss_carpet",
+    "minecraft:vine", "minecraft:weeping_vines", "minecraft:twisting_vines", "minecraft:cave_vines", "minecraft:sea_pickle", "minecraft:kelp",
+    "minecraft:seagrass", "minecraft:tall_seagrass", "minecraft:waterlily", "minecraft:lily_pad",
+    "minecraft:torchflower", "minecraft:pitcher_plant", "minecraft:pitcher_crop"
+]);
+// 2-block-tall plants: replace bottom with snow, top with air
+const SNOW_TWO_BLOCK_PLANTS = new Set([
+    "minecraft:sunflower", "minecraft:lilac", "minecraft:rose_bush", "minecraft:peony", "minecraft:large_fern",
+    "minecraft:double_tall_grass", "minecraft:tall_grass",
+    "minecraft:pitcher_plant", "minecraft:pitcher_crop",
+    "minecraft:big_dripleaf", "minecraft:big_dripleaf_stem"
+]);
 
 // Adaptive checking intervals (like biome ambience system)
 const GROUND_CHECK_INTERVAL_ON = 20; // Every 1 second when on infected ground (more frequent)
@@ -773,7 +792,7 @@ function checkVariantUnlock(player, codexParam = null) {
             }
         }
 
-        // Schedule all pending unlock messages with staggered delays
+        // Schedule all pending unlock messages with staggered delays (each plays once per discovery; flags prevent repeat)
         for (const unlock of pendingUnlocks) {
             system.runTimeout(() => {
                 try {
@@ -1468,11 +1487,26 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
     }
     
     if (codex?.items?.snowBookCrafted) {
-        player.sendMessage("§7Check your journal.");
-        // Play discovery sound
-        const volumeMultiplier = getPlayerSoundVolume(player);
-        player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
-        } else {
+        // "Check your journal" only once ever; after that show the specific discovery message
+        if (!codex.items.checkJournalMessageShown) {
+            codex.items.checkJournalMessageShown = true;
+            markCodex(player, "items.checkJournalMessageShown");
+            saveCodex(player, codex);
+            player.sendMessage("§7Check your journal.");
+            if (isDebugEnabled("main", "conversion")) {
+                console.warn(`[CODEX] "Check your journal" sent to ${player.name} (trigger: sendDiscoveryMessage messageType=${messageType} itemType=${itemType})`);
+            }
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
+            return;
+        }
+        // Already shown "Check your journal" once — show the specific discovery message + sound below
+        if (isDebugEnabled("main", "conversion")) {
+            console.warn(`[CODEX] Showing specific discovery message for ${player.name} (messageType=${messageType} itemType=${itemType})`);
+        }
+    }
+
+    {
         // Two-level mapping: messageType -> itemType -> message
         const messages = {
             important: {
@@ -1550,20 +1584,17 @@ function convertEntity(deadEntity, killer, targetEntityId, conversionName) {
         dimension.spawnParticle("mb:white_dust_particle", location);
     
     // Place snow layer at spawn location (all Maple Bears spawn on snow)
-    // Place snow at the block below the entity (where there's air above ground)
+    // Don't place on top of mb:snow_layer; replace minecraft:snow_layer with mb:snow_layer
     try {
         const spawnY = Math.floor(location.y - 1);
         const snowLoc = { x: Math.floor(location.x), y: spawnY, z: Math.floor(location.z) };
         const snowBlock = dimension.getBlock(snowLoc);
         const aboveBlock = dimension.getBlock({ x: snowLoc.x, y: spawnY + 1, z: snowLoc.z });
-        // Place snow if the block below is solid and the space above (where entity spawns) is air
-        if (snowBlock && aboveBlock && snowBlock.isAir !== undefined && !snowBlock.isAir && snowBlock.isLiquid !== undefined && !snowBlock.isLiquid && aboveBlock.isAir !== undefined && aboveBlock.isAir) {
-            // Use custom snow layer if available, otherwise vanilla
-            try {
-                aboveBlock.setType("mb:snow_layer");
-            } catch {
-                aboveBlock.setType(SNOW_LAYER_BLOCK);
-            }
+        const belowType = snowBlock?.typeId;
+        if (belowType === "minecraft:snow_layer") {
+            try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType(SNOW_LAYER_BLOCK); }
+        } else if (belowType !== "mb:snow_layer" && snowBlock && aboveBlock && snowBlock.isAir !== undefined && !snowBlock.isAir && snowBlock.isLiquid !== undefined && !snowBlock.isLiquid && aboveBlock.isAir !== undefined && aboveBlock.isAir) {
+            try { aboveBlock.setType("mb:snow_layer"); } catch { aboveBlock.setType(SNOW_LAYER_BLOCK); }
         }
     } catch {
         // Ignore snow placement errors
@@ -2739,11 +2770,18 @@ function handleGoldenApple(player, item) {
                 markCodex(player, "items.goldenAppleInfectionReductionDiscovered");
                 checkKnowledgeProgression(player);
                 
-                // Use the standard discovery message pattern
+                // Use the standard discovery message pattern (once ever per player)
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 if (codex.items.snowBookCrafted) {
-                    player.sendMessage("§7Check your journal.");
-                    player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
+                    if (!codex.items.checkJournalMessageShown) {
+                        codex.items.checkJournalMessageShown = true;
+                        markCodex(player, "items.checkJournalMessageShown");
+                        player.sendMessage("§7Check your journal.");
+                        if (isDebugEnabled("main", "conversion")) {
+                            console.warn(`[CODEX] "Check your journal" sent to ${player.name} (trigger: golden apple infection reduction)`);
+                        }
+                        player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
+                    }
                 } else {
                     player.sendMessage("§7You feel slightly better for a moment after eating the golden apple... This seems important to remember.");
                     player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
@@ -3580,14 +3618,20 @@ world.afterEvents.entityDie.subscribe((event) => {
                     }
                 }
                 
-                // Play explosion sound
+                // Play torpedo explosion sound (same as exhaustion death)
                 try {
-                    dimension.runCommand(`playsound mob.tnt.explode @a ${x} ${y} ${z} 1 1`);
+                    dimension.runCommand(`playsound torpedo_mb.explode @a ${x} ${y} ${z} 0.75 1`);
                 } catch (err) {
+                    try { dimension.runCommand(`playsound mob.tnt.explode @a ${x} ${y} ${z} 1 1`); } catch { }
                     if (isDebugEnabled("main", "death")) {
                         console.warn(`[TORPEDO DEATH] Sound command failed:`, err);
                     }
                 }
+                // Dust particles (same as exhaustion death)
+                try {
+                    dimension.spawnParticle("mb:white_dust_particle", { x: loc.x, y: loc.y + 1, z: loc.z });
+                    dimension.runCommand(`particle minecraft:ash ${x} ${y} ${z} 0.5 0.5 0.5 0.05 15`);
+                } catch { }
             } catch (error) {
                 if (isDebugEnabled("main", "death")) {
                     console.warn(`[TORPEDO DEATH] Error executing explosion commands:`, error);
@@ -3640,11 +3684,9 @@ world.afterEvents.entityDie.subscribe((event) => {
                                 const block = dimension.getBlock({ x: checkX, y: checkY, z: checkZ });
                                 if (block) {
                                     const blockType = block.typeId;
-                                    // Skip snow layers - they're not considered "solid" for placement purposes
-                                    if (blockType === "mb:snow_layer" || blockType === "minecraft:snow_layer") {
-                                        continue;
-                                    }
-                                    if (block.isAir !== undefined && !block.isAir && 
+                                    // Skip mb:snow_layer (don't place on top); minecraft:snow_layer is replaced with mb:snow_layer below
+                                    if (blockType === "mb:snow_layer") continue;
+                                    if (block.isAir !== undefined && !block.isAir &&
                                         block.isLiquid !== undefined && !block.isLiquid) {
                                         topSolidY = checkY;
                                         topSolidBlock = block;
@@ -3666,67 +3708,88 @@ world.afterEvents.entityDie.subscribe((event) => {
                                 if (existingSnowBlock) {
                                     const existingType = existingSnowBlock.typeId;
                                     if (existingType === "mb:snow_layer" || existingType === "minecraft:snow_layer") {
-                                        // Already has snow layer, skip placement
+                                        if (isDebugEnabled("main", "snow_placement")) {
+                                            console.warn(`[SNOW PLACEMENT] Death at (${checkX},${topSolidY + 1},${checkZ}) skip: already snow above solid at Y=${topSolidY}`);
+                                        }
                                         continue;
                                     }
                                 }
                                 
                                 const blockType = topSolidBlock.typeId;
-                                // If it's any ground foliage (grass, flowers, desert plants, etc.), replace it with snow
-                                if (blockType === "minecraft:grass_block" || blockType === "minecraft:grass" || 
-                                    blockType === "minecraft:tall_grass" || blockType === "minecraft:fern" || 
-                                    blockType === "minecraft:large_fern" ||
-                                    blockType === "minecraft:dandelion" || blockType === "minecraft:poppy" ||
-                                    blockType === "minecraft:blue_orchid" || blockType === "minecraft:allium" ||
-                                    blockType === "minecraft:azure_bluet" || blockType === "minecraft:red_tulip" ||
-                                    blockType === "minecraft:orange_tulip" || blockType === "minecraft:white_tulip" ||
-                                    blockType === "minecraft:pink_tulip" || blockType === "minecraft:oxeye_daisy" ||
-                                    blockType === "minecraft:cornflower" || blockType === "minecraft:lily_of_the_valley" ||
-                                    blockType === "minecraft:sunflower" || blockType === "minecraft:lilac" ||
-                                    blockType === "minecraft:rose_bush" || blockType === "minecraft:peony" ||
-                                    blockType === "minecraft:dead_bush" || blockType === "minecraft:cactus" ||
-                                    blockType === "minecraft:sweet_berry_bush" || blockType === "minecraft:nether_sprouts" ||
-                                    blockType === "minecraft:warped_roots" || blockType === "minecraft:crimson_roots" ||
-                                    blockType === "minecraft:small_dripleaf" || blockType === "minecraft:big_dripleaf" ||
-                                    blockType === "minecraft:big_dripleaf_stem" || blockType === "minecraft:spore_blossom" ||
-                                    blockType === "minecraft:glow_lichen" || blockType === "minecraft:moss_carpet" ||
-                                    blockType === "minecraft:vine" || blockType === "minecraft:weeping_vines" ||
-                                    blockType === "minecraft:twisting_vines" || blockType === "minecraft:cave_vines" ||
-                                    blockType === "minecraft:sea_pickle" || blockType === "minecraft:kelp" ||
-                                    blockType === "minecraft:seagrass" || blockType === "minecraft:tall_seagrass" ||
-                                    blockType === "minecraft:waterlily" || blockType === "minecraft:lily_pad") {
-                                    // Check if there's already snow at this location before replacing
+                                if (isDebugEnabled("main", "snow_placement")) {
+                                    console.warn(`[SNOW PLACEMENT] Death column (${checkX},${checkZ}) topSolidY=${topSolidY} blockType=${blockType}`);
+                                }
+                                // Replace vanilla snow layer with custom snow layer
+                                if (blockType === "minecraft:snow_layer") {
+                                    try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType(SNOW_LAYER_BLOCK); }
+                                    if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${topSolidY},${checkZ}) replaced vanilla snow with mb:snow_layer`);
+                                    continue;
+                                }
+                                // If it's any ground foliage (grass, flowers, etc.), replace it with snow
+                                if (SNOW_REPLACEABLE_BLOCKS.has(blockType)) {
                                     const existingSnowCheck = dimension.getBlock({ x: checkX, y: topSolidY, z: checkZ });
-                                    if (existingSnowCheck) {
-                                        const existingType = existingSnowCheck.typeId;
-                                        if (existingType === "mb:snow_layer" || existingType === "minecraft:snow_layer") {
-                                            // Already has snow, skip placement
-                                            continue;
-                                        }
+                                    if (existingSnowCheck && (existingSnowCheck.typeId === "mb:snow_layer" || existingSnowCheck.typeId === "minecraft:snow_layer")) {
+                                        if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${topSolidY},${checkZ}) skip: already snow at solid`);
+                                        continue;
                                     }
-                                    try {
-                                        topSolidBlock.setType("mb:snow_layer");
-                                    } catch {
-                                        topSolidBlock.setType(SNOW_LAYER_BLOCK);
+                                    // 2-block-tall plants: bottom → snow, top → air
+                                    if (SNOW_TWO_BLOCK_PLANTS.has(blockType)) {
+                                        const blockAbove = dimension.getBlock({ x: checkX, y: topSolidY + 1, z: checkZ });
+                                        const blockBelow = dimension.getBlock({ x: checkX, y: topSolidY - 1, z: checkZ });
+                                        if (blockAbove && SNOW_TWO_BLOCK_PLANTS.has(blockAbove.typeId)) {
+                                            try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType(SNOW_LAYER_BLOCK); }
+                                            try { blockAbove.setType("minecraft:air"); } catch { }
+                                            if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${topSolidY},${checkZ}) 2-block: bottom→snow, top→air`);
+                                        } else if (blockBelow && SNOW_TWO_BLOCK_PLANTS.has(blockBelow.typeId)) {
+                                            try { blockBelow.setType("mb:snow_layer"); } catch { blockBelow.setType(SNOW_LAYER_BLOCK); }
+                                            try { topSolidBlock.setType("minecraft:air"); } catch { }
+                                            if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${topSolidY},${checkZ}) 2-block: was top, bottom→snow, this→air`);
+                                        } else {
+                                            try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType(SNOW_LAYER_BLOCK); }
+                                            if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${topSolidY},${checkZ}) replaced ${blockType} with snow`);
+                                        }
+                                    } else {
+                                        try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType(SNOW_LAYER_BLOCK); }
+                                        if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${topSolidY},${checkZ}) replaced ${blockType} with snow`);
                                     }
                                 } else {
-                                    // Otherwise, place snow in the air above
+                                    // Place snow in the air above, or replace foliage (grass, tall_grass, etc.) that sits above the solid block
                                     const snowY = topSolidY + 1;
                                     const snowBlock = dimension.getBlock({ x: checkX, y: snowY, z: checkZ });
                                     if (snowBlock) {
-                                        // Check if it's already a snow layer - don't stack them
                                         const snowBlockType = snowBlock.typeId;
                                         if (snowBlockType === "mb:snow_layer" || snowBlockType === "minecraft:snow_layer") {
-                                            continue; // Already has snow, skip
+                                            if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${snowY},${checkZ}) skip: already snow`);
+                                            continue;
                                         }
-                                        // Only place if it's air
-                                        if (snowBlock.isAir !== undefined && snowBlock.isAir) {
-                                            // Use custom snow layer if available, otherwise vanilla
+                                        // Replace foliage above (grass, tall_grass, etc.) so snow doesn't stack on top of grass
+                                        if (SNOW_REPLACEABLE_BLOCKS.has(snowBlockType)) {
+                                            if (SNOW_TWO_BLOCK_PLANTS.has(snowBlockType)) {
+                                                const blockAboveSnow = dimension.getBlock({ x: checkX, y: snowY + 1, z: checkZ });
+                                                const blockBelowSnow = dimension.getBlock({ x: checkX, y: snowY - 1, z: checkZ });
+                                                if (blockAboveSnow && SNOW_TWO_BLOCK_PLANTS.has(blockAboveSnow.typeId)) {
+                                                    try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType(SNOW_LAYER_BLOCK); }
+                                                    try { blockAboveSnow.setType("minecraft:air"); } catch { }
+                                                    if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${snowY},${checkZ}) 2-block above: bottom→snow, top→air`);
+                                                } else if (blockBelowSnow && SNOW_TWO_BLOCK_PLANTS.has(blockBelowSnow.typeId)) {
+                                                    try { blockBelowSnow.setType("mb:snow_layer"); } catch { blockBelowSnow.setType(SNOW_LAYER_BLOCK); }
+                                                    try { snowBlock.setType("minecraft:air"); } catch { }
+                                                    if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${snowY},${checkZ}) 2-block above: was top, bottom→snow, this→air`);
+                                                } else {
+                                                    try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType(SNOW_LAYER_BLOCK); }
+                                                    if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${snowY},${checkZ}) replaced above ${snowBlockType} with snow`);
+                                                }
+                                            } else {
+                                                try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType(SNOW_LAYER_BLOCK); }
+                                                if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${snowY},${checkZ}) replaced above ${snowBlockType} with snow`);
+                                            }
+                                        } else if (snowBlock.isAir !== undefined && snowBlock.isAir) {
                                             try {
                                                 snowBlock.setType("mb:snow_layer");
                                             } catch {
                                                 snowBlock.setType(SNOW_LAYER_BLOCK);
                                             }
+                                            if (isDebugEnabled("main", "snow_placement")) console.warn(`[SNOW PLACEMENT] Death (${checkX},${snowY},${checkZ}) placed snow on air`);
                                         }
                                     }
                                 }
@@ -5268,44 +5331,45 @@ function tryPlaceSnowLayerUnder(entity) {
         if (!below || below.isLiquid || below.isAir || below.isAir === undefined) return;
         
         const belowType = below.typeId;
-        // If the block below is any ground foliage (grass, flowers, desert plants, etc.), replace it with snow
-        if (belowType === "minecraft:grass_block" || belowType === "minecraft:grass" || 
-            belowType === "minecraft:tall_grass" || belowType === "minecraft:fern" || 
-            belowType === "minecraft:large_fern" ||
-            belowType === "minecraft:dandelion" || belowType === "minecraft:poppy" ||
-            belowType === "minecraft:blue_orchid" || belowType === "minecraft:allium" ||
-            belowType === "minecraft:azure_bluet" || belowType === "minecraft:red_tulip" ||
-            belowType === "minecraft:orange_tulip" || belowType === "minecraft:white_tulip" ||
-            belowType === "minecraft:pink_tulip" || belowType === "minecraft:oxeye_daisy" ||
-            belowType === "minecraft:cornflower" || belowType === "minecraft:lily_of_the_valley" ||
-            belowType === "minecraft:sunflower" || belowType === "minecraft:lilac" ||
-            belowType === "minecraft:rose_bush" || belowType === "minecraft:peony" ||
-            belowType === "minecraft:dead_bush" || belowType === "minecraft:cactus" ||
-            belowType === "minecraft:sweet_berry_bush" || belowType === "minecraft:nether_sprouts" ||
-            belowType === "minecraft:warped_roots" || belowType === "minecraft:crimson_roots" ||
-            belowType === "minecraft:small_dripleaf" || belowType === "minecraft:big_dripleaf" ||
-            belowType === "minecraft:big_dripleaf_stem" || belowType === "minecraft:spore_blossom" ||
-            belowType === "minecraft:glow_lichen" || belowType === "minecraft:moss_carpet" ||
-            belowType === "minecraft:vine" || belowType === "minecraft:weeping_vines" ||
-            belowType === "minecraft:twisting_vines" || belowType === "minecraft:cave_vines" ||
-            belowType === "minecraft:sea_pickle" || belowType === "minecraft:kelp" ||
-            belowType === "minecraft:seagrass" || belowType === "minecraft:tall_seagrass" ||
-            belowType === "minecraft:waterlily" || belowType === "minecraft:lily_pad") {
-            try {
-                below.setType("mb:snow_layer");
-            } catch {
-                below.setType(SNOW_LAYER_BLOCK);
+        // Never place snow on top of mb:snow_layer - skip
+        if (belowType === "mb:snow_layer") return;
+        // Replace vanilla snow layer with custom snow layer
+        if (belowType === "minecraft:snow_layer") {
+            try { below.setType("mb:snow_layer"); } catch { below.setType(SNOW_LAYER_BLOCK); }
+            return;
+        }
+        // If the block below is any ground foliage (grass, flowers, etc.), replace it with snow
+        if (SNOW_REPLACEABLE_BLOCKS.has(belowType)) {
+            const aboveType = above.typeId;
+            if (aboveType === "mb:snow_layer" || aboveType === "minecraft:snow_layer") return;
+            if (SNOW_TWO_BLOCK_PLANTS.has(belowType) && above && SNOW_TWO_BLOCK_PLANTS.has(aboveType)) {
+                try { below.setType("mb:snow_layer"); } catch { below.setType(SNOW_LAYER_BLOCK); }
+                try { above.setType("minecraft:air"); } catch { }
+            } else {
+                try { below.setType("mb:snow_layer"); } catch { below.setType(SNOW_LAYER_BLOCK); }
             }
         } else {
-            // Otherwise, place snow in the air above (only if air above)
-            if (!above || !above.isAir || above.isAir === undefined) return;
-            // Check if it's already a snow layer - don't stack them
+            // Place snow in the air above, or replace foliage (grass, tall_grass, etc.) above
+            if (!above) return;
             const aboveType = above.typeId;
-            if (aboveType === "mb:snow_layer" || aboveType === "minecraft:snow_layer") {
-                return; // Already has snow, skip
-            }
-            // Double-check that below is actually solid before placing
-            if (above.isAir && !below.isAir && !below.isLiquid) {
+            if (aboveType === "mb:snow_layer" || aboveType === "minecraft:snow_layer") return;
+            // Replace foliage above so snow doesn't stack on top of grass
+            if (SNOW_REPLACEABLE_BLOCKS.has(aboveType)) {
+                if (SNOW_TWO_BLOCK_PLANTS.has(aboveType)) {
+                    const blockAboveAbove = dim.getBlock({ x: blockLoc.x, y: blockLoc.y + 2, z: blockLoc.z });
+                    if (blockAboveAbove && SNOW_TWO_BLOCK_PLANTS.has(blockAboveAbove.typeId)) {
+                        try { above.setType("mb:snow_layer"); } catch { above.setType(SNOW_LAYER_BLOCK); }
+                        try { blockAboveAbove.setType("minecraft:air"); } catch { }
+                    } else if (SNOW_TWO_BLOCK_PLANTS.has(belowType)) {
+                        try { below.setType("mb:snow_layer"); } catch { below.setType(SNOW_LAYER_BLOCK); }
+                        try { above.setType("minecraft:air"); } catch { }
+                    } else {
+                        try { above.setType("mb:snow_layer"); } catch { above.setType(SNOW_LAYER_BLOCK); }
+                    }
+                } else {
+                    try { above.setType("mb:snow_layer"); } catch { above.setType(SNOW_LAYER_BLOCK); }
+                }
+            } else if (above.isAir !== undefined && above.isAir && !below.isAir && !below.isLiquid) {
                 try {
                     above.setType("mb:snow_layer");
                 } catch {
@@ -6811,7 +6875,7 @@ world.beforeEvents.itemUse.subscribe((event) => {
         });
         return;
     }
-    
+
     // Snow item block conversion will be handled by itemUseAfterEvent below
 
     // Debug item testing features have been removed for playability
@@ -7163,17 +7227,34 @@ function unlockAllContentForDay(day) {
                 const codex = getCodex(player);
                 
                 // Ensure mobs are marked as seen if day is high enough (for variant unlocks)
+                // When we set the flag from day milestone, send discovery message + sound once (same as kill-based discovery)
                 if (day >= 2 && !codex.mobs.mapleBearSeen) {
                     codex.mobs.mapleBearSeen = true;
+                    markCodex(player, "mobs.mapleBearSeen");
+                    sendDiscoveryMessage(player, codex, "mysterious", "tiny_bear");
+                    const vol = getPlayerSoundVolume(player);
+                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * vol });
                 }
                 if (day >= 4 && !codex.mobs.infectedBearSeen) {
                     codex.mobs.infectedBearSeen = true;
+                    markCodex(player, "mobs.infectedBearSeen");
+                    sendDiscoveryMessage(player, codex, "dangerous", "infected_bear");
+                    const vol = getPlayerSoundVolume(player);
+                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * vol });
                 }
                 if (day >= 13 && !codex.mobs.buffBearSeen) {
                     codex.mobs.buffBearSeen = true;
+                    markCodex(player, "mobs.buffBearSeen");
+                    sendDiscoveryMessage(player, codex, "threatening", "buff_bear");
+                    const vol = getPlayerSoundVolume(player);
+                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * vol });
                 }
                 if (day >= 8 && !codex.mobs.flyingBearSeen) {
                     codex.mobs.flyingBearSeen = true;
+                    markCodex(player, "mobs.flyingBearSeen");
+                    sendDiscoveryMessage(player, codex, "dangerous", "flying_bear");
+                    const vol = getPlayerSoundVolume(player);
+                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * vol });
                 }
                 
                 // Unlock variants based on day

@@ -5029,26 +5029,19 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
                 }
                 
                 // Place snow layer at spawn location (all Maple Bears spawn on snow)
-                // Place snow at the block below the entity (where there's air above ground)
+                // Replace minecraft:snow_layer with mb:snow_layer; don't place on top of mb:snow_layer
                 try {
                     const spawnY = Math.floor(spawnLocation.y - 1);
                     const snowLoc = { x: Math.floor(spawnLocation.x), y: spawnY, z: Math.floor(spawnLocation.z) };
                     const snowBlock = dimension.getBlock(snowLoc);
                     const aboveBlock = dimension.getBlock({ x: snowLoc.x, y: spawnY + 1, z: snowLoc.z });
-                    
-                    // Check if there's already a snow layer at the placement location - don't stack snow on snow
-                    if (aboveBlock) {
+                    const belowType = snowBlock?.typeId;
+                    if (belowType === "minecraft:snow_layer") {
+                        try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType("minecraft:snow_layer"); }
+                    } else if (belowType !== "mb:snow_layer" && aboveBlock) {
                         const existingType = aboveBlock.typeId;
-                        if (existingType === "mb:snow_layer" || existingType === "minecraft:snow_layer") {
-                            // Already has snow layer, skip placement to avoid stacking
-                        } else if (snowBlock && snowBlock.isAir !== undefined && !snowBlock.isAir && snowBlock.isLiquid !== undefined && !snowBlock.isLiquid && aboveBlock.isAir !== undefined && aboveBlock.isAir) {
-                    // Place snow if the block below is solid and the space above (where entity spawns) is air
-                        // Use custom snow layer if available, otherwise vanilla
-                        try {
-                            aboveBlock.setType("mb:snow_layer");
-                        } catch {
-                            aboveBlock.setType("minecraft:snow_layer");
-                            }
+                        if (existingType !== "mb:snow_layer" && existingType !== "minecraft:snow_layer" && snowBlock && snowBlock.isAir !== undefined && !snowBlock.isAir && snowBlock.isLiquid !== undefined && !snowBlock.isLiquid && aboveBlock.isAir !== undefined && aboveBlock.isAir) {
+                            try { aboveBlock.setType("mb:snow_layer"); } catch { aboveBlock.setType("minecraft:snow_layer"); }
                         }
                     }
                 } catch {

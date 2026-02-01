@@ -73,7 +73,7 @@ export function getDefaultCodex() {
         },
         // Aggregated metadata by effect id
         symptomsMeta: {},
-        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, basicJournalSeen: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, bookCraftMessageShown: false, goldenAppleSeen: false, goldenCarrotSeen: false, enchantedGoldenAppleSeen: false, goldenAppleInfectionReductionDiscovered: false, goldSeen: false, goldNuggetSeen: false },
+        items: { snowFound: false, snowIdentified: false, snowBookCrafted: false, basicJournalSeen: false, cureItemsSeen: false, snowTier5Reached: false, snowTier10Reached: false, snowTier20Reached: false, snowTier50Reached: false, brewingStandSeen: false, bookCraftMessageShown: false, checkJournalMessageShown: false, goldenAppleSeen: false, goldenCarrotSeen: false, enchantedGoldenAppleSeen: false, goldenAppleInfectionReductionDiscovered: false, goldSeen: false, goldNuggetSeen: false },
         mobs: { 
             mapleBearSeen: false, 
             infectedBearSeen: false, 
@@ -3344,17 +3344,18 @@ export function showCodexBook(player, context) {
     function openTorpedoDebugMenu(settings) {
         const torpedo = settings.torpedo || {};
         const form = new ActionFormData().title("§bTorpedo AI Debug");
-        form.body(`§7Toggle debug logging for Torpedo Bears:\n\n§8Current settings:\n§7• General: ${torpedo.general ? "§aON" : "§cOFF"}\n§7• Targeting: ${torpedo.targeting ? "§aON" : "§cOFF"}\n§7• Diving: ${torpedo.diving ? "§aON" : "§cOFF"}\n§7• Block Breaking: ${torpedo.blockBreaking ? "§aON" : "§cOFF"}`);
+        form.body(`§7Toggle debug logging for Torpedo Bears:\n\n§8Current settings:\n§7• General: ${torpedo.general ? "§aON" : "§cOFF"}\n§7• Targeting: ${torpedo.targeting ? "§aON" : "§cOFF"}\n§7• Diving: ${torpedo.diving ? "§aON" : "§cOFF"}\n§7• Block Breaking: ${torpedo.blockBreaking ? "§aON" : "§cOFF"}\n§7• Block Placement: ${torpedo.blockPlacement ? "§aON" : "§cOFF"}`);
         
         form.button(`§${torpedo.general ? "a" : "c"}General Logging`);
         form.button(`§${torpedo.targeting ? "a" : "c"}Targeting`);
         form.button(`§${torpedo.diving ? "a" : "c"}Diving Mechanics`);
         form.button(`§${torpedo.blockBreaking ? "a" : "c"}Block Breaking`);
+        form.button(`§${torpedo.blockPlacement ? "a" : "c"}Block Placement`);
         form.button(`§${torpedo.all ? "a" : "c"}Toggle All`);
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 5) {
+            if (!res || res.canceled || res.selection === 6) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openDebugMenu();
@@ -3362,13 +3363,14 @@ export function showCodexBook(player, context) {
 
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
-            const flags = ["general", "targeting", "diving", "blockBreaking", "all"];
+            const flags = ["general", "targeting", "diving", "blockBreaking", "blockPlacement", "all"];
             if (res.selection < flags.length) {
                 const newState = toggleDebugFlag("torpedo", flags[res.selection]);
                 const stateText = newState ? "§aON" : "§cOFF";
                 player.sendMessage(`§7[DEBUG] Torpedo AI ${flags[res.selection]} debug: ${stateText}`);
                 // Log to console for confirmation
                 console.warn(`[DEBUG MENU] Torpedo AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+                invalidateDebugCache();
             }
                 return openTorpedoDebugMenu(getDebugSettings(player));
         }).catch(() => openDebugMenu());
@@ -3449,9 +3451,10 @@ export function showCodexBook(player, context) {
     function openMainDebugMenu(settings) {
         const main = settings.main || {};
         const form = new ActionFormData().title("§bMain Script Debug");
-        form.body(`§7Toggle debug logging for Main Script:\n\n§8Current settings:\n§7• Death Events: ${main.death ? "§aON" : "§cOFF"}\n§7• Mob Conversion: ${main.conversion ? "§aON" : "§cOFF"}\n§7• Infection: ${main.infection ? "§aON" : "§cOFF"}\n§7• Minor Infection: ${main.minorInfection ? "§aON" : "§cOFF"}`);
+        form.body(`§7Toggle debug logging for Main Script:\n\n§8Current settings:\n§7• Death Events: ${main.death ? "§aON" : "§cOFF"}\n§7• Snow Placement: ${main.snow_placement ? "§aON" : "§cOFF"}\n§7• Mob Conversion: ${main.conversion ? "§aON" : "§cOFF"}\n§7• Infection: ${main.infection ? "§aON" : "§cOFF"}\n§7• Minor Infection: ${main.minorInfection ? "§aON" : "§cOFF"}`);
         
         form.button(`§${main.death ? "a" : "c"}Death Events`);
+        form.button(`§${main.snow_placement ? "a" : "c"}Snow Placement`);
         form.button(`§${main.conversion ? "a" : "c"}Mob Conversion`);
         form.button(`§${main.infection ? "a" : "c"}Infection`);
         form.button(`§${main.minorInfection ? "a" : "c"}Minor Infection`);
@@ -3459,7 +3462,7 @@ export function showCodexBook(player, context) {
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 5) {
+            if (!res || res.canceled || res.selection === 6) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openDebugMenu();
@@ -3467,13 +3470,14 @@ export function showCodexBook(player, context) {
 
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
-            const flags = ["death", "conversion", "infection", "minorInfection", "all"];
+            const flags = ["death", "snow_placement", "conversion", "infection", "minorInfection", "all"];
             if (res.selection < flags.length) {
                 const newState = toggleDebugFlag("main", flags[res.selection]);
                 const stateText = newState ? "§aON" : "§cOFF";
                 player.sendMessage(`§7[DEBUG] Main Script ${flags[res.selection]} debug: ${stateText}`);
                 // Log to console for confirmation
                 console.warn(`[DEBUG MENU] Main Script ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+                invalidateDebugCache();
             }
                 return openMainDebugMenu(getDebugSettings(player));
         }).catch(() => openDebugMenu());
