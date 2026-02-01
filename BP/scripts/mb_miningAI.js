@@ -111,18 +111,17 @@ const WALKABLE_THROUGH_BLOCKS = new Set([
 ]);
 
 // All blocks are breakable by default except unbreakable ones
-// Mining speed: starts at wooden pickaxe speed (12 ticks) at day 15 (when mining bears first spawn), scales to netherite pickaxe speed (1 tick) by day 24
-// Capped at netherite speed (1 tick) for all days after day 24+
-// +1 tick offset = "one level down" / slightly slower mining
+// Mining speed: starts at wooden pickaxe speed (11 ticks) at day 15, scales to netherite (1 tick) by day 24
+// Slightly faster than before: one tick less throttle across the curve
 function getMiningInterval() {
     const currentDay = getCurrentDay();
   
-    if (currentDay < 15) return 12; // Wooden pickaxe speed (slowest) - before mining bears spawn
-    if (currentDay >= 24) return 2; // Slightly slower than netherite (1 → 2 ticks)
+    if (currentDay < 15) return 11; // Wooden-pick level (slowest) - before mining bears spawn
+    if (currentDay >= 24) return 1; // Netherite speed (1 tick)
   
-    // Linear progression: 12 ticks at day 15, 2 ticks at day 24 (one level slower than before)
-    const raw = Math.floor(12 - (11 / 9) * (currentDay - 15));
-    const interval = Math.max(1, Math.min(12, raw + 1));
+    // Linear progression: 11 ticks at day 15, 1 tick at day 24
+    const raw = Math.floor(11 - (10 / 9) * (currentDay - 15));
+    const interval = Math.max(1, Math.min(11, raw));
     return interval;
   }
   
@@ -265,7 +264,8 @@ const SOUND_RADIUS = 16;
 
 const lastKnownTargets = new Map();
 const lastSeenTargetTick = new Map(); // Track when target was last seen (for passive wandering)
-const lastMiningTick = new Map(); // Track last mining action per entity (for dynamic speed)
+const lastMiningTick = new Map(); // Track last mining action per entity (for idle bears)
+const lastBlockBreakTick = new Map(); // Track last block break per entity (mining speed throttle only)
 const buildQueues = new Map();
 const reservedNodes = new Map();
 const buildModeState = new Map();
@@ -2332,7 +2332,6 @@ function steerAlongPath(entity, path, targetInfo, config) {
  */
 function getNextStepBlockTowardTarget(loc, targetLoc, dimension, entity) {
     const horizontalDist = Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z);
-    const tick = system.currentTick;
     const logDebug = getDebugGeneral() || getDebugMining();
     if (logDebug) {
         const dy = targetLoc.y - loc.y;
@@ -7727,7 +7726,12 @@ function processContext(ctx, config, tick, leaderSummaryById) {
             : (hasTarget
                 ? MAX_BLOCKS_PER_ENTITY
                 : 0));
-    const digContext = { cleared: 0, max: digBudget, lastBroken: null };
+    // Throttle only block breaking by mining interval; movement/climbing run every tick
+    const miningInterval = getMiningInterval();
+    const lastBreak = lastBlockBreakTick.get(entity.id) ?? 0;
+    const allowMiningThisTick = (tick - lastBreak) >= miningInterval;
+    const effectiveBudget = allowMiningThisTick ? digBudget : 0;
+    const digContext = { cleared: 0, max: effectiveBudget, lastBroken: null };
     
     if (getDebugPitfall() && digBudget > 0) {
         console.warn(`[PITFALL DEBUG] processContext: digBudget=${digBudget} (role=${role}, buildPriority=${buildPriority}, hasTarget=${hasTarget}, MAX_BLOCKS_PER_ENTITY=${MAX_BLOCKS_PER_ENTITY})`);
@@ -9649,7 +9653,7 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                                 const sameLevelBlock = getBlock(dimension, originalStepX, stepBaseY, originalStepZ);
                                 const sameLevelSolid = sameLevelBlock && isSolidBlock(sameLevelBlock) && !AIR_BLOCKS.has(sameLevelBlock.typeId);
                                 
-                                // Debug: log detailed step info when applying movement (every 40 ticks or with debug flag)
+                                // Debug: log detailed step info when applying movement
                                 const tick = system.currentTick;
                                 const logStepInfo = getDebugGeneral() || getDebugMining();
                                 if (logStepInfo && (stepReady || hasClearedSpace)) {
@@ -9684,10 +9688,8 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                                 
                                 if (stepReady || hasClearedSpace) {
                                     try {
-                                        const tick = system.currentTick;
                                         const logStairMove = getDebugGeneral() || getDebugMining();
                                         const logStepDecision = logStairMove;
-                                        
                                         // Debug: log the decision
                                         if (logStepDecision) {
                                             console.warn(`[MINING AI] Stair decision: isElevatedStep=${isElevatedStep} stepY=${stepY} stepBaseY=${stepBaseY} stepReady=${stepReady} horizontalDist=${horizontalDistToLanding.toFixed(1)} landingTooFar=${landingTooFar} closeToOriginal=${closeToOriginal} distToOriginal=${distToOriginal.toFixed(2)} shouldUseOriginalStep=${shouldUseOriginalStep}`);
@@ -10034,7 +10036,6 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                             } else {
                                 const { stepX, stepY, stepZ, stepIsSolid, headroomClear, pathfindX, pathfindY, pathfindZ } = nextDown;
                                 const stepReady = stepIsSolid && headroomClear;
-                                const tick = system.currentTick;
                                 const logDescend = getDebugGeneral() || getDebugMining();
                                 if (logDescend) {
                                     console.warn(`[MINING AI] Descend step check: step=(${stepX},${stepY},${stepZ}) solid=${stepIsSolid} headroom=${headroomClear} stepReady=${stepReady}`);
@@ -10088,6 +10089,8 @@ function processContext(ctx, config, tick, leaderSummaryById) {
             }
         }
     }
+
+    if (digContext.cleared > 0) lastBlockBreakTick.set(entity.id, tick);
 
     const rescueContext = digContext.max > 0 ? digContext : { cleared: 0, max: FOLLOWER_BLOCK_BUDGET, lastBroken: digContext.lastBroken };
     liftIfBuried(entity, config.tunnelHeight, rescueContext);
@@ -10594,27 +10597,16 @@ function initializeMiningAI() {
                         console.warn(`[PITFALL DEBUG] ${leaderQueue.length} leaders in queue, miningInterval=${miningInterval}`);
                     }
                     
+                    // Leaders and followers: run every tick so movement and climbing are responsive.
+                    // Block breaking is throttled inside processContext by miningInterval.
                     for (const ctx of leaderQueue) {
-                        // Check if enough time has passed since last mining action for this entity
-                        const lastTick = lastMiningTick.get(ctx.entity.id) || 0;
-                        const ticksSinceLastMining = tick - lastTick;
-                        if (ticksSinceLastMining >= miningInterval) {
-                            if (DEBUG_PITFALL && tick % 20 === 0) {
-                                console.warn(`[PITFALL DEBUG] Processing leader ${ctx.entity.id.substring(0, 8)}, hasTarget=${!!ctx.targetInfo}, role=${ctx.role}`);
-                            }
-                            processContext(ctx, config, tick, leaderSummaryById);
-                            lastMiningTick.set(ctx.entity.id, tick);
-                        } else if (DEBUG_PITFALL && tick % 40 === 0) {
-                            console.warn(`[PITFALL DEBUG] Leader ${ctx.entity.id.substring(0, 8)} waiting: ${ticksSinceLastMining}/${miningInterval} ticks`);
+                        if (DEBUG_PITFALL && tick % 20 === 0) {
+                            console.warn(`[PITFALL DEBUG] Processing leader ${ctx.entity.id.substring(0, 8)}, hasTarget=${!!ctx.targetInfo}, role=${ctx.role}`);
                         }
+                        processContext(ctx, config, tick, leaderSummaryById);
                     }
                     for (const ctx of followerQueue) {
-                        // Check if enough time has passed since last mining action for this entity
-                        const lastTick = lastMiningTick.get(ctx.entity.id) || 0;
-                        if (tick - lastTick >= miningInterval) {
-                            processContext(ctx, config, tick, leaderSummaryById);
-                            lastMiningTick.set(ctx.entity.id, tick);
-                        }
+                        processContext(ctx, config, tick, leaderSummaryById);
                     }
                     for (const ctx of idleQueue) {
                         // Idle bears without targets

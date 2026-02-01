@@ -1,5 +1,58 @@
 # Context Summary
 
+**Date:** 2026-02-01
+
+## Mining AI: run every tick for movement, throttle only block breaking (mb_miningAI.js)
+
+Bears were going slow and not climbing blocks/stairs because **processContext** was only called every **miningInterval** ticks (2–12 ticks by day) for leaders and followers. That throttled the whole AI (pathfinding, steering, climbing) instead of only block-breaking speed.
+
+### Fix
+
+1. **Main loop**  
+   Leaders and followers now run **processContext every tick**. The `if (ticksSinceLastMining >= miningInterval)` guard and `lastMiningTick.set` for leaders/followers were removed so movement and climbing run every tick.
+
+2. **Block-breaking throttle inside processContext**  
+   - New map: **lastBlockBreakTick** — last tick this entity broke a block.  
+   - At start of processContext: `miningInterval = getMiningInterval()`, `allowMiningThisTick = (tick - lastBlockBreakTick) >= miningInterval`, `effectiveBudget = allowMiningThisTick ? digBudget : 0`, and **digContext.max = effectiveBudget**.  
+   - At end of processContext: if `digContext.cleared > 0` then `lastBlockBreakTick.set(entity.id, tick)`.
+
+Result: Bears get steering/impulse and stair logic every tick (responsive movement and climbing). Block breaking still respects mining speed (every 2–12 ticks by day). Idle bears unchanged (still process at miningInterval * 2).
+
+---
+
+## Mining debug logging reverted (mb_miningAI.js)
+
+Rate-limited mining debug (DEBUG_LOG_INTERVAL / shouldLogMiningDebug) was reverted because mining bears stopped jumping onto 1-block steps and climbing upward stairs. All rate-limiting was removed and the original pattern restored (see above for the actual movement fix).
+
+---
+
+**Date:** 2026-02-01
+
+## Snow block lists extracted to shared module
+
+`SNOW_REPLACEABLE_BLOCKS` and `SNOW_TWO_BLOCK_PLANTS` were duplicated in `BP/scripts/mb_torpedoAI.js` (lines 28–46) and `BP/scripts/main.js`. They were moved into a shared module and both files now import them.
+
+### Changes made
+
+1. **New `BP/scripts/mb_blockLists.js`**  
+   - Exports `SNOW_REPLACEABLE_BLOCKS` and `SNOW_TWO_BLOCK_PLANTS` (same names).  
+   - Contains the canonical Sets used for death/torpedo snow placement (grass, flowers, foliage; 2-block-tall plants).  
+   - `SNOW_REPLACEABLE_BLOCKS` includes `minecraft:grass_block` (from torpedo list).
+
+2. **`BP/scripts/mb_torpedoAI.js`**  
+   - Removed inline `SNOW_REPLACEABLE_BLOCKS` and `SNOW_TWO_BLOCK_PLANTS` definitions.  
+   - Added: `import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";`  
+   - All existing usages (e.g. `.has(blockType)`) unchanged; symbols now come from the import.
+
+3. **`BP/scripts/main.js`**  
+   - Removed inline `SNOW_REPLACEABLE_BLOCKS` and `SNOW_TWO_BLOCK_PLANTS` definitions.  
+   - Added: `import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";`  
+   - All references in death/snow placement logic unchanged; symbols now come from the import.
+
+Result: Single source of truth for snow-replaceable and two-block-plant lists; no code changes needed at call sites beyond the new imports.
+
+---
+
 **Date:** 2026-01-31
 
 ## "Check your journal" — one-time only (fixed)

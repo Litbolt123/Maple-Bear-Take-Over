@@ -1,5 +1,6 @@
 import { system, world, Player } from "@minecraft/server";
 import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
+import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
 import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCachedPlayers, getCachedMobs } from "./mb_sharedCache.js";
@@ -25,25 +26,32 @@ function getDebugBlockPlacement() {
     return isDebugEnabled("torpedo", "blockPlacement") || isDebugEnabled("torpedo", "all");
 }
 
-// Blocks that should be replaced by snow (grass, flowers, foliage) - same as main.js SNOW_REPLACEABLE_BLOCKS
-const SNOW_REPLACEABLE_BLOCKS = new Set([
-    "minecraft:grass_block", "minecraft:grass", "minecraft:short_grass", "minecraft:tall_grass", "minecraft:double_tall_grass", "minecraft:fern", "minecraft:large_fern",
-    "minecraft:dandelion", "minecraft:poppy", "minecraft:blue_orchid", "minecraft:allium", "minecraft:azure_bluet", "minecraft:red_tulip",
-    "minecraft:orange_tulip", "minecraft:white_tulip", "minecraft:pink_tulip", "minecraft:oxeye_daisy", "minecraft:cornflower", "minecraft:lily_of_the_valley",
-    "minecraft:sunflower", "minecraft:lilac", "minecraft:rose_bush", "minecraft:peony", "minecraft:dead_bush", "minecraft:cactus",
-    "minecraft:sweet_berry_bush", "minecraft:nether_sprouts", "minecraft:warped_roots", "minecraft:crimson_roots", "minecraft:small_dripleaf",
-    "minecraft:big_dripleaf", "minecraft:big_dripleaf_stem", "minecraft:spore_blossom", "minecraft:glow_lichen", "minecraft:moss_carpet",
-    "minecraft:vine", "minecraft:weeping_vines", "minecraft:twisting_vines", "minecraft:cave_vines", "minecraft:sea_pickle", "minecraft:kelp",
-    "minecraft:seagrass", "minecraft:tall_seagrass", "minecraft:waterlily", "minecraft:lily_pad",
-    "minecraft:torchflower", "minecraft:pitcher_plant", "minecraft:pitcher_crop"
-]);
-// 2-block-tall plants: replace bottom with snow, top with air (same as main.js SNOW_TWO_BLOCK_PLANTS)
-const SNOW_TWO_BLOCK_PLANTS = new Set([
-    "minecraft:sunflower", "minecraft:lilac", "minecraft:rose_bush", "minecraft:peony", "minecraft:large_fern",
-    "minecraft:double_tall_grass", "minecraft:tall_grass",
-    "minecraft:pitcher_plant", "minecraft:pitcher_crop",
-    "minecraft:big_dripleaf", "minecraft:big_dripleaf_stem"
-]);
+/**
+ * Handles 2-block plants (e.g. tall grass) when replacing with snow.
+ * Fetches block above/below, applies snow or air replacements with try/catch fallbacks.
+ */
+function handleTwoBlockPlant(dimension, checkX, topSolidY, checkZ, topSolidBlock, debugEnabled, isAbove = false) {
+    const blockAbove = dimension.getBlock({ x: checkX, y: topSolidY + 1, z: checkZ });
+    const blockBelow = dimension.getBlock({ x: checkX, y: topSolidY - 1, z: checkZ });
+    const blockType = topSolidBlock.typeId;
+    if (!SNOW_TWO_BLOCK_PLANTS.has(blockType)) return;
+    const prefix = isAbove ? "2-block above: " : "2-block: ";
+    const replaceLog = isAbove ? `replaced above ${blockType} with snow` : `replaced ${blockType} with snow`;
+    if (blockAbove && SNOW_TWO_BLOCK_PLANTS.has(blockAbove.typeId)) {
+        try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType("minecraft:snow_layer"); }
+        try { blockAbove.setType("minecraft:air"); } catch { }
+        if (debugEnabled) console.warn(`[TORPEDO SNOW] (${checkX},${topSolidY},${checkZ}) ${prefix}bottom→snow, top→air`);
+    } else if (blockBelow && SNOW_TWO_BLOCK_PLANTS.has(blockBelow.typeId)) {
+        try { blockBelow.setType("mb:snow_layer"); } catch { blockBelow.setType("minecraft:snow_layer"); }
+        try { topSolidBlock.setType("minecraft:air"); } catch { }
+        if (debugEnabled) console.warn(`[TORPEDO SNOW] (${checkX},${topSolidY},${checkZ}) ${prefix}was top, bottom→snow, this→air`);
+    } else {
+        try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType("minecraft:snow_layer"); }
+        if (debugEnabled) console.warn(`[TORPEDO SNOW] (${checkX},${topSolidY},${checkZ}) ${replaceLog}`);
+    }
+}
+
+// SNOW_REPLACEABLE_BLOCKS and SNOW_TWO_BLOCK_PLANTS imported from mb_blockLists.js
 
 const DIMENSION_IDS = ["overworld", "nether", "the_end"];
 const TORPEDO_TYPES = [
@@ -211,20 +219,7 @@ function checkTorpedoExhaustion(entity, config) {
                                 // If it's any ground foliage (grass, flowers, etc.), replace it with snow
                                 if (SNOW_REPLACEABLE_BLOCKS.has(blockType)) {
                                     if (SNOW_TWO_BLOCK_PLANTS.has(blockType)) {
-                                        const blockAbove = dimension.getBlock({ x: checkX, y: topSolidY + 1, z: checkZ });
-                                        const blockBelow = dimension.getBlock({ x: checkX, y: topSolidY - 1, z: checkZ });
-                                        if (blockAbove && SNOW_TWO_BLOCK_PLANTS.has(blockAbove.typeId)) {
-                                            try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType("minecraft:snow_layer"); }
-                                            try { blockAbove.setType("minecraft:air"); } catch { }
-                                            if (getDebugBlockPlacement()) console.warn(`[TORPEDO SNOW] (${checkX},${topSolidY},${checkZ}) 2-block: bottom→snow, top→air`);
-                                        } else if (blockBelow && SNOW_TWO_BLOCK_PLANTS.has(blockBelow.typeId)) {
-                                            try { blockBelow.setType("mb:snow_layer"); } catch { blockBelow.setType("minecraft:snow_layer"); }
-                                            try { topSolidBlock.setType("minecraft:air"); } catch { }
-                                            if (getDebugBlockPlacement()) console.warn(`[TORPEDO SNOW] (${checkX},${topSolidY},${checkZ}) 2-block: was top, bottom→snow, this→air`);
-                                        } else {
-                                            try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType("minecraft:snow_layer"); }
-                                            if (getDebugBlockPlacement()) console.warn(`[TORPEDO SNOW] (${checkX},${topSolidY},${checkZ}) replaced ${blockType} with snow`);
-                                        }
+                                        handleTwoBlockPlant(dimension, checkX, topSolidY, checkZ, topSolidBlock, getDebugBlockPlacement());
                                     } else {
                                         try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType("minecraft:snow_layer"); }
                                         if (getDebugBlockPlacement()) console.warn(`[TORPEDO SNOW] (${checkX},${topSolidY},${checkZ}) replaced ${blockType} with snow`);
@@ -242,20 +237,7 @@ function checkTorpedoExhaustion(entity, config) {
                                         // Replace foliage above so snow doesn't stack on top of grass
                                         if (SNOW_REPLACEABLE_BLOCKS.has(snowBlockType)) {
                                             if (SNOW_TWO_BLOCK_PLANTS.has(snowBlockType)) {
-                                                const blockAboveSnow = dimension.getBlock({ x: checkX, y: snowY + 1, z: checkZ });
-                                                const blockBelowSnow = dimension.getBlock({ x: checkX, y: snowY - 1, z: checkZ });
-                                                if (blockAboveSnow && SNOW_TWO_BLOCK_PLANTS.has(blockAboveSnow.typeId)) {
-                                                    try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType("minecraft:snow_layer"); }
-                                                    try { blockAboveSnow.setType("minecraft:air"); } catch { }
-                                                    if (getDebugBlockPlacement()) console.warn(`[TORPEDO SNOW] (${checkX},${snowY},${checkZ}) 2-block above: bottom→snow, top→air`);
-                                                } else if (blockBelowSnow && SNOW_TWO_BLOCK_PLANTS.has(blockBelowSnow.typeId)) {
-                                                    try { blockBelowSnow.setType("mb:snow_layer"); } catch { blockBelowSnow.setType("minecraft:snow_layer"); }
-                                                    try { snowBlock.setType("minecraft:air"); } catch { }
-                                                    if (getDebugBlockPlacement()) console.warn(`[TORPEDO SNOW] (${checkX},${snowY},${checkZ}) 2-block above: was top, bottom→snow, this→air`);
-                                                } else {
-                                                    try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType("minecraft:snow_layer"); }
-                                                    if (getDebugBlockPlacement()) console.warn(`[TORPEDO SNOW] (${checkX},${snowY},${checkZ}) replaced above ${snowBlockType} with snow`);
-                                                }
+                                                handleTwoBlockPlant(dimension, checkX, snowY, checkZ, snowBlock, getDebugBlockPlacement(), true);
                                             } else {
                                                 try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType("minecraft:snow_layer"); }
                                                 if (getDebugBlockPlacement()) console.warn(`[TORPEDO SNOW] (${checkX},${snowY},${checkZ}) replaced above ${snowBlockType} with snow`);
