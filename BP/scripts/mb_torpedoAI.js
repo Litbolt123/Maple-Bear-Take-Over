@@ -1,6 +1,7 @@
 import { system, world, Player } from "@minecraft/server";
 import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
 import { isDebugEnabled } from "./mb_codex.js";
+import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCachedPlayers, getCachedMobs } from "./mb_sharedCache.js";
 
 // Debug helper functions
@@ -946,6 +947,7 @@ function initializeTorpedoAI() {
     }
     
     torpedoAIIntervalId = system.runInterval(() => {
+        if (!isScriptEnabled(SCRIPT_IDS.torpedo)) return;
         const seen = new Set();
         const currentTick = system.currentTick;
         const ticksSinceStart = currentTick - aiLoopStartTick;

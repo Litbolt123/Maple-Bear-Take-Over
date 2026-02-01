@@ -1,10 +1,31 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData, ModalFormData, FormCancelationReason } from "@minecraft/server-ui";
 import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getPlayerPropertyChunked, setPlayerPropertyChunked, getWorldPropertyChunked, setWorldPropertyChunked } from "./mb_dynamicPropertyHandler.js";
+import { getAllScriptToggles, setScriptEnabled, SCRIPT_IDS, isBetaInfectedAIEnabled, setBetaInfectedAIEnabled, isBetaVisibleToAll, setBetaVisibleToAll, getBetaOwnerId, setBetaOwnerId } from "./mb_scriptToggles.js";
 import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTracker.js";
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
+
+function hasCheats(p) {
+    return (p?.hasTag && p.hasTag("mb_cheats")) || Boolean(typeof system !== "undefined" && system?.isEnableCheats?.());
+}
+
+/** Designated owner = first player to join the world */
+function isBetaOwner(p) {
+    const ownerId = getBetaOwnerId();
+    return ownerId != null && String(p.id) === String(ownerId);
+}
+
+/** Can edit beta settings: owner OR anyone with mb_cheats */
+function canChangeBeta(p) {
+    return isBetaOwner(p) || (p?.hasTag && p.hasTag("mb_cheats"));
+}
+
+/** Can see beta section: can change OR owner enabled "visible to all" */
+function canSeeBeta(p) {
+    return canChangeBeta(p) || isBetaVisibleToAll();
+}
 
 function getSpawnDifficultyValue() {
     let rawValue = getWorldProperty(SPAWN_DIFFICULTY_PROPERTY);
@@ -2936,6 +2957,7 @@ export function showCodexBook(player, context) {
 
     function openDeveloperTools() {
         const options = [
+            { label: "§fScript Toggles", action: () => openScriptTogglesMenu() },
             { label: "§fReset My Codex", action: () => triggerDebugCommand("reset_codex") },
             { label: "§fReset World Day to 1", action: () => triggerDebugCommand("reset_day") },
             { label: "§fSet Day...", action: () => promptSetDay() },
@@ -2943,7 +2965,7 @@ export function showCodexBook(player, context) {
         ];
 
         const form = new ActionFormData().title("§cDeveloper Tools");
-        form.body("§7Debug utilities:");
+        form.body("§7Debug utilities. §8Script Toggles: enable/disable scripts if things break.");
         for (const opt of options) {
             form.button(opt.label);
         }
@@ -2965,6 +2987,43 @@ export function showCodexBook(player, context) {
                 openDeveloperTools();
             }
         });
+    }
+
+    function openScriptTogglesMenu() {
+        const toggles = getAllScriptToggles();
+        const labels = {
+            [SCRIPT_IDS.mining]: "Mining AI",
+            [SCRIPT_IDS.infected]: "Infected AI",
+            [SCRIPT_IDS.flying]: "Flying AI",
+            [SCRIPT_IDS.torpedo]: "Torpedo AI",
+            [SCRIPT_IDS.biomeAmbience]: "Biome Ambience"
+        };
+        const ids = [SCRIPT_IDS.mining, SCRIPT_IDS.infected, SCRIPT_IDS.flying, SCRIPT_IDS.torpedo, SCRIPT_IDS.biomeAmbience];
+        const body = ids.map(id => `§7${labels[id]}: §${toggles[id] ? "aON" : "cOFF"}`).join("\n");
+        const form = new ActionFormData()
+            .title("§cScript Toggles")
+            .body(`§7Enable/disable scripts. §8Useful if something breaks.\n\n${body}`);
+
+        ids.forEach((id) => {
+            form.button(toggles[id] ? `§a${labels[id]} §8(ON) → OFF` : `§c${labels[id]} §8(OFF) → ON`);
+        });
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === ids.length) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openDeveloperTools();
+            }
+            if (res.selection >= 0 && res.selection < ids.length) {
+                const id = ids[res.selection];
+                const next = !toggles[id];
+                setScriptEnabled(id, next);
+                player.sendMessage(`§7${labels[id]}: ${next ? "§aON" : "§cOFF"}`);
+                player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            }
+            openScriptTogglesMenu();
+        }).catch(() => openDeveloperTools());
     }
 
     function getSpawnDifficultyLabel(value) {
@@ -3171,6 +3230,7 @@ export function showCodexBook(player, context) {
         form.body("§7Toggle debug logging for different AI systems:\n\n§8Select a category to configure:");
         
         form.button("§fMining AI");
+        form.button("§fInfected AI");
         form.button("§fTorpedo AI");
         form.button("§fFlying AI");
         form.button("§fSpawn Controller");
@@ -3188,7 +3248,7 @@ export function showCodexBook(player, context) {
                 return openMain();
             }
 
-            if (res.selection === 9) {
+            if (res.selection === 10) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openMain();
@@ -3198,14 +3258,15 @@ export function showCodexBook(player, context) {
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
             switch (res.selection) {
                 case 0: return openMiningDebugMenu(settings);
-                case 1: return openTorpedoDebugMenu(settings);
-                case 2: return openFlyingDebugMenu(settings);
-                case 3: return openSpawnDebugMenu(settings);
-                case 4: return openMainDebugMenu(settings);
-                case 5: return openBiomeAmbienceDebugMenu(settings);
-                case 6: return openDynamicPropertyDebugMenu(settings);
-                case 7: return openCodexDebugMenu(settings);
-                case 8: return openGroundInfectionDebugMenu(settings);
+                case 1: return openInfectedDebugMenu(settings);
+                case 2: return openTorpedoDebugMenu(settings);
+                case 3: return openFlyingDebugMenu(settings);
+                case 4: return openSpawnDebugMenu(settings);
+                case 5: return openMainDebugMenu(settings);
+                case 6: return openBiomeAmbienceDebugMenu(settings);
+                case 7: return openDynamicPropertyDebugMenu(settings);
+                case 8: return openCodexDebugMenu(settings);
+                case 9: return openGroundInfectionDebugMenu(settings);
                 default: return openDebugMenu();
             }
         }).catch(() => openMain());
@@ -3245,6 +3306,38 @@ export function showCodexBook(player, context) {
                 console.warn(`[DEBUG MENU] Mining AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
             }
                 return openMiningDebugMenu(getDebugSettings(player));
+        }).catch(() => openDebugMenu());
+    }
+
+    function openInfectedDebugMenu(settings) {
+        const infected = settings.infected || {};
+        const form = new ActionFormData().title("§bInfected AI Debug");
+        form.body(`§7Toggle debug logging for Infected AI (bears/pig/cow):\n\n§8Current settings:\n§7• General: ${infected.general ? "§aON" : "§cOFF"}\n§7• Pathfinding: ${infected.pathfinding ? "§aON" : "§cOFF"}\n§7• Gap Jump: ${infected.gapJump ? "§aON" : "§cOFF"}`);
+
+        form.button(`§${infected.general ? "a" : "c"}General Logging`);
+        form.button(`§${infected.pathfinding ? "a" : "c"}Pathfinding`);
+        form.button(`§${infected.gapJump ? "a" : "c"}Gap Jump`);
+        form.button(`§${infected.all ? "a" : "c"}Toggle All`);
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 4) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openDebugMenu();
+            }
+
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
+            const flags = ["general", "pathfinding", "gapJump", "all"];
+            if (res.selection < flags.length) {
+                const newState = toggleDebugFlag("infected", flags[res.selection]);
+                const stateText = newState ? "§aON" : "§cOFF";
+                player.sendMessage(`§7[DEBUG] Infected AI ${flags[res.selection]} debug: ${stateText}`);
+                console.warn(`[DEBUG MENU] Infected AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+                invalidateDebugCache();
+            }
+            return openInfectedDebugMenu(getDebugSettings(player));
         }).catch(() => openDebugMenu());
     }
 
@@ -3553,6 +3646,67 @@ export function showCodexBook(player, context) {
     }
 
     function openSettings() {
+        // Show settings chooser: General vs Beta Features
+        const canSee = canSeeBeta(player);
+        const form = new ActionFormData().title("§eSettings");
+        form.body("§7Choose a section:");
+        form.button("§fGeneral §8(Sound, Tips, Search)");
+        if (canSee) {
+            form.button("§dBeta Features §8(experimental)");
+        }
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openMain();
+            }
+            if (res.selection === 0) {
+                return openGeneralSettings();
+            }
+            if (canSee && res.selection === 1) {
+                return openBetaSettingsMenu();
+            }
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+            openMain();
+        }).catch(() => openMain());
+    }
+
+    function openBetaSettingsMenu() {
+        const canEdit = canChangeBeta(player);
+        const infectedOn = isBetaInfectedAIEnabled();
+        const visibleToAll = isBetaVisibleToAll();
+        const form = new ActionFormData()
+            .title("§dBeta Features")
+            .body(`§7Experimental features. §8(First joiner + mb_cheats can change)\n\n§7Infected AI (beta): §${infectedOn ? "aON" : "cOFF"}\n§7Visible to others in book: §${visibleToAll ? "aON" : "cOFF"}\n${!canEdit ? "\n§8You are viewing read-only." : ""}`);
+
+        if (canEdit) {
+            form.button(infectedOn ? "§aInfected AI §8(ON) → OFF" : "§cInfected AI §8(OFF) → ON");
+            form.button(visibleToAll ? "§aVisible to others §8(ON) → OFF" : "§cVisible to others §8(OFF) → ON");
+        }
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === (canEdit ? 2 : 0)) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openSettings();
+            }
+            if (canEdit && res.selection === 0) {
+                setBetaInfectedAIEnabled(!infectedOn);
+                player.sendMessage(`§7Infected AI (beta): ${infectedOn ? "§cOFF" : "§aON"}`);
+            } else if (canEdit && res.selection === 1) {
+                setBetaVisibleToAll(!visibleToAll);
+                player.sendMessage(`§7Visible to others: ${visibleToAll ? "§cOFF" : "§aON"}`);
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            openBetaSettingsMenu();
+        }).catch(() => openSettings());
+    }
+
+    function openGeneralSettings() {
         const settings = getSettings();
         const codex = getCodex(player);
         
@@ -3622,16 +3776,11 @@ export function showCodexBook(player, context) {
                     player.sendMessage("§7Settings saved!");
                     player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
                 } else if (res && res.canceled) {
-                    // Form was canceled - if formValues aren't available, we can't save changes
-                    // This happens if user clicks cancel before interacting with form
                     player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 } else {
-                    // Form was submitted but no values (shouldn't happen)
                     player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 }
-                
-                // Return to main menu (settings auto-saved if formValues were available)
-                openMain();
+                openSettings();
             }).catch((error) => {
                 console.warn(`[SETTINGS] Error showing settings form:`, error);
                 console.warn(`[SETTINGS] Error stack:`, error?.stack);
@@ -3772,6 +3921,12 @@ function getDefaultDebugSettings() {
             mining: false,
             movement: false,
             stairCreation: false,
+            all: false
+        },
+        infected: {
+            general: false,
+            pathfinding: false,
+            gapJump: false,
             all: false
         },
         torpedo: {
@@ -3965,7 +4120,7 @@ export function showBasicJournalUI(player) {
     
     buttons.push("§bSettings");
     buttonIcons.push("textures/ui/settings_glyph_color_2x");
-    buttonActions.push(() => showSettingsScreen(player));
+    buttonActions.push(() => showSettingsChooserBasic(player));
     
     buttons.push("§aRecipe: Powdery Journal");
     buttonIcons.push("textures/items/snow_book");
@@ -4166,7 +4321,67 @@ function showGoalScreen(player) {
     });
 }
 
-function showSettingsScreen(player) {
+function showBetaSettingsScreen(player, onBack) {
+    const canEdit = canChangeBeta(player);
+    const infectedOn = isBetaInfectedAIEnabled();
+    const visibleToAll = isBetaVisibleToAll();
+    const form = new ActionFormData()
+        .title("§dBeta Features")
+        .body(`§7Experimental features. §8(First joiner + mb_cheats can change)\n\n§7Infected AI (beta): §${infectedOn ? "aON" : "cOFF"}\n§7Visible to others in book: §${visibleToAll ? "aON" : "cOFF"}\n${!canEdit ? "\n§8You are viewing read-only." : ""}`);
+
+    if (canEdit) {
+        form.button(infectedOn ? "§aInfected AI §8(ON) → OFF" : "§cInfected AI §8(OFF) → ON");
+        form.button(visibleToAll ? "§aVisible to others §8(ON) → OFF" : "§cVisible to others §8(OFF) → ON");
+    }
+    form.button("§8Back");
+
+    form.show(player).then((res) => {
+        if (!res || res.canceled || res.selection === (canEdit ? 2 : 0)) {
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+            return onBack();
+        }
+        if (canEdit && res.selection === 0) {
+            setBetaInfectedAIEnabled(!infectedOn);
+            player.sendMessage(`§7Infected AI (beta): ${infectedOn ? "§cOFF" : "§aON"}`);
+        } else if (canEdit && res.selection === 1) {
+            setBetaVisibleToAll(!visibleToAll);
+            player.sendMessage(`§7Visible to others: ${visibleToAll ? "§cOFF" : "§aON"}`);
+        }
+        player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+        showBetaSettingsScreen(player, onBack);
+    }).catch(() => onBack());
+}
+
+function showSettingsChooserBasic(player) {
+    const canSee = canSeeBeta(player);
+    const form = new ActionFormData().title("§bSettings");
+    form.body("§7Choose a section:");
+    form.button("§fGeneral §8(Sound, Tips, Messages)");
+    if (canSee) {
+        form.button("§dBeta Features §8(experimental)");
+    }
+    form.button("§8Back");
+
+    form.show(player).then((res) => {
+        if (!res || res.canceled) {
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+            return showBasicJournalUI(player);
+        }
+        if (res.selection === 0) {
+            return showGeneralSettingsBasic(player);
+        }
+        if (canSee && res.selection === 1) {
+            return showBetaSettingsScreen(player, () => showSettingsChooserBasic(player));
+        }
+        const volumeMultiplier = getPlayerSoundVolume(player);
+        player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+        showBasicJournalUI(player);
+    }).catch(() => showBasicJournalUI(player));
+}
+
+function showGeneralSettingsBasic(player) {
     // Get or create settings
     const settingsKey = `mb_player_settings_${player.id}`;
     let rawSettings = getWorldPropertyChunked(settingsKey);
@@ -4236,18 +4451,15 @@ function showSettingsScreen(player) {
     
     form.show(player).then((response) => {
         if (response.canceled) {
-            // Play page turn sound when going back
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-            showBasicJournalUI(player);
+            showSettingsChooserBasic(player);
             return;
         }
         
-        // Play page turn sound when saving settings
         const volumeMultiplier = getPlayerSoundVolume(player);
         player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
         
-        // Ensure formValues are valid
         if (response.formValues && response.formValues.length >= 3) {
             // Get slider value (0-10) - ensure it's a valid number
             const sliderValue = typeof response.formValues[0] === 'number' 
@@ -4277,7 +4489,7 @@ function showSettingsScreen(player) {
                 player.sendMessage("§cError saving settings!");
             }
         }
-        showBasicJournalUI(player);
+        showSettingsChooserBasic(player);
     });
 }
 

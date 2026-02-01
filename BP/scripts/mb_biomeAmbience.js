@@ -9,6 +9,7 @@
 import { system, world } from "@minecraft/server";
 import { getCurrentDay } from "./mb_dayTracker.js";
 import { getPlayerSoundVolume, isDebugEnabled } from "./mb_codex.js";
+import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 
 // Track active biome ambience per player
 // Map: playerId -> { soundId: string, biomeId: string, lastCheckTick: number, biomeSize: string }
@@ -236,6 +237,7 @@ function checkBiomeAmbienceForPlayer(player, currentDay) {
  * Main biome ambience check loop - slower interval when no players in biomes
  */
 system.runInterval(() => {
+    if (!isScriptEnabled(SCRIPT_IDS.biomeAmbience)) return;
     try {
         const allPlayers = world.getAllPlayers();
         if (allPlayers.length === 0) return;
@@ -272,6 +274,7 @@ system.runInterval(() => {
  * Fast check loop - runs more frequently when players are in biomes
  */
 system.runInterval(() => {
+    if (!isScriptEnabled(SCRIPT_IDS.biomeAmbience)) return;
     try {
         // Only run if there are active ambience entries (players in biomes)
         if (activeBiomeAmbience.size === 0) return;

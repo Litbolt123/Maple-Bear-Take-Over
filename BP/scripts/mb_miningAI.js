@@ -2,6 +2,7 @@ import { system, world, ItemStack } from "@minecraft/server";
 import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
 import { getCurrentDay } from "./mb_dayTracker.js";
 import { isDebugEnabled } from "./mb_codex.js";
+import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCachedPlayers, getCachedPlayerPositions, getCachedMobs } from "./mb_sharedCache.js";
 
 // Basic debug to verify script is loaded
@@ -11,6 +12,14 @@ const DIMENSION_IDS = ["overworld", "nether", "the_end"];
 const MINING_BEAR_TYPES = [
     { id: "mb:mining_mb", tunnelHeight: 2 }, // Standard 1x2 tunnel (1 wide, 2 tall)
     { id: "mb:mining_mb_day20", tunnelHeight: 2 } // Standard 1x2 tunnel (1 wide, 2 tall)
+];
+
+// Entity types that use shared pathfinding (for processPathfindingChunk + cleanup entity lookup)
+// Includes infected bears/pig/cow - same nox7 pathfinding as mining bears
+const PATHFINDING_ENTITY_TYPES = [
+    "mb:mining_mb", "mb:mining_mb_day20",
+    "mb:infected", "mb:infected_day08", "mb:infected_day13", "mb:infected_day20",
+    "mb:infected_pig", "mb:infected_cow"
 ];
 
 const AIR_BLOCKS = new Set([
@@ -280,6 +289,8 @@ const leaderTrails = new Map();
 
 // Track collected blocks per mining bear entity
 export const collectedBlocks = new Map(); // Map<entityId, Map<itemTypeId, count>>
+// Exported for mb_infectedAI (nox7-style pathfinding + steering)
+export { getPathfindingPath, getPathfindingWaypoint, steerAlongPath };
 
 // Intelligence system state tracking
 const entityStrategies = new Map(); // Map<entityId, {strategy: string, lastCalculated: tick, optimalPosition: {x,y,z}}>
@@ -1880,25 +1891,18 @@ function processPathfindingChunk(entityId) {
         return;
     }
     
-    // Get entity to verify it still exists
+    // Get entity to verify it still exists (mining bears + infected entities share pathfinding)
     let entity = null;
     try {
-        const entities = dimension.getEntities({ type: "mb:mining_mb" });
-        for (const e of entities) {
-            if (e.id === entityId) {
-                entity = e;
-                break;
-            }
-        }
-        // Also check day20 variant
-        if (!entity) {
-            const entities2 = dimension.getEntities({ type: "mb:mining_mb_day20" });
-            for (const e of entities2) {
+        for (const typeId of PATHFINDING_ENTITY_TYPES) {
+            const entities = dimension.getEntities({ type: typeId });
+            for (const e of entities) {
                 if (e.id === entityId) {
                     entity = e;
                     break;
                 }
             }
+            if (entity) break;
         }
     } catch { }
     
@@ -2273,9 +2277,12 @@ function steerAlongPath(entity, path, targetInfo, config) {
     }
     
     // Vertical component for climbing
-    // Skip upward when target only slightly above (dy <= 1.5) — avoid "flying" in mid-air
+    // Small upward for 1-block steps (0.4 < dy <= 1.5) — helps step up ledges and cross gaps
+    // Larger upward for significant climb (dy > 1.5)
     let verticalImpulse = 0;
-    if (dy > 1.5) {
+    if (dy > 0.4 && dy <= 1.5) {
+        verticalImpulse = Math.min(dy * 0.025, 0.03); // Gentle step-up (1-block ledges, gap landing)
+    } else if (dy > 1.5) {
         // Target is meaningfully above - add upward push
         if (dist <= 5) {
             verticalImpulse = Math.min(dy * 0.03, 0.025);
@@ -2286,16 +2293,15 @@ function steerAlongPath(entity, path, targetInfo, config) {
         }
     }
     
-    // Check if entity is on ground before applying impulse
+    // Check if entity is on ground before applying impulse — never apply in air (prevents flying)
     const dimension = entity?.dimension;
     if (dimension) {
         const feetY = Math.floor(loc.y);
         const feetBlock = dimension.getBlock({ x: Math.floor(loc.x), y: feetY - 1, z: Math.floor(loc.z) });
         const isOnGround = feetBlock && !feetBlock.isAir && !feetBlock.isLiquid;
-        
-        // Only apply if on ground (prevents jumping/falling issues)
-        if (!isOnGround && verticalImpulse <= 0) {
-            return false; // Don't apply horizontal movement if airborne
+
+        if (!isOnGround) {
+            return false; // Don't apply any impulse when airborne (no upward or forward — prevents flying)
         }
     }
     
@@ -2521,6 +2527,7 @@ function getNextStepBlockTowardTarget(loc, targetLoc, dimension, entity) {
     const stepBlock = dimension ? getBlock(dimension, stepX, stepY, stepZ) : null;
     const stepIsSolid = stepBlock && isSolidBlock(stepBlock) && !AIR_BLOCKS.has(stepBlock.typeId);
     const headAt = dimension ? getBlock(dimension, stepX, baseY + 1, stepZ) : null;
+    const aboveAt = dimension ? getBlock(dimension, stepX, baseY + 2, stepZ) : null;
     // CRITICAL: For 1-block-high stairs, only check headroom at baseY+1, NOT baseY+2!
     // Checking baseY+2 creates 2-block-high stairs that the bear floats through
     const headroomClear = (!headAt || AIR_BLOCKS.has(headAt.typeId));
@@ -2738,8 +2745,9 @@ function getNextStepBlockTowardTargetDown(loc, targetLoc, dimension) {
  * @param {boolean} [sameLevelStep] - If true, we're walking onto the same-level step first (original-step path).
  *   Skip stepAbove horizontal scaling so we get full horizontal impulse; otherwise we barely move.
  * @param {boolean} [needsExtraForce] - If true, apply 25% more forward and 30% more upward impulse (for xray vision cases).
+ * @param {boolean} [stepIsSolid] - If false, step is air (e.g. open cave) — never apply upward impulse (prevents flying).
  */
-function steerTowardStep(entity, pathfindX, pathfindY, pathfindZ, sameLevelStep = false, needsExtraForce = false) {
+function steerTowardStep(entity, pathfindX, pathfindY, pathfindZ, sameLevelStep = false, needsExtraForce = false, stepIsSolid = true) {
     const loc = entity.location;
     const velocity = entity.getVelocity();
     const dx = pathfindX - loc.x;
@@ -2802,7 +2810,10 @@ function steerTowardStep(entity, pathfindX, pathfindY, pathfindZ, sameLevelStep 
     }
 
     let verticalImpulse = 0;
-    if (dy > 0.2) {
+    // CRITICAL: Never apply upward when pathfinding straight up (target directly above) — causes flying
+    const pathfindDirectlyAbove = Math.abs(pathfindX - loc.x) < 0.6 && Math.abs(pathfindZ - loc.z) < 0.6 && pathfindY > loc.y;
+    // CRITICAL: Never apply upward impulse when step is air (open cave) — would launch bear into void
+    if (dy > 0.2 && stepIsSolid && !pathfindDirectlyAbove) {
         // CRITICAL: Check if bear is already floating too high relative to the step
         // pathfindY is the step top (stepY + 1), so the step block is at pathfindY - 1
         // Bear should be standing on the step block, so bearY should be approximately pathfindY - 1 + 0.5 (entity height offset)
@@ -2856,7 +2867,7 @@ function steerTowardStep(entity, pathfindX, pathfindY, pathfindZ, sameLevelStep 
         if (needsExtraForce) {
             verticalImpulse *= 1.3; // 30% more upward force
         }
-    } else if (sameLevelStep && dy > 0.04) {
+    } else if (stepIsSolid && !pathfindDirectlyAbove && sameLevelStep && dy > 0.04) {
         // Bear is very close to step top (0.04 < dy <= 0.2). Don't cut vertical entirely —
         // keep a small nudge so he crests onto the step instead of falling back (oscillation).
         verticalImpulse = 0.07;
@@ -2869,6 +2880,19 @@ function steerTowardStep(entity, pathfindX, pathfindY, pathfindZ, sameLevelStep 
     if (needsExtraForce) {
         impulseX *= 1.25; // 25% more forward force
         impulseZ *= 1.25; // 25% more forward force
+    }
+
+    // CRITICAL: Never apply impulse when bear is in air (air all around) — prevents flying
+    const dimension = entity?.dimension;
+    if (dimension) {
+        const feetY = Math.floor(loc.y);
+        const feetBlock = getBlock(dimension, Math.floor(loc.x), feetY - 1, Math.floor(loc.z));
+        const isOnGround = feetBlock && isSolidBlock(feetBlock) && !AIR_BLOCKS.has(feetBlock?.typeId);
+        if (!isOnGround) {
+            verticalImpulse = 0;
+            impulseX = 0;
+            impulseZ = 0;
+        }
     }
 
     const tick = system.currentTick;
@@ -3884,11 +3908,11 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
     const existingWork = activeStairWork.get(stepKey);
     if (existingWork && existingWork.entityId !== entityId) {
         const ticksSinceWork = currentTick - existingWork.tick;
-        if (ticksSinceWork < STAIRWORKLOCKTICKS) {
+        if (ticksSinceWork < STAIR_WORK_LOCK_TICKS) {
             // Another bear is working on this stair - skip it and try a different location
             // Try landing area or look for alternative path
             const landingWork = activeStairWork.get(landingKey);
-            if (!landingWork || (landingWork.entityId !== entityId && (currentTick - landingWork.tick) < STAIRWORKLOCKTICKS)) {
+            if (!landingWork || (landingWork.entityId !== entityId && (currentTick - landingWork.tick) < STAIR_WORK_LOCK_TICKS)) {
                 return;  // Both areas are being worked on - skip this tick
             }
             
@@ -4001,7 +4025,7 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
             const nextStepWork = activeStairWork.get(nextStepKey);
             if (nextStepWork && nextStepWork.entityId !== entityId) {
                 const ticksSinceWork = currentTick - nextStepWork.tick;
-                if (ticksSinceWork < STAIRWORKLOCKTICKS) {
+                if (ticksSinceWork < STAIR_WORK_LOCK_TICKS) {
                     // Another bear is working on the new step position
                     if (getDebugGeneral() || getDebugMining()) {
                         console.warn(`[MINING AI] carveStair UPWARD: Next step forward (${nextStepX}, ${baseY}, ${nextStepZ}) is locked by another bear, skipping this tick`);
@@ -4015,7 +4039,7 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
             const nextLandingWork = activeStairWork.get(nextLandingKey);
             if (nextLandingWork && nextLandingWork.entityId !== entityId) {
                 const ticksSinceWork = currentTick - nextLandingWork.tick;
-                if (ticksSinceWork < STAIRWORKLOCKTICKS) {
+                if (ticksSinceWork < STAIR_WORK_LOCK_TICKS) {
                     // Another bear is working on the new landing position
                     if (getDebugGeneral() || getDebugMining()) {
                         console.warn(`[MINING AI] carveStair UPWARD: Next landing position (${nextLandingX}, ${baseY + 1}, ${nextLandingZ}) is locked by another bear, skipping this tick`);
@@ -4090,12 +4114,14 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
     // 3. Break blocks at the landing area (baseY+1), one block forward for the next step
     
     if (targetIsAbove) {
+        // CRITICAL: When target is directly above (horizontalDist < 2), NEVER apply upward impulse
+        // Mining straight up would rocket bear higher with each block — causes flying
+        const horizontalDistToTarget = targetLoc ? Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z) : 999;
+        const targetDirectlyAbove = horizontalDistToTarget < 2;
         if (getDebugGeneral() || getDebugMining()) {
-            const loc = entity.location;
-            const targetLoc = targetInfo?.entity?.location;
             console.warn(`[MINING AI] carveStair Building UPWARD stairs (dy=${targetDy.toFixed(1)})`);
             if (targetLoc) {
-                console.warn(`[MINING AI] carveStair TARGET LOCATION: (${targetLoc.x.toFixed(2)}, ${targetLoc.y.toFixed(2)}, ${targetLoc.z.toFixed(2)}) | BEAR LOCATION: (${loc.x.toFixed(2)}, ${loc.y.toFixed(2)}, ${loc.z.toFixed(2)})`);
+                console.warn(`[MINING AI] carveStair TARGET LOCATION: (${targetLoc.x.toFixed(2)}, ${targetLoc.y.toFixed(2)}, ${targetLoc.z.toFixed(2)}) | BEAR LOCATION: (${loc.x.toFixed(2)}, ${loc.y.toFixed(2)}, ${loc.z.toFixed(2)}) | horizontalDist=${horizontalDistToTarget.toFixed(1)} targetDirectlyAbove=${targetDirectlyAbove}`);
             }
         }
         
@@ -4229,15 +4255,17 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
                         
                         // Apply gentle impulse when mining blocks for step 2 (especially the 3-block space)
                         // Only apply once per step (when mining the middle block Y+3) to avoid excessive impulses
-                        // Check if bear is already too high before applying impulse
-                        if (targetIsAbove && (dirX !== 0 || dirZ !== 0) && blockToMine.y === baseY + 3) {
+                        // NEVER when target directly above (prevents flying)
+                        if (targetIsAbove && !targetDirectlyAbove && (dirX !== 0 || dirZ !== 0) && blockToMine.y === baseY + 3) {
                             const bearY = loc.y;
                             const step2Y = baseY + 1; // Step 2 foothold Y level
                             const expectedBearY = step2Y + 0.5; // Expected bear Y when standing on step 2
                             const bearHeightAboveStep = bearY - expectedBearY;
                             const isAlreadyTooHigh = bearHeightAboveStep > 0.5; // Already more than 0.5 blocks above step
+                            const feetBlock = dimension ? getBlock(dimension, Math.floor(loc.x), Math.floor(loc.y) - 1, Math.floor(loc.z)) : null;
+                            const isOnGround = feetBlock && isSolidBlock(feetBlock) && !AIR_BLOCKS.has(feetBlock?.typeId);
                             
-                            if (!isAlreadyTooHigh) {
+                            if (!isAlreadyTooHigh && isOnGround) {
                                 const forwardDist = Math.hypot(dirX, dirZ) || 1;
                                 const forwardDirX = dirX / forwardDist;
                                 const forwardDirZ = dirZ / forwardDist;
@@ -4312,20 +4340,18 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
                             // Mark this specific block as protected
                             markBlockProtected(baseX, baseY + 1, baseZ);
                             
-                            // SIMPLE APPROACH: When a stair block is mined, push bear up 1 block and forward 1 block
-                            // This ensures consistent stair climbing without complex pathfinding
-                            if (targetIsAbove && dirX !== 0 || dirZ !== 0) {
+                            // Only apply impulse if target NOT directly above (block above head = mining straight up — causes flying)
+                            if (targetIsAbove && !targetDirectlyAbove && (dirX !== 0 || dirZ !== 0)) {
                                 const forwardDist = Math.hypot(dirX, dirZ) || 1;
                                 const forwardDirX = dirX / forwardDist;
                                 const forwardDirZ = dirZ / forwardDist;
-                                // Strong upward and forward impulse to climb onto the step
                                 entity.applyImpulse({
-                                    x: forwardDirX * 0.25,  // Forward impulse
-                                    y: 0.20,                 // Upward impulse (1 block up)
-                                    z: forwardDirZ * 0.25   // Forward impulse
+                                    x: forwardDirX * 0.25,
+                                    y: 0.20,
+                                    z: forwardDirZ * 0.25
                                 });
                                 if (getDebugGeneral() || getDebugMining()) {
-                                    console.warn(`[MINING AI] carveStair UPWARD: Applied direct impulse to climb stair (up=0.20, forward=0.25)`);
+                                    console.warn(`[MINING AI] carveStair UPWARD: Applied impulse to climb stair (up=0.20, forward=0.25)`);
                                 }
                             }
                         } else {
@@ -4358,19 +4384,17 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
                             console.warn(`[MINING AI] carveStair UPWARD: Cleared step block at head level (${stepX}, ${baseY + 1}, ${stepZ}) - creating step for bear to climb onto`);
                             markBlockProtected(stepX, baseY + 1, stepZ);
                             
-                            // SIMPLE APPROACH: When step block is mined, push bear up 1 block and forward 1 block
-                            if (targetIsAbove && (dirX !== 0 || dirZ !== 0)) {
+                            if (targetIsAbove && !targetDirectlyAbove && (dirX !== 0 || dirZ !== 0)) {
                                 const forwardDist = Math.hypot(dirX, dirZ) || 1;
                                 const forwardDirX = dirX / forwardDist;
                                 const forwardDirZ = dirZ / forwardDist;
-                                // Strong upward and forward impulse to climb onto the step
                                 entity.applyImpulse({
-                                    x: forwardDirX * 0.30,  // Strong forward impulse
-                                    y: 0.22,                 // Strong upward impulse (1 block up)
-                                    z: forwardDirZ * 0.30   // Strong forward impulse
+                                    x: forwardDirX * 0.30,
+                                    y: 0.22,
+                                    z: forwardDirZ * 0.30
                                 });
                                 if (getDebugGeneral() || getDebugMining()) {
-                                    console.warn(`[MINING AI] carveStair UPWARD: Applied direct impulse to climb onto step (up=0.22, forward=0.30)`);
+                                    console.warn(`[MINING AI] carveStair UPWARD: Applied impulse to climb onto step (up=0.22, forward=0.30)`);
                                 }
                             }
                         } else {
@@ -4383,24 +4407,27 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
                 } else if (getDebugGeneral() || getDebugMining()) {
                     console.warn(`[MINING AI] carveStair UPWARD: Skipping protected step block at head level (${stepX}, ${baseY + 1}, ${stepZ})`);
                 }
-            } else if (getDebugGeneral() || getDebugMining()) {
-                // Step block is already air - bear can climb onto it
-                console.warn(`[MINING AI] carveStair UPWARD: Step block at head level (${stepX}, ${baseY + 1}, ${stepZ}) is already air - bear can climb onto it`);
-                
-                // SIMPLE APPROACH: Even if step is already air, push bear up and forward to climb onto it
-                if (targetIsAbove && (dirX !== 0 || dirZ !== 0)) {
+            } else {
+                // Step block at head level is already air
+                // Check if there's a solid block at feet level (stepX, baseY, stepZ) = 1-block ledge the bear can step onto
+                const blockAtFeet = getBlock(dimension, stepX, baseY, stepZ);
+                const stepSurfaceSolid = blockAtFeet && isSolidBlock(blockAtFeet) && !AIR_BLOCKS.has(blockAtFeet?.typeId);
+                if (stepSurfaceSolid && targetIsAbove && !targetDirectlyAbove && (dirX !== 0 || dirZ !== 0)) {
+                    // 1-block ledge: solid beneath the air - help bear step up (prevents stuck on terrain edges)
                     const forwardDist = Math.hypot(dirX, dirZ) || 1;
                     const forwardDirX = dirX / forwardDist;
                     const forwardDirZ = dirZ / forwardDist;
-                    // Apply impulse to climb onto the air step
                     entity.applyImpulse({
-                        x: forwardDirX * 0.30,  // Strong forward impulse
-                        y: 0.22,                 // Strong upward impulse (1 block up)
-                        z: forwardDirZ * 0.30   // Strong forward impulse
+                        x: forwardDirX * 0.30,
+                        y: 0.22,
+                        z: forwardDirZ * 0.30
                     });
                     if (getDebugGeneral() || getDebugMining()) {
-                        console.warn(`[MINING AI] carveStair UPWARD: Applied direct impulse to climb onto air step (up=0.22, forward=0.30)`);
+                        console.warn(`[MINING AI] carveStair UPWARD: 1-block ledge at (${stepX},${baseY},${stepZ}) - applied impulse to step up`);
                     }
+                } else if (getDebugGeneral() || getDebugMining()) {
+                    // Open cave - no solid to land on, NO impulse (prevents flying + pushing into walls)
+                    console.warn(`[MINING AI] carveStair UPWARD: Step at head level (${stepX}, ${baseY + 1}, ${stepZ}) is air, feet (${stepX},${baseY},${stepZ}) solid=${!!stepSurfaceSolid} - ${stepSurfaceSolid ? "1-block ledge" : "NO impulse (open cave)"}`);
                 }
             }
         }
@@ -4454,17 +4481,14 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
                             // Mark this specific block as protected
                             markBlockProtected(stepX, baseY + 1, stepZ);
                             
-                            // SIMPLE APPROACH: When a stair block is mined, push bear up 1 block and forward 1 block
-                            // This ensures consistent stair climbing without complex pathfinding
-                            if (targetIsAbove && dirX !== 0 || dirZ !== 0) {
+                            if (targetIsAbove && !targetDirectlyAbove && (dirX !== 0 || dirZ !== 0)) {
                                 const forwardDist = Math.hypot(dirX, dirZ) || 1;
                                 const forwardDirX = dirX / forwardDist;
                                 const forwardDirZ = dirZ / forwardDist;
-                                // Strong upward and forward impulse to climb onto the step
                                 entity.applyImpulse({
-                                    x: forwardDirX * 0.25,  // Forward impulse
-                                    y: 0.20,                 // Upward impulse (1 block up)
-                                    z: forwardDirZ * 0.25   // Forward impulse
+                                    x: forwardDirX * 0.25,
+                                    y: 0.20,
+                                    z: forwardDirZ * 0.25
                                 });
                                 if (getDebugGeneral() || getDebugMining()) {
                                     console.warn(`[MINING AI] carveStair UPWARD: Applied direct impulse to climb stair (up=0.20, forward=0.25)`);
@@ -4512,17 +4536,14 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
                                 console.warn(`[MINING AI] carveStair UPWARD: Cleared blocking block in front at (${stepX}, ${checkY}, ${stepZ}) toward target`);
                                 markBlockProtected(stepX, checkY, stepZ);
                                 
-                                // SIMPLE APPROACH: When a stair block is mined, push bear up 1 block and forward 1 block
-                                // This ensures consistent stair climbing without complex pathfinding
-                                if (targetIsAbove && dirX !== 0 || dirZ !== 0) {
+                                if (targetIsAbove && !targetDirectlyAbove && (dirX !== 0 || dirZ !== 0)) {
                                     const forwardDist = Math.hypot(dirX, dirZ) || 1;
                                     const forwardDirX = dirX / forwardDist;
                                     const forwardDirZ = dirZ / forwardDist;
-                                    // Strong upward and forward impulse to climb onto the step
                                     entity.applyImpulse({
-                                        x: forwardDirX * 0.25,  // Forward impulse
-                                        y: 0.20,                 // Upward impulse (1 block up)
-                                        z: forwardDirZ * 0.25   // Forward impulse
+                                        x: forwardDirX * 0.25,
+                                        y: 0.20,
+                                        z: forwardDirZ * 0.25
                                     });
                                     if (getDebugGeneral() || getDebugMining()) {
                                         console.warn(`[MINING AI] carveStair UPWARD: Applied direct impulse to climb stair (up=0.20, forward=0.25)`);
@@ -4639,17 +4660,14 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
                                     // Mark this specific block as protected
                                     markBlockProtected(checkX, checkY, checkZ);
                                     
-                                    // SIMPLE APPROACH: When a stair block is mined, push bear up 1 block and forward 1 block
-                                    // Only apply if this is a block that creates a step (at baseY+1 or step location)
-                                    if (targetIsAbove && (checkY === baseY + 1 || (checkX === stepX && checkZ === stepZ)) && (dirX !== 0 || dirZ !== 0)) {
+                                    if (targetIsAbove && !targetDirectlyAbove && (checkY === baseY + 1 || (checkX === stepX && checkZ === stepZ)) && (dirX !== 0 || dirZ !== 0)) {
                                         const forwardDist = Math.hypot(dirX, dirZ) || 1;
                                         const forwardDirX = dirX / forwardDist;
                                         const forwardDirZ = dirZ / forwardDist;
-                                        // Strong upward and forward impulse to climb onto the step
                                         entity.applyImpulse({
-                                            x: forwardDirX * 0.25,  // Forward impulse
-                                            y: 0.20,                 // Upward impulse (1 block up)
-                                            z: forwardDirZ * 0.25   // Forward impulse
+                                            x: forwardDirX * 0.25,
+                                            y: 0.20,
+                                            z: forwardDirZ * 0.25
                                         });
                                         if (getDebugGeneral() || getDebugMining()) {
                                             console.warn(`[MINING AI] carveStair UPWARD: Applied direct impulse to climb stair (up=0.20, forward=0.25)`);
@@ -4703,16 +4721,14 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
                                 console.warn(`[MINING AI] carveStair UPWARD: Cleared step block at (${stepX}, ${baseY}, ${stepZ}) to create stair in tunnel`);
                                 markBlockProtected(stepX, baseY, stepZ);
                                 
-                                // SIMPLE APPROACH: When a stair step block is mined, push bear up 1 block and forward 1 block
-                                if (targetIsAbove && (dirX !== 0 || dirZ !== 0)) {
+                                if (targetIsAbove && !targetDirectlyAbove && (dirX !== 0 || dirZ !== 0)) {
                                     const forwardDist = Math.hypot(dirX, dirZ) || 1;
                                     const forwardDirX = dirX / forwardDist;
                                     const forwardDirZ = dirZ / forwardDist;
-                                    // Strong upward and forward impulse to climb onto the step
                                     entity.applyImpulse({
-                                        x: forwardDirX * 0.25,  // Forward impulse
-                                        y: 0.20,                 // Upward impulse (1 block up)
-                                        z: forwardDirZ * 0.25   // Forward impulse
+                                        x: forwardDirX * 0.25,
+                                        y: 0.20,
+                                        z: forwardDirZ * 0.25
                                     });
                                     if (getDebugGeneral() || getDebugMining()) {
                                         console.warn(`[MINING AI] carveStair UPWARD: Applied direct impulse to climb stair after mining step block (up=0.20, forward=0.25)`);
@@ -4852,7 +4868,7 @@ function carveStair(entity, tunnelHeight, digContext, directionOverride = null, 
         const landingWork = activeStairWork.get(landingKey);
         if (landingWork && landingWork.entityId !== entityId) {
             const ticksSinceWork = currentTick - landingWork.tick;
-            if (ticksSinceWork < STAIRWORKLOCKTICKS) {
+            if (ticksSinceWork < STAIR_WORK_LOCK_TICKS) {
                 // Another bear is working on landing area - skip it for now
                 return;
             }
@@ -5627,18 +5643,23 @@ function carveSpiralStair(entity, tunnelHeight, digContext, directionOverride = 
                     recentStairBlocks.set(footholdKey, currentTick);
                 }
                 
-                // Apply gentle impulse to move forward and up/down
+                // Apply gentle impulse to move forward and up/down — only when on ground (prevents flying)
                 // Forward impulse: 0.10 (gentle, walk not fly)
                 // Upward/Downward impulse: 0.08 (gentle, walk up/down stairs)
                 try {
-                    const impulseX = currentDir.x * 0.10;
-                    const impulseZ = currentDir.z * 0.10;
-                    const impulseY = goingDown ? -0.08 : 0.08;
-                    
-                    entity.applyImpulse({ x: impulseX, y: impulseY, z: impulseZ });
-                    
-                    if (getDebugGeneral() || getDebugMovement()) {
-                        console.warn(`[MINING AI] carveSpiralStair: Applied impulse (${impulseX.toFixed(2)}, ${impulseY.toFixed(2)}, ${impulseZ.toFixed(2)})`);
+                    const feetBlock = dimension ? getBlock(dimension, bearX, bearY - 1, bearZ) : null;
+                    const isOnGround = feetBlock && isSolidBlock(feetBlock) && !AIR_BLOCKS.has(feetBlock?.typeId);
+                    const targetLocSpiral = targetInfo?.entity?.location;
+                    const horizontalDistSpiral = targetLocSpiral ? Math.hypot(targetLocSpiral.x - entity.location.x, targetLocSpiral.z - entity.location.z) : 999;
+                    const targetDirectlyAboveSpiral = !goingDown && horizontalDistSpiral < 2;
+                    if (isOnGround && !targetDirectlyAboveSpiral) {
+                        const impulseX = currentDir.x * 0.10;
+                        const impulseZ = currentDir.z * 0.10;
+                        const impulseY = goingDown ? -0.08 : 0.08;
+                        entity.applyImpulse({ x: impulseX, y: impulseY, z: impulseZ });
+                        if (getDebugGeneral() || getDebugMovement()) {
+                            console.warn(`[MINING AI] carveSpiralStair: Applied impulse (${impulseX.toFixed(2)}, ${impulseY.toFixed(2)}, ${impulseZ.toFixed(2)})`);
+                        }
                     }
                 } catch (e) {
                     if (getDebugGeneral()) {
@@ -5678,9 +5699,16 @@ function carveSpiralStair(entity, tunnelHeight, digContext, directionOverride = 
                             const newDir = rotateDirectionClockwise(currentDir);
                             state.currentDirection = newDir;
                             state.spiralStep = (spiralStep + 1) % 4;
-                            try {
-                                entity.applyImpulse({ x: currentDir.x * 0.10, z: currentDir.z * 0.10, y: 0.08 });
-                            } catch { }
+                            const feetBlockScan = dimension ? getBlock(dimension, bearX, bearY - 1, bearZ) : null;
+                            const isOnGroundScan = feetBlockScan && isSolidBlock(feetBlockScan) && !AIR_BLOCKS.has(feetBlockScan?.typeId);
+                            const targetLocScan = targetInfo?.entity?.location;
+                            const horizontalDistScan = targetLocScan ? Math.hypot(targetLocScan.x - entity.location.x, targetLocScan.z - entity.location.z) : 999;
+                            const targetDirectlyAboveScan = horizontalDistScan < 2;
+                            if (isOnGroundScan && !targetDirectlyAboveScan) {
+                                try {
+                                    entity.applyImpulse({ x: currentDir.x * 0.10, z: currentDir.z * 0.10, y: 0.08 });
+                                } catch { }
+                            }
                             spiralStairState.set(entityId, state);
                             return;
                         }
@@ -5717,14 +5745,26 @@ function carveSpiralStair(entity, tunnelHeight, digContext, directionOverride = 
             spiralStairState.set(entityId, state);
         }
     }
-    // Apply climb impulse so bear moves up; next tick we mine one step in (possibly rotated) front
+    // Apply climb impulse only when bear is ON GROUND and target NOT directly above — never in air or bear will fly
     if (!goingDown && digContext.cleared === clearedBeforeScan && targetInfo?.entity?.location) {
-        try {
-            entity.applyImpulse({ x: currentDir.x * 0.12, z: currentDir.z * 0.12, y: 0.10 });
+        const targetLoc = targetInfo.entity.location;
+        const loc = entity.location;
+        const horizontalDistToTarget = Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z);
+        const targetDirectlyAbove = horizontalDistToTarget < 2;
+        const feetBlock = dimension ? getBlock(dimension, bearX, bearY - 1, bearZ) : null;
+        const isOnGround = feetBlock && isSolidBlock(feetBlock) && !AIR_BLOCKS.has(feetBlock?.typeId);
+        if (isOnGround && !targetDirectlyAbove) {
+            try {
+                entity.applyImpulse({ x: currentDir.x * 0.12, z: currentDir.z * 0.12, y: 0.10 });
+                if (getDebugGeneral() || getDebugMovement()) {
+                    console.warn(`[MINING AI] carveSpiralStair: Open shaft - climb impulse (on ground)`);
+                }
+            } catch { }
+        } else {
             if (getDebugGeneral() || getDebugMovement()) {
-                console.warn(`[MINING AI] carveSpiralStair: Open shaft - climb impulse (mine one step next tick)`);
+                console.warn(`[MINING AI] carveSpiralStair: Open shaft - NOT applying climb impulse (bear in air, would fly)`);
             }
-        } catch { }
+        }
     }
     
     spiralStairState.set(entityId, state);
@@ -7803,10 +7843,15 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                         impulse = 0.045; // Stronger when close
                     }
                     
-                    // Add upward only when target meaningfully above (dy > 1.5) — avoid flying when 1 block up
+                    // Add upward only when target meaningfully above (dy > 1.5) AND on ground — avoid flying
                     const dy = targetLoc.y - loc.y;
                     let verticalImpulse = 0;
-                    if (dy > 1.5) {
+                    const dimension = entity?.dimension;
+                    const isOnGround = dimension && (() => {
+                        const feetBlock = dimension.getBlock({ x: Math.floor(loc.x), y: Math.floor(loc.y) - 1, z: Math.floor(loc.z) });
+                        return feetBlock && !feetBlock.isAir && !feetBlock.isLiquid;
+                    })();
+                    if (isOnGround && dy > 1.5) {
                         if (dy > 2 && dist <= 8) {
                             verticalImpulse = 0.02;
                         } else if (dy > 1.5 && dist <= 12) {
@@ -8048,7 +8093,12 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                         try {
                             let impulse = 0.03;
                             let verticalImpulse = 0;
-                            if (dy > 1.5) {
+                            const dimension = entity?.dimension;
+                            const isOnGround = dimension && (() => {
+                                const feetBlock = dimension.getBlock({ x: Math.floor(loc.x), y: Math.floor(loc.y) - 1, z: Math.floor(loc.z) });
+                                return feetBlock && !feetBlock.isAir && !feetBlock.isLiquid;
+                            })();
+                            if (isOnGround && dy > 1.5) {
                                 if (dy > 2 && horizontalDist <= 8) {
                                     verticalImpulse = 0.015;
                                 } else if (dy > 1.5 && horizontalDist <= 12) {
@@ -8526,8 +8576,13 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                                 impulse = 0.08;
                             }
                             
-                            // Add upward component since target is above
-                            let verticalImpulse = Math.min(dy * 0.02, 0.02);
+                            // Add upward only when on ground — avoid flying
+                            let verticalImpulse = 0;
+                            const feetBlock = dimension?.getBlock({ x: Math.floor(loc.x), y: Math.floor(loc.y) - 1, z: Math.floor(loc.z) });
+                            const isOnGround = feetBlock && !feetBlock.isAir && !feetBlock.isLiquid;
+                            if (isOnGround && dy > 1.5) {
+                                verticalImpulse = Math.min(dy * 0.02, 0.02);
+                            }
                             
                             entity.applyImpulse({
                                 x: (moveDx / moveDist) * impulse,
@@ -9515,10 +9570,12 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                                     const feetY = Math.floor(loc.y);
                                     const feetBlock = getBlock(dimension, Math.floor(loc.x), feetY - 1, Math.floor(loc.z));
                                     const isOnGround = feetBlock && isSolidBlock(feetBlock) && !AIR_BLOCKS.has(feetBlock.typeId);
+                                    const horizontalDistToTargetFallback = Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z);
+                                    const targetDirectlyAboveFallback = horizontalDistToTargetFallback < 2;
                                     
                                     let upwardImpulse = 0;
-                                    // Only apply upward impulse if on ground AND target is significantly above
-                                    if (isOnGround && dy > 2.5) {
+                                    // Only apply upward impulse if on ground AND target significantly above AND target NOT directly above (prevents flying)
+                                    if (isOnGround && !targetDirectlyAboveFallback && dy > 2.5) {
                                         // Target is significantly above (3+ blocks) - apply upward impulse, but scale it down for moderate heights
                                         if (dy > 5) {
                                             // High target - use stronger impulse
@@ -9681,16 +9738,15 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                                                     if (needsExtraForce) {
                                                         forwardImpulse *= 1.25; // 25% more forward force
                                                     }
-                                                    // CRITICAL: Only apply upward impulse when target is significantly above (dy > 2.5) AND bear is on ground
-                                                    // For smaller heights (1-2 blocks), rely on natural jumping/movement instead of impulse
-                                                    // IMPORTANT: Don't apply upward impulse if bear is already high up and not making progress (flying)
                                                     const feetY = Math.floor(loc.y);
                                                     const feetBlock = getBlock(dimension, Math.floor(loc.x), feetY - 1, Math.floor(loc.z));
                                                     const isOnGround = feetBlock && isSolidBlock(feetBlock) && !AIR_BLOCKS.has(feetBlock.typeId);
+                                                    const horizontalDistToTargetOrig = Math.hypot(targetLoc.x - loc.x, targetLoc.z - loc.z);
+                                                    const targetDirectlyAboveOrig = horizontalDistToTargetOrig < 2;
                                                     
                                                     let upwardImpulse = 0;
-                                                    // Only apply upward impulse if on ground AND target is significantly above
-                                                    if (isOnGround && dy > 2.5) {
+                                                    // Never apply upward when target directly above (prevents flying)
+                                                    if (isOnGround && !targetDirectlyAboveOrig && dy > 2.5) {
                                                         // Target is significantly above (3+ blocks) - apply upward impulse, but scale it down for moderate heights
                                                         if (dy > 5) {
                                                             // High target - use stronger impulse
@@ -9714,37 +9770,10 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                                                     }
                                                 }
                                             } else if (!sameLevelSolid) {
-                                                // If the same-level step is air, normally avoid upward impulse (twitching) and just move forward.
-                                                // BUT: When building upward stairs (dy > 1), we still need upward impulse to climb
+                                                // CRITICAL: Same-level step is air (open cave / gap) — NEVER apply upward impulse (causes flying).
+                                                // Only forward impulse so bear can move toward walls/blocks to mine. No upward.
                                                 const forwardImpulse = 0.11;
-                                                let upwardImpulse = 0;
-                                                
-                                                // When building upward stairs, apply upward impulse even if same-level is air
-                                                if (dy > 1) {
-                                                    const feetY = Math.floor(loc.y);
-                                                    const feetBlock = getBlock(dimension, Math.floor(loc.x), feetY - 1, Math.floor(loc.z));
-                                                    const isOnGround = feetBlock && isSolidBlock(feetBlock) && !AIR_BLOCKS.has(feetBlock.typeId);
-                                                    
-                                                    if (isOnGround) {
-                                                        // Apply upward impulse when building stairs, scaled by height difference
-                                                        if (dy > 5) {
-                                                            upwardImpulse = Math.min(STAIR_UPWARD_IMPULSE, Math.max(0.10, dy * 0.06));
-                                                        } else if (dy > 2) {
-                                                            upwardImpulse = Math.min(0.12, Math.max(0.07, dy * 0.04));
-                                                        } else {
-                                                            // Small height (1-2 blocks) - use reduced impulse
-                                                            upwardImpulse = Math.min(0.10, Math.max(0.05, dy * 0.03));
-                                                        }
-                                                        
-                                                        // Check if bear can see through walls but not visually (needs extra force)
-                                                        const canSeeThroughWalls = canSeeTargetThroughBlocks(entity, targetInfo, 3);
-                                                        const hasVisualLineOfSight = typeof hasLineOfSight !== 'undefined' ? hasLineOfSight : canSeeTargetThroughBlocks(entity, targetInfo, 0);
-                                                        const needsExtraForce = canSeeThroughWalls && !hasVisualLineOfSight;
-                                                        if (needsExtraForce) {
-                                                            upwardImpulse *= 1.3; // 30% more upward force
-                                                        }
-                                                    }
-                                                }
+                                                const upwardImpulse = 0;
                                                 
                                                 entity.applyImpulse({
                                                     x: dirX * forwardImpulse,
@@ -9782,9 +9811,10 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                                             const hasVisualLineOfSight = typeof hasLineOfSight !== 'undefined' ? hasLineOfSight : canSeeTargetThroughBlocks(entity, targetInfo, 0);
                                             const needsExtraForce = canSeeThroughWalls && !hasVisualLineOfSight;
                                             
-                                            const moved = steerTowardStep(entity, pathfindX, pathfindY, pathfindZ, goingToSameLevel, needsExtraForce);
+                                            // CRITICAL: stepIsSolid=false — elevated step is air (open cave). No upward impulse to prevent flying.
+                                            const moved = steerTowardStep(entity, pathfindX, pathfindY, pathfindZ, goingToSameLevel, needsExtraForce, false);
                                             if (logStairMove) {
-                                                console.warn(`[MINING AI] Stair pathfinding: elevated step (air) toward (${stepX},${stepY},${stepZ}) dy=${dy.toFixed(1)} - using impulse to climb, needsExtraForce=${needsExtraForce}`);
+                                                console.warn(`[MINING AI] Stair pathfinding: elevated step (air) toward (${stepX},${stepY},${stepZ}) dy=${dy.toFixed(1)} - forward only (no up), needsExtraForce=${needsExtraForce}`);
                                             }
                                             // When target is far away horizontally, also apply movement toward target while climbing
                                             // This ensures the bear moves toward the target horizontally even when climbing stairs
@@ -10130,6 +10160,7 @@ function initializeMiningAI() {
     let lastProcessedTick = 0;
     
     miningAIIntervalId = system.runInterval(() => {
+        if (!isScriptEnabled(SCRIPT_IDS.mining)) return;
         try {
             const tick = system.currentTick;
             const ticksSinceStart = tick - aiLoopStartTick;
@@ -10809,7 +10840,7 @@ function initializeMiningAI() {
                 continue;
             }
             
-            // Check if entity still exists
+            // Check if entity still exists (mining bears + infected entities share pathfinding)
             try {
                 let entityExists = false;
                 for (const dimId of DIMENSION_IDS) {
@@ -10817,21 +10848,15 @@ function initializeMiningAI() {
                         const dimension = world.getDimension(dimId);
                         if (!dimension) continue;
                         
-                        const entities = dimension.getEntities({ type: "mb:mining_mb" });
-                        for (const e of entities) {
-                            if (e.id === entityId) {
-                                entityExists = true;
-                                break;
+                        for (const typeId of PATHFINDING_ENTITY_TYPES) {
+                            const entities = dimension.getEntities({ type: typeId });
+                            for (const e of entities) {
+                                if (e.id === entityId) {
+                                    entityExists = true;
+                                    break;
+                                }
                             }
-                        }
-                        if (entityExists) break;
-                        
-                        const entities2 = dimension.getEntities({ type: "mb:mining_mb_day20" });
-                        for (const e of entities2) {
-                            if (e.id === entityId) {
-                                entityExists = true;
-                                break;
-                            }
+                            if (entityExists) break;
                         }
                         if (entityExists) break;
                     } catch { }

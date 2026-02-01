@@ -2,6 +2,37 @@
 
 ## Recent Changes (Latest Session)
 
+### Script Toggles & Beta Features (Jan 31)
+- **Developer Tools – Script Toggles**: New "Script Toggles" menu in Developer Tools (Dusted Journal/Basic Journal with cheats). Toggle on/off: Mining AI, Infected AI, Flying AI, Torpedo AI, Biome Ambience. Use to quickly disable scripts if something breaks.
+- **Settings – Beta Features**: New "Beta Features" section in Settings for both books. **Owner** = first player to join the world (set on playerSpawn when no owner exists). **Can edit** = owner OR anyone with `mb_cheats` tag.
+- **Beta: Infected AI**: Infected AI (nox7 pathfinding) is a beta feature. **Defaults OFF** on world load; must be turned on in the book. When off, infected AI stops running (vanilla entity behaviors continue).
+- **Visible to others**: Owner can toggle "Visible to others in book" so non-owners see the Beta section (read-only). When off, only owner/mb_cheats see Beta.
+- **Edit access**: Only first joiner (owner) or players with `mb_cheats` can change beta settings. Others see read-only state when "visible to all" is on.
+- **Storage**: Script toggles and beta settings use world dynamic properties. `mb_scriptToggles.js` provides `isScriptEnabled`, `isBetaInfectedAIEnabled`, etc. All AI scripts check these at the start of their tick.
+
+### Infected Maple Bear: Advanced nox7 Pathfinding Fix (Jan 31)
+- **Root cause**: Infected bears use shared nox7-style pathfinding from `mb_miningAI.js`, but `processPathfindingChunk` and the cleanup interval only searched for mining bear types (`mb:mining_mb`, `mb:mining_mb_day20`). Infected entities were treated as non-existent and their pathfinding was canceled immediately.
+- **`PATHFINDING_ENTITY_TYPES`**: Added constant listing all entity types that share pathfinding (mining bears + infected bears/pig/cow). Used in entity lookup instead of hardcoded mining types.
+- **`processPathfindingChunk`**: Now searches all pathfinding entity types when verifying entity exists, so infected pathfinding completes instead of being canceled.
+- **Cleanup interval**: Entity-existence check updated to use `PATHFINDING_ENTITY_TYPES` instead of mining-only types.
+- **mb_infectedAI waypoint fallback**: When pathfinding has a cached path, infected AI now uses waypoint-based movement (impulse toward next waypoint) instead of always falling back to direct target impulse. Aligns with mining AI behavior.
+
+### Mining Bear: No Flying When in Open Air (Continued)
+- **Open cave fix** (Jan 31): Bear still flew when player was above in an open cave. Root cause: steering toward an *air* step (no solid block to land on) still applied upward impulse.
+- **`steerTowardStep` stepIsSolid param**: Added `stepIsSolid` (default true). When `false` (elevated step is air, open cave), never apply upward impulse — only forward. Prevents launching bear into void.
+- **Elevated step (air) path**: When `!stepReady && isElevatedStep && headroomClear`, now calls `steerTowardStep(..., false)` so no upward impulse.
+- **Same-level air fallback**: Removed upward impulse when same-level step is air. Only forward impulse so bear can move toward blocks; no upward (would cause flying).
+- **More isOnGround gates**: Added `isOnGround` checks to: carveStair step 2 impulse (4258), carveSpiralStair impulse after mining (5651), "not actively targeting" movement (7850), pathfinding fallback (8088), "target too high for pitfall" (8557).
+- **Previous fix**: `steerTowardStep` and move-toward-target already gated with `isOnGround`; this session added `stepIsSolid` and air-step-specific fixes.
+
+### Mining Bear: No Flying When Target Directly Above (Continued)
+- **Root cause**: Bears flew when player was directly above (e.g. in caves). carveStair applied upward impulse (y: 0.20–0.22) every time a block was mined, so mining straight up rocketed the bear higher each block.
+- **targetDirectlyAbove (horizontalDist < 2)**: Added a guard so that when target is directly above (horizontal distance < 2 blocks), upward impulse is never applied.
+- **carveStair**: All “block mined” upward impulses now check `!targetDirectlyAbove`. When target is directly above, mining only clears blocks; no impulse is applied.
+- **steerTowardStep**: Added `pathfindDirectlyAbove` (pathfind target same x,z as bear) so no upward impulse is applied when pathfinding straight up.
+- **Stair fallbacks**: Added `targetDirectlyAboveFallback` and `targetDirectlyAboveOrig` to stair pathfinding fallbacks so no upward impulse when target is directly above.
+- **carveSpiralStair**: Applied `targetDirectlyAbove` checks to all climb impulses (block-mined impulse, open-shaft impulse, mining-loop impulse).
+
 ### Spiral Stair Descending Pattern (carveSpiralStair)
 - **`blocksToMine` now branches on `goingDown`** in `BP/scripts/mb_miningAI.js` (~5512–5527).
 - **Ascending** (unchanged): above head `(bearX, bearY+2, bearZ)`, in front at head `(frontX_final, bearY+1, frontZ_final)`, above front `(frontX_final, bearY+2, frontZ_final)`.

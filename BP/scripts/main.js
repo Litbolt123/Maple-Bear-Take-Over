@@ -9,6 +9,7 @@ import { initializeItemRegistry, registerItemHandler } from "./mb_itemRegistry.j
 import "./mb_spawnController.js";
 import "./mb_miningAI.js";
 import { collectedBlocks } from "./mb_miningAI.js";
+import "./mb_infectedAI.js";
 import "./mb_flyingAI.js";
 import "./mb_torpedoAI.js";
 import "./mb_dimensionAdaptation.js";

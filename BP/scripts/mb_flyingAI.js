@@ -1,6 +1,7 @@
 import { system, world } from "@minecraft/server";
 import { getCachedPlayers, getCachedPlayerPositions, getCachedMobs } from "./mb_sharedCache.js";
 import { isDebugEnabled } from "./mb_codex.js";
+import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 
 // Debug helper functions
 function getDebugGeneral() {
@@ -261,6 +262,7 @@ const targetCache = new Map(); // Map<entityId, {target: targetInfo, tick: numbe
 let aiLoopStartTick = system.currentTick;
 
 system.runInterval(() => {
+    if (!isScriptEnabled(SCRIPT_IDS.flying)) return;
     const tick = system.currentTick;
     const ticksSinceStart = tick - aiLoopStartTick;
     const seenIds = new Set();

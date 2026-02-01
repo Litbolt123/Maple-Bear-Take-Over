@@ -214,10 +214,6 @@
 				"y_max_head_rotation": 360,
 				"reach_multiplier": 2
 			},
-			"minecraft:behavior.random_stroll": {
-				"priority": 2,
-				"speed_multiplier": 0.8
-			},
 			"minecraft:behavior.look_at_player": {
 				"priority": 4,
 				"look_distance": 5
