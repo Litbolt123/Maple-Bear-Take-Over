@@ -10682,6 +10682,13 @@ function initializeMiningAI() {
                     }
                 }
                 
+                // Clean up last block break tick for inactive entities (keep in sync with lastMiningTick to prevent memory growth)
+                for (const [entityId] of lastBlockBreakTick.entries()) {
+                    if (!activeWorkerIds.has(entityId)) {
+                        lastBlockBreakTick.delete(entityId);
+                    }
+                }
+                
                 // Clean up spiral stair state for inactive entities
                 for (const [entityId, state] of spiralStairState.entries()) {
                     if (!activeWorkerIds.has(entityId)) {
