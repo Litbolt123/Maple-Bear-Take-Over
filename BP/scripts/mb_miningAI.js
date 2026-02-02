@@ -1,6 +1,7 @@
 import { system, world, ItemStack } from "@minecraft/server";
 import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
 import { getCurrentDay } from "./mb_dayTracker.js";
+import { getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCachedPlayers, getCachedPlayerPositions, getCachedMobs } from "./mb_sharedCache.js";
@@ -112,17 +113,23 @@ const WALKABLE_THROUGH_BLOCKS = new Set([
 
 // All blocks are breakable by default except unbreakable ones
 // Mining speed: starts at wooden pickaxe speed (11 ticks) at day 15, scales to netherite (1 tick) by day 24
-// Slightly faster than before: one tick less throttle across the curve
+// Scaled by addon difficulty: Easy = slower (higher interval), Hard = significantly faster (lower interval)
 function getMiningInterval() {
     const currentDay = getCurrentDay();
-  
-    if (currentDay < 15) return 11; // Wooden-pick level (slowest) - before mining bears spawn
-    if (currentDay >= 24) return 1; // Netherite speed (1 tick)
-  
-    // Linear progression: 11 ticks at day 15, 1 tick at day 24
-    const raw = Math.floor(11 - (10 / 9) * (currentDay - 15));
-    const interval = Math.max(1, Math.min(11, raw));
-    return interval;
+    const difficulty = getAddonDifficultyState();
+
+    let interval;
+    if (currentDay < 15) {
+        interval = 11; // Wooden-pick level (slowest) - before mining bears spawn
+    } else if (currentDay >= 24) {
+        interval = 1; // Netherite speed (1 tick)
+    } else {
+        // Linear progression: 11 ticks at day 15, 1 tick at day 24
+        const raw = Math.floor(11 - (10 / 9) * (currentDay - 15));
+        interval = Math.max(1, Math.min(11, raw));
+    }
+    const effective = Math.round(interval * difficulty.miningIntervalMultiplier);
+    return Math.max(1, Math.min(20, effective)); // Clamp 1–20 so Easy doesn't go above 20
   }
   
   const MAX_BLOCKS_PER_ENTITY = 1; // Mine one block at a time to create stairs/tunnels gradually

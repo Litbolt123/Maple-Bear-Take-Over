@@ -415,7 +415,7 @@ export function getInfectionMessage(type, level = "normal") {
                 severe: "§8The shadows seem to follow you..."
             },
             snow: {
-                hit: "§7A cold sensation spreads through you...",
+                hit: "§7A strange sensation spreads through you...",
                 infected: "§7You feel drawn to something...",
                 severe: "§8The craving grows stronger..."
             }
@@ -466,33 +466,33 @@ export function getInfectionMessage(type, level = "normal") {
 function getMilestoneMessage(day) {
     switch (day) {
         case 1:
-            return "The first day has passed. You've noticed strange changes in the world around you, though you can't quite put your finger on what's different.";
+            return "The first day has passed. Something feels different in the world.";
         case 2:
-            return "You notice strange, tiny white bears beginning to emerge from the shadows. Their eyes seem to follow you wherever you go, and they leave behind a peculiar white dust wherever they step. These creatures appear to be drawn to larger animals, and you've witnessed them attacking and converting other creatures into more of their kind. The infection has begun its silent spread across the land.";
+            return "Tiny white bears have appeared. They leave white dust where they step and turn other animals into more of their kind. The infection has begun to spread.";
         case 4:
-            return "The tiny bears have evolved into more dangerous variants. You've observed infected Maple Bears that are larger and more aggressive than their predecessors. These creatures seem to have developed a taste for corruption, actively seeking out and transforming other animals. The white dust they leave behind has become more concentrated, and you've noticed it seems to affect the very ground they walk on.";
+            return "Infected Maple Bears are bigger and meaner now. They hunt other animals and turn them. The dust they leave behind is thicker and seems to change the ground.";
         case 8:
-            return "The sky is no longer safe. You've witnessed Maple Bears taking flight, soaring through the air with an unnatural grace. These flying variants can reach places that were once thought secure, and they seem to hunt from above with terrifying precision. The infection has learned to take to the skies.";
+            return "The sky is no longer safe. Maple Bears can fly now. They hunt from above and can reach places you thought were safe.";
         case 11:
-            return "The infection continues to evolve. More dangerous variants have appeared, and the threat grows with each passing day. The white dust spreads further, and the corrupted creatures become more aggressive.";
+            return "The infection keeps changing. New, deadlier bears show up. The dust spreads further and the corrupted creatures get more aggressive.";
         case 13:
-            return "A new threat has emerged - massive Buff Maple Bears that tower over their smaller counterparts. These behemoths are incredibly dangerous and seem to possess an intelligence that the smaller variants lack. They actively hunt larger creatures and have been observed coordinating attacks. The infection has reached a critical point, with these powerful variants capable of spreading the corruption at an alarming rate.";
+            return "Buff Maple Bears have appeared—huge and very dangerous. They hunt in groups and spread the infection fast.";
         case 15:
-            return "The ground beneath your feet is no longer safe. You've discovered Maple Bears that can dig through the earth itself, tunneling towards their targets with relentless determination. These mining variants can reach you even in the deepest underground bases, and they seem to work together, creating elaborate tunnel networks. Nowhere is truly hidden from the infection.";
+            return "The ground is no longer safe. Mining Maple Bears can dig through the earth and reach you underground. They dig tunnels and work together. Nowhere is truly hidden.";
         case 17:
-            return "A new terror has emerged from the skies - torpedo-like Maple Bears that dive with devastating speed and force. These creatures strike from above with such velocity that they can break through almost any defense. They seem to target with an almost supernatural accuracy, as if they can sense your presence through walls. The infection has become a predator from every angle.";
+            return "Torpedo Maple Bears dive from the sky with huge speed and force. They can break through almost any defense. The infection attacks from every angle now.";
         case 20:
-            return "The world feels hushed, as if holding its breath. Day 20 bears walk like winter's final verdict, and the dust they shed clings to the air itself. Survivors whisper that the infection now remembers every step we've taken.";
+            return "The world feels hushed. Day 20 bears move like something that has already decided our fate. The dust they shed clings to the air. Survivors say the infection now remembers every step we take.";
         case 25:
-            return "You have survived. Twenty-five days of relentless infection, of watching the world transform under the weight of white dust and corrupted creatures. You stand as proof that humanity can endure even when the very ground beneath your feet turns against you. But the infection does not rest. It will only grow stronger, more relentless. The challenge continues, but you have proven yourself a true survivor.";
+            return "You have survived 25 days. The world has changed under the dust and the corrupted creatures. The infection will keep growing. You have proven you can survive.";
         case 50:
-            return "Fifty days. The infection has become something else entirely - a force of nature that reshapes reality itself. The white dust no longer simply covers the world; it has become the world. Every surface, every breath, every moment is tainted by its presence. The bears have evolved beyond recognition, and you wonder if you're still fighting an infection, or if you're fighting the world itself.";
+            return "Fifty days. The infection has become something else. The dust is everywhere now—every surface, every breath. The bears have changed beyond recognition. You wonder if you are still fighting an infection or the world itself.";
         case 75:
-            return "Seventy-five days. The boundary between infection and existence has blurred beyond recognition. The world remembers everything - every step, every death, every moment of hope. The bears move with a purpose that transcends mere hunger or aggression. They are architects of a new reality, and you are both witness and participant in this transformation. The question is no longer whether you can survive, but what you will become.";
+            return "Seventy-five days. The line between infection and the world has blurred. The bears move with a purpose beyond hunger. You are part of this change. The question is no longer if you can survive, but what you will become.";
         case 100:
-            return "One hundred days. You have reached a milestone that few could even imagine. The world you knew is gone, replaced by something that defies understanding. The infection has achieved a kind of perfection - a complete integration with reality itself. You stand at the threshold of something new, something that has never existed before. The journey continues, but you have proven that even in the face of absolute transformation, something of what you were remains. You are a survivor. You are a witness. You are part of the story that will be told long after the last bear has moved on.";
+            return "One hundred days. The world you knew is gone. The infection has become part of reality. You have proven that something of who you were remains. You are a survivor.";
         default:
-            return `Day ${day} has passed. The infection continues to evolve, and the world grows more dangerous with each sunrise.`;
+            return `Day ${day} has passed. The infection keeps changing and the world gets more dangerous.`;
     }
 }
 
@@ -821,7 +821,7 @@ export function mbiHandleMilestoneDay(day) {
                         }
                         if (!codex.journal.day20WorldLoreUnlocked) {
                             codex.journal.day20WorldLoreUnlocked = true;
-                            const loreEntry = "Day 20 pressed down like a heavy frost. The journal insists the world remembers our missteps.";
+                            const loreEntry = "Day 20 pressed down like a heavy weight. The journal insists the world remembers our missteps.";
                             recordDailyEvent(player, 20, loreEntry, "lore", codex);
                             saveCodex(player, codex);
                         } else {

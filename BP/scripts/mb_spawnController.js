@@ -6,7 +6,7 @@
 // ============================================================================
 
 import { system, world } from "@minecraft/server";
-import { getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
+import { getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { getCurrentDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { isDebugEnabled, getPlayerSoundVolume } from "./mb_codex.js";
 
@@ -5712,6 +5712,7 @@ system.runInterval(() => {
             chanceMultiplier *= SUNRISE_BOOST_MULTIPLIER;
         }
         chanceMultiplier *= spawnDifficultyState.multiplier;
+        chanceMultiplier *= getAddonDifficultyState().spawnMultiplier;
         chanceMultiplier *= weatherMultiplier; // Apply weather effect
 
         let extraCount = 0;

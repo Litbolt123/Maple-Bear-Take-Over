@@ -261,6 +261,29 @@ export function setWorldProperty(key, value) {
     }
 }
 
+/** World property for addon difficulty: -1 Easy, 0 Normal, 1 Hard */
+export const ADDON_DIFFICULTY_PROPERTY = "mb_addonDifficulty";
+
+/**
+ * Get addon difficulty state (spawn, hits to infect, infection speed, mining speed, torpedo max blocks).
+ * @returns {{ value: number, spawnMultiplier: number, hitsBase: number, infectionDecayMultiplier: number, miningIntervalMultiplier: number, torpedoMaxBlocksMultiplier: number }}
+ */
+export function getAddonDifficultyState() {
+    let raw = getWorldProperty(ADDON_DIFFICULTY_PROPERTY);
+    if (typeof raw !== "number") {
+        raw = 0;
+    }
+    const value = Math.max(-1, Math.min(1, raw));
+    if (value === -1) {
+        return { value: -1, spawnMultiplier: 0.7, hitsBase: 4, infectionDecayMultiplier: 0.8, miningIntervalMultiplier: 1.2, torpedoMaxBlocksMultiplier: 0.85 };
+    }
+    if (value === 1) {
+        // Hard: mining significantly faster (0.5x interval), torpedo max blocks significantly higher (2x)
+        return { value: 1, spawnMultiplier: 1.3, hitsBase: 2, infectionDecayMultiplier: 1.2, miningIntervalMultiplier: 0.5, torpedoMaxBlocksMultiplier: 2.0 };
+    }
+    return { value: 0, spawnMultiplier: 1.0, hitsBase: 3, infectionDecayMultiplier: 1.0, miningIntervalMultiplier: 1.0, torpedoMaxBlocksMultiplier: 1.0 };
+}
+
 function readPlayerDynamicPropertyDirect(player, key) {
     try {
         return player.getDynamicProperty(key);

@@ -3,7 +3,7 @@ import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { getCodex, getDefaultCodex, markCodex, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, checkKnowledgeProgression } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks } from "./mb_spawnController.js";
-import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
+import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { findItem, hasItem } from "./mb_itemFinder.js";
 import { initializeItemRegistry, registerItemHandler } from "./mb_itemRegistry.js";
 import "./mb_spawnController.js";
@@ -400,7 +400,7 @@ function trackBearKill(player, bearType) {
             if (codex.journal && !codex.journal.day20TinyLoreUnlocked) {
                 codex.journal.day20TinyLoreUnlocked = true;
                 const reflectionDay = getCurrentDay() + 1;
-                const loreEntry = "Witnessed the smallest bears ignite with renewed purpose. Their steps cut cold lines through the snow.";
+                const loreEntry = "Saw the smallest bears move with new purpose. Their steps cut lines through the dust.";
                 recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
             }
         } else if (bearType === INFECTED_BEAR_ID) {
@@ -420,7 +420,7 @@ function trackBearKill(player, bearType) {
             if (codex.journal && !codex.journal.day20InfectedLoreUnlocked) {
                 codex.journal.day20InfectedLoreUnlocked = true;
                 const reflectionDay = getCurrentDay() + 1;
-                const loreEntry = "Saw infected husks clad in drifting dust. Their presence drapes the world in a hollow quiet.";
+                const loreEntry = "Saw infected bears covered in dust. Where they go, everything goes quiet.";
                 recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
             }
         } else if (bearType === BUFF_BEAR_ID) {
@@ -440,7 +440,7 @@ function trackBearKill(player, bearType) {
             if (codex.journal && !codex.journal.day20BuffLoreUnlocked) {
                 codex.journal.day20BuffLoreUnlocked = true;
                 const reflectionDay = getCurrentDay() + 1;
-                const loreEntry = "A colossal Maple Bear vaulted the treetops; its roar bent the frost itself.";
+                const loreEntry = "A huge Buff Bear cleared the trees in one leap. Its roar shook the air.";
                 recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
             }
         } else if (bearType === INFECTED_PIG_ID) {
@@ -524,7 +524,7 @@ function trackMobKill(killer, victim) {
                     if (killerType === MAPLE_BEAR_DAY20_ID && codex.journal && !codex.journal.day20TinyLoreUnlocked) {
                         codex.journal.day20TinyLoreUnlocked = true;
                         const reflectionDay = getCurrentDay() + 1;
-                        const loreEntry = "Witnessed the smallest bears ignite with renewed purpose. Their steps cut cold lines through the snow.";
+                        const loreEntry = "Saw the smallest bears move with new purpose. Their steps cut lines through the dust.";
                         recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
                     }
                 } else if (killerType === INFECTED_BEAR_ID || killerType === INFECTED_BEAR_DAY8_ID || killerType === INFECTED_BEAR_DAY13_ID || killerType === INFECTED_BEAR_DAY20_ID) {
@@ -534,7 +534,7 @@ function trackMobKill(killer, victim) {
                     if (killerType === INFECTED_BEAR_DAY20_ID && codex.journal && !codex.journal.day20InfectedLoreUnlocked) {
                         codex.journal.day20InfectedLoreUnlocked = true;
                         const reflectionDay = getCurrentDay() + 1;
-                        const loreEntry = "Saw infected husks clad in drifting dust. Their presence drapes the world in a hollow quiet.";
+                        const loreEntry = "Saw infected bears covered in dust. Where they go, everything goes quiet.";
                         recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
                     }
                 } else if (killerType === BUFF_BEAR_ID || killerType === BUFF_BEAR_DAY13_ID || killerType === BUFF_BEAR_DAY20_ID) {
@@ -544,7 +544,7 @@ function trackMobKill(killer, victim) {
                     if (killerType === BUFF_BEAR_DAY20_ID && codex.journal && !codex.journal.day20BuffLoreUnlocked) {
                         codex.journal.day20BuffLoreUnlocked = true;
                         const reflectionDay = getCurrentDay() + 1;
-                        const loreEntry = "A colossal Maple Bear vaulted the treetops; its roar bent the frost itself.";
+                        const loreEntry = "A huge Buff Bear cleared the trees in one leap. Its roar shook the air.";
                         recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
                     }
                 } else if (killerType === INFECTED_PIG_ID) {
@@ -2250,7 +2250,10 @@ function cureMinorInfection(player) {
         // Send message about permanent immunity
         player.sendMessage("§a§lYou have cured your minor infection!");
         player.sendMessage("§eYou are now permanently immune. You will never contract minor infection again.");
-        player.sendMessage("§7You now require 3 hits from Maple Bears to get infected (instead of 2).");
+        const addonHits = getAddonDifficultyState();
+        const immuneHits = addonHits.hitsBase;
+        const normalHits = Math.max(1, addonHits.hitsBase - 1);
+        player.sendMessage(`§7You now require ${immuneHits} hits from Maple Bears to get infected (instead of ${normalHits}).`);
         
         // Clear hit count
         bearHitCount.delete(player.id);
@@ -2364,7 +2367,8 @@ function handleEnchantedGoldenApple(player, item) {
                 // Note: We do NOT remove the weakness effect - let it run its course naturally
                 player.sendMessage("§a§lYou have cured your major infection!");
                 player.sendMessage("§eYou are now permanently immune. You will never contract minor infection again.");
-                player.sendMessage("§7You now require 3 hits from Maple Bears to get infected (instead of 2).");
+                const addonHitsMajor = getAddonDifficultyState();
+                player.sendMessage(`§7You now require ${addonHitsMajor.hitsBase} hits from Maple Bears to get infected (instead of ${Math.max(1, addonHitsMajor.hitsBase - 1)}).`);
                 player.sendMessage("§bYou also have temporary immunity for 5 minutes.");
                 try { 
                     markCodex(player, "cures.bearCureKnown"); 
@@ -3926,12 +3930,11 @@ world.afterEvents.entityHurt.subscribe((event) => {
         // Check if player has temporary immunity (from major infection cure)
         const hasTemporaryImmunity = isPlayerImmune(player);
         
-        // Determine hits needed based on player status
-        let hitsNeeded = HITS_TO_INFECT; // Default for major infection (backward compatibility)
-        if (hasPermanentImmunity) {
-            hitsNeeded = IMMUNE_HITS_TO_INFECT; // 3 hits for permanently immune players
-        } else if (hasMinorInfection) {
-            hitsNeeded = MINOR_HITS_TO_INFECT; // 2 hits for minor infected players
+        // Determine hits needed based on addon difficulty and player status
+        const addonDifficulty = getAddonDifficultyState();
+        let hitsNeeded = addonDifficulty.hitsBase; // Default and permanently immune
+        if (hasMinorInfection) {
+            hitsNeeded = Math.max(1, addonDifficulty.hitsBase - 1); // Minor: one fewer hit
         }
         
         if (hasTemporaryImmunity) {
@@ -4271,7 +4274,8 @@ system.runInterval(() => {
 
         // Update last active tick when player is online
         state.lastActiveTick = system.currentTick;
-        state.ticksLeft -= 40; // Adjusted for 40-tick interval
+        const decayMultiplier = getAddonDifficultyState().infectionDecayMultiplier;
+        state.ticksLeft -= Math.round(40 * decayMultiplier); // 40-tick interval, scaled by addon difficulty
         
         // Cap ticksLeft at max for infection type
         if (state.ticksLeft > maxTicks) {
@@ -4415,8 +4419,10 @@ system.runInterval(() => {
             const ticksSinceDecay = system.currentTick - state.lastDecayTick;
             if (ticksSinceDecay >= 24000) {
                 state.lastDecayTick = system.currentTick;
-                state.ticksLeft = Math.max(0, Math.min(maxTicks, state.ticksLeft - dailyDecay));
-                console.log(`[SNOW DECAY] ${player.name} lost ${dailyDecay} ticks due to snow tier ${snowCount} decay`);
+                const decayMult = getAddonDifficultyState().infectionDecayMultiplier;
+                const scaledDecay = Math.round(dailyDecay * decayMult);
+                state.ticksLeft = Math.max(0, Math.min(maxTicks, state.ticksLeft - scaledDecay));
+                console.log(`[SNOW DECAY] ${player.name} lost ${scaledDecay} ticks due to snow tier ${snowCount} decay`);
             }
         }
         // Save data periodically
@@ -7075,7 +7081,8 @@ function clearPlayerCodexState(player) {
     if (!player) return;
 
     try {
-        setPlayerProperty(player, "mb_codex", JSON.stringify(getDefaultCodex()));
+        // Use saveCodex so chunked storage is cleared and reset correctly (same format as normal save)
+        saveCodex(player, getDefaultCodex());
     } catch (err) {
         console.warn(`[MBI] Failed writing default codex for ${player.name}:`, err);
     }
@@ -7137,40 +7144,40 @@ function unlockAllContentForDay(day) {
                 // We need to get the milestone message - it's not exported, so we'll recreate the logic
                 switch (d) {
                     case 2:
-                        milestoneMessage = "You notice strange, tiny white bears beginning to emerge from the shadows. Their eyes seem to follow you wherever you go, and they leave behind a peculiar white dust wherever they step. These creatures appear to be drawn to larger animals, and you've witnessed them attacking and converting other creatures into more of their kind. The infection has begun its silent spread across the land.";
+                        milestoneMessage = "Tiny white bears have appeared. They leave white dust where they step and turn other animals into more of their kind. The infection has begun to spread.";
                         break;
                     case 4:
-                        milestoneMessage = "The tiny bears have evolved into more dangerous variants. You've observed infected Maple Bears that are larger and more aggressive than their predecessors. These creatures seem to have developed a taste for corruption, actively seeking out and transforming other animals. The white dust they leave behind has become more concentrated, and you've noticed it seems to affect the very ground they walk on.";
+                        milestoneMessage = "Infected Maple Bears are bigger and meaner now. They hunt other animals and turn them. The dust they leave behind is thicker and seems to change the ground.";
                         break;
                     case 8:
-                        milestoneMessage = "The sky is no longer safe. You've witnessed Maple Bears taking flight, soaring through the air with an unnatural grace. These flying variants can reach places that were once thought secure, and they seem to hunt from above with terrifying precision. The infection has learned to take to the skies.";
+                        milestoneMessage = "The sky is no longer safe. Maple Bears can fly now. They hunt from above and can reach places you thought were safe.";
                         break;
                     case 11:
-                        milestoneMessage = "The infection continues to evolve. More dangerous variants have appeared, and the threat grows with each passing day. The white dust spreads further, and the corrupted creatures become more aggressive.";
+                        milestoneMessage = "The infection keeps changing. New, deadlier bears show up. The dust spreads further and the corrupted creatures get more aggressive.";
                         break;
                     case 13:
-                        milestoneMessage = "A new threat has emerged - massive Buff Maple Bears that tower over their smaller counterparts. These behemoths are incredibly dangerous and seem to possess an intelligence that the smaller variants lack. They actively hunt larger creatures and have been observed coordinating attacks. The infection has reached a critical point, with these powerful variants capable of spreading the corruption at an alarming rate.";
+                        milestoneMessage = "Buff Maple Bears have appeared—huge and very dangerous. They hunt in groups and spread the infection fast.";
                         break;
                     case 15:
-                        milestoneMessage = "The ground beneath your feet is no longer safe. You've discovered Maple Bears that can dig through the earth itself, tunneling towards their targets with relentless determination. These mining variants can reach you even in the deepest underground bases, and they seem to work together, creating elaborate tunnel networks. Nowhere is truly hidden from the infection.";
+                        milestoneMessage = "The ground is no longer safe. Mining Maple Bears can dig through the earth and reach you underground. They dig tunnels and work together. Nowhere is truly hidden.";
                         break;
                     case 17:
-                        milestoneMessage = "A new terror has emerged from the skies - torpedo-like Maple Bears that dive with devastating speed and force. These creatures strike from above with such velocity that they can break through almost any defense. They seem to target with an almost supernatural accuracy, as if they can sense your presence through walls. The infection has become a predator from every angle.";
+                        milestoneMessage = "Torpedo Maple Bears dive from the sky with huge speed and force. They can break through almost any defense. The infection attacks from every angle now.";
                         break;
                     case 20:
-                        milestoneMessage = "The world feels hushed, as if holding its breath. Day 20 bears walk like winter's final verdict, and the dust they shed clings to the air itself. Survivors whisper that the infection now remembers every step we've taken.";
+                        milestoneMessage = "The world feels hushed. Day 20 bears move like something that has already decided our fate. The dust they shed clings to the air. Survivors say the infection now remembers every step we take.";
                         break;
                     case 25:
-                        milestoneMessage = "You have survived. Twenty-five days of relentless infection, of watching the world transform under the weight of white dust and corrupted creatures. You stand as proof that humanity can endure even when the very ground beneath your feet turns against you. But the infection does not rest. It will only grow stronger, more relentless. The challenge continues, but you have proven yourself a true survivor.";
+                        milestoneMessage = "You have survived 25 days. The world has changed under the dust and the corrupted creatures. The infection will keep growing. You have proven you can survive.";
                         break;
                     case 50:
-                        milestoneMessage = "Fifty days. The infection has become something else entirely - a force of nature that reshapes reality itself. The white dust no longer simply covers the world; it has become the world. Every surface, every breath, every moment is tainted by its presence. The bears have evolved beyond recognition, and you wonder if you're still fighting an infection, or if you're fighting the world itself.";
+                        milestoneMessage = "Fifty days. The infection has become something else. The dust is everywhere now—every surface, every breath. The bears have changed beyond recognition. You wonder if you are still fighting an infection or the world itself.";
                         break;
                     case 75:
-                        milestoneMessage = "Seventy-five days. The boundary between infection and existence has blurred beyond recognition. The world remembers everything - every step, every death, every moment of hope. The bears move with a purpose that transcends mere hunger or aggression. They are architects of a new reality, and you are both witness and participant in this transformation. The question is no longer whether you can survive, but what you will become.";
+                        milestoneMessage = "Seventy-five days. The line between infection and the world has blurred. The bears move with a purpose beyond hunger. You are part of this change. The question is no longer if you can survive, but what you will become.";
                         break;
                     case 100:
-                        milestoneMessage = "One hundred days. You have reached a milestone that few could even imagine. The world you knew is gone, replaced by something that defies understanding. The infection has achieved a kind of perfection - a complete integration with reality itself. You stand at the threshold of something new, something that has never existed before. The journey continues, but you have proven that even in the face of absolute transformation, something of what you were remains. You are a survivor. You are a witness. You are part of the story that will be told long after the last bear has moved on.";
+                        milestoneMessage = "One hundred days. The world you knew is gone. The infection has become part of reality. You have proven that something of who you were remains. You are a survivor.";
                         break;
                 }
             }
@@ -7191,9 +7198,9 @@ function unlockAllContentForDay(day) {
                     if (!milestoneMessage) {
                         let generalMessage;
                         if (d === 1) {
-                            generalMessage = "The first day has passed. You've noticed strange changes in the world around you, though you can't quite put your finger on what's different.";
+                            generalMessage = "The first day has passed. Something feels different in the world.";
                         } else {
-                            generalMessage = `Day ${d} has passed. The infection continues to evolve, and the world grows more dangerous with each sunrise.`;
+                            generalMessage = `Day ${d} has passed. The infection keeps changing and the world gets more dangerous.`;
                         }
                         recordDailyEvent(player, d, generalMessage, "general", codex);
                     }
@@ -7254,7 +7261,7 @@ function unlockAllContentForDay(day) {
                     if (!codex.journal.day20WorldLoreUnlocked) {
                         codex.journal.day20WorldLoreUnlocked = true;
                         const reflectionDay = day + 1;
-                        const loreEntry = "Day 20 pressed down like a heavy frost. The journal insists the world remembers our missteps.";
+                        const loreEntry = "Day 20 pressed down like a heavy weight. The journal says the world remembers our missteps.";
                         recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
                     }
                     
@@ -7368,6 +7375,173 @@ function executeMbCommand(sender, subcommand, args = []) {
                 return;
             }
             applySpawnDifficulty(raw, sender);
+            return;
+        }
+        case "clear_infection": {
+            const target = args[0] ? world.getAllPlayers().find(p => p.name === args[0]) : sender;
+            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[0]} found.`); return; }
+            playerInfection.delete(target.id);
+            bearHitCount.delete(target.id);
+            curedPlayers.delete(target.id);
+            setPlayerProperty(target, "mb_infection", undefined);
+            setPlayerProperty(target, "mb_infection_type", undefined);
+            setPlayerProperty(target, "mb_immunity_end", undefined);
+            setPlayerProperty(target, "mb_bear_hit_count", undefined);
+            sender.sendMessage(`§7[MBI] Cleared infection state for ${target.name}.`);
+            return;
+        }
+        case "set_infection": {
+            const kind = (args[0] || "minor").toLowerCase();
+            const target = args[1] ? world.getAllPlayers().find(p => p.name === args[1]) : sender;
+            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[1]} found.`); return; }
+            const isMinor = kind === "minor";
+            const ticks = isMinor ? MINOR_INFECTION_TICKS : INFECTION_TICKS;
+            const type = isMinor ? MINOR_INFECTION_TYPE : MAJOR_INFECTION_TYPE;
+            curedPlayers.delete(target.id);
+            bearHitCount.delete(target.id);
+            setPlayerProperty(target, "mb_immunity_end", undefined);
+            playerInfection.set(target.id, {
+                ticksLeft: ticks,
+                cured: false,
+                hitCount: 0,
+                snowCount: 0,
+                infectionType: type,
+                minorInfectionCured: false,
+                source: "bear",
+                maxSeverity: 0,
+                lastTierMessage: 0,
+                lastDecayTick: system.currentTick,
+                warningSent: false,
+                lastActiveTick: system.currentTick
+            });
+            saveInfectionData(target);
+            sender.sendMessage(`§7[MBI] Set ${target.name} to ${type} infection.`);
+            return;
+        }
+        case "grant_immunity": {
+            const mode = (args[0] || "permanent").toLowerCase();
+            const target = args[1] ? world.getAllPlayers().find(p => p.name === args[1]) : sender;
+            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[1]} found.`); return; }
+            playerInfection.delete(target.id);
+            bearHitCount.delete(target.id);
+            setPlayerProperty(target, "mb_infection", undefined);
+            setPlayerProperty(target, "mb_infection_type", undefined);
+            setPlayerProperty(target, PERMANENT_IMMUNITY_PROPERTY, true);
+            setPlayerProperty(target, MINOR_INFECTION_CURED_PROPERTY, true);
+            if (mode === "temporary") {
+                const endTime = Date.now() + 5 * 60 * 1000;
+                curedPlayers.set(target.id, endTime);
+                setPlayerProperty(target, "mb_immunity_end", String(endTime));
+            } else {
+                curedPlayers.delete(target.id);
+                setPlayerProperty(target, "mb_immunity_end", undefined);
+            }
+            sender.sendMessage(`§7[MBI] Granted ${target.name} ${mode} immunity.`);
+            return;
+        }
+        case "remove_immunity": {
+            const target = args[0] ? world.getAllPlayers().find(p => p.name === args[0]) : sender;
+            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[0]} found.`); return; }
+            setPlayerProperty(target, PERMANENT_IMMUNITY_PROPERTY, undefined);
+            setPlayerProperty(target, MINOR_INFECTION_CURED_PROPERTY, undefined);
+            curedPlayers.delete(target.id);
+            setPlayerProperty(target, "mb_immunity_end", undefined);
+            sender.sendMessage(`§7[MBI] Removed immunity from ${target.name}.`);
+            return;
+        }
+        case "reset_intro": {
+            const target = args[0] ? world.getAllPlayers().find(p => p.name === args[0]) : sender;
+            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[0]} found.`); return; }
+            setPlayerProperty(target, PLAYER_INTRO_SEEN_PROPERTY, undefined);
+            sender.sendMessage(`§7[MBI] Reset intro for ${target.name}. They will see the intro again on next join.`);
+            return;
+        }
+        case "list_bears": {
+            const dim = sender.dimension;
+            const loc = sender.location;
+            const radius = 128;
+            const counts = {};
+            const bearPrefixes = ["mb:mb_", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+            try {
+                const entities = dim.getEntities({ location: loc, maxDistance: radius });
+                for (const e of entities) {
+                    const id = e.typeId || "";
+                    if (bearPrefixes.some(p => id.startsWith(p))) {
+                        counts[id] = (counts[id] || 0) + 1;
+                    }
+                }
+                const lines = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([id, n]) => `§7${id}: §f${n}`);
+                sender.sendMessage("§7[MBI] Bears within 128 blocks:\n" + (lines.length ? lines.join("\n") : "§8None"));
+            } catch (err) {
+                sender.sendMessage("§7[MBI] Error listing bears: " + (err?.message || err));
+            }
+            return;
+        }
+        case "force_spawn": {
+            const entityId = args[0] || "mb:mb_day20";
+            let target = sender;
+            let distanceArg = "2";
+            if (args.length >= 3) {
+                target = args[1] ? world.getAllPlayers().find(p => p.name === args[1]) : sender;
+                distanceArg = args[2];
+            } else if (args.length === 2) {
+                const second = String(args[1]);
+                const asNum = parseInt(second, 10);
+                if (second.toLowerCase() === "random" || !Number.isNaN(asNum)) {
+                    distanceArg = second;
+                } else {
+                    target = world.getAllPlayers().find(p => p.name === args[1]) || sender;
+                }
+            }
+            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[1]} found.`); return; }
+            let distance = 2;
+            if (distanceArg === "random" || (typeof distanceArg === "string" && distanceArg.toLowerCase() === "random")) {
+                distance = 1 + Math.floor(Math.random() * 20);
+            } else if (distanceArg !== undefined && distanceArg !== null && distanceArg !== "") {
+                const parsed = parseInt(String(distanceArg), 10);
+                if (!Number.isNaN(parsed) && parsed >= 0) distance = Math.min(64, Math.max(0, parsed));
+            }
+            try {
+                const loc = target.location;
+                const angle = Math.random() * Math.PI * 2;
+                const dx = Math.cos(angle) * distance;
+                const dz = Math.sin(angle) * distance;
+                const offset = { x: loc.x + dx, y: loc.y, z: loc.z + dz };
+                target.dimension.spawnEntity(entityId, offset);
+                sender.sendMessage(`§7[MBI] Spawned §f${entityId}§7 ${distance} block${distance !== 1 ? "s" : ""} from ${target.name}.`);
+            } catch (err) {
+                sender.sendMessage("§7[MBI] Spawn failed: " + (err?.message || err));
+            }
+            return;
+        }
+        case "dump_codex": {
+            const target = args[0] ? world.getAllPlayers().find(p => p.name === args[0]) : sender;
+            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[0]} found.`); return; }
+            try {
+                const codex = getCodex(target);
+                const str = JSON.stringify(codex);
+                const maxLen = 256;
+                const snippet = str.length > maxLen ? str.slice(0, maxLen) + "…" : str;
+                sender.sendMessage("§7[MBI] Codex (truncated): §8" + snippet);
+            } catch (err) {
+                sender.sendMessage("§7[MBI] Error: " + (err?.message || err));
+            }
+            return;
+        }
+        case "set_kill_count": {
+            const mobKey = args[0] || "tinyBearKills";
+            const value = parseInt(args[1], 10);
+            const target = args[2] ? world.getAllPlayers().find(p => p.name === args[2]) : sender;
+            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[2]} found.`); return; }
+            if (Number.isNaN(value) || value < 0) {
+                sender.sendMessage("§7[MBI] Usage: set_kill_count <mobKey> <number> [playerName]. Keys: tinyBearKills, infectedBearKills, buffBearKills, flyingBearKills, miningBearKills, torpedoBearKills, infectedPigKills, infectedCowKills.");
+                return;
+            }
+            const codex = getCodex(target);
+            if (!codex.mobs) codex.mobs = {};
+            codex.mobs[mobKey] = value;
+            saveCodex(target, codex);
+            sender.sendMessage(`§7[MBI] Set ${target.name} §f${mobKey}§7 to §f${value}§7.`);
             return;
         }
         default:

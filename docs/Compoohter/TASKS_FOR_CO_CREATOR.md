@@ -28,17 +28,17 @@ Dusted Dirt Block Item Icon 16x16 ✅
 
 5. **Journal Evolution** - The Basic Journal and Powdery Journal use the same texture. Consider:
    - Making Powdery Journal slightly different (maybe with powder/dust particles?)
-   - Or keeping them the same for lore consistency (your call)
+   - Or keeping them the same for lore consistency (your call) ✅
 
 6. **Mob Texture Variants** - Day variants might benefit from:
    - Subtle progression in corruption/corruption color
    - More obvious differences between Day 4, 8, 13, and 20 variants
-   - Consider if infected mobs (pig, cow) could show more infection visually
+   - Consider if infected mobs (pig, cow) could show more infection visually ✅
 
 7. **Item Texture Polish** - Review all custom items for:
    - Consistent art style
    - Readability at small sizes (16x16)
-   - Proper lighting/shading
+   - Proper lighting/shading ✅
 
 ---
 

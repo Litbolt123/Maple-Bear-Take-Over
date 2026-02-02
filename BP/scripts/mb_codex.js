@@ -1,6 +1,6 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData, ModalFormData, FormCancelationReason } from "@minecraft/server-ui";
-import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getPlayerPropertyChunked, setPlayerPropertyChunked, getWorldPropertyChunked, setWorldPropertyChunked } from "./mb_dynamicPropertyHandler.js";
+import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getPlayerPropertyChunked, setPlayerPropertyChunked, getWorldPropertyChunked, setWorldPropertyChunked, ADDON_DIFFICULTY_PROPERTY, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { getAllScriptToggles, setScriptEnabled, SCRIPT_IDS, isBetaInfectedAIEnabled, setBetaInfectedAIEnabled, isBetaVisibleToAll, setBetaVisibleToAll, getBetaOwnerId, setBetaOwnerId } from "./mb_scriptToggles.js";
 import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTracker.js";
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
@@ -251,6 +251,103 @@ export function markCodex(player, path, timestamp = false) {
     saveCodex(player, codex);
 }
 
+/**
+ * Sets all unlockable codex content to unlocked (for developer/testing).
+ * Does not clear or modify dailyEvents/achievements; use reset for a full wipe.
+ */
+export function fullyUnlockCodex(player) {
+    const codex = getCodex(player);
+    const def = getDefaultCodex();
+
+    // Infections & status (use same shape as getDefaultCodex so openInfections and others work)
+    if (codex.infections) {
+        codex.infections.bear = { discovered: true, firstHitAt: Date.now() };
+        codex.infections.snow = { discovered: true, firstUseAt: Date.now() };
+        codex.infections.minor = { discovered: true };
+        codex.infections.major = { discovered: true };
+    }
+    if (codex.status) {
+        codex.status.immuneKnown = true;
+        codex.status.bearTimerSeen = true;
+        codex.status.snowTimerSeen = true;
+    }
+    if (codex.cures) {
+        codex.cures.bearCureKnown = true;
+        codex.cures.minorCureKnown = true;
+    }
+
+    // Effects (infection symptoms + snow effects + minor infection effects)
+    for (const key of Object.keys(def.effects || {})) {
+        if (typeof def.effects[key] === "boolean") codex.effects[key] = true;
+    }
+    for (const key of Object.keys(def.snowEffects || {})) {
+        if (typeof def.snowEffects[key] === "boolean") codex.snowEffects[key] = true;
+    }
+    for (const key of Object.keys(def.minorInfectionEffects || {})) {
+        if (typeof def.minorInfectionEffects[key] === "boolean") codex.minorInfectionEffects[key] = true;
+    }
+    if (codex.symptomsUnlocks) {
+        codex.symptomsUnlocks.infectionSymptomsUnlocked = true;
+        codex.symptomsUnlocks.snowEffectsUnlocked = true;
+        codex.symptomsUnlocks.snowTierAnalysisUnlocked = true;
+        codex.symptomsUnlocks.minorInfectionAnalysisUnlocked = true;
+    }
+
+    // Items (all *Seen and tier flags)
+    for (const key of Object.keys(def.items || {})) {
+        if (typeof def.items[key] === "boolean") codex.items[key] = true;
+    }
+
+    // Mobs: all seen + variant unlocks + high kill counts so all variant text shows
+    const killCount = 200;
+    const mobKeys = ["mapleBearSeen", "infectedBearSeen", "infectedPigSeen", "infectedCowSeen", "buffBearSeen", "flyingBearSeen", "miningBearSeen", "torpedoBearSeen"];
+    for (const k of mobKeys) {
+        if (codex.mobs) codex.mobs[k] = true;
+    }
+    const countKeys = ["tinyBearKills", "infectedBearKills", "infectedPigKills", "infectedCowKills", "buffBearKills", "flyingBearKills", "miningBearKills", "torpedoBearKills",
+        "tinyBearMobKills", "infectedBearMobKills", "infectedPigMobKills", "infectedCowMobKills", "buffBearMobKills", "flyingBearMobKills", "miningBearMobKills", "torpedoBearMobKills",
+        "tinyBearHits", "infectedBearHits", "infectedPigHits", "infectedCowHits", "buffBearHits", "flyingBearHits", "miningBearHits", "torpedoBearHits"];
+    for (const k of countKeys) {
+        if (codex.mobs) codex.mobs[k] = killCount;
+    }
+    const variantFlags = ["day4VariantsUnlocked", "day8VariantsUnlocked", "day13VariantsUnlocked", "day20VariantsUnlocked",
+        "day4VariantsUnlockedTiny", "day4VariantsUnlockedInfected", "day4VariantsUnlockedBuff", "day4VariantsUnlockedOther",
+        "day8VariantsUnlockedTiny", "day8VariantsUnlockedInfected", "day8VariantsUnlockedBuff", "day8VariantsUnlockedOther",
+        "day13VariantsUnlockedTiny", "day13VariantsUnlockedInfected", "day13VariantsUnlockedBuff", "day13VariantsUnlockedOther",
+        "day20VariantsUnlockedTiny", "day20VariantsUnlockedInfected", "day20VariantsUnlockedBuff", "day20VariantsUnlockedOther",
+        "day4MessageShownTiny", "day4MessageShownInfected", "day4MessageShownBuff", "day4MessageShownOther",
+        "day8MessageShown", "day13MessageShown", "day20MessageShown"];
+    for (const k of variantFlags) {
+        if (codex.mobs) codex.mobs[k] = true;
+    }
+
+    // Biomes
+    for (const key of Object.keys(def.biomes || {})) {
+        if (typeof def.biomes[key] === "boolean") codex.biomes[key] = true;
+    }
+    if (!codex.biomeData) codex.biomeData = {};
+    codex.biomeData.mb_infected_biome = { visitCount: 1, totalInfectionSeen: 5, maxInfectionLevel: 5, lastVisit: Date.now() };
+
+    // Knowledge levels (max)
+    if (codex.knowledge) {
+        codex.knowledge.infectionLevel = 3;
+        codex.knowledge.bearLevel = 3;
+        codex.knowledge.biomeLevel = 3;
+        codex.knowledge.cureLevel = 3;
+        codex.knowledge.snowLevel = 3;
+    }
+
+    // Journal (Late Lore)
+    if (codex.journal) {
+        codex.journal.day20TinyLoreUnlocked = true;
+        codex.journal.day20InfectedLoreUnlocked = true;
+        codex.journal.day20BuffLoreUnlocked = true;
+        codex.journal.day20WorldLoreUnlocked = true;
+    }
+
+    saveCodex(player, codex);
+}
+
 // Knowledge progression system
 export function updateKnowledgeLevel(player, knowledgeType, level) {
     const codex = getCodex(player);
@@ -430,7 +527,7 @@ export function shareKnowledge(fromPlayer, toPlayer) {
                 case 'bearLevel': friendlyName = 'Bear Knowledge'; break;
                 case 'biomeLevel': friendlyName = 'Biome Knowledge'; break;
                 case 'cureLevel': friendlyName = 'Cure Knowledge'; break;
-                case 'snowLevel': friendlyName = 'Snow Knowledge'; break;
+                case 'snowLevel': friendlyName = '"Snow" Knowledge'; break;
                 default: friendlyName = knowledgeType.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
             }
 
@@ -473,9 +570,9 @@ export function shareKnowledge(fromPlayer, toPlayer) {
             // Convert item key to friendly name
             let friendlyName;
             switch (itemKey) {
-                case 'snowFound': friendlyName = 'Snow Discovery'; break;
+                case 'snowFound': friendlyName = '"Snow" Discovery'; break;
                 case 'snowBookCrafted': friendlyName = 'Knowledge Book'; break;
-                case 'snowIdentified': friendlyName = 'Snow Identification'; break;
+                case 'snowIdentified': friendlyName = '"Snow" Identification'; break;
                 default: friendlyName = itemKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
             }
 
@@ -792,7 +889,7 @@ export function showCodexBook(player, context) {
                     const snowCount = infectionState.snowCount || 0;
                     const hasConsumedSnow = snowCount > 0 || codex.infections.snow.discovered;
                     if (hasConsumedSnow) {
-                        summary.push(`§eSnow consumed: §c${snowCount}`);
+                        summary.push(`§e"Snow" consumed: §c${snowCount}`);
                     }
                 }
                 
@@ -847,9 +944,10 @@ export function showCodexBook(player, context) {
             // Check if player has ever been infected
             const hasBeenInfected = codex.history.totalInfections > 0;
             if (hasPermanentImmunity) {
+                const addonHits = getAddonDifficultyState();
                 summary.push(`§eStatus: §aHealthy (Permanently Immune)`);
                 summary.push(`§7You are permanently immune to minor infection.`);
-                summary.push(`§7You require 3 hits from Maple Bears to get infected.`);
+                summary.push(`§7You require ${addonHits.hitsBase} hits from Maple Bears to get infected.`);
             } else if (hasBeenInfected && infectionKnowledge >= 1) {
                 summary.push(`§eStatus: §aHealthy (Previously Infected)`);
             } else {
@@ -885,9 +983,12 @@ export function showCodexBook(player, context) {
         const hitCount = bearHitCount.get(player.id) || 0;
         const hasBeenHit = hitCount > 0 || codex.infections.bear.discovered;
         if (hasPowderyJournal && hasBeenHit && bearKnowledge >= 1) {
+            const addonHits = getAddonDifficultyState();
+            const majorHits = addonHits.hitsBase;
+            const minorToMajorHits = Math.max(1, addonHits.hitsBase - 1);
             if (hitCount > 0 && !hasInfection) {
                 const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
-                const hitsNeeded = hasPermanentImmunity ? IMMUNE_HITS_TO_INFECT : HITS_TO_INFECT;
+                const hitsNeeded = hasPermanentImmunity ? majorHits : majorHits;
                 summary.push(`§eBear Hits: §f${hitCount}/${hitsNeeded}`);
             } else if (hasInfection && infectionKnowledge >= 1) {
                 const infectionType = infectionState.infectionType || MAJOR_INFECTION_TYPE;
@@ -895,12 +996,12 @@ export function showCodexBook(player, context) {
                 if (isMinor) {
                     const currentHits = bearHitCount.get(player.id) || 0;
                     if (currentHits > 0) {
-                        summary.push(`§eBear Hits: §f${currentHits}/${MINOR_HITS_TO_INFECT} (until major infection)`);
+                        summary.push(`§eBear Hits: §f${currentHits}/${minorToMajorHits} (until major infection)`);
                     }
                     // Only show progression warning if player has learned about it
                     const hasProgressionKnowledge = codex.infections.major.discovered || hasPermanentImmunity;
                     if (hasProgressionKnowledge) {
-                        summary.push(`§7Warning: 2 hits OR 1 snow = Major Infection`);
+                        summary.push(`§7Warning: ${minorToMajorHits} hit${minorToMajorHits !== 1 ? "s" : ""} OR 1 "snow" = Major Infection`);
                     }
                 }
             }
@@ -1025,10 +1126,13 @@ export function showCodexBook(player, context) {
         const infectionState = playerInfection.get(player.id);
         const hasInfection = infectionState && !infectionState.cured && infectionState.ticksLeft > 0;
         const infectionType = hasInfection ? (infectionState.infectionType || MAJOR_INFECTION_TYPE) : null;
+        const isMinor = hasInfection && (infectionType === MINOR_INFECTION_TYPE);
         const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
         const minorInfectionCured = getPlayerProperty(player, "mb_minor_infection_cured") === true;
+        const minorDiscovered = codex.infections.minor && (typeof codex.infections.minor === "object" ? codex.infections.minor.discovered : !!codex.infections.minor);
+        const majorDiscovered = codex.infections.major && (typeof codex.infections.major === "object" ? codex.infections.major.discovered : !!codex.infections.major);
         
-        if (codex.infections.bear.discovered || codex.infections.snow.discovered || codex.infections.minor || hasInfection || hasPermanentImmunity) {
+        if (codex.infections.bear.discovered || codex.infections.snow.discovered || minorDiscovered || majorDiscovered || hasInfection || hasPermanentImmunity) {
             lines.push("§eThe Infection");
             lines.push("");
             
@@ -1066,10 +1170,11 @@ export function showCodexBook(player, context) {
                 }
                 lines.push("");
             } else if (hasPermanentImmunity) {
+                const immuneHits = getAddonDifficultyState().hitsBase;
                 lines.push("§aCurrent Status: Permanently Immune");
                 lines.push("§7You have cured your minor infection and gained permanent immunity.");
                 lines.push("§7You will never contract minor infection again.");
-                lines.push("§7You now require 3 hits from Maple Bears to get infected.");
+                lines.push(`§7You now require ${immuneHits} hits from Maple Bears to get infected.`);
                 lines.push("");
             } else {
                 lines.push("§aCurrent Status: Healthy");
@@ -1081,8 +1186,8 @@ export function showCodexBook(player, context) {
             lines.push("");
             
             // Minor Infection - only show if experienced
-            const hasMinorExperience = codex.infections.minor.discovered || isMinor || hasPermanentImmunity;
-            const hasHadMinorInfection = codex.infections.minor.discovered;
+            const hasMinorExperience = minorDiscovered || isMinor || hasPermanentImmunity;
+            const hasHadMinorInfection = minorDiscovered;
             if (hasMinorExperience) {
                 lines.push("§eMinor Infection:");
                 
@@ -1122,10 +1227,11 @@ export function showCodexBook(player, context) {
                 }
                 
                 // Progression info - only show if learned about it
-                const hasProgressionKnowledge = codex.infections.major.discovered || hasPermanentImmunity;
+                const hasProgressionKnowledge = majorDiscovered || hasPermanentImmunity;
                 if (hasProgressionKnowledge) {
-                    lines.push("§7• Requires 2 hits from Maple Bears to progress to major");
-                    lines.push("§7• OR 1 snow consumption to progress to major");
+                    const minorToMajor = Math.max(1, getAddonDifficultyState().hitsBase - 1);
+                    lines.push(`§7• Requires ${minorToMajor} hit${minorToMajor !== 1 ? "s" : ""} from Maple Bears to progress to major`);
+                    lines.push("§7• OR 1 \"snow\" consumption to progress to major");
                 }
                 
                 lines.push("");
@@ -1136,7 +1242,7 @@ export function showCodexBook(player, context) {
             }
             
             // Major Infection - only show if experienced
-            const hasMajorExperience = codex.infections.major.discovered || (!isMinor && hasInfection);
+            const hasMajorExperience = majorDiscovered || (!isMinor && hasInfection);
             if (hasMajorExperience) {
                 lines.push("§cMajor Infection:");
                 
@@ -1179,10 +1285,11 @@ export function showCodexBook(player, context) {
             
             // Progression Warning - only show if both infections experienced
             if (hasMinorExperience && hasMajorExperience) {
+                const minorToMajorHits = Math.max(1, getAddonDifficultyState().hitsBase - 1);
                 lines.push("§6Progression:");
                 lines.push("§7• Minor infection can progress to major infection:");
-                lines.push("§7  - 2 hits from Maple Bears");
-                lines.push("§7  - OR 1 snow consumption");
+                lines.push(`§7  - ${minorToMajorHits} hit${minorToMajorHits !== 1 ? "s" : ""} from Maple Bears`);
+                lines.push("§7  - OR 1 \"snow\" consumption");
                 lines.push("§c• Warning: Minor infection is more easily treatable.");
                 lines.push("§c  Once it becomes major, the cure becomes much more difficult.");
                 lines.push("");
@@ -1220,10 +1327,13 @@ export function showCodexBook(player, context) {
                 const hasEnchantedApple = codex.items.enchantedGoldenAppleSeen;
                 
                 if (hasWeaknessPotion && hasEnchantedApple && codex.cures.bearCureKnown) {
+                    const addonCure = getAddonDifficultyState();
+                    const immuneHits = addonCure.hitsBase;
+                    const normalHits = Math.max(1, addonCure.hitsBase - 1);
                     lines.push("§7  Weakness effect + Enchanted Golden Apple");
                     lines.push("§7  Effect: §aPermanent Immunity§7 (prevents minor infection on respawn)");
                     lines.push("§7  Also grants: §bTemporary Immunity§7 (5 minutes)");
-                    lines.push("§7  Requires: 3 hits from Maple Bears to get infected (instead of 2)");
+                    lines.push(`§7  Requires: ${immuneHits} hits from Maple Bears to get infected (instead of ${normalHits})`);
                 } else if (hasWeaknessPotion || hasEnchantedApple) {
                     lines.push("§7  Components: §8??? (one component discovered)");
                 } else {
@@ -1331,7 +1441,7 @@ export function showCodexBook(player, context) {
             
             // Add snow effects if unlocked
             if (showSnowEffects) {
-                form.button("§bSnow Effects");
+                form.button("§b\"Snow\" Effects");
                 buttonIndex++;
             }
             
@@ -1434,7 +1544,7 @@ export function showCodexBook(player, context) {
                     const timingStr = [timing.early ? `early(${timing.early})` : null, timing.mid ? `mid(${timing.mid})` : null, timing.late ? `late(${timing.late})` : null].filter(Boolean).join(", ") || "unknown";
                     const sc = meta.snowCounts || {};
                     const snowStr = [sc.low ? `1-5(${sc.low})` : null, sc.mid ? `6-10(${sc.mid})` : null, sc.high ? `11+(${sc.high})` : null].filter(Boolean).join(", ") || "-";
-                    body = `§e${e.title}\n§7Sources: §f${srcs}\n§7Duration: §f${minDur}s - ${maxDur}s\n§7Amplifier: §f${minAmp} - ${maxAmp}\n§7Timing: §f${timingStr}\n§7Snow Count: §f${snowStr}`;
+                    body = `§e${e.title}\n§7Sources: §f${srcs}\n§7Duration: §f${minDur}s - ${maxDur}s\n§7Amplifier: §f${minAmp} - ${maxAmp}\n§7Timing: §f${timingStr}\n§7"Snow" Count: §f${snowStr}`;
                 }
                 new ActionFormData().title(`§6Infection Symptoms: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
                     const volumeMultiplier = getPlayerSoundVolume(player);
@@ -1465,10 +1575,10 @@ export function showCodexBook(player, context) {
         // Only show experienced snow effects
         const entries = allEntries.filter(e => codex.snowEffects[e.key]);
         
-        const form = new ActionFormData().title("§6Snow Effects");
+        const form = new ActionFormData().title("§6\"Snow\" Effects");
         
         if (entries.length === 0) {
-            form.body("§7No snow effects have been experienced yet.\n§8You need to consume snow while infected to unlock effect information.");
+            form.body("§7No \"snow\" effects have been experienced yet.\n§8You need to consume \"snow\" while infected to unlock effect information.");
             form.button("§8Back");
         } else {
             form.body("§7Select an effect to view details:");
@@ -1500,10 +1610,10 @@ export function showCodexBook(player, context) {
                 let body = "§e???";
                 if (known) {
                     const effectType = e.type === "positive" ? "§aBeneficial" : "§cHarmful";
-                    const description = e.type === "positive" ? "This effect provides benefits when consumed with snow." : "This effect causes negative effects when consumed with snow.";
-                    body = `§e${e.title}\n§7Type: ${effectType}\n§7Description: §f${description}\n\n§7This effect can be obtained by consuming snow while infected. The chance and intensity depend on your infection level.`;
+                    const description = e.type === "positive" ? "This effect provides benefits when consumed with \"snow\"." : "This effect causes negative effects when consumed with \"snow\".";
+                    body = `§e${e.title}\n§7Type: ${effectType}\n§7Description: §f${description}\n\n§7This effect can be obtained by consuming \"snow\" while infected. The chance and intensity depend on your infection level.`;
                 }
-                new ActionFormData().title(`§6Snow Effects: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
+                new ActionFormData().title(`§6"Snow" Effects: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
                     const volumeMultiplier = getPlayerSoundVolume(player);
                     player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                     openSnowEffects();
@@ -1666,9 +1776,10 @@ export function showCodexBook(player, context) {
                         body += "§7Effect: §aPermanent Immunity§7 - prevents minor infection on respawn.\n";
                     }
                 } else if (hasPermanentImmunity) {
+                    const addonImm = getAddonDifficultyState();
                     body += "§aYou have already cured your minor infection and gained permanent immunity.\n";
                     body += "§7You will never contract minor infection again.\n";
-                    body += "§7You now require 3 hits from Maple Bears to get infected (instead of 2).\n";
+                    body += `§7You now require ${addonImm.hitsBase} hits from Maple Bears to get infected (instead of ${Math.max(1, addonImm.hitsBase - 1)}).\n`;
                 } else {
                     body += "§7Cure: Golden Apple + Golden Carrot\n";
                     body += "§7Both must be consumed separately (any order).\n";
@@ -1685,10 +1796,11 @@ export function showCodexBook(player, context) {
             const hasProgressionKnowledge = hasHadMinorInfection && (codex.infections.major.discovered || hasPermanentImmunity);
             
             if (hasProgressionKnowledge) {
+                const minorToMajor = Math.max(1, getAddonDifficultyState().hitsBase - 1);
                 body += "§6Progression:\n";
                 body += "§7Minor infection can progress to major infection:\n";
-                body += "§7  • 2 hits from Maple Bears\n";
-                body += "§7  • OR 1 snow consumption\n";
+                body += `§7  • ${minorToMajor} hit${minorToMajor !== 1 ? "s" : ""} from Maple Bears\n`;
+                body += "§7  • OR 1 \"snow\" consumption\n";
                 body += "§cWarning: Minor infection is more easily treatable.\n";
                 body += "§cOnce it becomes major, the cure becomes much more difficult.\n";
             } else if (isMinor) {
@@ -1816,15 +1928,15 @@ export function showCodexBook(player, context) {
                         if (bearKnowledge >= 2 && killCount >= 25) {
                             body += `\n\n§6Combat Analysis:`;
                             if (e.key === "mapleBearSeen") {
-                                body += `\n§7Drop Rate: 60% chance\n§7Loot: 1 snow item\n§7Health: 1 HP\n§7Damage: 1`;
+                                body += `\n§7Drop Rate: 60% chance\n§7Loot: 1 "snow" item\n§7Health: 1 HP\n§7Damage: 1`;
                             } else if (e.key === "infectedBearSeen") {
-                                body += `\n§7Drop Rate: 80% chance\n§7Loot: 1-5 snow items\n§7Health: 20 HP\n§7Damage: 2.5`;
+                                body += `\n§7Drop Rate: 80% chance\n§7Loot: 1-5 "snow" items\n§7Health: 20 HP\n§7Damage: 2.5`;
                             } else if (e.key === "infectedPigSeen") {
-                                body += `\n§7Drop Rate: 75% chance\n§7Loot: 1-4 snow items\n§7Health: 10 HP\n§7Damage: 2\n§7Special: Can infect other mobs`;
+                                body += `\n§7Drop Rate: 75% chance\n§7Loot: 1-4 "snow" items\n§7Health: 10 HP\n§7Damage: 2\n§7Special: Can infect other mobs`;
                             } else if (e.key === "infectedCowSeen") {
-                                body += `\n§7Drop Rate: 75% chance\n§7Loot: 1-4 snow items\n§7Health: 10 HP\n§7Damage: 2`;
+                                body += `\n§7Drop Rate: 75% chance\n§7Loot: 1-4 "snow" items\n§7Health: 10 HP\n§7Damage: 2`;
                             } else if (e.key === "buffBearSeen") {
-                                body += `\n§7Drop Rate: 80% chance\n§7Loot: 3-15 snow items\n§7Health: 100 HP\n§7Damage: 8`;
+                                body += `\n§7Drop Rate: 80% chance\n§7Loot: 3-15 "snow" items\n§7Health: 100 HP\n§7Damage: 8`;
                             } else if (e.key === "flyingBearSeen") {
                                 body += `\n§7Drop Rate: 80% chance\n§7Loot: 2-6 'Snow' (Powder) shavings & aerial kit\n§7Health: 50 HP (Day 20 patrols climb higher)\n§7Damage: 10\n§7Special: 70% low swoops, 30% high patrols dusting you from above.`;
                             } else if (e.key === "miningBearSeen") {
@@ -1849,13 +1961,13 @@ export function showCodexBook(player, context) {
                                 variantInfo += `\n\n§eDay 4+ Variants:`;
                                 hasVariants = true;
                                 if (e.key === "mapleBearSeen") {
-                                    variantInfo += `\n§7Enhanced: 1 HP, 1.5 Damage, 65% drop rate, 1-2 snow items`;
+                                    variantInfo += `\n§7Enhanced: 1 HP, 1.5 Damage, 65% drop rate, 1-2 "snow" items`;
                                 } else if (e.key === "infectedBearSeen") {
-                                    variantInfo += `\n§7Enhanced: 25 HP, 2.5 Damage, 80% drop rate, 1-5 snow items`;
+                                    variantInfo += `\n§7Enhanced: 25 HP, 2.5 Damage, 80% drop rate, 1-5 "snow" items`;
                                 } else if (e.key === "infectedPigSeen") {
-                                    variantInfo += `\n§7Enhanced: 10 HP, 1 Damage, 80% drop rate, 1-5 snow items\n§7Special: Enhanced infection spread`;
+                                    variantInfo += `\n§7Enhanced: 10 HP, 1 Damage, 80% drop rate, 1-5 "snow" items\n§7Special: Enhanced infection spread`;
                                 } else if (e.key === "infectedCowSeen") {
-                                    variantInfo += `\n§7Enhanced: 10 HP, 1.5 Damage, 85% drop rate, 2-6 snow items\n§7Special: Improved conversion rate`;
+                                    variantInfo += `\n§7Enhanced: 10 HP, 1.5 Damage, 85% drop rate, 2-6 "snow" items\n§7Special: Improved conversion rate`;
                                 }
                             }
 
@@ -1863,13 +1975,13 @@ export function showCodexBook(player, context) {
                                 variantInfo += `\n\n§eDay 8+ Variants:`;
                                 hasVariants = true;
                                 if (e.key === "mapleBearSeen") {
-                                    variantInfo += `\n§7Advanced: 2 HP, 2 Damage, 70% drop rate, 1-3 snow items`;
+                                    variantInfo += `\n§7Advanced: 2 HP, 2 Damage, 70% drop rate, 1-3 "snow" items`;
                                 } else if (e.key === "infectedBearSeen") {
-                                    variantInfo += `\n§7Advanced: 25 HP, 4 Damage, 90% drop rate, 2-8 snow items`;
+                                    variantInfo += `\n§7Advanced: 25 HP, 4 Damage, 90% drop rate, 2-8 "snow" items`;
                                 } else if (e.key === "infectedPigSeen") {
-                                    variantInfo += `\n§7Advanced: 10 HP, 1 Damage, 90% drop rate, 2-8 snow items\n§7Special: Maximum infection spread`;
+                                    variantInfo += `\n§7Advanced: 10 HP, 1 Damage, 90% drop rate, 2-8 "snow" items\n§7Special: Maximum infection spread`;
                                 } else if (e.key === "infectedCowSeen") {
-                                    variantInfo += `\n§7Advanced: 10 HP, 1.5 Damage, 95% drop rate, 3-10 snow items\n§7Special: Maximum conversion rate`;
+                                    variantInfo += `\n§7Advanced: 10 HP, 1.5 Damage, 95% drop rate, 3-10 "snow" items\n§7Special: Maximum conversion rate`;
                                 }
                             }
 
@@ -1877,15 +1989,15 @@ export function showCodexBook(player, context) {
                                 variantInfo += `\n\n§eDay 13+ Variants:`;
                                 hasVariants = true;
                                 if (e.key === "mapleBearSeen") {
-                                    variantInfo += `\n§7Ultimate: 3 HP, 3 Damage, 75% drop rate, 1-4 snow items\n§7Special: Enhanced speed and reach`;
+                                    variantInfo += `\n§7Ultimate: 3 HP, 3 Damage, 75% drop rate, 1-4 "snow" items\n§7Special: Enhanced speed and reach`;
                                 } else if (e.key === "infectedBearSeen") {
-                                    variantInfo += `\n§7Ultimate: 50 HP, 6 Damage, 95% drop rate, 3-12 snow items\n§7Special: Maximum threat level`;
+                                    variantInfo += `\n§7Ultimate: 50 HP, 6 Damage, 95% drop rate, 3-12 "snow" items\n§7Special: Maximum threat level`;
                                 } else if (e.key === "infectedPigSeen") {
-                                    variantInfo += `\n§7Ultimate: 10 HP, 1 Damage, 95% drop rate, 3-12 snow items\n§7Special: Ultimate infection spread`;
+                                    variantInfo += `\n§7Ultimate: 10 HP, 1 Damage, 95% drop rate, 3-12 "snow" items\n§7Special: Ultimate infection spread`;
                                 } else if (e.key === "infectedCowSeen") {
-                                    variantInfo += `\n§7Ultimate: 10 HP, 1.5 Damage, 98% drop rate, 4-15 snow items\n§7Special: Ultimate conversion rate`;
+                                    variantInfo += `\n§7Ultimate: 10 HP, 1.5 Damage, 98% drop rate, 4-15 "snow" items\n§7Special: Ultimate conversion rate`;
                                 } else if (e.key === "buffBearSeen") {
-                                    variantInfo += `\n§7Ultimate: 150 HP, 10 Damage, 98% drop rate, 8-30 snow items\n§7Special: Ultimate combat mastery`;
+                                    variantInfo += `\n§7Ultimate: 150 HP, 10 Damage, 98% drop rate, 8-30 "snow" items\n§7Special: Ultimate combat mastery`;
                                 }
                             }
 
@@ -1901,11 +2013,11 @@ export function showCodexBook(player, context) {
                                 variantInfo += `\n\n§eDay 20+ Variants:`;
                                 hasVariants = true;
                                 if (e.key === "mapleBearSeen") {
-                                    variantInfo += `\n§7Ascended: 5 HP, 4 Damage, 80% drop rate, 3-15 snow items\n§7Special: Swift flanking and synchronized strikes`;
+                                    variantInfo += `\n§7Ascended: 5 HP, 4 Damage, 80% drop rate, 3-15 "snow" items\n§7Special: Swift flanking and synchronized strikes`;
                                 } else if (e.key === "infectedBearSeen") {
-                                    variantInfo += `\n§7Ascended: 40 HP, 8 Damage, 95% drop rate, 3-15 snow items\n§7Special: Dust saturation expands infection radius`;
+                                    variantInfo += `\n§7Ascended: 40 HP, 8 Damage, 95% drop rate, 3-15 "snow" items\n§7Special: Dust saturation expands infection radius`;
                                 } else if (e.key === "buffBearSeen") {
-                                    variantInfo += `\n§7Ascended: 200 HP, 12 Damage, 98% drop rate, 5-18 snow items\n§7Special: Long-range leaps and crushing roar`;
+                                    variantInfo += `\n§7Ascended: 200 HP, 12 Damage, 98% drop rate, 5-18 "snow" items\n§7Special: Long-range leaps and crushing roar`;
                                 }
                             }
 
@@ -2064,11 +2176,11 @@ export function showCodexBook(player, context) {
                         const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
                         
                         if (hasBeenInfected && hasFoundSnow && infectionKnowledge >= 1) {
-                            body = "§eSnow (Powder)\n§7Risky substance. Leads to symptoms and doom.";
+                            body = "§e\"Snow\" (Powder)\n§7Risky substance. Leads to symptoms and doom.";
                         } else if (codex.items.snowIdentified && infectionKnowledge >= 1) {
-                            body = "§eSnow (Powder)\n§7Risky substance. Leads to symptoms and doom.";
+                            body = "§e\"Snow\" (Powder)\n§7Risky substance. Leads to symptoms and doom.";
                         } else if (snowKnowledge >= 1) {
-                            body = "§eSnow (Powder)\n§7A mysterious white powder. You sense it has properties beyond what you currently understand.";
+                            body = "§e\"Snow\" (Powder)\n§7A mysterious white powder. You sense it has properties beyond what you currently understand.";
                         } else {
                             body = "§eUnknown White Substance\n§7A powdery white substance. You have no idea what this could be.";
                         }
@@ -2082,10 +2194,10 @@ export function showCodexBook(player, context) {
                         
                         if (totalKills < 5 && totalInfections === 0) {
                             // Basic journal info
-                            body = "§ePowdery Journal\n§7A leather-bound journal that documents your discoveries about the mysterious outbreak.\n\n§7Basic Features:\n§7• Tracks infection status\n§7• Records basic mob information\n§7• Simple discovery logging\n\n§7This journal appears to update itself with new information as you make discoveries.";
+                            body = "§ePowdery Journal\n§7A journal that records what you find about the outbreak.\n\n§7Basic:\n§7• Tracks infection\n§7• Records mobs\n§7• Logs discoveries\n\n§7It updates itself as you find new things.";
                         } else if (totalKills < 25 || totalInfections < 2) {
                             // Intermediate journal info
-                            body = "§ePowdery Journal\n§7A sophisticated journal that automatically documents your experiences with the mysterious outbreak.\n\n§7Enhanced Features:\n§7• Tracks infection status and progression\n§7• Records symptoms and effects observed\n§7• Documents mob encounters and analysis\n§7• Maintains detailed logs of discoveries\n§7• Provides basic analysis of substances\n\n§7The journal's behavior suggests it may be more than a simple book. Its true nature remains mysterious.";
+                            body = "§ePowdery Journal\n§7A journal that records your experiences with the outbreak.\n\n§7More:\n§7• Tracks infection and how it grows\n§7• Records symptoms and effects\n§7• Logs mob encounters\n§7• Keeps detailed discovery logs\n§7• Analyzes substances\n\n§7It may be more than a simple book. Its true nature is unknown.";
                         } else {
                             // Expert journal info
                             body = "§ePowdery Journal\n§7An anomalous journal that appears to be a sophisticated recording and analysis device. Its behavior suggests advanced technology or supernatural properties.\n\n§6Advanced Features:\n§7• Real-time infection monitoring and analysis\n§7• Comprehensive symptom tracking and correlation\n§7• Detailed mob behavior analysis and statistics\n§7• Tier-based substance analysis and warnings\n§7• Historical tracking of outbreak progression\n§7• Predictive modeling of infection patterns\n§7• Cross-reference analysis of discoveries\n\n§6Anomalous Properties:\n§7• Updates automatically without user input\n§7• Appears to have knowledge beyond user experience\n§7• Provides warnings about future dangers\n§7• Correlates data across multiple play sessions\n§7• Suggests awareness of broader outbreak scope\n\n§7Notes: This journal may be a key to understanding the true nature of the outbreak. Its capabilities far exceed normal documentation tools.";
@@ -2107,10 +2219,16 @@ export function showCodexBook(player, context) {
                             body = "§eCure Components\n§7Rumors suggest that certain items can reverse infections when used together.\n\n§7Suspected Components:\n§7• Weakness Potion: May weaken the infection\n§7• Enchanted Golden Apple: Provides healing energy\n§7• Timing: Must be used at specific moments" + hintText + "\n\n§8Note: Cure mechanism is not fully understood. Experimentation required.";
                         } else if (codex.cures.bearCureKnown && !hasCured) {
                             // Known cure info
-                            body = "§eCure Components\n§7A combination of items that can reverse infections when used together.\n\n§6For Major Infection:\n§7• Weakness Potion: Temporarily weakens the infection\n§7• Enchanted Golden Apple: Provides healing energy\n§7• Must be consumed while under weakness effect\n§7• Effect: Grants §aPermanent Immunity§7 (prevents minor infection on respawn)\n§7• Also grants: §bTemporary Immunity§7 (5 minutes)\n§7• Requires 3 hits from Maple Bears to get infected (instead of 2)\n\n§6For Minor Infection:\n§7• Golden Apple: Part of the cure\n§7• Golden Carrot: Part of the cure\n§7• Both must be consumed separately (any order)\n§7• Effect: Grants §aPermanent Immunity§7\n\n§7Mechanism:\n§7• Weakness reduces infection strength\n§7• Golden apple provides healing energy\n§7• Combined effect neutralizes infection\n\n§7Notes:\n§7• Major infection can be cured with proper timing\n§7• Minor infection can be cured with golden apple + golden carrot\n§7• Both cures grant permanent immunity\n§7• Cure process is irreversible once begun\n\n§aCure knowledge is precious - use it wisely.";
+                            const addonCure = getAddonDifficultyState();
+                            const immuneH = addonCure.hitsBase;
+                            const normalH = Math.max(1, addonCure.hitsBase - 1);
+                            body = "§eCure Components\n§7A combination of items that can reverse infections when used together.\n\n§6For Major Infection:\n§7• Weakness Potion: Temporarily weakens the infection\n§7• Enchanted Golden Apple: Provides healing energy\n§7• Must be consumed while under weakness effect\n§7• Effect: Grants §aPermanent Immunity§7 (prevents minor infection on respawn)\n§7• Also grants: §bTemporary Immunity§7 (5 minutes)\n§7• Requires " + immuneH + " hits from Maple Bears to get infected (instead of " + normalH + ")\n\n§6For Minor Infection:\n§7• Golden Apple: Part of the cure\n§7• Golden Carrot: Part of the cure\n§7• Both must be consumed separately (any order)\n§7• Effect: Grants §aPermanent Immunity§7\n\n§7Mechanism:\n§7• Weakness reduces infection strength\n§7• Golden apple provides healing energy\n§7• Combined effect neutralizes infection\n\n§7Notes:\n§7• Major infection can be cured with proper timing\n§7• Minor infection can be cured with golden apple + golden carrot\n§7• Both cures grant permanent immunity\n§7• Cure process is irreversible once begun\n\n§aCure knowledge is precious - use it wisely.";
                         } else {
                             // Expert cure info
-                            body = "§eCure Components\n§7A sophisticated combination of items that can reverse infections through precise biochemical manipulation.\n\n§6For Major Infection:\n§7• Weakness Potion: Creates temporary vulnerability in infection\n§7• Enchanted Golden Apple: Provides concentrated healing energy\n§7• Critical Timing: Must be consumed while under weakness effect\n§7• Effect: Grants §aPermanent Immunity§7 (prevents minor infection on respawn)\n§7• Also grants: §bTemporary Immunity§7 (5 minutes)\n§7• Requires 3 hits from Maple Bears to get infected (instead of 2)\n\n§6For Minor Infection:\n§7• Golden Apple: Essential component\n§7• Golden Carrot: Essential component\n§7• Both must be consumed separately (any order)\n§7• Effect: Grants §aPermanent Immunity§7\n\n§6Scientific Mechanism:\n§7• Weakness potion disrupts infection's cellular binding\n§7• Golden apple energy overwhelms infection's defenses\n§7• Combined effect creates complete neutralization\n§7• Process triggers permanent immunity response\n\n§6Advanced Notes:\n§7• Major infection: Curable with proper procedure (weakness + enchanted golden apple)\n§7• Minor infection: Curable with golden apple + golden carrot\n§7• Both cures grant permanent immunity - prevents minor infection on respawn\n§7• Temporary immunity also granted for major infection cure (5 minutes)\n§7• Cure process: Irreversible once initiated\n§7• Failure risk: High if timing is incorrect (for major infection)\n\n§6Expert Analysis:\n§7• Cure mechanism suggests infection has exploitable weaknesses\n§7• Permanent immunity indicates successful cure neutralizes infection permanently\n§7• Temporary immunity from major cure provides additional protection period\n§7• Both cure methods provide permanent immunity to minor infection\n§7• Cure knowledge represents critical survival information\n\n§aMastery of cure techniques is essential for long-term survival.";
+                            const addonExp = getAddonDifficultyState();
+                            const immuneHExp = addonExp.hitsBase;
+                            const normalHExp = Math.max(1, addonExp.hitsBase - 1);
+                            body = "§eCure Components\n§7A sophisticated combination of items that can reverse infections through precise biochemical manipulation.\n\n§6For Major Infection:\n§7• Weakness Potion: Creates temporary vulnerability in infection\n§7• Enchanted Golden Apple: Provides concentrated healing energy\n§7• Critical Timing: Must be consumed while under weakness effect\n§7• Effect: Grants §aPermanent Immunity§7 (prevents minor infection on respawn)\n§7• Also grants: §bTemporary Immunity§7 (5 minutes)\n§7• Requires " + immuneHExp + " hits from Maple Bears to get infected (instead of " + normalHExp + ")\n\n§6For Minor Infection:\n§7• Golden Apple: Essential component\n§7• Golden Carrot: Essential component\n§7• Both must be consumed separately (any order)\n§7• Effect: Grants §aPermanent Immunity§7\n\n§6Scientific Mechanism:\n§7• Weakness potion disrupts infection's cellular binding\n§7• Golden apple energy overwhelms infection's defenses\n§7• Combined effect creates complete neutralization\n§7• Process triggers permanent immunity response\n\n§6Advanced Notes:\n§7• Major infection: Curable with proper procedure (weakness + enchanted golden apple)\n§7• Minor infection: Curable with golden apple + golden carrot\n§7• Both cures grant permanent immunity - prevents minor infection on respawn\n§7• Temporary immunity also granted for major infection cure (5 minutes)\n§7• Cure process: Irreversible once initiated\n§7• Failure risk: High if timing is incorrect (for major infection)\n\n§6Expert Analysis:\n§7• Cure mechanism suggests infection has exploitable weaknesses\n§7• Permanent immunity indicates successful cure neutralizes infection permanently\n§7• Temporary immunity from major cure provides additional protection period\n§7• Both cure methods provide permanent immunity to minor infection\n§7• Cure knowledge represents critical survival information\n\n§aMastery of cure techniques is essential for long-term survival.";
                         }
                     } else if (e.key === "potionsSeen") {
                         // Progressive potion information
@@ -2150,14 +2268,15 @@ export function showCodexBook(player, context) {
                                 
                                 if (hasDiscoveredReduction) {
                                     body += "\n§7• Reduces infection severity when consumed while infected\n§7• Provides temporary relief from infection symptoms";
-                                    body += "\n\n§6Infection Reduction:\n§7• Consuming a golden apple while infected reduces the infection's hold\n§7• The effect is subtle but noticeable\n§7• Does not cure the infection, only reduces its severity\n§7• Multiple apples can provide cumulative relief\n§7• The relief is temporary - the infection continues to progress";
+                                    body += "\n\n§6Infection Reduction:\n§7• Eating a golden apple while infected weakens the infection\n§7• The effect is small but real\n§7• Does not cure, only eases it\n§7• More apples can help more\n§7• Relief is temporary—the infection keeps growing";
                                 }
                             }
                             
                             // Only show minor cure info if player has experienced minor infection
                             const hasHadMinorInfection = codex.infections.minor.discovered || isMinor || hasPermanentImmunity;
                             if (hasHadMinorInfection && hasSeenGoldenCarrot) {
-                                body += "\n\n§6Minor Infection Cure:\n§7• Part of the minor infection cure (along with Golden Carrot)\n§7• Must be consumed separately from Golden Carrot (any order)\n§7• Effect: Grants §aPermanent Immunity§7 when both components are consumed\n§7• Permanent immunity prevents minor infection on respawn\n§7• Permanent immunity requires 3 hits from Maple Bears to get infected (instead of 2)";
+                                const addonGA = getAddonDifficultyState();
+                                body += "\n\n§6Minor Infection Cure:\n§7• Part of the minor infection cure (along with Golden Carrot)\n§7• Must be consumed separately from Golden Carrot (any order)\n§7• Effect: Grants §aPermanent Immunity§7 when both components are consumed\n§7• Permanent immunity prevents minor infection on respawn\n§7• Permanent immunity requires " + addonGA.hitsBase + " hits from Maple Bears to get infected (instead of " + Math.max(1, addonGA.hitsBase - 1) + ")";
                             }
                             
                             if (hasSeenEnchantedApple && infectionKnowledge >= 2) {
@@ -2228,7 +2347,8 @@ export function showCodexBook(player, context) {
                             
                             // Only show detailed cure info if player has experienced minor infection
                             if (hasHadMinorInfection && (infectionKnowledge >= 2 || (isMinor && (hasGoldenApple || hasGoldenCarrot)) || hasPermanentImmunity)) {
-                                body += "\n\n§6Minor Infection Cure:\n§7• Must be consumed along with a Golden Apple to cure minor infection\n§7• Both items must be consumed separately (any order)\n§7• Effect: Grants §aPermanent Immunity§7\n§7• Permanent immunity prevents minor infection on respawn\n§7• Permanent immunity requires 3 hits from Maple Bears to get infected (instead of 2)";
+                                const addonGC = getAddonDifficultyState();
+                                body += "\n\n§6Minor Infection Cure:\n§7• Must be consumed along with a Golden Apple to cure minor infection\n§7• Both items must be consumed separately (any order)\n§7• Effect: Grants §aPermanent Immunity§7\n§7• Permanent immunity prevents minor infection on respawn\n§7• Permanent immunity requires " + addonGC.hitsBase + " hits from Maple Bears to get infected (instead of " + Math.max(1, addonGC.hitsBase - 1) + ")";
                             } else if (infectionKnowledge >= 1 && !hasHadMinorInfection) {
                                 body += "\n\n§7Research Notes:\n§7• Appears to have medical applications\n§7• May be related to infection treatment";
                             }
@@ -2352,7 +2472,8 @@ export function showCodexBook(player, context) {
                                 body += "\n§7• Has unique therapeutic applications";
                                 
                                 if (cureKnown || hasCured) {
-                                    body += "\n\n§6Major Infection Cure:\n§7• Part of the major infection cure (along with Weakness effect)\n§7• Must be consumed while under weakness effect\n§7• Effect: Grants §aPermanent Immunity§7 (prevents minor infection on respawn)\n§7• Also grants: §bTemporary Immunity§7 (5 minutes)\n§7• Permanent immunity requires 3 hits from Maple Bears to get infected (instead of 2)";
+                                    const addonEGA = getAddonDifficultyState();
+                                    body += "\n\n§6Major Infection Cure:\n§7• Part of the major infection cure (along with Weakness effect)\n§7• Must be consumed while under weakness effect\n§7• Effect: Grants §aPermanent Immunity§7 (prevents minor infection on respawn)\n§7• Also grants: §bTemporary Immunity§7 (5 minutes)\n§7• Permanent immunity requires " + addonEGA.hitsBase + " hits from Maple Bears to get infected (instead of " + Math.max(1, addonEGA.hitsBase - 1) + ")";
                                 } else if (infectionKnowledge >= 1) {
                                     body += "\n\n§7Research Notes:\n§7• May be required for advanced medical procedures\n§7• Appears to have applications in infection treatment";
                                 }
@@ -2530,7 +2651,7 @@ export function showCodexBook(player, context) {
             hasEntries = true;
             if (biomeKnowledge >= 2) {
                 // Advanced knowledge - show detailed biome data
-                body += "§fInfected Biome\n§7A corrupted landscape where the Maple Bear infection thrives. The ground is covered in a layer of white dust, and the very air feels heavy with an unsettling presence.\n\n";
+                body += "§fInfected Biome\n§7A corrupted place where the Maple Bear infection thrives. The ground is covered in white dust. The air feels heavy and wrong.\n\n";
 
                 // Show biome infection data if available
                 if (codex.biomeData && codex.biomeData.mb_infected_biome) {
@@ -2543,27 +2664,27 @@ export function showCodexBook(player, context) {
                     body += `§7Peak Infection Observed: §f${biomeData.maxInfectionLevel}/10\n`;
 
                     if (biomeKnowledge >= 3) {
-                        body += `\n§6Expert Notes:\n§7This biome appears to be the epicenter of the infection. The white dust seems to be both a symptom and a vector of the corruption.`;
+                        body += `\n§6Expert Notes:\n§7This biome is the heart of the infection. The white dust spreads the corruption.`;
                     }
                 }
                 
                 // Show ambient pressure info if discovered
                 if (codex.biomes.biomeAmbientPressureSeen) {
-                    body += `\n§6Ambient Effects:\n§7Merely being present in this biome gradually affects you. The air itself carries the infection, though at a much slower rate than direct contact with corrupted blocks.`;
+                    body += `\n§6Ambient Effects:\n§7Being in this biome slowly affects you. The air carries the infection, but slower than touching corrupted blocks.`;
                     
                     // Progressive knowledge about ground exposure
                     if (codex.biomes.minorToMajorFromGround || codex.biomes.majorGroundWarningSeen) {
-                        body += `\n\n§6Ground Exposure:\n§7Standing directly on corrupted blocks accelerates the infection far more than ambient exposure. The ground itself is the primary vector of corruption.`;
+                        body += `\n\n§6Ground Exposure:\n§7Standing on corrupted blocks speeds up the infection. The ground spreads it most.`;
                     }
                     
                     body += `\n`;
                 }
             } else if (biomeKnowledge >= 1) {
                 // Basic knowledge
-                body += "§fInfected Biome\n§7A corrupted landscape where strange creatures thrive. The ground is covered in a layer of white dust, and the very air feels heavy with an unsettling presence.";
+                body += "§fInfected Biome\n§7A corrupted place where strange creatures live. The ground is covered in white dust. The air feels heavy and wrong.";
             } else {
                 // Minimal knowledge
-                body += "§fCorrupted Biome\n§7You've discovered a strange area where the land itself seems wrong. White dust covers the ground, and you feel uneasy here.";
+                body += "§fCorrupted Biome\n§7A strange area where the land feels wrong. White dust covers the ground. You feel uneasy here.";
             }
             body += "\n\n";
         }
@@ -2573,50 +2694,50 @@ export function showCodexBook(player, context) {
             hasEntries = true;
             body += "§fDusted Dirt\n";
             if (codex.biomes.dustedDirtGroundEffectSeen) {
-                body += "§7Corrupted soil that spreads infection through direct contact. Standing on this block for extended periods will worsen your infection. The dust clings to your feet.";
+                body += "§7Corrupted soil that spreads infection when you stand on it. Standing here too long worsens your infection. The dust sticks to your feet.";
                 
                 // Progressive knowledge based on experience
                 if (codex.biomes.minorToMajorFromGround) {
-                    body += "\n\n§6Your Experience:\n§7You've learned firsthand that prolonged exposure to this corrupted ground can escalate a minor infection into something far worse. The corruption seeps deeper with each passing moment.";
+                    body += "\n\n§6Your Experience:\n§7Staying on this ground too long can turn a minor infection into something much worse.";
                 }
                 
                 if (codex.biomes.majorGroundWarningSeen) {
-                    body += "\n\n§6Advanced Knowledge:\n§7Even with a major infection, standing on this ground continues to worsen your condition. The corruption builds slowly but relentlessly.";
+                    body += "\n\n§6Advanced Knowledge:\n§7Even with a major infection, standing here still worsens your condition.";
                 }
                 
                 if (codex.biomes.majorSnowIncreaseFromGround) {
-                    body += "\n\n§6Critical Discovery:\n§7The ground itself seems to feed the infection within you. Your 'snow' level increases gradually while exposed, making the corruption more severe.";
+                    body += "\n\n§6Critical Discovery:\n§7This ground feeds the infection in you. Your 'snow' level goes up while you stand here.";
                 }
                 
                 body += "\n\n";
             } else {
-                body += "§7Corrupted soil found in infected biomes. The white dust covering it seems unnatural.\n\n";
+                body += "§7Corrupted soil in infected biomes. The white dust on it seems wrong.\n\n";
             }
         }
 
-        // Snow Layer Entry
+        // Snow Layer Entry (infected dust/powder layers—not cold)
         if (codex.biomes.snowLayerSeen) {
             hasEntries = true;
-            body += "§fInfected Snow Layer\n";
+            body += "§fInfected Dust Layer\n";
             if (codex.biomes.snowLayerGroundEffectSeen) {
-                body += "§7Corrupted snow that spreads infection faster than dusted dirt. Walking through these layers accelerates the infection process. The cold seems to intensify the corruption.";
+                body += "§7Layers of corrupted dust that spread infection faster than dusted dirt. Walking through them speeds up the infection. The dust here is thick and strong.";
                 
                 // Progressive knowledge based on experience
                 if (codex.biomes.minorToMajorFromGround) {
-                    body += "\n\n§6Your Experience:\n§7You've learned firsthand that prolonged exposure to these corrupted layers can escalate a minor infection into something far worse. The corruption spreads twice as fast here.";
+                    body += "\n\n§6Your Experience:\n§7Staying in these layers too long can turn a minor infection into something much worse. The corruption spreads twice as fast here.";
                 }
                 
                 if (codex.biomes.majorGroundWarningSeen) {
-                    body += "\n\n§6Advanced Knowledge:\n§7Even with a major infection, walking through these layers continues to worsen your condition. The corruption builds faster than on dusted dirt.";
+                    body += "\n\n§6Advanced Knowledge:\n§7Even with a major infection, walking through these layers still worsens your condition. Faster than dusted dirt.";
                 }
                 
                 if (codex.biomes.majorSnowIncreaseFromGround) {
-                    body += "\n\n§6Critical Discovery:\n§7These snow layers feed the infection within you more aggressively than dusted dirt. Your 'snow' level increases more rapidly while exposed.";
+                    body += "\n\n§6Critical Discovery:\n§7These dust layers feed the infection in you more than dusted dirt. Your 'snow' level goes up faster while exposed.";
                 }
                 
                 body += "\n\n";
             } else {
-                body += "§7Strange snow layers found in infected areas. They appear similar to normal snow but something feels wrong about them.\n\n";
+                body += "§7Strange dust layers found in infected areas. They look like pale powder; something feels wrong about them.\n\n";
             }
         }
 
@@ -2642,16 +2763,16 @@ export function showCodexBook(player, context) {
             entries.push({
                 id: "world",
                 title: "Day 20: World Memory",
-                summary: "How the land feels beneath the dust.",
-                body: "§eWorld Memory (Day 20)\n§7The air clings with powdered frost, and every echo feels rehearsed. Survivors whisper that the dust remembers our footsteps, retracing mistakes no one recalls making. The journal insists the world is keeping score."
+                summary: "How the land feels under the dust.",
+                body: "§eWorld Memory (Day 20)\n§7The air is heavy with dust. Survivors say the dust remembers our steps—mistakes no one recalls making. The journal says the world is keeping score."
             });
         }
         if (codex.journal?.day20TinyLoreUnlocked) {
             entries.push({
                 id: "tiny",
                 title: "Tiny Vanguard",
-                summary: "The small bears with sharpened intent.",
-                body: "§eTiny Vanguard\n§7The smallest Maple Bears no longer scatter at lanternlight. Their paws carve thin white lines through the snow, and packs of them move with a choreographed urgency. Whatever guides them now is patient, and it keeps count."
+                summary: "The small bears with sharp intent.",
+                body: "§eTiny Vanguard\n§7The smallest Maple Bears no longer run from light. Their paws cut thin lines through the dust. Packs move in sync. Whatever guides them is patient and keeps count."
             });
         }
         if (codex.journal?.day20InfectedLoreUnlocked) {
@@ -2659,20 +2780,20 @@ export function showCodexBook(player, context) {
                 id: "infected",
                 title: "Hollow Procession",
                 summary: "What the infected leave behind.",
-                body: "§eHollow Procession\n§7Infected Maple Bears move like pallbearers. Dust rolls off their shoulders in slow curtains, blanketing ground that never thaws. They hum without voices, and livestock fall silent long before they arrive."
+                body: "§eHollow Procession\n§7Infected Maple Bears move like they carry something heavy. Dust rolls off their shoulders and covers the ground. They hum without voices. Animals go quiet long before they arrive."
             });
         }
         if (codex.journal?.day20BuffLoreUnlocked) {
             entries.push({
                 id: "buff",
                 title: "Skybreaker",
-                summary: "Notes on the heaviest footsteps.",
-                body: "§eSkybreaker\n§7Buff Maple Bears clear the treeline in a single bound now. When they land, snow shivers off nearby hills, and the dust swarms back into place as if the wind itself obeys them. Standing your ground only teaches them where to land next."
+                summary: "Notes on the heaviest bears.",
+                body: "§eSkybreaker\n§7Buff Maple Bears clear the treeline in one jump. When they land, dust flies off the hills and settles back."
             });
         }
 
         const form = new ActionFormData().title("§6Late Lore");
-        form.body(entries.length > 0 ? "§7Recovered observations:" : "§7No late entries recorded yet.");
+        form.body(entries.length > 0 ? "§7Recovered notes:" : "§7No late entries yet.");
 
         for (const entry of entries) {
             form.button(`§f${entry.title}\n§8${entry.summary}`);
@@ -2691,7 +2812,7 @@ export function showCodexBook(player, context) {
             player.playSound("mb.codex_turn_page", { pitch: 0.9, volume: 0.7 * volumeMultiplier });
             new ActionFormData()
                 .title(`§6Late Lore: ${entry.title}`)
-                .body(`${entry.body}\n\n§8The journal records what we would rather forget.`)
+                .body(`${entry.body}\n\n§8The journal records what we'd rather forget.`)
                 .button("§8Back")
                 .show(player)
                 .then(() => {
@@ -2809,7 +2930,7 @@ export function showCodexBook(player, context) {
                     const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
                     if (infectionKnowledge >= 3) {
                         body += `\n§6Day 20 Knowledge:\n`;
-                        body += `§7At Day 20, the infection reaches maximum conversion rate (100%). Bear attacks and snow consumption become far more dangerous. The infection spreads faster and more efficiently at this stage.`;
+                        body += `§7At Day 20, the infection reaches maximum conversion rate (100%). Bear attacks and "snow" consumption become far more dangerous. The infection spreads faster and more efficiently at this stage.`;
                     } else if (infectionKnowledge >= 2) {
                         body += `\n§6Day 20 Knowledge:\n`;
                         body += `§7At Day 20, the infection reaches its peak intensity. Conversion rates are maximized.`;
@@ -2958,14 +3079,22 @@ export function showCodexBook(player, context) {
     function openDeveloperTools() {
         const options = [
             { label: "§fScript Toggles", action: () => openScriptTogglesMenu() },
+            { label: "§aFully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage("§aCodex fully unlocked."); openDeveloperTools(); } },
             { label: "§fReset My Codex", action: () => triggerDebugCommand("reset_codex") },
             { label: "§fReset World Day to 1", action: () => triggerDebugCommand("reset_day") },
             { label: "§fSet Day...", action: () => promptSetDay() },
-            { label: "§fSpawn Difficulty", action: () => openSpawnDifficultyMenu() }
+            { label: "§fSpawn Difficulty", action: () => openSpawnDifficultyMenu() },
+            { label: "§fClear / Set Infection", action: () => openInfectionDevMenu() },
+            { label: "§fGrant / Remove Immunity", action: () => openImmunityDevMenu() },
+            { label: "§fReset Intro", action: () => triggerDebugCommand("reset_intro", [], () => openDeveloperTools()) },
+            { label: "§fList Nearby Bears", action: () => triggerDebugCommand("list_bears", [], () => openDeveloperTools()) },
+            { label: "§fForce Spawn", action: () => openForceSpawnMenu() },
+            { label: "§fDump Codex State", action: () => triggerDebugCommand("dump_codex", [], () => openDeveloperTools()) },
+            { label: "§fSet Kill Counts", action: () => openSetKillCountMenu() }
         ];
 
         const form = new ActionFormData().title("§cDeveloper Tools");
-        form.body("§7Debug utilities. §8Script Toggles: enable/disable scripts if things break.");
+        form.body("§7Debug utilities. §8Fully Unlock: unlock all codex content. Reset: clear all codex data. Script Toggles: enable/disable scripts if things break.");
         for (const opt of options) {
             form.button(opt.label);
         }
@@ -3094,6 +3223,189 @@ export function showCodexBook(player, context) {
 
             triggerDebugCommand("set_spawn_difficulty_value", [String(parsed)], () => openSpawnDifficultyMenu());
         }).catch(() => openSpawnDifficultyMenu());
+    }
+
+    function openInfectionDevMenu() {
+        const form = new ActionFormData()
+            .title("§cClear / Set Infection")
+            .body("§7Clear infection state or set minor/major infection for testing.");
+        form.button("§cClear Infection");
+        form.button("§eSet Minor Infection");
+        form.button("§4Set Major Infection");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 3) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            if (res.selection === 0) triggerDebugCommand("clear_infection", [], () => openInfectionDevMenu());
+            else if (res.selection === 1) triggerDebugCommand("set_infection", ["minor"], () => openInfectionDevMenu());
+            else if (res.selection === 2) triggerDebugCommand("set_infection", ["major"], () => openInfectionDevMenu());
+            else openDeveloperTools();
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openImmunityDevMenu() {
+        const form = new ActionFormData()
+            .title("§cGrant / Remove Immunity")
+            .body("§7Grant permanent or temporary immunity, or remove immunity.");
+        form.button("§aGrant Permanent Immunity");
+        form.button("§bGrant Temporary Immunity (5 min)");
+        form.button("§cRemove Immunity");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 3) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            if (res.selection === 0) triggerDebugCommand("grant_immunity", ["permanent"], () => openImmunityDevMenu());
+            else if (res.selection === 1) triggerDebugCommand("grant_immunity", ["temporary"], () => openImmunityDevMenu());
+            else if (res.selection === 2) triggerDebugCommand("remove_immunity", [], () => openImmunityDevMenu());
+            else openDeveloperTools();
+        }).catch(() => openDeveloperTools());
+    }
+
+    const FORCE_SPAWN_OPTIONS = [
+        { id: "mb:mb_day00", label: "Tiny (day 0)" },
+        { id: "mb:mb_day04", label: "Tiny (day 4)" },
+        { id: "mb:mb_day08", label: "Tiny (day 8)" },
+        { id: "mb:mb_day13", label: "Tiny (day 13)" },
+        { id: "mb:mb_day20", label: "Tiny (day 20)" },
+        { id: "mb:infected", label: "Infected" },
+        { id: "mb:infected_day08", label: "Infected (day 8)" },
+        { id: "mb:infected_day13", label: "Infected (day 13)" },
+        { id: "mb:infected_day20", label: "Infected (day 20)" },
+        { id: "mb:buff_mb", label: "Buff" },
+        { id: "mb:buff_mb_day13", label: "Buff (day 13)" },
+        { id: "mb:buff_mb_day20", label: "Buff (day 20)" },
+        { id: "mb:flying_mb", label: "Flying" },
+        { id: "mb:flying_mb_day15", label: "Flying (day 15)" },
+        { id: "mb:flying_mb_day20", label: "Flying (day 20)" },
+        { id: "mb:mining_mb", label: "Mining" },
+        { id: "mb:mining_mb_day20", label: "Mining (day 20)" },
+        { id: "mb:torpedo_mb", label: "Torpedo" },
+        { id: "mb:torpedo_mb_day20", label: "Torpedo (day 20)" }
+    ];
+
+    function openForceSpawnMenu() {
+        const form = new ActionFormData()
+            .title("§cForce Spawn")
+            .body("§7Spawn a bear type near you or another player.");
+        for (const opt of FORCE_SPAWN_OPTIONS) {
+            form.button(`§f${opt.label} §8(${opt.id})`);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === FORCE_SPAWN_OPTIONS.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const opt = FORCE_SPAWN_OPTIONS[res.selection];
+            if (opt) openForceSpawnTargetMenu(opt);
+            else openDeveloperTools();
+        }).catch(() => openDeveloperTools());
+    }
+
+    const FORCE_SPAWN_DISTANCES = [
+        { value: "2", label: "Near (2 blocks)" },
+        { value: "5", label: "5 blocks" },
+        { value: "10", label: "10 blocks" },
+        { value: "15", label: "15 blocks" },
+        { value: "20", label: "20 blocks" },
+        { value: "random", label: "Random (within 20 blocks)" }
+    ];
+
+    function openForceSpawnTargetMenu(opt) {
+        const allPlayers = world.getAllPlayers();
+        const otherPlayers = allPlayers.filter(p => p && p.id !== player.id);
+        const form = new ActionFormData()
+            .title("§cForce Spawn — Target")
+            .body(`§7Spawn §f${opt.label}§7 near whom?`);
+        form.button("§aNear me");
+        for (const p of otherPlayers) {
+            form.button(`§f${p.name}`);
+        }
+        form.button("§8Back");
+        const totalOptions = 1 + otherPlayers.length;
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === totalOptions) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openForceSpawnMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const targetName = res.selection === 0 ? undefined : (otherPlayers[res.selection - 1]?.name);
+            if (res.selection === 0 || targetName) openForceSpawnDistanceMenu(opt, targetName);
+            else openForceSpawnMenu();
+        }).catch(() => openForceSpawnMenu());
+    }
+
+    function openForceSpawnDistanceMenu(opt, targetName) {
+        const form = new ActionFormData()
+            .title("§cForce Spawn — Distance")
+            .body(`§7How far from the target? §8(Target: ${targetName ? targetName : "you"})`);
+        for (const d of FORCE_SPAWN_DISTANCES) {
+            form.button(`§f${d.label}`);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === FORCE_SPAWN_DISTANCES.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openForceSpawnTargetMenu(opt);
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const distOpt = FORCE_SPAWN_DISTANCES[res.selection];
+            if (distOpt) {
+                const args = [opt.id];
+                if (targetName) args.push(targetName);
+                args.push(distOpt.value);
+                triggerDebugCommand("force_spawn", args, () => openForceSpawnMenu());
+            } else openForceSpawnTargetMenu(opt);
+        }).catch(() => openForceSpawnTargetMenu(opt));
+    }
+
+    const KILL_COUNT_KEYS = [
+        { key: "tinyBearKills", label: "Tiny Bear" },
+        { key: "infectedBearKills", label: "Infected Bear" },
+        { key: "infectedPigKills", label: "Infected Pig" },
+        { key: "infectedCowKills", label: "Infected Cow" },
+        { key: "buffBearKills", label: "Buff Bear" },
+        { key: "flyingBearKills", label: "Flying Bear" },
+        { key: "miningBearKills", label: "Mining Bear" },
+        { key: "torpedoBearKills", label: "Torpedo Bear" }
+    ];
+
+    function openSetKillCountMenu() {
+        const form = new ActionFormData()
+            .title("§cSet Kill Counts")
+            .body("§7Set codex kill count for a mob type (for testing achievements/entries).");
+        for (const opt of KILL_COUNT_KEYS) {
+            const codex = getCodex(player);
+            const current = codex.mobs?.[opt.key] ?? 0;
+            form.button(`§f${opt.label} §8(current: ${current})`);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === KILL_COUNT_KEYS.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const opt = KILL_COUNT_KEYS[res.selection];
+            if (!opt) return openDeveloperTools();
+            const codex = getCodex(player);
+            const current = codex.mobs?.[opt.key] ?? 0;
+            const modal = new ModalFormData()
+                .title("§cSet Kill Count")
+                .slider("Value (0–500)", 0, 500, { valueStep: 1, defaultValue: Math.min(500, Math.max(0, current)) });
+            modal.show(player).then((modalRes) => {
+                if (!modalRes || modalRes.canceled) return openSetKillCountMenu();
+                const value = typeof modalRes.formValues?.[0] === "number" ? Math.round(modalRes.formValues[0]) : current;
+                triggerDebugCommand("set_kill_count", [opt.key, String(value)], () => openSetKillCountMenu());
+            }).catch(() => openSetKillCountMenu());
+        }).catch(() => openDeveloperTools());
     }
 
     function triggerDebugCommand(subcommand, args = [], onComplete = () => openDeveloperTools()) {
@@ -3714,7 +4026,12 @@ export function showCodexBook(player, context) {
         const settings = getSettings();
         const codex = getCodex(player);
         
-        // Get spawn difficulty state (for display only, not editable here)
+        // Addon difficulty (world): -1 Easy, 0 Normal, 1 Hard
+        const addonDifficultyValue = getAddonDifficultyState().value;
+        const addonDifficultyIndex = Math.max(0, Math.min(2, addonDifficultyValue + 1)); // Easy=0, Normal=1, Hard=2
+        const canEditDifficulty = canChangeBeta(player);
+        
+        // Spawn difficulty (display; dev tool can override)
         const spawnValue = getSpawnDifficultyValue();
         let spawnBoostText = "Normal (0)";
         if (spawnValue === -1) spawnBoostText = "Easy (-1)";
@@ -3726,8 +4043,9 @@ export function showCodexBook(player, context) {
         // Convert soundVolume (0-1) to slider value (0-10)
         const volumeSliderValue = Math.round((settings.soundVolume || 1.0) * 10);
         
-        // Create dropdown options for bear/block volumes
+        // Create dropdown options for bear/block volumes and addon difficulty
         const volumeOptions = ["Off", "Low", "High"];
+        const difficultyOptions = ["Easy", "Normal", "Hard"];
         const bearVolIndex = Math.max(0, Math.min(2, settings.bearSoundVolume || 2));
         const breakVolIndex = Math.max(0, Math.min(2, settings.blockBreakVolume || 2));
         
@@ -3739,14 +4057,15 @@ export function showCodexBook(player, context) {
                 .toggle("Audio Messages", { defaultValue: settings.audioMessages !== false })
                 .dropdown("Bear Sound Volume", volumeOptions, { defaultValueIndex: bearVolIndex })
                 .dropdown("Block Break Volume", volumeOptions, { defaultValueIndex: breakVolIndex })
-                .toggle("Show Search Button", { defaultValue: settings.showSearchButton !== false });
+                .toggle("Show Search Button", { defaultValue: settings.showSearchButton !== false })
+                .dropdown((hasCheats(player) ? "Addon Difficulty — Spawn: E 0.7× N 1× H 1.3×. Major hits (from nothing): E 4 N 3 H 2. Major hits (from minor): E 3 N 2 H 1. Infection decay: E 0.8× N 1× H 1.2×. Mining interval: E 1.2× N 1× H 0.5×. Torpedo max blocks: E 0.85× N 1× H 2×." : "Addon Difficulty") + (canEditDifficulty ? "" : " §8(read-only)"), difficultyOptions, { defaultValueIndex: addonDifficultyIndex });
             
             form.show(player).then((res) => {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 
                 // Save settings if form values exist (whether submitted or canceled)
                 // ModalFormData may provide formValues even when canceled if user interacted with form
-                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 6) {
+                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 7) {
                     // Convert slider value (0-10) back to float (0-1)
                     const sliderValue = typeof res.formValues[0] === 'number' 
                         ? Math.max(0, Math.min(10, Math.round(Number(res.formValues[0]))))
@@ -3759,6 +4078,15 @@ export function showCodexBook(player, context) {
                     settings.bearSoundVolume = typeof res.formValues[3] === 'number' ? Math.max(0, Math.min(2, res.formValues[3])) : bearVolIndex;
                     settings.blockBreakVolume = typeof res.formValues[4] === 'number' ? Math.max(0, Math.min(2, res.formValues[4])) : breakVolIndex;
                     settings.showSearchButton = Boolean(res.formValues[5]);
+                    
+                    // Addon difficulty (world): only first joiner or mb_cheats can change
+                    if (canEditDifficulty && typeof res.formValues[6] === 'number') {
+                        const selectedIndex = Math.max(0, Math.min(2, Math.floor(res.formValues[6])));
+                        const newAddonValue = selectedIndex === 0 ? -1 : selectedIndex === 1 ? 0 : 1;
+                        setWorldProperty(ADDON_DIFFICULTY_PROPERTY, newAddonValue);
+                        // Sync spawn difficulty to match (can be overridden later in Developer Tools)
+                        setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, newAddonValue);
+                    }
                     
                     // Save to codex (auto-save on any form close - submit or cancel)
                     saveCodex(player, codex);
@@ -3838,8 +4166,8 @@ export function showCodexBook(player, context) {
             
             // Search items
             const itemEntries = [
-                { key: "snowFound", title: "Snow", section: "Items" },
-                { key: "snowIdentified", title: "Snow Identified", section: "Items" },
+                { key: "snowFound", title: "\"Snow\"", section: "Items" },
+                { key: "snowIdentified", title: "\"Snow\" Identified", section: "Items" },
                 { key: "snowBookCrafted", title: "Powdery Journal", section: "Items" },
                 { key: "cureItemsSeen", title: "Cure Items", section: "Items" },
                 { key: "brewingStandSeen", title: "Brewing Stand", section: "Items" }
@@ -4309,7 +4637,7 @@ function playJournalIntroAudio(player) {
 
 function showGoalScreen(player) {
     const form = new ActionFormData().title("§6Your Goal");
-    form.body(`§eThe Infection\n\n§7Your world has been infected by a mysterious white powder. Strange creatures called "Maple Bears" are spreading this infection.\n\n§eYour Objectives:\n§7• Survive the infection.\n§7• Learn about the bears and their behavior.\n§7• Discover how to cure yourself, if you get infected.\n§7• Upgrade this journal to track your progress and find the cure.\n§7• Find a way to cure your infection before you degrade.\n\n§cIMPORTANT: §7Upgrading your journal is essential for discovering cures and tracking your infection status. Without the upgraded journal, you won't be able to learn crucial information about infections, cures, and treatments.\n\n§7The infection gets worse over time. Stay alert!`);
+    form.body(`§eThe Infection\n\n§7Your world has been infected by a mysterious white powder. Strange creatures called "Maple Bears" are spreading this infection.\n\n§eYour Objectives:\n§7• Survive the infection.\n§7• Discover how to cure yourself.\n§7• Learn about the bears and their behavior.\n§7• Upgrade this journal to track your progress and find the cure.\n§7• Find a way to cure your infection before you degrade and it worsens.\n\n§cIMPORTANT: §7Upgrading your journal is essential for discovering cures and tracking your infection status. Without the upgraded journal, you won't be able to learn crucial information about infections, cures, and treatments.\n\n§7The infection gets worse over time. Stay alert!`);
     form.button("§8Back");
     form.show(player).then((res) => {
         if (res.canceled) {

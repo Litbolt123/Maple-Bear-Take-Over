@@ -4,6 +4,7 @@ import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.
 import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCachedPlayers, getCachedMobs } from "./mb_sharedCache.js";
+import { getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 
 // Debug helper functions
 function getDebugGeneral() {
@@ -58,6 +59,14 @@ const TORPEDO_TYPES = [
     { id: "mb:torpedo_mb", cruiseMin: 60, cruiseMax: 150, diveRange: 70, forwardForce: 0.55, breaksPerTick: 15, structureScanRadius: 6, minY: 60, maxBlocks: 50 },
     { id: "mb:torpedo_mb_day20", cruiseMin: 70, cruiseMax: 180, diveRange: 80, forwardForce: 0.65, breaksPerTick: 18, structureScanRadius: 8, minY: 70, maxBlocks: 50 }
 ];
+
+/** Max blocks a torpedo can break per dive, scaled by addon difficulty (Easy: less, Hard: more). */
+function getEffectiveTorpedoMaxBlocks(config) {
+    const base = config?.maxBlocks ?? 50;
+    const mult = getAddonDifficultyState().torpedoMaxBlocksMultiplier;
+    return Math.max(1, Math.round(base * mult));
+}
+
 const DRIFT_FORCE = 0.03; // Reduced for straighter movement
 const ALTITUDE_CORRECTION_FORCE = 0.5; // Increased for aggressive sky staying
 const DIVE_BOOST_MULTIPLIER = 2.5; // High speed diving multiplier
@@ -109,7 +118,7 @@ function incrementBreakCount(entity) {
 
 function checkTorpedoExhaustion(entity, config) {
     const breakCount = getBreakCount(entity);
-    if (breakCount >= config.maxBlocks) {
+    if (breakCount >= getEffectiveTorpedoMaxBlocks(config)) {
         // Torpedo is exhausted - explode on death
         const loc = entity.location;
         const dimension = entity.dimension;
@@ -506,7 +515,7 @@ function breakStructureBlocks(dimension, blocks, limit, entity = null, config = 
         // Check break count if entity and config provided
         if (entity && config) {
             const breakCount = getBreakCount(entity);
-            if (breakCount >= config.maxBlocks) {
+            if (breakCount >= getEffectiveTorpedoMaxBlocks(config)) {
                 checkTorpedoExhaustion(entity, config);
                 break;
             }
@@ -597,7 +606,7 @@ function breakBlocksInPath(entity, direction, config) {
         
         // Check break count before breaking
         const breakCount = getBreakCount(entity);
-        if (breakCount >= config.maxBlocks) {
+        if (breakCount >= getEffectiveTorpedoMaxBlocks(config)) {
             checkTorpedoExhaustion(entity, config);
             continue;
         }
@@ -649,7 +658,7 @@ function breakBlocksAboveEntity(entity, maxHeight, config) {
         if (UNBREAKABLE_BLOCKS.has(typeId)) continue;
         
         const breakCount = getBreakCount(entity);
-        if (breakCount >= config.maxBlocks) {
+        if (breakCount >= getEffectiveTorpedoMaxBlocks(config)) {
             checkTorpedoExhaustion(entity, config);
             continue;
         }
