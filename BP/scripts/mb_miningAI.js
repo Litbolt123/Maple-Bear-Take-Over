@@ -128,7 +128,9 @@ function getMiningInterval() {
         const raw = Math.floor(11 - (10 / 9) * (currentDay - 15));
         interval = Math.max(1, Math.min(11, raw));
     }
-    const effective = Math.round(interval * difficulty.miningIntervalMultiplier);
+    let multiplier = Number(difficulty?.miningIntervalMultiplier);
+    if (!isFinite(multiplier)) multiplier = 1;
+    const effective = Math.round(interval * multiplier);
     return Math.max(1, Math.min(20, effective)); // Clamp 1–20 so Easy doesn't go above 20
   }
   

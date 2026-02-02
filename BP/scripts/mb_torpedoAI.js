@@ -63,8 +63,9 @@ const TORPEDO_TYPES = [
 /** Max blocks a torpedo can break per dive, scaled by addon difficulty (Easy: less, Hard: more). */
 function getEffectiveTorpedoMaxBlocks(config) {
     const base = config?.maxBlocks ?? 50;
-    const mult = getAddonDifficultyState().torpedoMaxBlocksMultiplier;
-    return Math.max(1, Math.round(base * mult));
+    const mult = Number(getAddonDifficultyState().torpedoMaxBlocksMultiplier);
+    const safeMult = Number.isFinite(mult) ? mult : 1;
+    return Math.max(1, Math.round(base * safeMult));
 }
 
 const DRIFT_FORCE = 0.03; // Reduced for straighter movement

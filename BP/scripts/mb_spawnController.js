@@ -5712,8 +5712,12 @@ system.runInterval(() => {
             chanceMultiplier *= SUNRISE_BOOST_MULTIPLIER;
         }
         chanceMultiplier *= spawnDifficultyState.multiplier;
-        chanceMultiplier *= getAddonDifficultyState().spawnMultiplier;
-        chanceMultiplier *= weatherMultiplier; // Apply weather effect
+        const addonState = getAddonDifficultyState();
+        const rawAddonSpawn = addonState?.spawnMultiplier;
+        const validatedAddonSpawnMultiplier = (rawAddonSpawn != null && Number.isFinite(Number(rawAddonSpawn))) ? Number(rawAddonSpawn) : 1;
+        chanceMultiplier *= validatedAddonSpawnMultiplier;
+        const validatedWeatherMultiplier = Number.isFinite(Number(weatherMultiplier)) ? Number(weatherMultiplier) : 1;
+        chanceMultiplier *= validatedWeatherMultiplier; // Apply weather effect
 
         let extraCount = 0;
         if (density > 140) {

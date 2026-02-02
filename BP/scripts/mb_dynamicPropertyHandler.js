@@ -269,11 +269,9 @@ export const ADDON_DIFFICULTY_PROPERTY = "mb_addonDifficulty";
  * @returns {{ value: number, spawnMultiplier: number, hitsBase: number, infectionDecayMultiplier: number, miningIntervalMultiplier: number, torpedoMaxBlocksMultiplier: number }}
  */
 export function getAddonDifficultyState() {
-    let raw = getWorldProperty(ADDON_DIFFICULTY_PROPERTY);
-    if (typeof raw !== "number") {
-        raw = 0;
-    }
-    const value = Math.max(-1, Math.min(1, raw));
+    const raw = getWorldProperty(ADDON_DIFFICULTY_PROPERTY);
+    const num = Number(raw);
+    const value = Math.max(-1, Math.min(1, Number.isNaN(num) ? 0 : num));
     if (value === -1) {
         return { value: -1, spawnMultiplier: 0.7, hitsBase: 4, infectionDecayMultiplier: 0.8, miningIntervalMultiplier: 1.2, torpedoMaxBlocksMultiplier: 0.85 };
     }
