@@ -4,7 +4,7 @@ import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.
 import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCachedPlayers, getCachedMobs } from "./mb_sharedCache.js";
-import { getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
+import { getAddonDifficultyState, getWorldProperty } from "./mb_dynamicPropertyHandler.js";
 
 // Debug helper functions
 function getDebugGeneral() {
@@ -376,13 +376,39 @@ function findTarget(entity, maxDistance) {
     
     const origin = entity.location;
     const maxDistSq = maxDistance * maxDistance;
+    const dimensionId = dimension?.id;
+
+    // Dev tool: force all bears to target a specific player
+    const forceTargetName = getWorldProperty("mb_force_target_player");
+    if (forceTargetName && typeof forceTargetName === "string" && dimensionId) {
+        const forcePlayer = getCachedPlayers().find(p => p && p.name === forceTargetName && p.dimension?.id === dimensionId);
+        if (forcePlayer) {
+            try {
+                if (forcePlayer.getGameMode?.() !== "creative" && forcePlayer.getGameMode?.() !== "spectator") {
+                    const dx = forcePlayer.location.x - origin.x;
+                    const dy = forcePlayer.location.y - origin.y;
+                    const dz = forcePlayer.location.z - origin.z;
+                    const distSq = dx * dx + dy * dy + dz * dz;
+                    if (distSq <= maxDistSq) {
+                        const targetInfo = {
+                            entity: forcePlayer,
+                            location: forcePlayer.location,
+                            vector: { x: dx, y: dy, z: dz }
+                        };
+                        targetCache.set(entity.id, { target: targetInfo, tick: currentTick });
+                        return targetInfo;
+                    }
+                }
+            } catch { }
+        }
+    }
+
     let best = null;
     let bestDistSq = maxDistSq;
     const config = TORPEDO_TYPES.find(c => c.id === entity.typeId);
     const minY = config?.minY || MIN_STRUCTURE_Y;
 
     // Prioritize players (skip creative and spectator mode)
-    // Use shared cache instead of querying all players again
     const allPlayers = getCachedPlayers();
     for (const player of allPlayers) {
         if (player.dimension !== dimension) continue;

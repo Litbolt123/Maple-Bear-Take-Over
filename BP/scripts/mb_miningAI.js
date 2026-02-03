@@ -1,7 +1,7 @@
 import { system, world, ItemStack } from "@minecraft/server";
 import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
 import { getCurrentDay } from "./mb_dayTracker.js";
-import { getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
+import { getAddonDifficultyState, getWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getCachedPlayers, getCachedPlayerPositions, getCachedMobs } from "./mb_sharedCache.js";
@@ -6572,13 +6572,40 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS, useCache = 
     
     const origin = entity.location;
     const maxDistSq = maxDistance * maxDistance;
+    const dimensionId = dimension?.id;
+
+    // Dev tool: force all bears to target a specific player
+    const forceTargetName = getWorldProperty("mb_force_target_player");
+    if (forceTargetName && typeof forceTargetName === "string" && dimensionId) {
+        const forcePlayer = getCachedPlayers().find(p => p && p.name === forceTargetName && p.dimension?.id === dimensionId);
+        if (forcePlayer) {
+            try {
+                if (forcePlayer.getGameMode?.() !== "creative" && forcePlayer.getGameMode?.() !== "spectator") {
+                    const dx = forcePlayer.location.x - origin.x;
+                    const dy = forcePlayer.location.y - origin.y;
+                    const dz = forcePlayer.location.z - origin.z;
+                    const distSq = dx * dx + dy * dy + dz * dz;
+                    if (distSq <= maxDistSq) {
+                        const targetInfo = {
+                            entity: forcePlayer,
+                            location: forcePlayer.location,
+                            vector: { x: dx, y: dy, z: dz },
+                            distanceSq: distSq
+                        };
+                        targetCache.set(entityId, { target: targetInfo, tick: currentTick });
+                        return targetInfo;
+                    }
+                }
+            } catch { }
+        }
+    }
+
     let best = null;
     let bestDistSq = maxDistSq;
     let bestPlayer = null;
     let bestPlayerDistSq = maxDistSq;
 
     // FIRST PASS: Find the closest player (ALWAYS prioritize players over mobs)
-    // Use shared cache instead of querying all players again
     const allPlayers = getCachedPlayers();
     if (getDebugTarget()) {
         console.warn(`[MINING AI] findNearestTarget: Checking ${allPlayers.length} players, maxDistance=${maxDistance}, entity=${entity.id.substring(0, 8)}`);

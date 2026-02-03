@@ -2,6 +2,7 @@ import { system, world } from "@minecraft/server";
 import { getCachedPlayers, getCachedPlayerPositions, getCachedMobs } from "./mb_sharedCache.js";
 import { isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
+import { getWorldProperty } from "./mb_dynamicPropertyHandler.js";
 
 // Debug helper functions
 function getDebugGeneral() {
@@ -58,9 +59,24 @@ const AIR_BLOCKS = new Set([
 ]);
 
 const flightRoleMap = new Map();
+const flyingDistractedMap = new Map(); // 10% of flying bears target closest mob/entity instead of only players
+const DISTRACTED_CHANCE = 0.1;
+// Anger spread: when a flying MB is hit by a player, or when another bear hits a player, target that player
+const angerTargetMap = new Map(); // entityId -> { entity: Player, expireTick: number }
+const ANGER_DURATION_TICKS = 600; // 30 seconds
+const ANGER_SPREAD_RADIUS = 24; // blocks for "nearby" when another bear hits player
 const lastSeenTargetTick = new Map(); // Track when target was last seen (for passive wandering)
 const lastFlightSoundTick = new Map(); // Track last flight sound playback per entity
 const FLIGHT_SOUND_INTERVAL = 40; // Play flight sound every 2 seconds (40 ticks)
+
+function isFlyingDistracted(entityId) {
+    let value = flyingDistractedMap.get(entityId);
+    if (value === undefined) {
+        value = Math.random() < DISTRACTED_CHANCE;
+        flyingDistractedMap.set(entityId, value);
+    }
+    return value;
+}
 
 function findTarget(entity, maxDistance = MAX_TARGET_DISTANCE) {
     const dimension = entity?.dimension;
@@ -79,35 +95,85 @@ function findTarget(entity, maxDistance = MAX_TARGET_DISTANCE) {
     let best = null;
     let bestDistSq = maxDistSq;
 
-    // Use shared cache instead of querying all players
-    const allPlayers = getCachedPlayers();
     const dimensionId = dimension?.id;
     if (!dimensionId) {
-        // Cache the negative result to avoid repeated validation within the same tick
-        // Only write null if there was no previous positive cached value
         if (!cached || cached.target === null) {
             targetCache.set(entityId, { target: null, tick: currentTick });
         }
         return null;
     }
-    for (const player of allPlayers) {
-        if (!player.dimension?.id || player.dimension.id !== dimensionId) continue;
-        // Skip creative and spectator mode players (they can't be attacked)
-        try {
-            const gameMode = player.getGameMode();
-            if (gameMode === "creative" || gameMode === "spectator") continue;
-        } catch { }
-        const dx = player.location.x - origin.x;
-        const dy = player.location.y - origin.y;
-        const dz = player.location.z - origin.z;
-        const distSq = dx * dx + dy * dy + dz * dz;
-        if (distSq < bestDistSq) {
-            best = player;
-            bestDistSq = distSq;
+
+    // Dev tool: force all bears to target a specific player
+    const forceTargetName = getWorldProperty("mb_force_target_player");
+    if (forceTargetName && typeof forceTargetName === "string") {
+        const forcePlayer = getCachedPlayers().find(p => p && p.name === forceTargetName && p.dimension?.id === dimensionId);
+        if (forcePlayer) {
+            try {
+                if (forcePlayer.getGameMode?.() === "creative" || forcePlayer.getGameMode?.() === "spectator") {
+                    // skip
+                } else {
+                    const dx = forcePlayer.location.x - origin.x;
+                    const dy = forcePlayer.location.y - origin.y;
+                    const dz = forcePlayer.location.z - origin.z;
+                    const distSq = dx * dx + dy * dy + dz * dz;
+                    if (distSq < maxDistSq) {
+                        const target = {
+                            entity: forcePlayer,
+                            vector: { x: dx, y: dy, z: dz }
+                        };
+                        targetCache.set(entityId, { target, tick: currentTick });
+                        return target;
+                    }
+                }
+            } catch { }
         }
     }
 
-    // Use shared cache instead of per-entity query
+    // Anger spread: if this flying MB was hit by a player (or told to target a player), prefer that target
+    const anger = angerTargetMap.get(entityId);
+    if (anger && anger.expireTick > currentTick && anger.entity) {
+        try {
+            const p = anger.entity;
+            if (p.dimension?.id === dimensionId) {
+                const gameMode = p.getGameMode?.();
+                if (gameMode !== "creative" && gameMode !== "spectator") {
+                    const dx = p.location.x - origin.x;
+                    const dy = p.location.y - origin.y;
+                    const dz = p.location.z - origin.z;
+                    const distSq = dx * dx + dy * dy + dz * dz;
+                    if (distSq < maxDistSq) {
+                        const target = { entity: p, vector: { x: dx, y: dy, z: dz } };
+                        targetCache.set(entityId, { target, tick: currentTick });
+                        return target;
+                    }
+                }
+            }
+        } catch { }
+        angerTargetMap.delete(entityId);
+    }
+
+    // 10% of flying bears target closest mob/entity instead of just players (more variety)
+    const distracted = isFlyingDistracted(entityId);
+
+    // Collect all valid targets with distance (so we can 10% switch when multiple nearby)
+    const candidates = [];
+
+    if (!distracted) {
+        const allPlayers = getCachedPlayers();
+        for (const player of allPlayers) {
+            if (!player.dimension?.id || player.dimension.id !== dimensionId) continue;
+            try {
+                const gameMode = player.getGameMode();
+                if (gameMode === "creative" || gameMode === "spectator") continue;
+            } catch { }
+            const dx = player.location.x - origin.x;
+            const dy = player.location.y - origin.y;
+            const dz = player.location.z - origin.z;
+            const distSq = dx * dx + dy * dy + dz * dz;
+            if (distSq < maxDistSq) candidates.push({ entity: player, distSq });
+        }
+    }
+
     const mobs = getCachedMobs(dimension, origin, maxDistance);
     for (const mob of mobs) {
         if (mob === entity) continue;
@@ -115,20 +181,30 @@ function findTarget(entity, maxDistance = MAX_TARGET_DISTANCE) {
         const dy = mob.location.y - origin.y;
         const dz = mob.location.z - origin.z;
         const distSq = dx * dx + dy * dy + dz * dz;
-        if (distSq < bestDistSq) {
-            best = mob;
-            bestDistSq = distSq;
+        if (distSq < maxDistSq) candidates.push({ entity: mob, distSq });
+    }
+
+    // Sort by distance (closest first)
+    candidates.sort((a, b) => a.distSq - b.distSq);
+
+    // 10% of the time when multiple targets nearby: switch to a different one (don't focus 100% on closest)
+    let chosen = null;
+    if (candidates.length > 0) {
+        if (candidates.length >= 2 && Math.random() < 0.1) {
+            chosen = candidates[Math.floor(Math.random() * candidates.length)].entity;
+        } else {
+            chosen = candidates[0].entity;
         }
     }
 
     let target = null;
-    if (best) {
+    if (chosen) {
         target = {
-            entity: best,
+            entity: chosen,
             vector: {
-                x: best.location.x - origin.x,
-                y: best.location.y - origin.y,
-                z: best.location.z - origin.z
+                x: chosen.location.x - origin.x,
+                y: chosen.location.y - origin.y,
+                z: chosen.location.z - origin.z
             }
         };
     }
@@ -211,6 +287,14 @@ function cleanupFlightRoles(seenIds) {
     for (const key of flightRoleMap.keys()) {
         if (!seenIds.has(key)) {
             flightRoleMap.delete(key);
+        }
+    }
+}
+
+function cleanupFlyingDistracted(seenIds) {
+    for (const key of flyingDistractedMap.keys()) {
+        if (!seenIds.has(key)) {
+            flyingDistractedMap.delete(key);
         }
     }
 }
@@ -451,6 +535,7 @@ system.runInterval(() => {
 
     if (seenIds.size > 0) {
         cleanupFlightRoles(seenIds);
+        cleanupFlyingDistracted(seenIds);
         // Clean up tracking for removed entities
         for (const [entityId] of lastSeenTargetTick.entries()) {
             if (!seenIds.has(entityId)) {
@@ -474,6 +559,7 @@ system.runInterval(() => {
                 const entity = world.getEntity(entityId);
                 if (!entity || !entity.isValid()) {
                     targetCache.delete(entityId);
+                    angerTargetMap.delete(entityId);
                 }
             }
         } catch {
@@ -481,4 +567,33 @@ system.runInterval(() => {
         }
     }
 }, AI_TICK_INTERVAL); // Run every AI_TICK_INTERVAL ticks (reduced frequency for performance)
+
+/** Set a flying bear to target a specific player (e.g. after being hit by that player). */
+export function setFlyingBearAngerTarget(flyingEntity, player) {
+    if (!flyingEntity?.id || !player) return;
+    const currentTick = system.currentTick;
+    angerTargetMap.set(flyingEntity.id, { entity: player, expireTick: currentTick + ANGER_DURATION_TICKS });
+    targetCache.delete(flyingEntity.id); // Force next tick to use anger target
+}
+
+/** Make nearby flying bears target this player (e.g. when another bear hit the player — anger spread). */
+export function angerNearbyFlyingBearsAtPlayer(dimension, location, targetPlayer, radius = ANGER_SPREAD_RADIUS) {
+    if (!dimension || !location || !targetPlayer) return;
+    const currentTick = system.currentTick;
+    const expireTick = currentTick + ANGER_DURATION_TICKS;
+    for (const config of FLYING_TYPES) {
+        let entities;
+        try {
+            entities = dimension.getEntities({ type: config.id, location, maxDistance: radius });
+        } catch {
+            continue;
+        }
+        for (const entity of entities) {
+            if (entity && entity.id) {
+                angerTargetMap.set(entity.id, { entity: targetPlayer, expireTick });
+                targetCache.delete(entity.id);
+            }
+        }
+    }
+}
 

@@ -25,7 +25,8 @@ export const SCRIPT_IDS = {
     infected: "infected_ai",
     flying: "flying_ai",
     torpedo: "torpedo_ai",
-    biomeAmbience: "biome_ambience"
+    biomeAmbience: "biome_ambience",
+    spawnController: "spawn_controller"
 };
 
 /** Default: all scripts enabled. Only explicit false disables. */
@@ -47,7 +48,8 @@ export function getAllScriptToggles() {
         [SCRIPT_IDS.infected]: isScriptEnabled(SCRIPT_IDS.infected),
         [SCRIPT_IDS.flying]: isScriptEnabled(SCRIPT_IDS.flying),
         [SCRIPT_IDS.torpedo]: isScriptEnabled(SCRIPT_IDS.torpedo),
-        [SCRIPT_IDS.biomeAmbience]: isScriptEnabled(SCRIPT_IDS.biomeAmbience)
+        [SCRIPT_IDS.biomeAmbience]: isScriptEnabled(SCRIPT_IDS.biomeAmbience),
+        [SCRIPT_IDS.spawnController]: isScriptEnabled(SCRIPT_IDS.spawnController)
     };
 }
 

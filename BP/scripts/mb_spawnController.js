@@ -9,6 +9,7 @@ import { system, world } from "@minecraft/server";
 import { getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { getCurrentDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { isDebugEnabled, getPlayerSoundVolume } from "./mb_codex.js";
+import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 
 // ============================================================================
 // SECTION 1: DEBUG AND ERROR LOGGING
@@ -5180,6 +5181,7 @@ debugLog('spawn', "Maple Bear spawn controller initialized with debugging enable
 
 system.runInterval(() => {
     try {
+        if (!isScriptEnabled(SCRIPT_IDS.spawnController)) return;
         // Reset global spawn counter each tick
         globalSpawnCount = 0;
         

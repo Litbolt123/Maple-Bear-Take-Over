@@ -1,6 +1,6 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
-import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, checkKnowledgeProgression } from "./mb_codex.js";
+import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, getPlayerSettings, checkKnowledgeProgression } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
@@ -9,8 +9,8 @@ import { initializeItemRegistry, registerItemHandler } from "./mb_itemRegistry.j
 import "./mb_spawnController.js";
 import "./mb_miningAI.js";
 import { collectedBlocks } from "./mb_miningAI.js";
-import "./mb_infectedAI.js";
-import "./mb_flyingAI.js";
+import { setInfectedAngerTarget, angerNearbyInfectedAtPlayer } from "./mb_infectedAI.js";
+import { setFlyingBearAngerTarget, angerNearbyFlyingBearsAtPlayer } from "./mb_flyingAI.js";
 import "./mb_torpedoAI.js";
 import "./mb_dimensionAdaptation.js";
 import "./mb_biomeAmbience.js";
@@ -205,6 +205,7 @@ const SYMPTOM_LEVEL_CONFIG = {
     }
 };
 const lastSymptomTick = new Map(); // playerId -> last tick applied
+const cureReminderLastTick = new Map(); // playerId -> last tick cure hint shown
 function getSymptomLevel(ticksLeft) {
     const total = INFECTION_TICKS;
     const ratio = Math.max(0, Math.min(1, (ticksLeft || 0) / total));
@@ -341,11 +342,12 @@ function checkAndUnlockMobDiscovery(codex, player, killType, mobKillType, hitTyp
     if (totalKills >= requiredKills) {
         // Mark as discovered (markCodex sets the value and section/subsection unlock timestamps)
         markCodex(player, `mobs.${unlockKey}`);
-        sendDiscoveryMessage(player, codex, messageType, itemType);
-        const volumeMultiplier = getPlayerSoundVolume(player);
-        player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
-        if (requiredKills === 1) {
-            player.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
+        if (sendDiscoveryMessage(player, codex, messageType, itemType, `mobs.${unlockKey}`)) {
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+            if (requiredKills === 1) {
+                player.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
+            }
         }
 
         // Update knowledge progression after discovery
@@ -508,7 +510,11 @@ function trackBearKill(player, bearType) {
                 }
             }
         }
-        
+        // Easter egg: 100 torpedo bear kills (hidden achievement)
+        if ((codex.mobs.torpedoBearKills || 0) >= 100 && !codex.achievements?.hidden100TorpedoKills) {
+            if (!codex.achievements) codex.achievements = {};
+            codex.achievements.hidden100TorpedoKills = true;
+        }
         saveCodex(player, codex);
     } catch (error) {
         console.warn(`[BEAR KILL] Error tracking bear kill for ${player.name}:`, error);
@@ -1484,20 +1490,29 @@ function normalizeBoolean(value) {
     return false;
 }
 
-// --- Helper: Send contextual discovery message ---
-function sendDiscoveryMessage(player, codex, messageType = "interesting", itemType = "") {
+// Track which discovery messages we've already sent per discovery item (so they don't repeat in chat)
+const discoveryMessageSent = new Map(); // key: `${playerId}_${discoveryKey}` e.g. playerId_items.goldSeen
+
+// --- Helper: Send contextual discovery message (once per discovery item per player). Returns true if message (and sound) was sent, false if skipped. ---
+// discoveryKey: codex path or unique id for this discovery (e.g. "items.goldSeen", "mobs.mapleBearSeen")
+function sendDiscoveryMessage(player, codex, messageType = "interesting", itemType = "", discoveryKey = "") {
     // Don't show discovery messages during intro sequence
     if (introInProgress.has(player.id)) {
         console.log(`[DISCOVERY] Suppressing discovery message for ${player?.name} during intro (item: ${itemType})`);
-        return; // Skip discovery messages during intro
+        return false;
     }
     
     // Check if this player has seen intro - if not, suppress discovery messages until intro completes
     const introSeen = normalizeBoolean(getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY));
     if (!introSeen && !codex?.items?.snowBookCrafted) {
         console.log(`[DISCOVERY] Suppressing discovery message for ${player?.name} until intro completes (item: ${itemType})`);
-        return; // Wait until intro is shown before discovery messages
+        return false;
     }
+    
+    // Only send once per discovery item per player (key by discoveryKey, or fallback to messageType+itemType)
+    const sentKey = discoveryKey ? `${player.id}_${discoveryKey}` : `${player.id}_${messageType}_${itemType}`;
+    if (discoveryMessageSent.has(sentKey)) return false;
+    discoveryMessageSent.set(sentKey, true);
     
     if (codex?.items?.snowBookCrafted) {
         // "Check your journal" only once ever; after that show the specific discovery message
@@ -1511,7 +1526,7 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
             }
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
-            return;
+            return true;
         }
         // Already shown "Check your journal" once — show the specific discovery message + sound below
         if (isDebugEnabled("main", "conversion")) {
@@ -1561,10 +1576,11 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
         const message = messages[messageType]?.[itemType] || messages[messageType]?.default || messages.default;
         player.sendMessage(message);
 
-        // Play discovery sound
+        // Play discovery sound (only here; callers should not play discovery sound if we returned true—they use our return to avoid repeating sounds)
         const volumeMultiplier = getPlayerSoundVolume(player);
         player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
     }
+    return true;
 }
 
 // --- Helper: Common entity conversion logic ---
@@ -2203,9 +2219,10 @@ function handlePotion(player, item) {
             const codex = getCodex(player);
             if (!codex.items.potionsSeen) {
                 markCodex(player, "items.potionsSeen"); 
-                sendDiscoveryMessage(player, codex, "interesting", "potion");
-                const volumeMultiplier = getPlayerSoundVolume(player);
-                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+                if (sendDiscoveryMessage(player, codex, "interesting", "potion", "items.potionsSeen")) {
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+                }
             }
         } catch { }
 
@@ -2218,10 +2235,11 @@ function handlePotion(player, item) {
                 const codex = getCodex(player);
                 if (!codex.items.weaknessPotionSeen) {
                     markCodex(player, "items.weaknessPotionSeen"); 
-                    sendDiscoveryMessage(player, codex, "important", "weakness");
-                    const volumeMultiplier = getPlayerSoundVolume(player);
-                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
-                    player.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
+                    if (sendDiscoveryMessage(player, codex, "important", "weakness", "items.weaknessPotionSeen")) {
+                        const volumeMultiplier = getPlayerSoundVolume(player);
+                        player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+                        player.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
+                    }
                     checkKnowledgeProgression(player);
                 }
             } catch { }
@@ -2278,6 +2296,7 @@ function cureMinorInfection(player) {
         
         // Send message about permanent immunity
         player.sendMessage(CHAT_SUCCESS + "§lYou have cured your minor infection!");
+        player.sendMessage(CHAT_INFO + `Cured on Day ${getCurrentDay()}.`);
         player.sendMessage(CHAT_WARNING + "You are now permanently immune. You will never contract minor infection again.");
         const addonHits = getAddonDifficultyState();
         const immuneHits = addonHits.hitsBase;
@@ -2325,10 +2344,11 @@ function handleEnchantedGoldenApple(player, item) {
             const codex = getCodex(player);
             if (!codex.items.enchantedGoldenAppleSeen) {
                 markCodex(player, "items.enchantedGoldenAppleSeen"); 
-                sendDiscoveryMessage(player, codex, "important", "enchanted_apple");
-                const volumeMultiplier = getPlayerSoundVolume(player);
-                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
-                player.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
+                if (sendDiscoveryMessage(player, codex, "important", "enchanted_apple", "items.enchantedGoldenAppleSeen")) {
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+                    player.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
+                }
                 checkKnowledgeProgression(player);
             }
         } catch (error) {
@@ -2403,6 +2423,7 @@ function handleEnchantedGoldenApple(player, item) {
 
                 // Note: We do NOT remove the weakness effect - let it run its course naturally
                 player.sendMessage(CHAT_SUCCESS + "§lYou have cured your major infection!");
+                player.sendMessage(CHAT_INFO + `Cured on Day ${getCurrentDay()}. Permanent immunity granted.`);
                 player.sendMessage(CHAT_WARNING + "You are now permanently immune. You will never contract minor infection again.");
                 const addonHitsMajor = getAddonDifficultyState();
                 player.sendMessage(CHAT_INFO + `You now require ${CHAT_HIGHLIGHT}${addonHitsMajor.hitsBase}${CHAT_INFO} hits from Maple Bears to get infected (instead of ${CHAT_HIGHLIGHT}${Math.max(1, addonHitsMajor.hitsBase - 1)}${CHAT_INFO}).`);
@@ -2750,9 +2771,10 @@ function handleGoldenApple(player, item) {
         const codex = getCodex(player);
         if (!codex.items.goldenAppleSeen) {
             markCodex(player, "items.goldenAppleSeen"); 
-            sendDiscoveryMessage(player, codex, "interesting", "golden_apple");
-            const volumeMultiplier = getPlayerSoundVolume(player);
-            player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+            if (sendDiscoveryMessage(player, codex, "interesting", "golden_apple", "items.goldenAppleSeen")) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+            }
             checkKnowledgeProgression(player);
         }
     } catch { }
@@ -2839,9 +2861,10 @@ function handleGoldenCarrot(player, item) {
         const codex = getCodex(player);
         if (!codex.items.goldenCarrotSeen) {
             markCodex(player, "items.goldenCarrotSeen"); 
-            sendDiscoveryMessage(player, codex, "interesting", "golden_carrot");
-            const volumeMultiplier = getPlayerSoundVolume(player);
-            player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+            if (sendDiscoveryMessage(player, codex, "interesting", "golden_carrot", "items.goldenCarrotSeen")) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+            }
             
             // Update infection knowledge when discovering cure-related items
             checkKnowledgeProgression(player);
@@ -3446,6 +3469,33 @@ world.afterEvents.entityDie.subscribe((event) => {
     // Handle player death - clear infection data and transform if killed by Maple Bear
     if (entity instanceof Player) {
         handleInfectedPlayerDeath(entity, source); // Check for transformation BEFORE clearing data
+        // Easter egg: track death by bear type (hidden achievement "Death by All")
+        try {
+            const killer = source?.damagingEntity;
+            if (killer && killer.typeId) {
+                const tid = killer.typeId;
+                let cat = null;
+                if (tid.startsWith("mb:mb_") || tid === "mb:mb_day00") cat = "tiny";
+                else if (tid.startsWith("mb:infected")) cat = "infected";
+                else if (tid.startsWith("mb:buff_mb")) cat = "buff";
+                else if (tid.startsWith("mb:flying_mb")) cat = "flying";
+                else if (tid.startsWith("mb:mining_mb")) cat = "mining";
+                else if (tid.startsWith("mb:torpedo_mb")) cat = "torpedo";
+                if (cat) {
+                    const codex = getCodex(entity);
+                    if (!codex.deathsByBearType) codex.deathsByBearType = {};
+                    codex.deathsByBearType[cat] = true;
+                    const all = ["tiny", "infected", "buff", "flying", "mining", "torpedo"].every(c => codex.deathsByBearType[c]);
+                    if (all && !codex.achievements?.hiddenDeathByAll) {
+                        if (!codex.achievements) codex.achievements = {};
+                        codex.achievements.hiddenDeathByAll = true;
+                        saveCodex(entity, codex);
+                    } else {
+                        saveCodex(entity, codex);
+                    }
+                }
+            }
+        } catch (e) { /* ignore */ }
         handlePlayerDeath(entity);
         return; // Exit early for player deaths
     }
@@ -3843,6 +3893,30 @@ world.afterEvents.entityDie.subscribe((event) => {
 
 
 
+// --- Anger spread: flying MB hit by player → target that player ---
+world.afterEvents.entityHurt.subscribe((event) => {
+    const hurtEntity = event.hurtEntity;
+    const source = event.damageSource;
+    const flyingTypes = [FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID];
+    if (!hurtEntity?.typeId || !flyingTypes.includes(hurtEntity.typeId)) return;
+    if (!source?.damagingEntity || !(source.damagingEntity instanceof Player)) return;
+    try {
+        setFlyingBearAngerTarget(hurtEntity, source.damagingEntity);
+    } catch { }
+});
+
+// --- Anger spread: infected (bear/pig/cow) hit by player → target that player ---
+const INFECTED_ANGER_TYPES = [INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID, INFECTED_PIG_ID, INFECTED_COW_ID];
+world.afterEvents.entityHurt.subscribe((event) => {
+    const hurtEntity = event.hurtEntity;
+    const source = event.damageSource;
+    if (!hurtEntity?.typeId || !INFECTED_ANGER_TYPES.includes(hurtEntity.typeId)) return;
+    if (!source?.damagingEntity || !(source.damagingEntity instanceof Player)) return;
+    try {
+        setInfectedAngerTarget(hurtEntity, source.damagingEntity);
+    } catch { }
+});
+
 // --- Bear Infection: On hit by Maple Bear ---
 world.afterEvents.entityHurt.subscribe((event) => {
     const player = event.hurtEntity;
@@ -3859,6 +3933,13 @@ world.afterEvents.entityHurt.subscribe((event) => {
                     TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID
                 ];
     if (source && source.damagingEntity && mapleBearTypes.includes(source.damagingEntity.typeId)) {
+        // Anger spread: nearby flying bears and infected (bear/pig/cow) target this player (another bear hit them)
+        try {
+            if (player.dimension && player.location) {
+                angerNearbyFlyingBearsAtPlayer(player.dimension, player.location, player);
+                angerNearbyInfectedAtPlayer(player.dimension, player.location, player);
+            }
+        } catch { }
         // Track hits for mob discovery
         try {
             const codex = getCodex(player);
@@ -4329,6 +4410,40 @@ system.runInterval(() => {
             state.ticksLeft = maxTicks;
         }
 
+        // Optional infection timer on screen (Settings) — top of screen, small (subtitle)
+        if (state.ticksLeft > 0) {
+            try {
+                const opts = getPlayerSettings(player);
+                if (opts.showInfectionTimer && player.onScreenDisplay?.setTitle) {
+                    const daysLeft = Math.ceil(state.ticksLeft / 24000);
+                    const label = infectionType === MINOR_INFECTION_TYPE ? "§e" : "§c";
+                    const text = `${label}~${daysLeft} day${daysLeft !== 1 ? "s" : ""} left`;
+                    player.onScreenDisplay.setTitle("", {
+                        subtitle: text,
+                        fadeInDuration: 0,
+                        stayDuration: 60,
+                        fadeOutDuration: 0
+                    });
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        // Cure reminder: if major infection and player has weakness + enchanted golden apple (one-time or rare)
+        if (infectionType === MAJOR_INFECTION_TYPE && state.ticksLeft > 0 && !introInProgress.has(id)) {
+            try {
+                const hasWeakness = player.getEffect?.("minecraft:weakness");
+                if (hasWeakness && hasItem(player, "minecraft:enchanted_golden_apple")) {
+                    let last = cureReminderLastTick.get(id) ?? 0;
+                    if (system.currentTick - last >= 300) {
+                        cureReminderLastTick.set(id, system.currentTick);
+                        if (player.onScreenDisplay?.setActionBar) {
+                            player.onScreenDisplay.setActionBar("§aYou have the cure components.");
+                        }
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+
         if (infectionType === MINOR_INFECTION_TYPE) {
             // Minor infection - apply random mild effects that worsen over time
             // Don't apply effects during intro sequence
@@ -4602,7 +4717,7 @@ system.runInterval(() => {
                         try { 
                             markCodex(p, "items.snowFound"); 
                             if (!shouldSuppressDiscovery) {
-                                sendDiscoveryMessage(p, codex, "important", "snow");
+                                sendDiscoveryMessage(p, codex, "important", "snow", "items.snowFound");
                             }
                             checkKnowledgeProgression(p);
                         } catch { }
@@ -4618,8 +4733,7 @@ system.runInterval(() => {
                     if (it && it.typeId === "minecraft:brewing_stand") { 
                         try { 
                             markCodex(p, "items.brewingStandSeen"); 
-                            if (!shouldSuppressDiscovery) {
-                                sendDiscoveryMessage(p, codex, "interesting", "brewing_stand");
+                            if (!shouldSuppressDiscovery && sendDiscoveryMessage(p, codex, "interesting", "brewing_stand", "items.brewingStandSeen")) {
                                 const volumeMultiplier = getPlayerSoundVolume(p);
                                 p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
                             }
@@ -4636,8 +4750,7 @@ system.runInterval(() => {
                     if (it && it.typeId === "minecraft:gold_ingot") { 
                         try { 
                             markCodex(p, "items.goldSeen");
-                            if (!shouldSuppressDiscovery) {
-                                sendDiscoveryMessage(p, codex, "interesting", "gold");
+                            if (!shouldSuppressDiscovery && sendDiscoveryMessage(p, codex, "interesting", "gold", "items.goldSeen")) {
                                 const volumeMultiplier = getPlayerSoundVolume(p);
                                 p.playSound("mob.villager.idle", { pitch: 1.1, volume: 0.5 * volumeMultiplier });
                             }
@@ -4655,8 +4768,7 @@ system.runInterval(() => {
                     if (it && it.typeId === "minecraft:gold_nugget") { 
                         try { 
                             markCodex(p, "items.goldNuggetSeen");
-                            if (!shouldSuppressDiscovery) {
-                                sendDiscoveryMessage(p, codex, "interesting", "gold_nugget");
+                            if (!shouldSuppressDiscovery && sendDiscoveryMessage(p, codex, "interesting", "gold_nugget", "items.goldNuggetSeen")) {
                                 const volumeMultiplier = getPlayerSoundVolume(p);
                                 p.playSound("mob.villager.idle", { pitch: 1.1, volume: 0.5 * volumeMultiplier });
                             }
@@ -4674,8 +4786,7 @@ system.runInterval(() => {
                     if (it && it.typeId === "mb:dusted_dirt") { 
                         try { 
                             markCodex(p, "biomes.dustedDirtSeen"); // Only mark biomes version, removed from items 
-                            if (!shouldSuppressDiscovery) {
-                                sendDiscoveryMessage(p, codex, "interesting");
+                            if (!shouldSuppressDiscovery && sendDiscoveryMessage(p, codex, "interesting", "", "biomes.dustedDirtSeen")) {
                                 const volumeMultiplier = getPlayerSoundVolume(p);
                                 p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
                             }
@@ -5612,10 +5723,11 @@ world.afterEvents.effectAdd.subscribe((event) => {
             const codex = getCodex(entity);
             if (!codex.items.weaknessPotionSeen) {
                 markCodex(entity, "items.weaknessPotionSeen");
-                sendDiscoveryMessage(entity, codex, "important");
-                const volumeMultiplier = getPlayerSoundVolume(entity);
-                entity.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
-                entity.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
+                if (sendDiscoveryMessage(entity, codex, "important", "weakness", "items.weaknessPotionSeen")) {
+                    const volumeMultiplier = getPlayerSoundVolume(entity);
+                    entity.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+                    entity.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
+                }
             }
         } catch { }
     }
@@ -5626,9 +5738,10 @@ world.afterEvents.effectAdd.subscribe((event) => {
             const codex = getCodex(entity);
             if (!codex.items.potionsSeen) {
                 markCodex(entity, "items.potionsSeen");
-                sendDiscoveryMessage(entity, codex, "interesting");
-                const volumeMultiplier = getPlayerSoundVolume(entity);
-                entity.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+                if (sendDiscoveryMessage(entity, codex, "interesting", "potion", "items.potionsSeen")) {
+                    const volumeMultiplier = getPlayerSoundVolume(entity);
+                    entity.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
+                }
             }
         } catch { }
     }
@@ -7272,30 +7385,34 @@ function unlockAllContentForDay(day) {
                 if (day >= 2 && !codex.mobs.mapleBearSeen) {
                     codex.mobs.mapleBearSeen = true;
                     markCodex(player, "mobs.mapleBearSeen");
-                    sendDiscoveryMessage(player, codex, "mysterious", "tiny_bear");
-                    const vol = getPlayerSoundVolume(player);
-                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * vol });
+                    if (sendDiscoveryMessage(player, codex, "mysterious", "tiny_bear", "mobs.mapleBearSeen")) {
+                        const vol = getPlayerSoundVolume(player);
+                        player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * vol });
+                    }
                 }
                 if (day >= 4 && !codex.mobs.infectedBearSeen) {
                     codex.mobs.infectedBearSeen = true;
                     markCodex(player, "mobs.infectedBearSeen");
-                    sendDiscoveryMessage(player, codex, "dangerous", "infected_bear");
-                    const vol = getPlayerSoundVolume(player);
-                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * vol });
+                    if (sendDiscoveryMessage(player, codex, "dangerous", "infected_bear", "mobs.infectedBearSeen")) {
+                        const vol = getPlayerSoundVolume(player);
+                        player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * vol });
+                    }
                 }
                 if (day >= 13 && !codex.mobs.buffBearSeen) {
                     codex.mobs.buffBearSeen = true;
                     markCodex(player, "mobs.buffBearSeen");
-                    sendDiscoveryMessage(player, codex, "threatening", "buff_bear");
-                    const vol = getPlayerSoundVolume(player);
-                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * vol });
+                    if (sendDiscoveryMessage(player, codex, "threatening", "buff_bear", "mobs.buffBearSeen")) {
+                        const vol = getPlayerSoundVolume(player);
+                        player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * vol });
+                    }
                 }
                 if (day >= 8 && !codex.mobs.flyingBearSeen) {
                     codex.mobs.flyingBearSeen = true;
                     markCodex(player, "mobs.flyingBearSeen");
-                    sendDiscoveryMessage(player, codex, "dangerous", "flying_bear");
-                    const vol = getPlayerSoundVolume(player);
-                    player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * vol });
+                    if (sendDiscoveryMessage(player, codex, "dangerous", "flying_bear", "mobs.flyingBearSeen")) {
+                        const vol = getPlayerSoundVolume(player);
+                        player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * vol });
+                    }
                 }
                 
                 // Unlock variants based on day
@@ -7508,21 +7625,25 @@ function executeMbCommand(sender, subcommand, args = []) {
             return;
         }
         case "list_bears": {
-            const dim = sender.dimension;
+            const radius = Math.min(256, Math.max(16, parseInt(args[0], 10) || 128));
+            const dimId = args[1] || "";
+            let dim = sender.dimension;
+            if (dimId === "overworld" || dimId === "minecraft:overworld") dim = world.getDimension("overworld");
+            else if (dimId === "nether" || dimId === "minecraft:nether") dim = world.getDimension("nether");
+            else if (dimId === "the_end" || dimId === "minecraft:the_end") dim = world.getDimension("the_end");
             const loc = sender.location;
-            const radius = 128;
             const counts = {};
-            const bearPrefixes = ["mb:mb_", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+            const bearPrefixes = ["mb:mb_", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb", "mb:infected_pig", "mb:infected_cow"];
             try {
                 const entities = dim.getEntities({ location: loc, maxDistance: radius });
                 for (const e of entities) {
                     const id = e.typeId || "";
-                    if (bearPrefixes.some(p => id.startsWith(p))) {
+                    if (bearPrefixes.some(p => id.startsWith(p)) || id.startsWith("mb:infected")) {
                         counts[id] = (counts[id] || 0) + 1;
                     }
                 }
                 const lines = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([id, n]) => CHAT_INFO + id + ": " + CHAT_HIGHLIGHT + n);
-                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Bears within 128 blocks:\n" + (lines.length ? lines.join("\n") : CHAT_DEV + "None"));
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Bears within ${radius} blocks (${dim.id}):\n` + (lines.length ? lines.join("\n") : CHAT_DEV + "None"));
             } catch (err) {
                 sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Error listing bears: " + (err?.message || err));
             }
@@ -7552,30 +7673,176 @@ function executeMbCommand(sender, subcommand, args = []) {
                 const parsed = parseInt(String(distanceArg), 10);
                 if (!Number.isNaN(parsed) && parsed >= 0) distance = Math.min(64, Math.max(0, parsed));
             }
+            const quantity = Math.min(10, Math.max(1, parseInt(args[3], 10) || 1));
             try {
                 const loc = target.location;
-                const angle = Math.random() * Math.PI * 2;
-                const dx = Math.cos(angle) * distance;
-                const dz = Math.sin(angle) * distance;
-                const offset = { x: loc.x + dx, y: loc.y, z: loc.z + dz };
-                target.dimension.spawnEntity(entityId, offset);
-                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Spawned ${CHAT_HIGHLIGHT}${entityId}${CHAT_INFO} ${distance} block${distance !== 1 ? "s" : ""} from ${target.name}.`);
+                let spawned = 0;
+                for (let i = 0; i < quantity; i++) {
+                    const angle = (quantity === 1 ? Math.random() : (i / quantity)) * Math.PI * 2 + Math.random() * 0.2;
+                    const dist = quantity === 1 ? distance : distance * (0.7 + Math.random() * 0.3);
+                    const dx = Math.cos(angle) * dist;
+                    const dz = Math.sin(angle) * dist;
+                    const offset = { x: loc.x + dx, y: loc.y, z: loc.z + dz };
+                    target.dimension.spawnEntity(entityId, offset);
+                    spawned++;
+                }
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Spawned ${CHAT_HIGHLIGHT}${spawned}${CHAT_INFO} ${entityId} ${distance} block${distance !== 1 ? "s" : ""} from ${target.name}.`);
             } catch (err) {
                 sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Spawn failed: " + (err?.message || err));
             }
             return;
         }
-        case "dump_codex": {
-            const target = args[0] ? world.getAllPlayers().find(p => p.name === args[0]) : sender;
-            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[0]} found.`); return; }
+        case "simulate_next_day": {
             try {
-                const codex = getCodex(target);
-                const str = JSON.stringify(codex);
-                const maxLen = 256;
-                const snippet = str.length > maxLen ? str.slice(0, maxLen) + "…" : str;
-                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Codex (truncated): " + CHAT_DEV + snippet);
+                const day = getCurrentDay();
+                const newDay = day + 1;
+                setCurrentDay(newDay);
+                if (typeof isMilestoneDay === "function" && isMilestoneDay(newDay) && typeof mbiHandleMilestoneDay === "function") {
+                    mbiHandleMilestoneDay(newDay);
+                }
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Day advanced to ${CHAT_HIGHLIGHT}${newDay}${CHAT_INFO}.`);
             } catch (err) {
                 sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Error: " + (err?.message || err));
+            }
+            return;
+        }
+        case "clear_bears": {
+            const radius = Math.min(128, Math.max(32, parseInt(args[0], 10) || 64));
+            const dim = sender.dimension;
+            const loc = sender.location;
+            const bearPrefixes = ["mb:mb_", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+            try {
+                const entities = dim.getEntities({ location: loc, maxDistance: radius });
+                let killed = 0;
+                for (const e of entities) {
+                    const id = e.typeId || "";
+                    if (bearPrefixes.some(p => id.startsWith(p)) || id === "mb:infected_pig" || id === "mb:infected_cow") {
+                        e.kill();
+                        killed++;
+                    }
+                }
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Cleared ${CHAT_HIGHLIGHT}${killed}${CHAT_INFO} bears within ${radius} blocks.`);
+            } catch (err) {
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Error: " + (err?.message || err));
+            }
+            return;
+        }
+        case "inspect_entity": {
+            const dim = sender.dimension;
+            const loc = sender.location;
+            const bearPrefixes = ["mb:mb_", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+            try {
+                const entities = dim.getEntities({ location: loc, maxDistance: 20 });
+                let nearest = null;
+                let nearestDistSq = 21 * 21;
+                for (const e of entities) {
+                    const id = e.typeId || "";
+                    if (!bearPrefixes.some(p => id.startsWith(p))) continue;
+                    const dx = e.location.x - loc.x, dy = e.location.y - loc.y, dz = e.location.z - loc.z;
+                    const d2 = dx * dx + dy * dy + dz * dz;
+                    if (d2 < nearestDistSq) {
+                        nearestDistSq = d2;
+                        nearest = e;
+                    }
+                }
+                if (!nearest) {
+                    sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "No Maple Bear within 20 blocks.");
+                    return;
+                }
+                const l = nearest.location;
+                let healthStr = "";
+                try {
+                    const health = nearest.getComponent?.("health");
+                    if (health) healthStr = ` Health: ${health.currentValue}/${health.effectiveMax}`;
+                } catch { }
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Nearest bear: ${CHAT_HIGHLIGHT}${nearest.typeId}${CHAT_INFO}${healthStr}\n§7Pos: ${l.x.toFixed(1)}, ${l.y.toFixed(1)}, ${l.z.toFixed(1)} Dim: ${dim.id}`);
+            } catch (err) {
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Error: " + (err?.message || err));
+            }
+            return;
+        }
+        case "set_force_target_player": {
+            const name = args[0] ? String(args[0]).trim() : "";
+            if (!name) {
+                setWorldProperty("mb_force_target_player", undefined);
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Cleared force target. Bears will target normally.");
+            } else {
+                const target = world.getAllPlayers().find(p => p.name === name);
+                if (!target) {
+                    sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${name} found.`);
+                    return;
+                }
+                setWorldProperty("mb_force_target_player", name);
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `All nearby bears with AI will now target ${CHAT_HIGHLIGHT}${name}${CHAT_INFO}.`);
+            }
+            return;
+        }
+        case "reset_codex_section": {
+            const section = (args[0] || "").toLowerCase();
+            const target = args[1] ? world.getAllPlayers().find(p => p.name === args[1]) : sender;
+            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[1]} found.`); return; }
+            const valid = ["mobs", "items", "infections", "journal", "all"];
+            if (!valid.includes(section)) {
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: reset_codex_section <mobs|items|infections|journal|all> [playerName]");
+                return;
+            }
+            try {
+                const codex = getCodex(target);
+                if (section === "all") {
+                    saveCodex(target, getDefaultCodex());
+                    sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Reset entire codex for ${target.name}.`);
+                } else {
+                    if (section === "mobs") codex.mobs = {};
+                    if (section === "items") codex.items = {};
+                    if (section === "infections") codex.infections = {};
+                    if (section === "journal") codex.journal = {};
+                    saveCodex(target, codex);
+                    sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Reset codex section §f${section}§7 for ${target.name}.`);
+                }
+            } catch (err) {
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Error: " + (err?.message || err));
+            }
+            return;
+        }
+        case "dump_codex": {
+            const mode = (args[0] === "summary" || args[0] === "full") ? args[0] : "snippet";
+            const playerArg = (mode === "snippet" ? args[0] : args[1]) || null;
+            const target = playerArg ? world.getAllPlayers().find(p => p.name === playerArg) : sender;
+            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${playerArg || args[0]} found.`); return; }
+            try {
+                const codex = getCodex(target);
+                if (mode === "summary") {
+                    const summary = {
+                        mobs: codex.mobs ? Object.keys(codex.mobs).length + " keys" : "none",
+                        items: codex.items ? Object.keys(codex.items).length + " keys" : "none",
+                        infections: codex.infections ? Object.keys(codex.infections).length + " keys" : "none",
+                        cures: codex.cures ? Object.keys(codex.cures).length + " keys" : "none",
+                        journal: codex.journal ? Object.keys(codex.journal).length + " keys" : "none",
+                        dailyEvents: codex.dailyEvents ? Object.keys(codex.dailyEvents).length + " days" : "none",
+                        achievements: codex.achievements ? Object.keys(codex.achievements).length + " keys" : "none",
+                        history: codex.history ? Object.keys(codex.history).length + " keys" : "none"
+                    };
+                    const summaryStr = JSON.stringify(summary, null, 2);
+                    sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Codex summary (" + target.name + "):\n" + CHAT_DEV + summaryStr);
+                    console.log("[MBI] Codex summary " + target.name + ":\n" + summaryStr);
+                } else if (mode === "full") {
+                    const str = JSON.stringify(codex);
+                    console.log("[MBI] Codex full " + target.name + ":\n" + str);
+                    const chunkLen = 256;
+                    for (let i = 0; i < str.length; i += chunkLen) {
+                        const chunk = str.slice(i, i + chunkLen);
+                        sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + (i === 0 ? "Codex (full) " : "") + chunk);
+                    }
+                } else {
+                    const str = JSON.stringify(codex);
+                    const maxLen = 256;
+                    const snippet = str.length > maxLen ? str.slice(0, maxLen) + "…" : str;
+                    sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Codex (truncated): " + CHAT_DEV + snippet);
+                    console.log("[MBI] Codex snippet " + target.name + ":\n" + str.slice(0, 2000) + (str.length > 2000 ? "…" : ""));
+                }
+            } catch (err) {
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Error: " + (err?.message || err));
+                console.warn("[MBI] dump_codex error:", err);
             }
             return;
         }

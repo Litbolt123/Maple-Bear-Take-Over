@@ -40,16 +40,46 @@ const GAP_DETECT_DISTANCE = 1.2;
 // Fallback direct movement when no path
 const FALLBACK_IMPULSE = 0.04;
 
+// Anger spread: when hit by a player or when another bear hits a player
+const angerTargetMap = new Map(); // entityId -> { entity: Player, expireTick: number }
+const ANGER_DURATION_TICKS = 600; // 30 seconds
+const ANGER_SPREAD_RADIUS = 24;
+
 let infectedAIIntervalId = null;
 
-function findNearestPlayer(entity) {
+function getTargetPlayer(entity) {
     const loc = entity.location;
     const dimension = entity?.dimension;
     if (!dimension) return null;
 
+    const entityId = entity.id;
+    const currentTick = system.currentTick;
+    const maxDistSq = TARGET_RADIUS * TARGET_RADIUS;
+
+    // Anger: prefer player who hit this entity or who was hit by another bear
+    const anger = angerTargetMap.get(entityId);
+    if (anger && anger.expireTick > currentTick && anger.entity) {
+        try {
+            const p = anger.entity;
+            if (p.dimension?.id === dimension.id) {
+                const gameMode = p.getGameMode?.();
+                if (gameMode !== "creative" && gameMode !== "spectator") {
+                    const dx = p.location.x - loc.x;
+                    const dz = p.location.z - loc.z;
+                    const dy = p.location.y - loc.y;
+                    const distSq = dx * dx + dz * dz;
+                    if (distSq < maxDistSq && distSq > 0.01) {
+                        return { entity: p, distSq, dx, dz, dy };
+                    }
+                }
+            }
+        } catch { }
+        angerTargetMap.delete(entityId);
+    }
+
     const players = getCachedPlayers();
     let nearest = null;
-    let nearestDistSq = TARGET_RADIUS * TARGET_RADIUS;
+    let nearestDistSq = maxDistSq;
 
     for (const player of players) {
         if (!player?.location || player.dimension?.id !== dimension.id) continue;
@@ -67,6 +97,10 @@ function findNearestPlayer(entity) {
         }
     }
     return nearest;
+}
+
+function findNearestPlayer(entity) {
+    return getTargetPlayer(entity);
 }
 
 /**
@@ -278,6 +312,33 @@ function initializeInfectedAI() {
     }, AI_INTERVAL_TICKS);
 
     console.warn("[INFECTED AI] Script loaded - nox7-style pathfinding with gap jumping");
+}
+
+/** Set an infected entity to target a specific player (e.g. after being hit by that player). */
+export function setInfectedAngerTarget(infectedEntity, player) {
+    if (!infectedEntity?.id || !player) return;
+    const currentTick = system.currentTick;
+    angerTargetMap.set(infectedEntity.id, { entity: player, expireTick: currentTick + ANGER_DURATION_TICKS });
+}
+
+/** Make nearby infected entities target this player (e.g. when another bear hit the player — anger spread). */
+export function angerNearbyInfectedAtPlayer(dimension, location, targetPlayer, radius = ANGER_SPREAD_RADIUS) {
+    if (!dimension || !location || !targetPlayer) return;
+    const currentTick = system.currentTick;
+    const expireTick = currentTick + ANGER_DURATION_TICKS;
+    for (const typeId of INFECTED_TYPES) {
+        let entities;
+        try {
+            entities = dimension.getEntities({ type: typeId, location, maxDistance: radius });
+        } catch {
+            continue;
+        }
+        for (const entity of entities) {
+            if (entity?.id) {
+                angerTargetMap.set(entity.id, { entity: targetPlayer, expireTick });
+            }
+        }
+    }
 }
 
 // Start after a delay (ensure world is ready)

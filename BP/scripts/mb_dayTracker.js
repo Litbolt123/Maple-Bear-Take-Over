@@ -1,6 +1,6 @@
 import { world, system } from "@minecraft/server";
 import { getWorldProperty, setWorldProperty, getPlayerProperty } from "./mb_dynamicPropertyHandler.js";
-import { getCodex, saveCodex, markSectionUnlock, markSubsectionUnlock, getKnowledgeLevel, hasKnowledge, checkKnowledgeProgression, getPlayerSoundVolume } from "./mb_codex.js";
+import { getCodex, saveCodex, markSectionUnlock, markSubsectionUnlock, getKnowledgeLevel, hasKnowledge, checkKnowledgeProgression, getPlayerSoundVolume, getPlayerSettings } from "./mb_codex.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_DANGER_STRONG, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT } from "./mb_chatColors.js";
 
 // Minimal dynamic property test (must be delayed until after startup)
@@ -679,8 +679,12 @@ function startDayCycleLoop() {
                 const displayInfo = getDayDisplayInfo(newDay);
 
                 // Notify players
+                const isMilestone = isMilestoneDay(newDay);
                 for (const player of world.getAllPlayers()) {
                     if (player && player.isValid) {
+                        const criticalOnly = getPlayerSettings(player).criticalWarningsOnly;
+                        const showDayMessage = !criticalOnly || isMilestone;
+
                         const soundConfig = getInfectionSound(newDay);
                         const volumeMultiplier = getPlayerSoundVolume(player);
                         player.playSound(soundConfig.sound, {
@@ -688,7 +692,6 @@ function startDayCycleLoop() {
                             volume: soundConfig.volume * volumeMultiplier
                         });
                         
-                        // Enhanced title for post-victory days
                         let titleText = `${displayInfo.color}${displayInfo.symbols} Day ${newDay}`;
                         if (newDay > 25) {
                             const daysPastVictory = newDay - 25;
@@ -697,13 +700,20 @@ function startDayCycleLoop() {
                         
                         showPlayerTitle(player, titleText, undefined, {}, newDay);
                         
-                        // Enhanced actionbar messages
-                        let actionbarText = "The Maple Bear infection continues...";
-                        if (newDay > 25) {
-                            const daysPastVictory = newDay - 25;
-                            actionbarText = `§cThe infection intensifies... §7(${daysPastVictory} days past victory)`;
-                        } else if (newDay === 25) {
-                            actionbarText = "§aVictory achieved! But the infection persists...";
+                        let actionbarText = "";
+                        if (showDayMessage) {
+                            actionbarText = "The Maple Bear infection continues...";
+                            if (newDay > 25) {
+                                const daysPastVictory = newDay - 25;
+                                actionbarText = `§cThe infection intensifies... §7(${daysPastVictory} days past victory)`;
+                            } else if (newDay === 25) {
+                                actionbarText = "§aVictory achieved! But the infection persists...";
+                            }
+                            if (MILESTONE_DAYS.includes(newDay + 1)) {
+                                actionbarText = (actionbarText ? actionbarText + " " : "") + "§8Tomorrow: a turning point approaches.";
+                            }
+                        } else {
+                            actionbarText = `§7Day ${newDay}`;
                         }
                         showPlayerActionbar(player, actionbarText);
                         
@@ -749,6 +759,24 @@ function startDayCycleLoop() {
                 // Handle milestone days
                 if (isMilestoneDay(newDay)) {
                     mbiHandleMilestoneDay(newDay);
+                }
+
+                // Easter egg: Day 100 survived (hidden achievement)
+                if (newDay === 100) {
+                    try {
+                        for (const p of world.getAllPlayers()) {
+                            if (p && p.isValid) {
+                                const codex = getCodex(p);
+                                if (!codex.achievements) codex.achievements = {};
+                                if (!codex.achievements.hiddenDay100Survived) {
+                                    codex.achievements.hiddenDay100Survived = true;
+                                    saveCodex(p, codex);
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        console.warn("[MBI] Day 100 hidden achievement:", err);
+                    }
                 }
             }
 

@@ -239,6 +239,38 @@ export function getPlayerSoundVolume(player) {
     }
 }
 
+/**
+ * Get player settings used by main/dayTracker (infection timer, critical warnings only).
+ * Infection timer is Powdery-only; critical warnings can come from Basic or codex.
+ * @param {Player} player
+ * @returns {{ showInfectionTimer: boolean, criticalWarningsOnly: boolean }}
+ */
+export function getPlayerSettings(player) {
+    try {
+        const codex = getCodex(player);
+        const s = codex?.settings;
+        // Infection timer: Powdery Journal only (not in Basic Journal)
+        const showInfectionTimer = Boolean(s?.showInfectionTimer);
+        const settingsKey = `mb_player_settings_${player.id}`;
+        const raw = getWorldPropertyChunked(settingsKey);
+        if (raw) {
+            let parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
+            if (parsed && typeof parsed === 'object') {
+                return {
+                    showInfectionTimer,
+                    criticalWarningsOnly: Boolean(parsed.criticalWarningsOnly)
+                };
+            }
+        }
+        return {
+            showInfectionTimer,
+            criticalWarningsOnly: Boolean(s?.criticalWarningsOnly)
+        };
+    } catch (e) {
+        return { showInfectionTimer: false, criticalWarningsOnly: false };
+    }
+}
+
 /** Map codex path prefix to main menu section id for new/updated tracking */
 function getSectionForPath(path) {
     const top = path.split(".")[0];
@@ -867,10 +899,11 @@ export function showCodexBook(player, context) {
                     showSearchButton: true,
                     bearSoundVolume: 2, // 0=off, 1=low, 2=high
                     blockBreakVolume: 2, // 0=off, 1=low, 2=high
-                    // Add Basic Journal settings with defaults
-                    soundVolume: 1.0, // 0-1 range (stored as 0-1, displayed as 0-10 slider)
+                    soundVolume: 1.0,
                     showTips: true,
-                    audioMessages: true
+                    audioMessages: true,
+                    showInfectionTimer: false,
+                    criticalWarningsOnly: false
                 };
                 saveCodex(player, codex);
             } else {
@@ -883,6 +916,12 @@ export function showCodexBook(player, context) {
                 }
                 if (codex.settings.audioMessages === undefined) {
                     codex.settings.audioMessages = true;
+                }
+                if (codex.settings.showInfectionTimer === undefined) {
+                    codex.settings.showInfectionTimer = false;
+                }
+                if (codex.settings.criticalWarningsOnly === undefined) {
+                    codex.settings.criticalWarningsOnly = false;
                 }
             }
             
@@ -909,6 +948,10 @@ export function showCodexBook(player, context) {
                     }
                     if (typeof parsedBasicSettings.audioMessages === 'boolean') {
                         codex.settings.audioMessages = parsedBasicSettings.audioMessages;
+                    }
+                    // showInfectionTimer is Powdery-only; do not sync from Basic
+                    if (typeof parsedBasicSettings.criticalWarningsOnly === 'boolean') {
+                        codex.settings.criticalWarningsOnly = parsedBasicSettings.criticalWarningsOnly;
                     }
                 }
             }
@@ -1222,6 +1265,14 @@ export function showCodexBook(player, context) {
         if (codex.infections.bear.discovered || codex.infections.snow.discovered || minorDiscovered || majorDiscovered || hasInfection || hasPermanentImmunity) {
             lines.push("§eThe Infection");
             lines.push("");
+
+            // First-aid quick reference: only if they've unlocked all cure items and cured themselves before
+            const hasCuredBefore = (codex.history?.totalCures > 0) || codex.cures?.minorCureDoneAt || hasPermanentImmunity;
+            const allCureItemsUnlocked = !!(codex.items?.goldenAppleSeen && codex.items?.goldenCarrotSeen && codex.items?.weaknessPotionSeen && codex.items?.enchantedGoldenAppleSeen && codex.cures?.bearCureKnown);
+            if (hasCuredBefore && allCureItemsUnlocked) {
+                lines.push("§6Quick reference: §7Minor: Golden Apple + Golden Carrot. §cMajor: Weakness + Enchanted Golden Apple.");
+                lines.push("");
+            }
             
             // Show current infection status - progressive based on experience
             if (hasInfection) {
@@ -2711,6 +2762,13 @@ export function showCodexBook(player, context) {
                 const dayEvents = codex.dailyEvents[selectedDay];
                 
                 let body = `§6Day ${selectedDay}\n\n`;
+                // Daily log mood: random tone per day (hopeful, grim, dry) for variety
+                const moodLines = [
+                    "§7A day that held a glimmer of hope.",
+                    "§8A grim day, by any measure.",
+                    "§8Matter-of-fact. The world moved on."
+                ];
+                body += moodLines[selectedDay % moodLines.length] + "\n\n";
 
                 // Handle both old format (array) and new format (object with categories)
                 if (Array.isArray(dayEvents)) {
@@ -3224,6 +3282,19 @@ export function showCodexBook(player, context) {
             const displayName = (unlocked || revealed) ? label : "?".repeat(label.length);
             body += unlocked ? `§a✓ First ${displayName} kill\n` : `§8✗ First ${displayName} kill\n`;
         }
+        // Hidden easter-egg achievements (only shown when unlocked)
+        const hiddenEntries = [
+            { key: "hiddenDeathByAll", label: "Death by All", desc: "Died to every bear type (tiny, infected, buff, flying, mining, torpedo)." },
+            { key: "hiddenDay100Survived", label: "Day 100", desc: "Survived to Day 100." },
+            { key: "hidden100TorpedoKills", label: "Torpedo Hunter", desc: "Killed 100 torpedo Maple Bears." }
+        ];
+        for (const { key, label, desc } of hiddenEntries) {
+            if (achievements[key]) {
+                if (!body.endsWith("\n\n")) body += "\n";
+                body += `§5Hidden\n`;
+                body += `§a✓ ${label}\n§7${desc}\n`;
+            }
+        }
         
         const form = new ActionFormData().title("§6Achievements").body(body).button("§8Back");
         form.show(player).then((res) => {
@@ -3238,21 +3309,183 @@ export function showCodexBook(player, context) {
         }).catch(() => { openMain(); });
     }
 
+    function openBearsTargetPlayerMenu() {
+        const allPlayers = world.getAllPlayers();
+        const form = new ActionFormData()
+            .title("§cBears Target Player")
+            .body("§7Make all nearby bears (with AI) target this player. §8(Clear to restore normal targeting.)");
+        form.button("§aMe §8(" + player.name + ")");
+        for (const p of allPlayers) {
+            if (p && p.id !== player.id) form.button("§f" + p.name);
+        }
+        form.button("§cClear §8(normal targeting)");
+        form.button("§8Back");
+        const others = allPlayers.filter(p => p && p.id !== player.id);
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 1 + others.length + 1) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            if (res.selection === 0) triggerDebugCommand("set_force_target_player", [player.name], () => openDeveloperTools());
+            else if (res.selection <= others.length) triggerDebugCommand("set_force_target_player", [others[res.selection - 1].name], () => openDeveloperTools());
+            else if (res.selection === 1 + others.length) triggerDebugCommand("set_force_target_player", [], () => openDeveloperTools());
+            else openDeveloperTools();
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openListBearsMenu() {
+        const form = new ActionFormData()
+            .title("§cList Bears")
+            .body("§7Choose radius and dimension. Result is sent to chat.");
+        form.button("§f32 blocks §8(current dim)");
+        form.button("§f64 blocks §8(current dim)");
+        form.button("§f128 blocks §8(current dim)");
+        form.button("§f256 blocks §8(current dim)");
+        form.button("§e128 blocks §8(overworld)");
+        form.button("§e128 blocks §8(nether)");
+        form.button("§e128 blocks §8(end)");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 7) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const radiusDim = [
+                ["32", ""],
+                ["64", ""],
+                ["128", ""],
+                ["256", ""],
+                ["128", "overworld"],
+                ["128", "nether"],
+                ["128", "the_end"]
+            ];
+            const [radius, dim] = radiusDim[res.selection] || ["128", ""];
+            const args = [radius];
+            if (dim) args.push(dim);
+            triggerDebugCommand("list_bears", args, () => openDeveloperTools());
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openClearBearsMenu() {
+        const form = new ActionFormData()
+            .title("§cClear Bears")
+            .body("§7Kill all Maple Bears (and infected mobs) within radius. §8(current dimension)");
+        form.button("§f64 blocks");
+        form.button("§c128 blocks");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 2) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const radius = res.selection === 0 ? "64" : "128";
+            triggerDebugCommand("clear_bears", [radius], () => openDeveloperTools());
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openResetCodexSectionMenu() {
+        openTargetPlayerMenu("Reset Codex Section", (targetName) => {
+            const form = new ActionFormData()
+                .title("§cReset Codex Section")
+                .body("§7Reset only this part of the codex." + (targetName ? ` §8(Target: ${targetName})` : ""));
+            form.button("§fMobs");
+            form.button("§fItems");
+            form.button("§fInfections");
+            form.button("§fJournal");
+            form.button("§cAll");
+            form.button("§8Back");
+            form.show(player).then((res) => {
+                if (!res || res.canceled || res.selection === 5) {
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                    return openDeveloperTools();
+                }
+                player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+                const sections = ["mobs", "items", "infections", "journal", "all"];
+                const section = sections[res.selection];
+                if (section) {
+                    const args = targetName ? [section, targetName] : [section];
+                    triggerDebugCommand("reset_codex_section", args, () => openDeveloperTools());
+                } else openDeveloperTools();
+            }).catch(() => openDeveloperTools());
+        });
+    }
+
+    function openTargetPlayerMenu(caption, onSelect) {
+        const allPlayers = world.getAllPlayers();
+        const others = allPlayers.filter(p => p && p.id !== player.id);
+        const form = new ActionFormData()
+            .title("§cTarget Player")
+            .body(`§7Apply to whom? §8(${caption})`);
+        form.button("§aMe §8(" + player.name + ")");
+        for (const p of others) {
+            form.button("§f" + p.name);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 1 + others.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            if (res.selection === 0) {
+                onSelect(null);
+            } else if (res.selection >= 1 && res.selection <= others.length) {
+                onSelect(others[res.selection - 1].name);
+            } else {
+                openDeveloperTools();
+            }
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openDumpCodexTargetMenu() {
+        openTargetPlayerMenu("Dump Codex", (targetName) => {
+            openDumpCodexMenu(targetName);
+        });
+    }
+
+    function openDumpCodexMenu(targetName) {
+        const form = new ActionFormData()
+            .title("§cDump Codex")
+            .body("§7Output is sent to chat and to logs. §8Summary = high-level keys/counts. Full = entire JSON in chunks.");
+        form.button("§fSnippet §8(truncated)");
+        form.button("§eSummary §8(keys/counts)");
+        form.button("§cFull §8(JSON, chunks + logs)");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 3) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const args = targetName ? (res.selection === 0 ? [targetName] : res.selection === 1 ? ["summary", targetName] : ["full", targetName]) : (res.selection === 0 ? [] : res.selection === 1 ? ["summary"] : ["full"]);
+            if (res.selection >= 0 && res.selection <= 2) triggerDebugCommand("dump_codex", args, () => openDeveloperTools());
+            else openDeveloperTools();
+        }).catch(() => openDeveloperTools());
+    }
+
     function openDeveloperTools() {
         const options = [
             { label: "§fScript Toggles", action: () => openScriptTogglesMenu() },
             { label: "§aFully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked."); openDeveloperTools(); } },
-            { label: "§fReset My Codex", action: () => triggerDebugCommand("reset_codex") },
+            { label: "§fReset My Codex", action: () => openTargetPlayerMenu("Reset Codex", (name) => { triggerDebugCommand("reset_codex", name ? [name] : []); openDeveloperTools(); }) },
             { label: "§fReset World Day to 1", action: () => triggerDebugCommand("reset_day") },
             { label: "§fSet Day...", action: () => promptSetDay() },
             { label: "§fSpawn Difficulty", action: () => openSpawnDifficultyMenu() },
-            { label: "§fClear / Set Infection", action: () => openInfectionDevMenu() },
-            { label: "§fGrant / Remove Immunity", action: () => openImmunityDevMenu() },
+            { label: "§fClear / Set Infection", action: () => openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name)) },
+            { label: "§fGrant / Remove Immunity", action: () => openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name)) },
             { label: "§fReset Intro", action: () => triggerDebugCommand("reset_intro", [], () => openDeveloperTools()) },
-            { label: "§fList Nearby Bears", action: () => triggerDebugCommand("list_bears", [], () => openDeveloperTools()) },
+            { label: "§fBears Target Player", action: () => openBearsTargetPlayerMenu() },
+            { label: "§fList Nearby Bears", action: () => openListBearsMenu() },
             { label: "§fForce Spawn", action: () => openForceSpawnMenu() },
-            { label: "§fDump Codex State", action: () => triggerDebugCommand("dump_codex", [], () => openDeveloperTools()) },
-            { label: "§fSet Kill Counts", action: () => openSetKillCountMenu() }
+            { label: "§fSimulate Next Day", action: () => { triggerDebugCommand("simulate_next_day", [], () => openDeveloperTools()); } },
+            { label: "§fClear Bears (radius)", action: () => openClearBearsMenu() },
+            { label: "§fInspect Nearest Bear", action: () => triggerDebugCommand("inspect_entity", [], () => openDeveloperTools()) },
+            { label: "§fReset Codex Section", action: () => openResetCodexSectionMenu() },
+            { label: "§fDump Codex State", action: () => openDumpCodexTargetMenu() },
+            { label: "§fSet Kill Counts", action: () => openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name)) }
         ];
 
         const form = new ActionFormData().title("§cDeveloper Tools");
@@ -3287,9 +3520,10 @@ export function showCodexBook(player, context) {
             [SCRIPT_IDS.infected]: "Infected AI",
             [SCRIPT_IDS.flying]: "Flying AI",
             [SCRIPT_IDS.torpedo]: "Torpedo AI",
-            [SCRIPT_IDS.biomeAmbience]: "Biome Ambience"
+            [SCRIPT_IDS.biomeAmbience]: "Biome Ambience",
+            [SCRIPT_IDS.spawnController]: "Spawn Controller"
         };
-        const ids = [SCRIPT_IDS.mining, SCRIPT_IDS.infected, SCRIPT_IDS.flying, SCRIPT_IDS.torpedo, SCRIPT_IDS.biomeAmbience];
+        const ids = [SCRIPT_IDS.mining, SCRIPT_IDS.infected, SCRIPT_IDS.flying, SCRIPT_IDS.torpedo, SCRIPT_IDS.biomeAmbience, SCRIPT_IDS.spawnController];
         const body = ids.map(id => `§7${labels[id]}: §${toggles[id] ? "aON" : "cOFF"}`).join("\n");
         const form = new ActionFormData()
             .title("§cScript Toggles")
@@ -3324,12 +3558,22 @@ export function showCodexBook(player, context) {
         return value > 0 ? `Custom (+${value})` : `Custom (${value})`;
     }
 
+    function getSpawnDifficultyPreview(value) {
+        if (value <= -2) return "§8Fewer spawns, longer intervals.";
+        if (value === -1) return "§8Slightly fewer spawns (Easy).";
+        if (value === 0) return "§8Normal spawn rate.";
+        if (value === 1) return "§8Slightly more spawns (Hard).";
+        if (value >= 2) return "§8More spawns, shorter intervals.";
+        return "";
+    }
+
     function openSpawnDifficultyMenu() {
         const currentRaw = Number(getWorldProperty(SPAWN_DIFFICULTY_PROPERTY) ?? 0);
         const label = getSpawnDifficultyLabel(currentRaw);
+        const preview = getSpawnDifficultyPreview(currentRaw);
         const form = new ActionFormData()
             .title("§cSpawn Difficulty")
-            .body(`§7Current Setting: §f${label}\n§7Value: §f${currentRaw}\n\n§8Adjust how aggressively Maple Bears spawn.\n§8Custom values range from §f-5 (calm)§8 to §f+5 (relentless).`);
+            .body(`§7Current Setting: §f${label}\n§7Value: §f${currentRaw}\n\n${preview ? preview + "\n\n" : ""}§8Adjust how aggressively Maple Bears spawn.\n§8Custom values range from §f-5 (calm)§8 to §f+5 (relentless).`);
 
         form.button("§aEasy (-1)");
         form.button("§fNormal (0)");
@@ -3387,44 +3631,46 @@ export function showCodexBook(player, context) {
         }).catch(() => openSpawnDifficultyMenu());
     }
 
-    function openInfectionDevMenu() {
+    function openInfectionDevMenu(targetName) {
         const form = new ActionFormData()
             .title("§cClear / Set Infection")
-            .body("§7Clear infection state or set minor/major infection for testing.");
+            .body("§7Clear infection state or set minor/major infection for testing." + (targetName ? ` §8(Target: ${targetName})` : ""));
         form.button("§cClear Infection");
         form.button("§eSet Minor Infection");
         form.button("§4Set Major Infection");
         form.button("§8Back");
+        const infectArgs = (extra) => (targetName ? [...extra, targetName] : extra);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 3) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
                 return openDeveloperTools();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
-            if (res.selection === 0) triggerDebugCommand("clear_infection", [], () => openInfectionDevMenu());
-            else if (res.selection === 1) triggerDebugCommand("set_infection", ["minor"], () => openInfectionDevMenu());
-            else if (res.selection === 2) triggerDebugCommand("set_infection", ["major"], () => openInfectionDevMenu());
+            if (res.selection === 0) triggerDebugCommand("clear_infection", infectArgs([]), () => openInfectionDevMenu(targetName));
+            else if (res.selection === 1) triggerDebugCommand("set_infection", infectArgs(["minor"]), () => openInfectionDevMenu(targetName));
+            else if (res.selection === 2) triggerDebugCommand("set_infection", infectArgs(["major"]), () => openInfectionDevMenu(targetName));
             else openDeveloperTools();
         }).catch(() => openDeveloperTools());
     }
 
-    function openImmunityDevMenu() {
+    function openImmunityDevMenu(targetName) {
         const form = new ActionFormData()
             .title("§cGrant / Remove Immunity")
-            .body("§7Grant permanent or temporary immunity, or remove immunity.");
+            .body("§7Grant permanent or temporary immunity, or remove immunity." + (targetName ? ` §8(Target: ${targetName})` : ""));
         form.button("§aGrant Permanent Immunity");
         form.button("§bGrant Temporary Immunity (5 min)");
         form.button("§cRemove Immunity");
         form.button("§8Back");
+        const immunArgs = (extra) => (targetName ? [...extra, targetName] : extra);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 3) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
                 return openDeveloperTools();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
-            if (res.selection === 0) triggerDebugCommand("grant_immunity", ["permanent"], () => openImmunityDevMenu());
-            else if (res.selection === 1) triggerDebugCommand("grant_immunity", ["temporary"], () => openImmunityDevMenu());
-            else if (res.selection === 2) triggerDebugCommand("remove_immunity", [], () => openImmunityDevMenu());
+            if (res.selection === 0) triggerDebugCommand("grant_immunity", immunArgs(["permanent"]), () => openImmunityDevMenu(targetName));
+            else if (res.selection === 1) triggerDebugCommand("grant_immunity", immunArgs(["temporary"]), () => openImmunityDevMenu(targetName));
+            else if (res.selection === 2) triggerDebugCommand("remove_immunity", immunArgs([]), () => openImmunityDevMenu(targetName));
             else openDeveloperTools();
         }).catch(() => openDeveloperTools());
     }
@@ -3504,6 +3750,12 @@ export function showCodexBook(player, context) {
         }).catch(() => openForceSpawnMenu());
     }
 
+    const FORCE_SPAWN_QUANTITIES = [
+        { value: 1, label: "1" },
+        { value: 5, label: "5" },
+        { value: 10, label: "10" }
+    ];
+
     function openForceSpawnDistanceMenu(opt, targetName) {
         const form = new ActionFormData()
             .title("§cForce Spawn — Distance")
@@ -3519,13 +3771,33 @@ export function showCodexBook(player, context) {
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             const distOpt = FORCE_SPAWN_DISTANCES[res.selection];
-            if (distOpt) {
+            if (distOpt) openForceSpawnQuantityMenu(opt, targetName, distOpt.value);
+            else openForceSpawnTargetMenu(opt);
+        }).catch(() => openForceSpawnTargetMenu(opt));
+    }
+
+    function openForceSpawnQuantityMenu(opt, targetName, distanceValue) {
+        const form = new ActionFormData()
+            .title("§cForce Spawn — Quantity")
+            .body(`§7How many to spawn? §8(Distance: ${distanceValue} blocks)`);
+        for (const q of FORCE_SPAWN_QUANTITIES) {
+            form.button(`§f${q.label}`);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === FORCE_SPAWN_QUANTITIES.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openForceSpawnMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const qOpt = FORCE_SPAWN_QUANTITIES[res.selection];
+            if (qOpt) {
                 const args = [opt.id];
                 if (targetName) args.push(targetName);
-                args.push(distOpt.value);
+                args.push(distanceValue, String(qOpt.value));
                 triggerDebugCommand("force_spawn", args, () => openForceSpawnMenu());
-            } else openForceSpawnTargetMenu(opt);
-        }).catch(() => openForceSpawnTargetMenu(opt));
+            } else openForceSpawnMenu();
+        }).catch(() => openForceSpawnMenu());
     }
 
     const KILL_COUNT_KEYS = [
@@ -3539,12 +3811,13 @@ export function showCodexBook(player, context) {
         { key: "torpedoBearKills", label: "Torpedo Bear" }
     ];
 
-    function openSetKillCountMenu() {
+    function openSetKillCountMenu(targetName) {
+        const targetPlayer = targetName ? world.getAllPlayers().find(p => p.name === targetName) : player;
         const form = new ActionFormData()
             .title("§cSet Kill Counts")
-            .body("§7Set codex kill count for a mob type (for testing achievements/entries).");
+            .body("§7Set codex kill count for a mob type (for testing achievements/entries)." + (targetName ? ` §8(Target: ${targetName})` : ""));
         for (const opt of KILL_COUNT_KEYS) {
-            const codex = getCodex(player);
+            const codex = targetPlayer ? getCodex(targetPlayer) : getCodex(player);
             const current = codex.mobs?.[opt.key] ?? 0;
             form.button(`§f${opt.label} §8(current: ${current})`);
         }
@@ -3557,16 +3830,17 @@ export function showCodexBook(player, context) {
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             const opt = KILL_COUNT_KEYS[res.selection];
             if (!opt) return openDeveloperTools();
-            const codex = getCodex(player);
+            const codex = targetPlayer ? getCodex(targetPlayer) : getCodex(player);
             const current = codex.mobs?.[opt.key] ?? 0;
             const modal = new ModalFormData()
                 .title("§cSet Kill Count")
                 .slider("Value (0–500)", 0, 500, { valueStep: 1, defaultValue: Math.min(500, Math.max(0, current)) });
             modal.show(player).then((modalRes) => {
-                if (!modalRes || modalRes.canceled) return openSetKillCountMenu();
+                if (!modalRes || modalRes.canceled) return openSetKillCountMenu(targetName);
                 const value = typeof modalRes.formValues?.[0] === "number" ? Math.round(modalRes.formValues[0]) : current;
-                triggerDebugCommand("set_kill_count", [opt.key, String(value)], () => openSetKillCountMenu());
-            }).catch(() => openSetKillCountMenu());
+                const setArgs = targetName ? [opt.key, String(value), targetName] : [opt.key, String(value)];
+                triggerDebugCommand("set_kill_count", setArgs, () => openSetKillCountMenu(targetName));
+            }).catch(() => openSetKillCountMenu(targetName));
         }).catch(() => openDeveloperTools());
     }
 
@@ -4211,6 +4485,8 @@ export function showCodexBook(player, context) {
         const bearVolIndex = Math.max(0, Math.min(2, settings.bearSoundVolume || 2));
         const breakVolIndex = Math.max(0, Math.min(2, settings.blockBreakVolume || 2));
         
+        const showInfectionTimer = settings.showInfectionTimer === true;
+        const criticalWarningsOnly = settings.criticalWarningsOnly === true;
         try {
             const form = new ModalFormData()
                 .title("§eSettings")
@@ -4220,15 +4496,14 @@ export function showCodexBook(player, context) {
                 .dropdown("Bear Sound Volume", volumeOptions, { defaultValueIndex: bearVolIndex })
                 .dropdown("Block Break Volume", volumeOptions, { defaultValueIndex: breakVolIndex })
                 .toggle("Show Search Button", { defaultValue: settings.showSearchButton !== false })
+                .toggle("Infection timer on screen (top, small)", { defaultValue: showInfectionTimer })
+                .toggle("Only critical infection/day warnings", { defaultValue: criticalWarningsOnly })
                 .dropdown((hasCheats(player) ? "Addon Difficulty — Spawn: E 0.7× N 1× H 1.3×. Major hits (from nothing): E 4 N 3 H 2. Major hits (from minor): E 3 N 2 H 1. Infection decay: E 0.8× N 1× H 1.2×. Mining interval: E 1.2× N 1× H 0.5×. Torpedo max blocks: E 0.85× N 1× H 2×." : "Addon Difficulty") + (canEditDifficulty ? "" : " §8(read-only)"), difficultyOptions, { defaultValueIndex: addonDifficultyIndex });
             
             form.show(player).then((res) => {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 
-                // Save settings if form values exist (whether submitted or canceled)
-                // ModalFormData may provide formValues even when canceled if user interacted with form
-                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 7) {
-                    // Convert slider value (0-10) back to float (0-1)
+                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 9) {
                     const sliderValue = typeof res.formValues[0] === 'number' 
                         ? Math.max(0, Math.min(10, Math.round(Number(res.formValues[0]))))
                         : volumeSliderValue;
@@ -4240,25 +4515,25 @@ export function showCodexBook(player, context) {
                     settings.bearSoundVolume = typeof res.formValues[3] === 'number' ? Math.max(0, Math.min(2, res.formValues[3])) : bearVolIndex;
                     settings.blockBreakVolume = typeof res.formValues[4] === 'number' ? Math.max(0, Math.min(2, res.formValues[4])) : breakVolIndex;
                     settings.showSearchButton = Boolean(res.formValues[5]);
+                    settings.showInfectionTimer = Boolean(res.formValues[6]);
+                    settings.criticalWarningsOnly = Boolean(res.formValues[7]);
                     
-                    // Addon difficulty (world): only first joiner or mb_cheats can change
-                    if (canEditDifficulty && typeof res.formValues[6] === 'number') {
-                        const selectedIndex = Math.max(0, Math.min(2, Math.floor(res.formValues[6])));
+                    if (canEditDifficulty && typeof res.formValues[8] === 'number') {
+                        const selectedIndex = Math.max(0, Math.min(2, Math.floor(res.formValues[8])));
                         const newAddonValue = selectedIndex === 0 ? -1 : selectedIndex === 1 ? 0 : 1;
                         setWorldProperty(ADDON_DIFFICULTY_PROPERTY, newAddonValue);
-                        // Sync spawn difficulty to match (can be overridden later in Developer Tools)
                         setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, newAddonValue);
                     }
                     
-                    // Save to codex (auto-save on any form close - submit or cancel)
                     saveCodex(player, codex);
                     
-                    // Also save to Basic Journal settings for backwards compatibility
                     const basicSettingsKey = `mb_player_settings_${player.id}`;
                     const basicSettings = {
                         soundVolume: normalizedVolume,
                         showTips: settings.showTips,
-                        audioMessages: settings.audioMessages
+                        audioMessages: settings.audioMessages,
+                        showInfectionTimer: settings.showInfectionTimer,
+                        criticalWarningsOnly: settings.criticalWarningsOnly
                     };
                     try {
                         setWorldPropertyChunked(basicSettingsKey, JSON.stringify(basicSettings));
@@ -4921,33 +5196,35 @@ function showGeneralSettingsBasic(player) {
         }
         
         if (parsedSettings && typeof parsedSettings === 'object') {
-            // Copy properties to ensure we have a clean object
             settings = {
                 soundVolume: typeof parsedSettings.soundVolume === 'number' ? parsedSettings.soundVolume : 1.0,
                 showTips: parsedSettings.showTips !== false,
-                audioMessages: parsedSettings.audioMessages !== false
+                audioMessages: parsedSettings.audioMessages !== false,
+                showInfectionTimer: parsedSettings.showInfectionTimer === true,
+                criticalWarningsOnly: parsedSettings.criticalWarningsOnly === true
             };
         } else {
-            // Default settings
             settings = {
                 soundVolume: 1.0,
                 showTips: true,
-                audioMessages: true
+                audioMessages: true,
+                showInfectionTimer: false,
+                criticalWarningsOnly: false
             };
         }
     } else {
-        // Default settings
         settings = {
             soundVolume: 1.0,
             showTips: true,
-            audioMessages: true
+            audioMessages: true,
+            showInfectionTimer: false,
+            criticalWarningsOnly: false
         };
     }
     
-    // Ensure all settings exist and are correct types
-    if (settings.audioMessages === undefined) {
-        settings.audioMessages = true;
-    }
+    if (settings.audioMessages === undefined) settings.audioMessages = true;
+    if (settings.showInfectionTimer === undefined) settings.showInfectionTimer = false;
+    if (settings.criticalWarningsOnly === undefined) settings.criticalWarningsOnly = false;
     if (settings.soundVolume === undefined || typeof settings.soundVolume !== 'number') {
         settings.soundVolume = 1.0;
     }
@@ -4967,7 +5244,8 @@ function showGeneralSettingsBasic(player) {
         .title("§bSettings")
         .slider("Sound Volume (0-10)", 0, 10, { valueStep: 1, defaultValue: volumeSliderValue })
         .toggle("Show Tips", { defaultValue: showTips })
-        .toggle("Audio Messages", { defaultValue: audioMessages });
+        .toggle("Audio Messages", { defaultValue: audioMessages })
+        .toggle("Only critical infection/day warnings", { defaultValue: Boolean(settings.criticalWarningsOnly) });
     
     form.show(player).then((response) => {
         if (response.canceled) {
@@ -4980,24 +5258,20 @@ function showGeneralSettingsBasic(player) {
         const volumeMultiplier = getPlayerSoundVolume(player);
         player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
         
-        if (response.formValues && response.formValues.length >= 3) {
-            // Get slider value (0-10) - ensure it's a valid number
+        if (response.formValues && response.formValues.length >= 4) {
             const sliderValue = typeof response.formValues[0] === 'number' 
                 ? Math.max(0, Math.min(10, Math.round(Number(response.formValues[0]))))
                 : volumeSliderValue;
-            
-            // Convert to float (0-1) for storage, but ensure it's a proper number
-            const normalizedVolume = Math.round((sliderValue / 10) * 100) / 100; // Round to 2 decimal places
-            
-            // Get toggle values - ensure they're proper booleans
+            const normalizedVolume = Math.round((sliderValue / 10) * 100) / 100;
             const showTipsValue = Boolean(response.formValues[1]);
             const audioMessagesValue = Boolean(response.formValues[2]);
+            const criticalWarningsOnlyValue = Boolean(response.formValues[3]);
             
-            // Create a new clean settings object with explicitly typed values
             const newSettings = {
                 soundVolume: Number(normalizedVolume),
                 showTips: Boolean(showTipsValue),
-                audioMessages: Boolean(audioMessagesValue)
+                audioMessages: Boolean(audioMessagesValue),
+                criticalWarningsOnly: criticalWarningsOnlyValue
             };
             
             try {
