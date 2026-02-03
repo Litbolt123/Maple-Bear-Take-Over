@@ -4,6 +4,7 @@ import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldPropert
 import { getAllScriptToggles, setScriptEnabled, SCRIPT_IDS, isBetaInfectedAIEnabled, setBetaInfectedAIEnabled, isBetaVisibleToAll, setBetaVisibleToAll, getBetaOwnerId, setBetaOwnerId } from "./mb_scriptToggles.js";
 import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTracker.js";
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
+import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
@@ -167,7 +168,12 @@ export function getDefaultCodex() {
             day20TinyLoreUnlocked: false,
             day20InfectedLoreUnlocked: false,
             day20BuffLoreUnlocked: false,
-            day20WorldLoreUnlocked: false
+            day20WorldLoreUnlocked: false,
+            sectionLastUnlock: {},
+            sectionLastViewed: {},
+            subsectionLastUnlock: {},
+            subsectionLastViewed: {},
+            hasOpenedBefore: false
         },
         biomeData: {} // Will store biome-specific infection data as discovered
     };
@@ -233,6 +239,18 @@ export function getPlayerSoundVolume(player) {
     }
 }
 
+/** Map codex path prefix to main menu section id for new/updated tracking */
+function getSectionForPath(path) {
+    const top = path.split(".")[0];
+    if (top === "infections" || top === "cures" || top === "status") return "infection";
+    if (top === "effects" || top === "snowEffects" || top === "symptomsUnlocks" || top === "minorInfectionEffects") return "symptoms";
+    if (top === "mobs") return "mobs";
+    if (top === "items") return "items";
+    if (top === "biomes") return "biomes";
+    if (top === "journal") return "lateLore";
+    return null;
+}
+
 export function markCodex(player, path, timestamp = false) {
     const codex = getCodex(player);
     const parts = path.split(".");
@@ -243,12 +261,74 @@ export function markCodex(player, path, timestamp = false) {
         ref = ref[key];
     }
     const leaf = parts[parts.length - 1];
+    const prevValue = ref[leaf];
     if (timestamp) {
         ref[leaf] = Date.now();
     } else {
         ref[leaf] = true;
     }
+    // Only bump "new/updated" when the value actually changed (e.g. Infection shouldn't show updated every open just because timer is shown)
+    const valueChanged = timestamp ? (ref[leaf] !== prevValue) : (prevValue !== true);
+    if (valueChanged) {
+        const section = getSectionForPath(path);
+        if (section) {
+            if (!codex.journal) codex.journal = {};
+            if (!codex.journal.sectionLastUnlock) codex.journal.sectionLastUnlock = {};
+            codex.journal.sectionLastUnlock[section] = Date.now();
+        }
+        if (!codex.journal) codex.journal = {};
+        if (!codex.journal.subsectionLastUnlock) codex.journal.subsectionLastUnlock = {};
+        codex.journal.subsectionLastUnlock[path] = Date.now();
+    }
     saveCodex(player, codex);
+}
+
+/** Mark a subsection (e.g. mobs.mapleBearSeen) as viewed. */
+function markSubsectionViewed(player, subsectionPath) {
+    try {
+        const codex = getCodex(player);
+        if (!codex.journal) codex.journal = {};
+        if (!codex.journal.subsectionLastViewed) codex.journal.subsectionLastViewed = {};
+        codex.journal.subsectionLastViewed[subsectionPath] = Date.now();
+        saveCodex(player, codex);
+    } catch (e) { }
+}
+
+/** Call to mark a subsection as having new content (e.g. timeline.day.5). */
+export function markSubsectionUnlock(player, subsectionPath) {
+    try {
+        const codex = getCodex(player);
+        if (!codex.journal) codex.journal = {};
+        if (!codex.journal.subsectionLastUnlock) codex.journal.subsectionLastUnlock = {};
+        codex.journal.subsectionLastUnlock[subsectionPath] = Date.now();
+        saveCodex(player, codex);
+    } catch (e) {
+        console.warn("[CODEX] markSubsectionUnlock failed:", e);
+    }
+}
+
+/** Call when a section gets new content from outside markCodex (e.g. Timeline from recordDailyEvent). */
+export function markSectionUnlock(player, section) {
+    try {
+        const codex = getCodex(player);
+        if (!codex.journal) codex.journal = {};
+        if (!codex.journal.sectionLastUnlock) codex.journal.sectionLastUnlock = {};
+        codex.journal.sectionLastUnlock[section] = Date.now();
+        saveCodex(player, codex);
+    } catch (e) {
+        console.warn("[CODEX] markSectionUnlock failed:", e);
+    }
+}
+
+/** Mark a section as viewed (clears new/updated state for that section). */
+function markSectionViewed(player, sectionId) {
+    try {
+        const codex = getCodex(player);
+        if (!codex.journal) codex.journal = {};
+        if (!codex.journal.sectionLastViewed) codex.journal.sectionLastViewed = {};
+        codex.journal.sectionLastViewed[sectionId] = Date.now();
+        saveCodex(player, codex);
+    } catch (e) { }
 }
 
 /**
@@ -709,11 +789,11 @@ export function shareKnowledge(fromPlayer, toPlayer) {
 
         // Send special feedback to both players
         const summary = sharedItems.join(', ');
-        fromPlayer.sendMessage(`§7Shared with §f${toPlayer.name}§7: §a${summary}`);
+        fromPlayer.sendMessage(CHAT_INFO + "Shared with " + CHAT_HIGHLIGHT + toPlayer.name + CHAT_INFO + ": " + CHAT_SUCCESS + summary);
         if (recipientHasJournal) {
-            toPlayer.sendMessage(`§b${fromPlayer.name}§7 shared: §a${summary}`);
+            toPlayer.sendMessage(CHAT_SPECIAL + fromPlayer.name + CHAT_INFO + " shared: " + CHAT_SUCCESS + summary);
         } else {
-            toPlayer.sendMessage(`§7Knowledge shared, but no journal to record it.`);
+            toPlayer.sendMessage(CHAT_INFO + "Knowledge shared, but no journal to record it.");
         }
         const volumeMultiplier = getPlayerSoundVolume(toPlayer);
         toPlayer.playSound("random.orb", { pitch: 1.2, volume: 0.8 * volumeMultiplier });
@@ -1011,75 +1091,84 @@ export function showCodexBook(player, context) {
         return summary.join("\n");
     }
 
+    function sectionHasNewOrUpdated(codex, sectionId) {
+        const unlock = codex.journal?.sectionLastUnlock?.[sectionId];
+        const viewed = codex.journal?.sectionLastViewed?.[sectionId];
+        const neverViewed = viewed == null;
+        if (neverViewed) return { new: true, updated: false };
+        if (!unlock) return { new: false, updated: false };
+        const updated = unlock > viewed;
+        return { new: false, updated };
+    }
+
+    function subsectionHasNewOrUpdated(codex, subsectionPath) {
+        const unlock = codex.journal?.subsectionLastUnlock?.[subsectionPath];
+        const viewed = codex.journal?.subsectionLastViewed?.[subsectionPath];
+        if (!unlock) return { new: false, updated: false };
+        const neverViewed = viewed == null;
+        const updated = !neverViewed && unlock > viewed;
+        return { new: neverViewed, updated };
+    }
+
     function openMain() {
         const codex = getCodex(player);
         const form = new ActionFormData().title("§6Powdery Journal");
         form.body(`${buildSummary()}\n\n§eChoose a section:`);
         
-        // Only show buttons for unlocked sections
         const buttons = [];
         const buttonActions = [];
         
-        // Infection section - always available
-        buttons.push("§fInfection");
-        buttonActions.push(() => openInfections());
+        function addSectionButton(baseLabel, sectionId, action) {
+            const state = sectionId ? sectionHasNewOrUpdated(codex, sectionId) : { new: false, updated: false };
+            let label = baseLabel;
+            if (state.new || state.updated) {
+                label = `§l§o${baseLabel} §8(${state.new ? "new" : "updated"})`;
+            }
+            buttons.push(label);
+            buttonActions.push(action);
+        }
         
-        // Symptoms section - show if any symptoms/snow effects discovered
+        // Infection - always available
+        addSectionButton("§fInfection", "infection", () => openInfections());
+        
         const hasAnySymptoms = Object.values(codex.effects).some(seen => seen);
         const hasAnySnowEffects = Object.values(codex.snowEffects).some(seen => seen);
         const hasSnowKnowledge = codex.items.snowIdentified;
         const maxSnow = maxSnowLevels.get(player.id);
-        
-        // Show symptoms tab if any symptoms/snow effects have been recorded
         if (hasAnySymptoms || hasAnySnowEffects || (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0)) {
-            buttons.push("§fSymptoms");
-            buttonActions.push(() => openSymptoms());
+            addSectionButton("§fSymptoms", "symptoms", () => openSymptoms());
         }
         
-        // Mobs section - only if any mobs discovered
         const hasAnyMobs = Object.values(codex.mobs).some(seen => seen === true);
         if (hasAnyMobs) {
-            buttons.push("§fMobs");
-            buttonActions.push(() => openMobs());
+            addSectionButton("§fMobs", "mobs", () => openMobs());
         }
         
-        // Items section - only if any items discovered
         const hasAnyItems = Object.values(codex.items).some(seen => seen);
         if (hasAnyItems) {
-            buttons.push("§fItems");
-            buttonActions.push(() => openItems());
+            addSectionButton("§fItems", "items", () => openItems());
         }
         
         const hasAnyBiomes = codex.biomes.infectedBiomeSeen || codex.biomes.dustedDirtSeen || codex.biomes.snowLayerSeen;
         if (hasAnyBiomes) {
-            buttons.push("§fBiomes and Blocks");
-            buttonActions.push(() => openBiomes());
+            addSectionButton("§fBiomes and Blocks", "biomes", () => openBiomes());
         }
         
         const hasEndgameLore = !!(codex.journal?.day20TinyLoreUnlocked || codex.journal?.day20InfectedLoreUnlocked || codex.journal?.day20BuffLoreUnlocked || codex.journal?.day20WorldLoreUnlocked);
         if (hasEndgameLore) {
-            buttons.push("§fLate Lore");
-            buttonActions.push(() => openLateLore());
+            addSectionButton("§fLate Lore", "lateLore", () => openLateLore());
         }
 
-        // Timeline section - only show if there's content available
         const currentDay = getCurrentDay ? getCurrentDay() : 0;
         const hasDailyEvents = codex.dailyEvents && Object.keys(codex.dailyEvents).length > 0;
         const hasTimelineContent = currentDay >= 2 || hasDailyEvents;
         if (hasTimelineContent) {
-            buttons.push("§fTimeline");
-            buttonActions.push(() => openTimeline());
+            addSectionButton("§fTimeline", "timeline", () => openTimeline());
         }
 
-        // Achievements section - show if any achievements exist
-        const hasAchievements = codex.achievements && (codex.achievements.day25Victory || codex.achievements.maxDaysSurvived);
-        if (hasAchievements) {
-            buttons.push("§fAchievements");
-            buttonActions.push(() => openAchievements());
-        }
+        addSectionButton("§fAchievements", "achievements", () => openAchievements());
 
         const hasDebugOptions = (player.hasTag && player.hasTag("mb_cheats")) || Boolean(system?.isEnableCheats?.());
-
         if (hasDebugOptions) {
             buttons.push("§bDebug Menu");
             buttonActions.push(() => openDebugMenu());
@@ -1087,18 +1176,15 @@ export function showCodexBook(player, context) {
             buttonActions.push(() => openDeveloperTools());
         }
         
-        // Settings button - always available
         buttons.push("§eSettings");
         buttonActions.push(() => openSettings());
         
-        // Search button - only if enabled in settings
         const settings = getSettings();
         if (settings.showSearchButton) {
             buttons.push("§bSearch");
             buttonActions.push(() => openSearch());
         }
         
-        // Add buttons to form
         for (const button of buttons) {
             form.button(button);
         }
@@ -1121,6 +1207,7 @@ export function showCodexBook(player, context) {
     }
 
     function openInfections() {
+        markSectionViewed(player, "infection");
         const codex = getCodex(player);
         const lines = [];
         const infectionState = playerInfection.get(player.id);
@@ -1388,6 +1475,7 @@ export function showCodexBook(player, context) {
     }
 
     function openSymptoms() {
+        markSectionViewed(player, "symptoms");
         const codex = getCodex(player);
         
         // Calculate infection status from context
@@ -1511,7 +1599,13 @@ export function showCodexBook(player, context) {
             form.body("§7Select a symptom to view details:");
             
             for (const e of entries) {
-                form.button(`§f${e.title}`);
+                let label = `§f${e.title}`;
+                const subPath = "effects." + e.key;
+                const subState = subsectionHasNewOrUpdated(codex, subPath);
+                if (subState.new || subState.updated) {
+                    label = `§l§o${label} §8(${subState.new ? "new" : "updated"})`;
+                }
+                form.button(label);
             }
             
             form.button("§8Back");
@@ -1532,6 +1626,7 @@ export function showCodexBook(player, context) {
             if (res.selection >= 0 && res.selection < entries.length) {
                 const e = entries[res.selection];
                 const known = codex.effects[e.key];
+                if (known) markSubsectionViewed(player, "effects." + e.key);
                 let body = "§e???";
                 if (known) {
                     const meta = (codex.symptomsMeta || {})[e.id] || {};
@@ -1586,7 +1681,13 @@ export function showCodexBook(player, context) {
             for (const e of entries) {
                 const color = e.type === "positive" ? "§a" : "§c";
                 const prefix = e.type === "positive" ? "§a+" : "§c-";
-                form.button(`${color}${prefix} ${e.title}`);
+                let label = `${color}${prefix} ${e.title}`;
+                const subPath = "snowEffects." + e.key;
+                const subState = subsectionHasNewOrUpdated(codex, subPath);
+                if (subState.new || subState.updated) {
+                    label = `§l§o${label} §8(${subState.new ? "new" : "updated"})`;
+                }
+                form.button(label);
             }
             
             form.button("§8Back");
@@ -1607,6 +1708,7 @@ export function showCodexBook(player, context) {
             if (res.selection >= 0 && res.selection < entries.length) {
                 const e = entries[res.selection];
                 const known = codex.snowEffects[e.key];
+                if (known) markSubsectionViewed(player, "snowEffects." + e.key);
                 let body = "§e???";
                 if (known) {
                     const effectType = e.type === "positive" ? "§aBeneficial" : "§cHarmful";
@@ -1822,6 +1924,7 @@ export function showCodexBook(player, context) {
     }
 
     function openMobs() {
+        markSectionViewed(player, "mobs");
         const codex = getCodex(player);
         const entries = [
             { key: "mapleBearSeen", title: "Tiny Maple Bear", icon: "textures/items/mb" },
@@ -1864,6 +1967,11 @@ export function showCodexBook(player, context) {
                 if (killCount > 0) {
                     label += ` §7(Kills: ${killCount})`;
                 }
+                const subPath = "mobs." + e.key;
+                const subState = subsectionHasNewOrUpdated(codex, subPath);
+                if (subState.new || subState.updated) {
+                    label = `§l§o${label} §8(${subState.new ? "new" : "updated"})`;
+                }
             }
             
             if (known) form.button(label, e.icon);
@@ -1879,6 +1987,7 @@ export function showCodexBook(player, context) {
             if (res.selection >= 0 && res.selection < entries.length) {
                 const e = entries[res.selection];
                 const known = codex.mobs[e.key];
+                if (known) markSubsectionViewed(player, "mobs." + e.key);
                 let body = "§e???";
                 
                 if (known) {
@@ -2081,6 +2190,7 @@ export function showCodexBook(player, context) {
     }
 
     function openItems() {
+        markSectionViewed(player, "items");
         const codex = getCodex(player);
         
         // Item icon configuration
@@ -2143,7 +2253,14 @@ export function showCodexBook(player, context) {
                 showIcon = true;
             }
             
-            const label = `§f${maskTitle(title, codex.items[e.key])}`;
+            let label = `§f${maskTitle(title, codex.items[e.key])}`;
+            if (codex.items[e.key]) {
+                const subPath = "items." + e.key;
+                const subState = subsectionHasNewOrUpdated(codex, subPath);
+                if (subState.new || subState.updated) {
+                    label = `§l§o${label} §8(${subState.new ? "new" : "updated"})`;
+                }
+            }
             
             // Add icons for known items only
             if (codex.items[e.key] && ITEM_ICONS[e.key]) {
@@ -2167,6 +2284,7 @@ export function showCodexBook(player, context) {
             if (res.selection >= 0 && res.selection < entries.length) {
                 const e = entries[res.selection];
                 const known = codex.items[e.key];
+                if (known) markSubsectionViewed(player, "items." + e.key);
                 let body = "§e???";
                 if (known) {
                     if (e.key === "snowFound") {
@@ -2565,7 +2683,13 @@ export function showCodexBook(player, context) {
             }
 
             if (hasEvents) {
-                form.button(`§fDay ${day}`);
+                let label = `§fDay ${day}`;
+                const subPath = "timeline.day." + day;
+                const subState = subsectionHasNewOrUpdated(codex, subPath);
+                if (subState.new || subState.updated) {
+                    label = `§l§o${label} §8(${subState.new ? "new" : "updated"})`;
+                }
+                form.button(label);
             }
         }
         
@@ -2583,6 +2707,7 @@ export function showCodexBook(player, context) {
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             if (res.selection >= 0 && res.selection < daysWithEvents.length) {
                 const selectedDay = daysWithEvents[res.selection];
+                markSubsectionViewed(player, "timeline.day." + selectedDay);
                 const dayEvents = codex.dailyEvents[selectedDay];
                 
                 let body = `§6Day ${selectedDay}\n\n`;
@@ -2638,6 +2763,7 @@ export function showCodexBook(player, context) {
     }
     
     function openBiomes() {
+        markSectionViewed(player, "biomes");
         const codex = getCodex(player);
         const form = new ActionFormData().title("§6Biomes and Blocks");
         
@@ -2756,6 +2882,7 @@ export function showCodexBook(player, context) {
     }
 
     function openLateLore() {
+        markSectionViewed(player, "lateLore");
         const codex = getCodex(player);
         const entries = [];
 
@@ -2796,7 +2923,13 @@ export function showCodexBook(player, context) {
         form.body(entries.length > 0 ? "§7Recovered notes:" : "§7No late entries yet.");
 
         for (const entry of entries) {
-            form.button(`§f${entry.title}\n§8${entry.summary}`);
+            let label = `§f${entry.title}\n§8${entry.summary}`;
+            const subPath = "lateLore." + entry.id;
+            const subState = subsectionHasNewOrUpdated(codex, subPath);
+            if (subState.new || subState.updated) {
+                label = `§l§o${label} §8(${subState.new ? "new" : "updated"})`;
+            }
+            form.button(label);
         }
         form.button("§8Back");
 
@@ -2808,6 +2941,7 @@ export function showCodexBook(player, context) {
             }
 
             const entry = entries[res.selection];
+            markSubsectionViewed(player, "lateLore." + entry.id);
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 0.9, volume: 0.7 * volumeMultiplier });
             new ActionFormData()
@@ -2824,6 +2958,7 @@ export function showCodexBook(player, context) {
     }
 
     function openTimeline() {
+        markSectionViewed(player, "timeline");
         const codex = getCodex(player);
         const currentDay = getCurrentDay ? getCurrentDay() : 0;
         const hasDailyEvents = codex.dailyEvents && Object.keys(codex.dailyEvents).length > 0;
@@ -3024,6 +3159,7 @@ export function showCodexBook(player, context) {
     }
 
     function openAchievements() {
+        markSectionViewed(player, "achievements");
         const codex = getCodex(player);
         let body = `§6Achievements\n\n`;
         
@@ -3047,20 +3183,46 @@ export function showCodexBook(player, context) {
             body += `§7Maximum Days Survived: §f${achievements.maxDaysSurvived}\n`;
             body += `§7Days Past Victory: §f${daysPastVictory}\n\n`;
             
-            // Show milestone achievements
+            // Show milestone achievements (not yet achieved = ??? by length)
             const milestones = [30, 35, 40, 45, 50];
             for (const milestone of milestones) {
                 const milestoneKey = `day${milestone}Survived`;
+                const label = `Day ${milestone} Survived`;
                 if (achievements[milestoneKey]) {
-                    body += `§a✓ Day ${milestone} Survived\n`;
+                    body += `§a✓ ${label}\n`;
                 } else if (achievements.maxDaysSurvived >= milestone) {
-                    body += `§a✓ Day ${milestone} Survived\n`;
+                    body += `§a✓ ${label}\n`;
                 } else {
-                    body += `§8✗ Day ${milestone} Survived\n`;
+                    body += `§8✗ ${"?".repeat(label.length)}\n`;
                 }
             }
         } else if (achievements.maxDaysSurvived) {
             body += `§7Maximum Days Survived: §f${achievements.maxDaysSurvived}\n`;
+        }
+        
+        // First cures: Minor always shown; Major only if player has had major infection
+        const majorDiscovered = codex.infections?.major && (typeof codex.infections.major === "object" ? codex.infections.major.discovered : !!codex.infections.major);
+        body += `\n§6Cures\n`;
+        body += achievements.firstMinorCure ? `§a✓ Minor Cure\n` : `§8✗ Minor Cure\n`;
+        if (majorDiscovered) {
+            body += achievements.firstMajorCure ? `§a✓ Major Cure\n` : `§8✗ Major Cure\n`;
+        }
+        
+        // First bear kills: show name only when unlocked or when player has experienced that mob (seen in codex)
+        const firstKillEntries = [
+            { key: "firstKill_tinyBear", label: "Maple Bear", seenKey: "mapleBearSeen" },
+            { key: "firstKill_infectedBear", label: "Infected Bear", seenKey: "infectedBearSeen" },
+            { key: "firstKill_buffBear", label: "Buff Maple Bear", seenKey: "buffBearSeen" },
+            { key: "firstKill_flyingBear", label: "Flying Maple Bear", seenKey: "flyingBearSeen" },
+            { key: "firstKill_miningBear", label: "Mining Maple Bear", seenKey: "miningBearSeen" },
+            { key: "firstKill_torpedoBear", label: "Torpedo Maple Bear", seenKey: "torpedoBearSeen" }
+        ];
+        body += `\n§6First Kills\n`;
+        for (const { key, label, seenKey } of firstKillEntries) {
+            const unlocked = achievements[key];
+            const revealed = codex.mobs && codex.mobs[seenKey];
+            const displayName = (unlocked || revealed) ? label : "?".repeat(label.length);
+            body += unlocked ? `§a✓ First ${displayName} kill\n` : `§8✗ First ${displayName} kill\n`;
         }
         
         const form = new ActionFormData().title("§6Achievements").body(body).button("§8Back");
@@ -3079,7 +3241,7 @@ export function showCodexBook(player, context) {
     function openDeveloperTools() {
         const options = [
             { label: "§fScript Toggles", action: () => openScriptTogglesMenu() },
-            { label: "§aFully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage("§aCodex fully unlocked."); openDeveloperTools(); } },
+            { label: "§aFully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked."); openDeveloperTools(); } },
             { label: "§fReset My Codex", action: () => triggerDebugCommand("reset_codex") },
             { label: "§fReset World Day to 1", action: () => triggerDebugCommand("reset_day") },
             { label: "§fSet Day...", action: () => promptSetDay() },
@@ -3148,7 +3310,7 @@ export function showCodexBook(player, context) {
                 const id = ids[res.selection];
                 const next = !toggles[id];
                 setScriptEnabled(id, next);
-                player.sendMessage(`§7${labels[id]}: ${next ? "§aON" : "§cOFF"}`);
+                player.sendMessage(CHAT_INFO + labels[id] + ": " + (next ? CHAT_SUCCESS + "ON" : CHAT_DANGER + "OFF"));
                 player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             }
             openScriptTogglesMenu();
@@ -3212,12 +3374,12 @@ export function showCodexBook(player, context) {
             const rawInput = res.formValues?.[0] ?? "";
             const parsed = parseInt(rawInput, 10);
             if (Number.isNaN(parsed)) {
-                player.sendMessage("§7[MBI] Invalid difficulty value.");
+                player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Invalid difficulty value.");
                 return openSpawnDifficultyMenu();
             }
 
             if (parsed < -5 || parsed > 5) {
-                player.sendMessage("§7[MBI] Enter a value between -5 (calm) and +5 (relentless).");
+                player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Enter a value between -5 (calm) and +5 (relentless).");
                 return openSpawnDifficultyMenu();
             }
 
@@ -3450,11 +3612,11 @@ export function showCodexBook(player, context) {
 
             if (!handled) {
                 console.warn(`[MBI] Failed to trigger debug command ${subcommand}.`);
-                player?.sendMessage?.("§7[MBI] Failed to send debug command. See log.");
+                player?.sendMessage?.(CHAT_DEV + "[MBI] " + CHAT_INFO + "Failed to send debug command. See log.");
             }
         } catch (err) {
             console.warn("[MBI] Failed to prepare debug command payload:", err);
-            player?.sendMessage?.("§7[MBI] Failed to send debug command.");
+            player?.sendMessage?.(CHAT_DEV + "[MBI] " + CHAT_INFO + "Failed to send debug command.");
         } finally {
             system.run(onComplete);
         }
@@ -3472,7 +3634,7 @@ export function showCodexBook(player, context) {
             const dayString = res.formValues?.[0] ?? "";
             const dayNumber = parseInt(dayString, 10);
             if (Number.isNaN(dayNumber) || dayNumber < 1) {
-                player.sendMessage("§7[MBI] Invalid day number.");
+                player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Invalid day number.");
                 return openDeveloperTools();
             }
 
@@ -3613,7 +3775,7 @@ export function showCodexBook(player, context) {
             if (res.selection < flags.length) {
                 const newState = toggleDebugFlag("mining", flags[res.selection]);
                 const stateText = newState ? "§aON" : "§cOFF";
-                player.sendMessage(`§7[DEBUG] Mining AI ${flags[res.selection]} debug: ${stateText}`);
+                player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Mining AI ${flags[res.selection]} debug: ${stateText}`);
                 // Log to console for confirmation
                 console.warn(`[DEBUG MENU] Mining AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
             }
@@ -3645,7 +3807,7 @@ export function showCodexBook(player, context) {
             if (res.selection < flags.length) {
                 const newState = toggleDebugFlag("infected", flags[res.selection]);
                 const stateText = newState ? "§aON" : "§cOFF";
-                player.sendMessage(`§7[DEBUG] Infected AI ${flags[res.selection]} debug: ${stateText}`);
+                player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Infected AI ${flags[res.selection]} debug: ${stateText}`);
                 console.warn(`[DEBUG MENU] Infected AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 invalidateDebugCache();
             }
@@ -3679,7 +3841,7 @@ export function showCodexBook(player, context) {
             if (res.selection < flags.length) {
                 const newState = toggleDebugFlag("torpedo", flags[res.selection]);
                 const stateText = newState ? "§aON" : "§cOFF";
-                player.sendMessage(`§7[DEBUG] Torpedo AI ${flags[res.selection]} debug: ${stateText}`);
+                player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Torpedo AI ${flags[res.selection]} debug: ${stateText}`);
                 // Log to console for confirmation
                 console.warn(`[DEBUG MENU] Torpedo AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 invalidateDebugCache();
@@ -3712,7 +3874,7 @@ export function showCodexBook(player, context) {
             if (res.selection < flags.length) {
                 const newState = toggleDebugFlag("flying", flags[res.selection]);
                 const stateText = newState ? "§aON" : "§cOFF";
-                player.sendMessage(`§7[DEBUG] Flying AI ${flags[res.selection]} debug: ${stateText}`);
+                player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Flying AI ${flags[res.selection]} debug: ${stateText}`);
                 // Log to console for confirmation
                 console.warn(`[DEBUG MENU] Flying AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
             }
@@ -3750,7 +3912,7 @@ export function showCodexBook(player, context) {
                 const flagName = flags[res.selection];
                 const newState = toggleDebugFlag("spawn", flagName);
                 const stateText = newState ? "§aON" : "§cOFF";
-                player.sendMessage(`§7[DEBUG] Spawn Controller ${flagName} debug: ${stateText}`);
+                player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Spawn Controller ${flagName} debug: ${stateText}`);
                 // Log to console for confirmation
                 console.warn(`[DEBUG MENU] Spawn Controller ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 // Invalidate cache to ensure changes take effect immediately
@@ -3786,7 +3948,7 @@ export function showCodexBook(player, context) {
             if (res.selection < flags.length) {
                 const newState = toggleDebugFlag("main", flags[res.selection]);
                 const stateText = newState ? "§aON" : "§cOFF";
-                player.sendMessage(`§7[DEBUG] Main Script ${flags[res.selection]} debug: ${stateText}`);
+                player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Main Script ${flags[res.selection]} debug: ${stateText}`);
                 // Log to console for confirmation
                 console.warn(`[DEBUG MENU] Main Script ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 invalidateDebugCache();
@@ -3824,7 +3986,7 @@ export function showCodexBook(player, context) {
                 const flagName = flags[res.selection];
                 const newState = toggleDebugFlag("biome_ambience", flagName);
                 const stateText = newState ? "§aON" : "§cOFF";
-                player.sendMessage(`§7[DEBUG] Biome Ambience ${flagName} debug: ${stateText}`);
+                player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Biome Ambience ${flagName} debug: ${stateText}`);
                 // Log to console for confirmation
                 console.warn(`[DEBUG MENU] Biome Ambience ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 // Invalidate cache to ensure changes take effect immediately
@@ -3868,7 +4030,7 @@ export function showCodexBook(player, context) {
                 const flagName = flags[res.selection];
                 const newState = toggleDebugFlag("dynamic_properties", flagName);
                 const stateText = newState ? "§aON" : "§cOFF";
-                player.sendMessage(`§7[DEBUG] Dynamic Properties ${flagName} debug: ${stateText}`);
+                player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Dynamic Properties ${flagName} debug: ${stateText}`);
                 console.warn(`[DEBUG MENU] Dynamic Properties ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 invalidateDebugCache();
             }
@@ -3910,7 +4072,7 @@ export function showCodexBook(player, context) {
                 const flagName = flags[res.selection];
                 const newState = toggleDebugFlag("codex", flagName);
                 const stateText = newState ? "§aON" : "§cOFF";
-                player.sendMessage(`§7[DEBUG] Codex/Knowledge ${flagName} debug: ${stateText}`);
+                player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Codex/Knowledge ${flagName} debug: ${stateText}`);
                 console.warn(`[DEBUG MENU] Codex/Knowledge ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 invalidateDebugCache();
             }
@@ -3953,7 +4115,7 @@ export function showCodexBook(player, context) {
                 const flagName = flags[res.selection];
                 const newState = toggleDebugFlag("ground_infection", flagName);
                 const stateText = newState ? "§aON" : "§cOFF";
-                player.sendMessage(`§7[DEBUG] Ground Infection Timer ${flagName} debug: ${stateText}`);
+                player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Ground Infection Timer ${flagName} debug: ${stateText}`);
                 console.warn(`[DEBUG MENU] Ground Infection Timer ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 invalidateDebugCache();
             }
@@ -4012,10 +4174,10 @@ export function showCodexBook(player, context) {
             }
             if (canEdit && res.selection === 0) {
                 setBetaInfectedAIEnabled(!infectedOn);
-                player.sendMessage(`§7Infected AI (beta): ${infectedOn ? "§cOFF" : "§aON"}`);
+                player.sendMessage(CHAT_INFO + "Infected AI (beta): " + (infectedOn ? CHAT_DANGER + "OFF" : CHAT_SUCCESS + "ON"));
             } else if (canEdit && res.selection === 1) {
                 setBetaVisibleToAll(!visibleToAll);
-                player.sendMessage(`§7Visible to others: ${visibleToAll ? "§cOFF" : "§aON"}`);
+                player.sendMessage(CHAT_INFO + "Visible to others: " + (visibleToAll ? CHAT_DANGER + "OFF" : CHAT_SUCCESS + "ON"));
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             openBetaSettingsMenu();
@@ -4105,7 +4267,7 @@ export function showCodexBook(player, context) {
                     }
                     
                     // Send confirmation message (consistent with Basic Journal)
-                    player.sendMessage("§7Settings saved!");
+                    player.sendMessage(CHAT_INFO + "Settings saved!");
                     player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
                 } else if (res && res.canceled) {
                     player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
@@ -4116,13 +4278,13 @@ export function showCodexBook(player, context) {
             }).catch((error) => {
                 console.warn(`[SETTINGS] Error showing settings form:`, error);
                 console.warn(`[SETTINGS] Error stack:`, error?.stack);
-                player.sendMessage("§cError opening settings! Check console for details.");
+                player.sendMessage(CHAT_DANGER + "Error opening settings! Check console for details.");
                 openMain();
             });
         } catch (error) {
             console.warn(`[SETTINGS] Error creating settings form:`, error);
             console.warn(`[SETTINGS] Error stack:`, error?.stack);
-            player.sendMessage("§cError creating settings form! Check console for details.");
+            player.sendMessage(CHAT_DANGER + "Error creating settings form! Check console for details.");
             openMain();
         }
     }
@@ -4230,7 +4392,33 @@ export function showCodexBook(player, context) {
         }).catch(() => openMain());
     }
 
-    try { openMain(); } catch { }
+    function showFirstTimeIntro() {
+        const codex = getCodex(player);
+        const form = new ActionFormData()
+            .title("§6Powdery Journal")
+            .body("§7This journal records what you learn about the outbreak.\n\n§7It updates as you discover creatures, items, and places. Use it to track infection, cures, and dangers.\n\n§7Things are logged as you experience them.")
+            .button("§aContinue");
+        form.show(player).then((res) => {
+            if (!codex.journal) codex.journal = {};
+            codex.journal.hasOpenedBefore = true;
+            saveCodex(player, codex);
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+            openMain();
+        }).catch(() => {
+            if (!codex.journal) codex.journal = {};
+            codex.journal.hasOpenedBefore = true;
+            saveCodex(player, codex);
+            openMain();
+        });
+    }
+
+    const codexForEntry = getCodex(player);
+    if (!codexForEntry.journal?.hasOpenedBefore) {
+        try { showFirstTimeIntro(); } catch { openMain(); }
+    } else {
+        try { openMain(); } catch { }
+    }
 }
 
 // Cache for combined debug state across all players
@@ -4629,7 +4817,7 @@ function playJournalIntroAudio(player) {
         }
         
         // Show message while audio plays
-        player.sendMessage("§7Playing introduction...");
+        player.sendMessage(CHAT_INFO + "Playing introduction...");
     } catch (error) {
         console.warn(`[BASIC JOURNAL] Error playing intro audio:`, error);
     }
@@ -4675,10 +4863,10 @@ function showBetaSettingsScreen(player, onBack) {
         }
         if (canEdit && res.selection === 0) {
             setBetaInfectedAIEnabled(!infectedOn);
-            player.sendMessage(`§7Infected AI (beta): ${infectedOn ? "§cOFF" : "§aON"}`);
+            player.sendMessage(CHAT_INFO + "Infected AI (beta): " + (infectedOn ? CHAT_DANGER + "OFF" : CHAT_SUCCESS + "ON"));
         } else if (canEdit && res.selection === 1) {
             setBetaVisibleToAll(!visibleToAll);
-            player.sendMessage(`§7Visible to others: ${visibleToAll ? "§cOFF" : "§aON"}`);
+            player.sendMessage(CHAT_INFO + "Visible to others: " + (visibleToAll ? CHAT_DANGER + "OFF" : CHAT_SUCCESS + "ON"));
         }
         player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
         showBetaSettingsScreen(player, onBack);
@@ -4815,10 +5003,10 @@ function showGeneralSettingsBasic(player) {
             try {
                 // Stringify the object for storage (like other dynamic properties in the codebase)
                 setWorldPropertyChunked(settingsKey, JSON.stringify(newSettings));
-                player.sendMessage("§7Settings saved!");
+                player.sendMessage(CHAT_INFO + "Settings saved!");
             } catch (error) {
                 console.warn(`[BASIC JOURNAL] Error saving settings:`, error);
-                player.sendMessage("§cError saving settings!");
+                player.sendMessage(CHAT_DANGER + "Error saving settings!");
             }
         }
         showSettingsChooserBasic(player);

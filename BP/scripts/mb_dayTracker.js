@@ -1,6 +1,7 @@
 import { world, system } from "@minecraft/server";
 import { getWorldProperty, setWorldProperty, getPlayerProperty } from "./mb_dynamicPropertyHandler.js";
-import { getCodex, saveCodex, getKnowledgeLevel, hasKnowledge, checkKnowledgeProgression, getPlayerSoundVolume } from "./mb_codex.js";
+import { getCodex, saveCodex, markSectionUnlock, markSubsectionUnlock, getKnowledgeLevel, hasKnowledge, checkKnowledgeProgression, getPlayerSoundVolume } from "./mb_codex.js";
+import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_DANGER_STRONG, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT } from "./mb_chatColors.js";
 
 // Minimal dynamic property test (must be delayed until after startup)
 // system.run(() => {
@@ -342,6 +343,10 @@ export function recordDailyEvent(player, day, event, category = "general", codex
         // Avoid duplicate events
         if (!codex.dailyEvents[day][category].includes(event)) {
             codex.dailyEvents[day][category].push(event);
+            if (!codexOverride) {
+                markSectionUnlock(player, "timeline");
+                markSubsectionUnlock(player, "timeline.day." + day);
+            }
         }
 
         if (!codexOverride) {
@@ -383,7 +388,7 @@ export function checkDailyEventsForAllPlayers() {
                                 player.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
 
                                 // Send discovery message
-                                player.sendMessage("§7You feel your thoughts organizing... New insights about yesterday's events have been recorded in your mind.");
+                                player.sendMessage(CHAT_INFO + "You feel your thoughts organizing... New insights about yesterday's events have been recorded in your mind.");
                             } catch (err) {
                                 console.warn("[ERROR] in milestone discovery sound/message:", err);
                             }
@@ -406,55 +411,55 @@ export function checkDailyEventsForAllPlayers() {
 export function getInfectionMessage(type, level = "normal") {
     const currentDay = getCurrentDay();
 
-    // Early days (0-3): Calm, mysterious
+    // Early days (0-3): Calm, mysterious (return plain text; call sites add color)
     if (currentDay < 4) {
         const earlyMessages = {
             bear: {
-                hit: "§7Something brushes against you...",
-                infected: "§7You feel a strange presence...",
-                severe: "§8The shadows seem to follow you..."
+                hit: "Something brushes against you...",
+                infected: "You feel a strange presence...",
+                severe: "The shadows seem to follow you..."
             },
             snow: {
-                hit: "§7A strange sensation spreads through you...",
-                infected: "§7You feel drawn to something...",
-                severe: "§8The craving grows stronger..."
+                hit: "A strange sensation spreads through you...",
+                infected: "You feel drawn to something...",
+                severe: "The craving grows stronger..."
             }
         };
-        return earlyMessages[type]?.[level] || earlyMessages[type]?.infected || "§7Something feels different...";
+        return earlyMessages[type]?.[level] || earlyMessages[type]?.infected || "Something feels different...";
     }
 
     // Mid days (4-7): More direct, concerning
     else if (currentDay < 8) {
         const midMessages = {
             bear: {
-                hit: "§eYou were struck by something unnatural!",
-                infected: "§6You start to feel off...",
-                severe: "§cThe infection spreads through your body..."
+                hit: "You were struck by something unnatural!",
+                infected: "You start to feel off...",
+                severe: "The infection spreads through your body..."
             },
             snow: {
-                hit: "§eThe powder burns as it enters your system...",
-                infected: "§6You start to feel funny...",
-                severe: "§cThe substance takes hold of your mind..."
+                hit: "The powder burns as it enters your system...",
+                infected: "You start to feel funny...",
+                severe: "The substance takes hold of your mind..."
             }
         };
-        return midMessages[type]?.[level] || midMessages[type]?.infected || "§6Something is wrong...";
+        return midMessages[type]?.[level] || midMessages[type]?.infected || "Something is wrong...";
     }
 
     // Late days (8+): Urgent, dangerous
     else {
         const lateMessages = {
             bear: {
-                hit: "§cA Maple Bear attacks you!",
-                infected: "§4You start to feel off...",
-                severe: "§4The transformation begins..."
+                hit: "A Maple Bear attacks you!",
+                infected: "You start to feel off...",
+                severe: "The transformation begins..."
             },
             snow: {
-                hit: "§cThe powder sears through your veins!",
-                infected: "§4You start to feel funny...",
-                severe: "§4The substance consumes your soul..."
+                hit: "The powder sears through your veins!",
+                infected: "You start to feel funny...",
+                severe: "The substance consumes your soul..."
             }
         };
-        return lateMessages[type]?.[level] || lateMessages[type]?.infected || "§4You are in grave danger...";
+        return lateMessages[type]?.[level] || lateMessages[type]?.infected || "You are in grave danger...";
     }
 }
 
@@ -705,8 +710,8 @@ function startDayCycleLoop() {
                         // Post-victory periodic warnings (every 5 days)
                         if (newDay > 25 && (newDay - 25) % 5 === 0) {
                             const daysPastVictory = newDay - 25;
-                            player.sendMessage(`§c§l[WARNING] §r§cThe infection has grown ${daysPastVictory} days stronger since victory.`);
-                            player.sendMessage(`§cThe world becomes more dangerous with each passing day.`);
+                            player.sendMessage(CHAT_DANGER + "§l[WARNING] §r" + CHAT_DANGER + `The infection has grown ${daysPastVictory} days stronger since victory.`);
+                            player.sendMessage(CHAT_DANGER + "The world becomes more dangerous with each passing day.");
                             const volumeMultiplier = getPlayerSoundVolume(player);
                             player.playSound("mob.wither.spawn", { pitch: 0.8, volume: 0.7 * volumeMultiplier });
                             
@@ -736,7 +741,7 @@ function startDayCycleLoop() {
                 // Enhanced day message for post-victory
                 if (newDay > 25) {
                     const daysPastVictory = newDay - 25;
-                    world.sendMessage(`${displayInfo.color}${displayInfo.symbols} Day ${newDay} §7(+${daysPastVictory} past victory) - The infection intensifies...`);
+                    world.sendMessage(`${displayInfo.color}${displayInfo.symbols} Day ${newDay} ${CHAT_INFO}(+${daysPastVictory} past victory) - The infection intensifies...`);
                 } else {
                     world.sendMessage(`${displayInfo.color}${displayInfo.symbols} A new day begins... Day ${newDay}`);
                 }
@@ -766,7 +771,7 @@ export function mbiHandleMilestoneDay(day) {
     system.runTimeout(() => {
         try {
             // Broadcast milestone message
-            world.sendMessage(`§8[MBI] §6Milestone reached: Day ${day}`);
+            world.sendMessage(CHAT_DEV + "[MBI] " + CHAT_ACHIEVEMENT + `Milestone reached: Day ${day}`);
             // Play milestone sound, show title, and record in codex for all players
             for (const player of world.getAllPlayers()) {
                 try {
@@ -792,23 +797,23 @@ export function mbiHandleMilestoneDay(day) {
             // Trigger specific milestone events
             switch (day) {
                 case 2:
-                    world.sendMessage(`§8[MBI] §eThe tiny ones have emerged...`);
+                    world.sendMessage(CHAT_DEV + "[MBI] " + CHAT_WARNING + "The tiny ones have emerged...");
                     break;
                 case 4:
-                    world.sendMessage(`§8[MBI] §6Who is that over there...?`);
+                    world.sendMessage(CHAT_DEV + "[MBI] " + CHAT_ACHIEVEMENT + "Who is that over there...?");
                     break;
                 case 8:
-                    world.sendMessage(`§8[MBI] §cThe sky is no longer safe. Flying Maple Bears have arrived.`);
+                    world.sendMessage(CHAT_DEV + "[MBI] " + CHAT_DANGER + "The sky is no longer safe. Flying Maple Bears have arrived.");
                     break;
                 case 13:
-                    world.sendMessage(`§8[MBI] §cIf you see one, run.`);
+                    world.sendMessage(CHAT_DEV + "[MBI] " + CHAT_DANGER + "If you see one, run.");
                     break;
                 case 20:
-                    world.sendMessage(`§8[MBI] §7The air feels thin. Day 20 has settled in.`);
+                    world.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "The air feels thin. Day 20 has settled in.");
                     break;
                 case 25:
-                    world.sendMessage(`§8[MBI] §a§lVICTORY! §r§aYou have survived 25 days!`);
-                    world.sendMessage(`§8[MBI] §7The infection continues, but you have proven yourself a true survivor.`);
+                    world.sendMessage(CHAT_DEV + "[MBI] " + CHAT_SUCCESS + "§lVICTORY! §r" + CHAT_SUCCESS + "You have survived 25 days!");
+                    world.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "The infection continues, but you have proven yourself a true survivor.");
                     break;
             }
 
@@ -855,14 +860,14 @@ export function mbiHandleMilestoneDay(day) {
                         }
                         
                         // Send victory message
-                        player.sendMessage("§a§l═══════════════════════════════════");
-                        player.sendMessage("§a§l  VICTORY ACHIEVED!");
-                        player.sendMessage("§7  You have survived 25 days of infection.");
-                        player.sendMessage("§7  The world recognizes your resilience.");
-                        player.sendMessage("§c§l  WARNING:");
-                        player.sendMessage("§c  The infection will only grow stronger.");
-                        player.sendMessage("§c  Continue at your own risk.");
-                        player.sendMessage("§a§l═══════════════════════════════════");
+                        player.sendMessage(CHAT_SUCCESS + "§l═══════════════════════════════════");
+                        player.sendMessage(CHAT_SUCCESS + "§l  VICTORY ACHIEVED!");
+                        player.sendMessage(CHAT_INFO + "  You have survived 25 days of infection.");
+                        player.sendMessage(CHAT_INFO + "  The world recognizes your resilience.");
+                        player.sendMessage(CHAT_DANGER + "§l  WARNING:");
+                        player.sendMessage(CHAT_DANGER + "  The infection will only grow stronger.");
+                        player.sendMessage(CHAT_DANGER + "  Continue at your own risk.");
+                        player.sendMessage(CHAT_SUCCESS + "§l═══════════════════════════════════");
                     } catch (error) {
                         console.warn("[MBI] Failed to celebrate Day 25 victory for player", error);
                     }
@@ -1195,7 +1200,7 @@ world.afterEvents.playerJoin.subscribe((event) => {
                                     // But only if enough time has passed since intro (intro takes ~15 seconds)
                                     const displayInfo = getDayDisplayInfo(currentDay);
                                     if (currentDay < 2) {
-                                        sendPlayerMessage(player, "§aWelcome to a completely normal world...");
+                                        sendPlayerMessage(player, CHAT_SUCCESS + "Welcome to a completely normal world...");
                                         showPlayerTitle(player, "§aWelcome...", undefined, { stayDuration: 40 }, currentDay);
                                         showPlayerActionbar(player, "Everything seems peaceful here...");
                                     } else {

@@ -1,6 +1,6 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
-import { getCodex, getDefaultCodex, markCodex, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, checkKnowledgeProgression } from "./mb_codex.js";
+import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, checkKnowledgeProgression } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
@@ -15,6 +15,7 @@ import "./mb_torpedoAI.js";
 import "./mb_dimensionAdaptation.js";
 import "./mb_biomeAmbience.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
+import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_DANGER_STRONG, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 
 // NOTE: Debug and testing features have been commented out for playability
 // To re-enable testing features, uncomment the following sections:
@@ -125,6 +126,7 @@ const AMBIENT_PRESSURE_RADIUS = 32;
 const AMBIENT_PRESSURE_THRESHOLD = 100;
 const AMBIENT_WARNING_SECONDS = 600; // 10 minutes
 const AMBIENT_INFECTION_SECONDS = 630; // 10 minutes + 30 seconds
+const GROUND_NAUSIA_DURATION_TICKS = 100; // 5 seconds when standing on infected ground triggers warning
 const AMBIENT_DECAY_SECONDS_PER_TICK = 2; // Every 1 second, reduce by 1 second (2s interval -> -2)
 
 // Biome check optimization
@@ -337,8 +339,7 @@ function checkAndUnlockMobDiscovery(codex, player, killType, mobKillType, hitTyp
     const totalKills = playerKills + mobKills + hits;
     
     if (totalKills >= requiredKills) {
-        // Mark as discovered in the codex object immediately
-        codex.mobs[unlockKey] = true;
+        // Mark as discovered (markCodex sets the value and section/subsection unlock timestamps)
         markCodex(player, `mobs.${unlockKey}`);
         sendDiscoveryMessage(player, codex, messageType, itemType);
         const volumeMultiplier = getPlayerSoundVolume(player);
@@ -399,6 +400,7 @@ function trackBearKill(player, bearType) {
 
             if (codex.journal && !codex.journal.day20TinyLoreUnlocked) {
                 codex.journal.day20TinyLoreUnlocked = true;
+                markSubsectionUnlock(player, "lateLore.tiny");
                 const reflectionDay = getCurrentDay() + 1;
                 const loreEntry = "Saw the smallest bears move with new purpose. Their steps cut lines through the dust.";
                 recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
@@ -419,6 +421,7 @@ function trackBearKill(player, bearType) {
 
             if (codex.journal && !codex.journal.day20InfectedLoreUnlocked) {
                 codex.journal.day20InfectedLoreUnlocked = true;
+                markSubsectionUnlock(player, "lateLore.infected");
                 const reflectionDay = getCurrentDay() + 1;
                 const loreEntry = "Saw infected bears covered in dust. Where they go, everything goes quiet.";
                 recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
@@ -439,6 +442,7 @@ function trackBearKill(player, bearType) {
 
             if (codex.journal && !codex.journal.day20BuffLoreUnlocked) {
                 codex.journal.day20BuffLoreUnlocked = true;
+                markSubsectionUnlock(player, "lateLore.buff");
                 const reflectionDay = getCurrentDay() + 1;
                 const loreEntry = "A huge Buff Bear cleared the trees in one leap. Its roar shook the air.";
                 recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
@@ -484,6 +488,27 @@ function trackBearKill(player, bearType) {
         // Check for day variant unlocks based on specific variant kills
         checkVariantUnlock(player, codex);
         
+        // First kill per base bear type (achievement + chat message)
+        const firstKillChecks = [
+            { countKey: "tinyBearKills", achievementKey: "firstKill_tinyBear", label: "Maple Bear" },
+            { countKey: "infectedBearKills", achievementKey: "firstKill_infectedBear", label: "Infected Bear" },
+            { countKey: "buffBearKills", achievementKey: "firstKill_buffBear", label: "Buff Maple Bear" },
+            { countKey: "flyingBearKills", achievementKey: "firstKill_flyingBear", label: "Flying Maple Bear" },
+            { countKey: "miningBearKills", achievementKey: "firstKill_miningBear", label: "Mining Maple Bear" },
+            { countKey: "torpedoBearKills", achievementKey: "firstKill_torpedoBear", label: "Torpedo Maple Bear" }
+        ];
+        for (const { countKey, achievementKey, label } of firstKillChecks) {
+            const count = codex.mobs[countKey] || 0;
+            if (count === 1) {
+                if (!codex.achievements) codex.achievements = {};
+                if (!codex.achievements[achievementKey]) {
+                    codex.achievements[achievementKey] = true;
+                    markSectionUnlock(player, "achievements");
+                    player.sendMessage(`${CHAT_ACHIEVEMENT}KO ${label}.`);
+                }
+            }
+        }
+        
         saveCodex(player, codex);
     } catch (error) {
         console.warn(`[BEAR KILL] Error tracking bear kill for ${player.name}:`, error);
@@ -523,6 +548,7 @@ function trackMobKill(killer, victim) {
 
                     if (killerType === MAPLE_BEAR_DAY20_ID && codex.journal && !codex.journal.day20TinyLoreUnlocked) {
                         codex.journal.day20TinyLoreUnlocked = true;
+                        markSubsectionUnlock(player, "lateLore.tiny");
                         const reflectionDay = getCurrentDay() + 1;
                         const loreEntry = "Saw the smallest bears move with new purpose. Their steps cut lines through the dust.";
                         recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
@@ -533,6 +559,7 @@ function trackMobKill(killer, victim) {
 
                     if (killerType === INFECTED_BEAR_DAY20_ID && codex.journal && !codex.journal.day20InfectedLoreUnlocked) {
                         codex.journal.day20InfectedLoreUnlocked = true;
+                        markSubsectionUnlock(player, "lateLore.infected");
                         const reflectionDay = getCurrentDay() + 1;
                         const loreEntry = "Saw infected bears covered in dust. Where they go, everything goes quiet.";
                         recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
@@ -543,6 +570,7 @@ function trackMobKill(killer, victim) {
 
                     if (killerType === BUFF_BEAR_DAY20_ID && codex.journal && !codex.journal.day20BuffLoreUnlocked) {
                         codex.journal.day20BuffLoreUnlocked = true;
+                        markSubsectionUnlock(player, "lateLore.buff");
                         const reflectionDay = getCurrentDay() + 1;
                         const loreEntry = "A huge Buff Bear cleared the trees in one leap. Its roar shook the air.";
                         recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
@@ -597,12 +625,12 @@ function unlockDay4Variant(player, codex, condition, individualFlagKey, messageF
             codex.mobs[messageFlagKey] = true; // Mark message as shown
 
             if (codex.items.snowBookCrafted) {
-                player.sendMessage("§8Day 4+ variants unlocked.");
+                player.sendMessage(CHAT_DEV + "Day 4+ variants unlocked.");
                     const volumeMultiplier = getPlayerSoundVolume(player);
                     player.playSound("random.orb", { pitch: 1.5, volume: 0.8 * volumeMultiplier });
                     player.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
             } else {
-                player.sendMessage("§7You feel your knowledge expanding...");
+                player.sendMessage(CHAT_INFO + "You feel your knowledge expanding...");
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("random.orb", { pitch: 1.3, volume: 0.6 * volumeMultiplier });
                 player.playSound("mob.villager.idle", { pitch: 1.0, volume: 0.4 * volumeMultiplier });
@@ -657,7 +685,7 @@ function checkVariantUnlock(player, codexParam = null) {
                 codex.mobs.day4MessageShown = true;
                 pendingUnlocks.push({
                     delay: messageDelay,
-                    message: codex.items.snowBookCrafted ? "§8Day 4+ variants unlocked." : "§7You feel your knowledge expanding...",
+                    message: codex.items.snowBookCrafted ? (CHAT_DEV + "Day 4+ variants unlocked.") : (CHAT_INFO + "You feel your knowledge expanding..."),
                     sounds: codex.items.snowBookCrafted ? 
                         [{ sound: "random.orb", pitch: 1.5, volume: 0.8 }, { sound: "mob.villager.idle", pitch: 1.2, volume: 0.6 }] :
                         [{ sound: "random.orb", pitch: 1.3, volume: 0.6 }, { sound: "mob.villager.idle", pitch: 1.0, volume: 0.4 }]
@@ -692,7 +720,7 @@ function checkVariantUnlock(player, codexParam = null) {
                     codex.mobs.day8MessageShown = true;
                     pendingUnlocks.push({
                         delay: messageDelay,
-                        message: codex.items.snowBookCrafted ? "§8Day 8+ variants unlocked." : "§7You feel your knowledge expanding...",
+                        message: codex.items.snowBookCrafted ? (CHAT_DEV + "Day 8+ variants unlocked.") : (CHAT_INFO + "You feel your knowledge expanding..."),
                         sounds: codex.items.snowBookCrafted ? 
                             [{ sound: "random.orb", pitch: 1.5, volume: 0.8 }, { sound: "mob.villager.idle", pitch: 1.2, volume: 0.6 }] :
                             [{ sound: "random.orb", pitch: 1.3, volume: 0.6 }, { sound: "mob.villager.idle", pitch: 1.0, volume: 0.4 }]
@@ -728,7 +756,7 @@ function checkVariantUnlock(player, codexParam = null) {
                     codex.mobs.day13MessageShown = true;
                     pendingUnlocks.push({
                         delay: messageDelay,
-                        message: codex.items.snowBookCrafted ? "§8Day 13+ variants unlocked." : "§7You feel your knowledge expanding...",
+                        message: codex.items.snowBookCrafted ? (CHAT_DEV + "Day 13+ variants unlocked.") : (CHAT_INFO + "You feel your knowledge expanding..."),
                         sounds: codex.items.snowBookCrafted ? 
                             [{ sound: "random.orb", pitch: 1.5, volume: 0.8 }, { sound: "mob.villager.idle", pitch: 1.2, volume: 0.6 }] :
                             [{ sound: "random.orb", pitch: 1.3, volume: 0.6 }, { sound: "mob.villager.idle", pitch: 1.0, volume: 0.4 }]
@@ -766,7 +794,7 @@ function checkVariantUnlock(player, codexParam = null) {
                     codex.mobs.day20MessageShown = true;
                     pendingUnlocks.push({
                         delay: messageDelay,
-                        message: codex.items.snowBookCrafted ? "§8Day 20+ variants unlocked." : "§7You feel your knowledge pulled toward something dreadful...",
+                        message: codex.items.snowBookCrafted ? (CHAT_DEV + "Day 20+ variants unlocked.") : (CHAT_INFO + "You feel your knowledge pulled toward something dreadful..."),
                         sounds: codex.items.snowBookCrafted ? 
                             [{ sound: "random.orb", pitch: 1.5, volume: 0.8 }, { sound: "mob.villager.idle", pitch: 1.2, volume: 0.6 }] :
                             [{ sound: "random.orb", pitch: 1.3, volume: 0.6 }, { sound: "mob.villager.idle", pitch: 1.0, volume: 0.4 }]
@@ -1121,16 +1149,16 @@ function applyMajorInfectionFromGround(player, infectionState) {
         player.playSound("mob.wolf.growl", { pitch: 0.7, volume: 0.8 * volumeMultiplier });
         
         if (hasBeenMajorInfected) {
-            player.sendMessage("§cMajor infection.");
+            player.sendMessage(CHAT_DANGER + "Major infection.");
         } else {
             player.onScreenDisplay.setTitle("§c§lMAJOR INFECTION", {
                 fadeInDuration: 10,
                 stayDuration: 60,
                 fadeOutDuration: 20
             });
-            player.sendMessage("§4§lSOMETHING IS WRONG!");
-            player.sendMessage("§c§lYour infection has worsened dramatically!");
-            player.sendMessage("§7The ground itself feels corrupted.");
+            player.sendMessage(CHAT_DANGER_STRONG + "§lSOMETHING IS WRONG!");
+            player.sendMessage(CHAT_DANGER + "§lYour infection has worsened dramatically!");
+            player.sendMessage(CHAT_INFO + "The ground itself feels corrupted.");
             setPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY, true);
         }
         
@@ -1169,9 +1197,9 @@ function applyMajorInfectionFromGround(player, infectionState) {
         player.addTag(INFECTED_TAG);
         
         if (hasBeenMajorInfected) {
-            player.sendMessage("§cMajor infection.");
+            player.sendMessage(CHAT_DANGER + "Major infection.");
         } else {
-            player.sendMessage("§8You have been infected. Find a cure.");
+            player.sendMessage(CHAT_DANGER + "You have been infected. Find a cure.");
             setPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY, true);
         }
         
@@ -1217,9 +1245,9 @@ function applySnowExposureIncrease(player, infectionState, fromGround = false) {
         // Only send 1-2 vague messages before going silent
         if (messagesSent < 2) {
             if (messagesSent === 0) {
-                player.sendMessage("§7Something feels wrong about this ground...");
+                player.sendMessage(CHAT_INFO + "Something feels wrong about this ground...");
             } else if (messagesSent === 1) {
-                player.sendMessage("§7The ground underneath feels like its seeping into me...");
+                player.sendMessage(CHAT_INFO + "The ground underneath feels like its seeping into me...");
             }
             state.majorGroundMessagesSent = messagesSent + 1;
             try {
@@ -1243,21 +1271,22 @@ function applySnowExposureIncrease(player, infectionState, fromGround = false) {
             // Very subtle, ambient sound - low pitch, low volume
             player.playSound("mob.enderman.portal", { pitch: 0.3, volume: 0.15 * volumeMultiplier });
         } catch { }
+        applyEffect(player, "minecraft:nausea", GROUND_NAUSIA_DURATION_TICKS, { amplifier: 0 });
     } else if (currentTier > (infectionState.lastTierMessage || 0)) {
         // Normal tier messages (from eating snow, being hit, etc.)
         let message = "";
         if (snowCount <= 5) {
-            message = "§eThe substance seems to slow down the infection...";
+            message = CHAT_WARNING + "The substance seems to slow down the infection...";
         } else if (snowCount <= 10) {
-            message = "§eThe substance seems to have no noticeable effect anymore...";
+            message = CHAT_WARNING + "The substance seems to have no noticeable effect anymore...";
         } else if (snowCount <= 20) {
-            message = "§cThe substance seems to... be accelerating the infection!?";
+            message = CHAT_DANGER + "The substance seems to... be accelerating the infection!?";
         } else if (snowCount <= 50) {
-            message = "§4The substance seems to heavily affect you and continues to accelerate the infection...";
+            message = CHAT_DANGER_STRONG + "The substance seems to heavily affect you and continues to accelerate the infection...";
         } else if (snowCount <= 100) {
-            message = "§4The substance seems to have nearly taken over you completely...";
+            message = CHAT_DANGER_STRONG + "The substance seems to have nearly taken over you completely...";
         } else {
-            message = "§0How are you even here? The 'snow' seems to consume all...";
+            message = CHAT_INFO + "How are you even here? The 'snow' seems to consume all...";
         }
         
         infectionState.lastTierMessage = currentTier;
@@ -1476,7 +1505,7 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
             codex.items.checkJournalMessageShown = true;
             markCodex(player, "items.checkJournalMessageShown");
             saveCodex(player, codex);
-            player.sendMessage("§7Check your journal.");
+            player.sendMessage(CHAT_INFO + "Check your journal.");
             if (isDebugEnabled("main", "conversion")) {
                 console.warn(`[CODEX] "Check your journal" sent to ${player.name} (trigger: sendDiscoveryMessage messageType=${messageType} itemType=${itemType})`);
             }
@@ -1494,38 +1523,38 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
         // Two-level mapping: messageType -> itemType -> message
         const messages = {
             important: {
-                weakness: "§7A weakness potion... This seems important for curing infections!",
-                enchanted_apple: "§7An enchanted golden apple... This seems important for healing!",
-                snow: "§7Some mysterious powder... This seems important to remember!",
-                default: "§7This seems important... I will need to remember it."
+                weakness: CHAT_INFO + "A weakness potion... This seems important for curing infections!",
+                enchanted_apple: CHAT_INFO + "An enchanted golden apple... This seems important for healing!",
+                snow: CHAT_INFO + "Some mysterious powder... This seems important to remember!",
+                default: CHAT_INFO + "This seems important... I will need to remember it."
             },
             dangerous: {
-                infected_bear: "§7An infected bear... This creature is dangerous and corrupted!",
-                infected_pig: "§7An infected pig... This creature is dangerous and corrupted!",
-                infected_cow: "§7An infected cow... This creature is dangerous and corrupted!",
-                flying_bear: "§7A flying Maple Bear... the white powder rains from the sky now.",
-                mining_bear: "§7A mining Maple Bear... it digs careful powder lanes straight to you.",
-                default: "§7This creature is dangerous... I should remember its behavior."
+                infected_bear: CHAT_INFO + "An infected bear... This creature is dangerous and corrupted!",
+                infected_pig: CHAT_INFO + "An infected pig... This creature is dangerous and corrupted!",
+                infected_cow: CHAT_INFO + "An infected cow... This creature is dangerous and corrupted!",
+                flying_bear: CHAT_INFO + "A flying Maple Bear... the white powder rains from the sky now.",
+                mining_bear: CHAT_INFO + "A mining Maple Bear... it digs careful powder lanes straight to you.",
+                default: CHAT_INFO + "This creature is dangerous... I should remember its behavior."
             },
             mysterious: {
-                tiny_bear: "§7A tiny Maple Bear... This creature is mysterious and unsettling!",
-                default: "§7This creature is mysterious... I need to study it more."
+                tiny_bear: CHAT_INFO + "A tiny Maple Bear... This creature is mysterious and unsettling!",
+                default: CHAT_INFO + "This creature is mysterious... I need to study it more."
             },
             threatening: {
-                buff_bear: "§7A buff Maple Bear... Book it bro, run for your life.",
-                torpedo_bear: "§7A torpedo Maple Bear... sky-borne white powder warheads are real.",
-                default: "§7This creature is threatening... I must understand its nature."
+                buff_bear: CHAT_INFO + "A buff Maple Bear... Book it bro, run for your life.",
+                torpedo_bear: CHAT_INFO + "A torpedo Maple Bear... sky-borne white powder warheads are real.",
+                default: CHAT_INFO + "This creature is threatening... I must understand its nature."
             },
             interesting: {
-                brewing_stand: "§7A brewing stand... This seems important for alchemy!",
-                golden_apple: "§7A golden apple... This seems useful for healing!",
-                golden_carrot: "§7A golden carrot... This seems useful!",
-                gold: "§7Gold ingot... This valuable metal might have applications! §ePerhaps something useful can be crafted from it?",
-                gold_nugget: "§7Gold nugget... This valuable material might be useful! §ePerhaps something useful can be crafted from it?",
-                snow: "§7Some mysterious powder... This seems important to remember!",
-                default: "§7This seems interesting... I will need to remember it."
+                brewing_stand: CHAT_INFO + "A brewing stand... This seems important for alchemy!",
+                golden_apple: CHAT_INFO + "A golden apple... This seems useful for healing!",
+                golden_carrot: CHAT_INFO + "A golden carrot... This seems useful!",
+                gold: CHAT_INFO + "Gold ingot... This valuable metal might have applications! " + CHAT_WARNING + "Perhaps something useful can be crafted from it?",
+                gold_nugget: CHAT_INFO + "Gold nugget... This valuable material might be useful! " + CHAT_WARNING + "Perhaps something useful can be crafted from it?",
+                snow: CHAT_INFO + "Some mysterious powder... This seems important to remember!",
+                default: CHAT_INFO + "This seems interesting... I will need to remember it."
             },
-            default: "§7This seems interesting... I will need to remember it."
+            default: CHAT_INFO + "This seems interesting... I will need to remember it."
         };
 
         // Lookup message with fallback chain
@@ -2196,7 +2225,7 @@ function handlePotion(player, item) {
                     checkKnowledgeProgression(player);
                 }
             } catch { }
-            player.sendMessage("§7You feel weak... This might help with curing infections.");
+            player.sendMessage(CHAT_INFO + "You feel weak... This might help with curing infections.");
         } else {
             // Log all potion data to help identify weakness potions
             console.log(`[POTION] Unknown potion data: ${potionData} - please check if this is a weakness potion`);
@@ -2248,23 +2277,31 @@ function cureMinorInfection(player) {
         player.playSound("random.levelup", { pitch: 1.2, volume: 0.75 * volumeMultiplier });
         
         // Send message about permanent immunity
-        player.sendMessage("§a§lYou have cured your minor infection!");
-        player.sendMessage("§eYou are now permanently immune. You will never contract minor infection again.");
+        player.sendMessage(CHAT_SUCCESS + "§lYou have cured your minor infection!");
+        player.sendMessage(CHAT_WARNING + "You are now permanently immune. You will never contract minor infection again.");
         const addonHits = getAddonDifficultyState();
         const immuneHits = addonHits.hitsBase;
         const normalHits = Math.max(1, addonHits.hitsBase - 1);
-        player.sendMessage(`§7You now require ${immuneHits} hits from Maple Bears to get infected (instead of ${normalHits}).`);
+        player.sendMessage(CHAT_INFO + `You now require ${CHAT_HIGHLIGHT}${immuneHits}${CHAT_INFO} hits from Maple Bears to get infected (instead of ${CHAT_HIGHLIGHT}${normalHits}${CHAT_INFO}).`);
         
         // Clear hit count
         bearHitCount.delete(player.id);
         
-        // Update codex
+        // Update codex and first-cure achievement
         try {
             const codex = getCodex(player);
             markCodex(player, "cures.minorCureKnown");
             markCodex(player, "cures.minorCureDoneAt", true);
             trackInfectionHistory(player, "minor_cured");
             checkKnowledgeProgression(player);
+            if (!codex.achievements) codex.achievements = {};
+            if (!codex.achievements.firstMinorCure) {
+                codex.achievements.firstMinorCure = true;
+                markSectionUnlock(player, "achievements");
+                if (player.onScreenDisplay && player.onScreenDisplay.setActionBar) {
+                    player.onScreenDisplay.setActionBar("§7First cure. Well done.");
+                }
+            }
             saveCodex(player, codex);
         } catch (error) {
             console.warn(`[MINOR CURE] Error updating codex:`, error);
@@ -2365,17 +2402,27 @@ function handleEnchantedGoldenApple(player, item) {
                 console.log(`[CURE] Immediately saved cure data for ${player.name}`);
 
                 // Note: We do NOT remove the weakness effect - let it run its course naturally
-                player.sendMessage("§a§lYou have cured your major infection!");
-                player.sendMessage("§eYou are now permanently immune. You will never contract minor infection again.");
+                player.sendMessage(CHAT_SUCCESS + "§lYou have cured your major infection!");
+                player.sendMessage(CHAT_WARNING + "You are now permanently immune. You will never contract minor infection again.");
                 const addonHitsMajor = getAddonDifficultyState();
-                player.sendMessage(`§7You now require ${addonHitsMajor.hitsBase} hits from Maple Bears to get infected (instead of ${Math.max(1, addonHitsMajor.hitsBase - 1)}).`);
-                player.sendMessage("§bYou also have temporary immunity for 5 minutes.");
+                player.sendMessage(CHAT_INFO + `You now require ${CHAT_HIGHLIGHT}${addonHitsMajor.hitsBase}${CHAT_INFO} hits from Maple Bears to get infected (instead of ${CHAT_HIGHLIGHT}${Math.max(1, addonHitsMajor.hitsBase - 1)}${CHAT_INFO}).`);
+                player.sendMessage(CHAT_SPECIAL + "You also have temporary immunity for 5 minutes.");
                 try { 
+                    const codex = getCodex(player);
                     markCodex(player, "cures.bearCureKnown"); 
                     markCodex(player, "cures.bearCureDoneAt", true); 
                     markCodex(player, "cures.minorCureKnown"); 
                     markCodex(player, "cures.minorCureDoneAt", true);
                     checkKnowledgeProgression(player);
+                    if (!codex.achievements) codex.achievements = {};
+                    if (!codex.achievements.firstMajorCure) {
+                        codex.achievements.firstMajorCure = true;
+                        markSectionUnlock(player, "achievements");
+                        if (player.onScreenDisplay && player.onScreenDisplay.setActionBar) {
+                            player.onScreenDisplay.setActionBar("§7Major infection cured. You did it.");
+                        }
+                    }
+                    saveCodex(player, codex);
                 } catch { }
             });
         } else {
@@ -2384,7 +2431,7 @@ function handleEnchantedGoldenApple(player, item) {
     } else {
         // Player is not infected
         system.run(() => {
-            player.sendMessage("§aYou are not currently infected.");
+            player.sendMessage(CHAT_SUCCESS + "You are not currently infected.");
         });
     }
 }
@@ -2422,10 +2469,10 @@ function handleSnowConsumption(player, item) {
             const codex = getCodex(player);
             if (!codex.status.immuneKnown) {
                 markCodex(player, "status.immuneKnown");
-                player.sendMessage("§7You realize you are permanently immune to infection from snow.");
+                player.sendMessage(CHAT_INFO + "You realize you are permanently immune to infection from snow.");
             }
         } catch { }
-        player.sendMessage("§eYou are permanently immune. The snow has no effect on you.");
+        player.sendMessage(CHAT_WARNING + "You are permanently immune. The snow has no effect on you.");
         return; // Don't proceed with normal snow consumption
     }
     
@@ -2436,7 +2483,7 @@ function handleSnowConsumption(player, item) {
             const codex = getCodex(player);
             if (!codex.status.immuneKnown) {
                 markCodex(player, "status.immuneKnown");
-                player.sendMessage("§7You realize you are immune to infection.");
+                player.sendMessage(CHAT_INFO + "You realize you are immune to infection.");
             }
         } catch { }
         
@@ -2450,12 +2497,12 @@ function handleSnowConsumption(player, item) {
                 // Immunity ended, remove it
                 curedPlayers.delete(player.id);
                 player.removeTag("mb_immune_hit_message");
-                player.sendMessage("§8Your immunity has been broken by the snow. This was your last warning.");
+                player.sendMessage(CHAT_DANGER + "Your immunity has been broken by the snow. This was your last warning.");
                 try { markCodex(player, "items.snowBreaksImmunity"); } catch { }
             } else {
                 const remainingMs = newImmunityEnd - Date.now();
                 const remainingMinutes = Math.ceil(remainingMs / 60000);
-                player.sendMessage(`§7The snow weakens your immunity. ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''} remaining.`);
+                player.sendMessage(CHAT_INFO + `The snow weakens your immunity. ${CHAT_HIGHLIGHT}${remainingMinutes}${CHAT_INFO} minute${remainingMinutes !== 1 ? 's' : ''} remaining.`);
             }
         }
         return; // Don't proceed with normal snow consumption
@@ -2504,7 +2551,7 @@ function handleSnowConsumption(player, item) {
                 
                 if (hasBeenMajorInfected) {
                     // Reduced text for subsequent major infections (sounds still play)
-                    player.sendMessage("§cMajor infection.");
+                    player.sendMessage(CHAT_DANGER + "Major infection.");
                 } else {
                     // Full text for first major infection
                     player.onScreenDisplay.setTitle("§c§lMAJOR INFECTION", {
@@ -2513,9 +2560,9 @@ function handleSnowConsumption(player, item) {
                         fadeOutDuration: 20
                     });
                     
-                    player.sendMessage("§4§lSOMETHING IS WRONG!");
-                    player.sendMessage("§c§lYour infection has worsened dramatically!");
-                    player.sendMessage("§7The powder has corrupted you further.");
+                    player.sendMessage(CHAT_DANGER_STRONG + "§lSOMETHING IS WRONG!");
+                    player.sendMessage(CHAT_DANGER + "§lYour infection has worsened dramatically!");
+                    player.sendMessage(CHAT_INFO + "The powder has corrupted you further.");
                     
                     // Only show time information if player has Powdery Journal
                     try {
@@ -2523,9 +2570,9 @@ function handleSnowConsumption(player, item) {
                         if (codex.items.snowBookCrafted) {
                             const daysLeft = Math.ceil(preservedTicks / 24000);
                             if (preservedTicks < maxMajorTicks) {
-                                player.sendMessage(`§7You have ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left.`);
+                                player.sendMessage(CHAT_INFO + `You have ${CHAT_HIGHLIGHT}${daysLeft}${CHAT_INFO} day${daysLeft !== 1 ? 's' : ''} left.`);
                             } else {
-                                player.sendMessage("§7Your timer has been reduced to 5 days.");
+                                player.sendMessage(CHAT_INFO + "Your timer has been reduced to 5 days.");
                             }
                         }
                     } catch { }
@@ -2588,10 +2635,10 @@ function handleSnowConsumption(player, item) {
         
         if (hasBeenMajorInfected) {
             // Reduced text for subsequent major infections (sounds still play)
-            player.sendMessage("§cMajor infection.");
+            player.sendMessage(CHAT_DANGER + "Major infection.");
         } else {
             // Full text for first major infection
-            player.sendMessage("§8You have been infected. Find a cure.");
+            player.sendMessage(CHAT_DANGER + "You have been infected. Find a cure.");
             // Mark as having been major infected
             setPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY, true);
         }
@@ -2634,17 +2681,17 @@ function handleSnowConsumption(player, item) {
         let message = "";
         
         if (snowCount <= 5) {
-            message = "§eThe substance seems to slow down the infection...";
+            message = CHAT_WARNING + "The substance seems to slow down the infection...";
         } else if (snowCount <= 10) {
-            message = "§eThe substance seems to have no noticeable effect anymore...";
+            message = CHAT_WARNING + "The substance seems to have no noticeable effect anymore...";
         } else if (snowCount <= 20) {
-            message = "§cThe substance seems to... be accelerating the infection!?";
+            message = CHAT_DANGER + "The substance seems to... be accelerating the infection!?";
         } else if (snowCount <= 50) {
-            message = "§4The substance seems to heavily affect you and continues to accelerate the infection...";
+            message = CHAT_DANGER_STRONG + "The substance seems to heavily affect you and continues to accelerate the infection...";
         } else if (snowCount <= 100) {
-            message = "§4The substance seems to have nearly taken over you completely...";
+            message = CHAT_DANGER_STRONG + "The substance seems to have nearly taken over you completely...";
         } else {
-            message = "§0How are you even here? The 'snow' seems to consume all...";
+            message = CHAT_INFO + "How are you even here? The 'snow' seems to consume all...";
         }
         
         // Apply time effect
@@ -2729,9 +2776,9 @@ function handleGoldenApple(player, item) {
         } else {
             // Progress message
             if (hasGoldenCarrot) {
-                player.sendMessage("§eYou've consumed both components. The cure is taking effect...");
+                player.sendMessage(CHAT_WARNING + "You've consumed both components. The cure is taking effect...");
             } else {
-                player.sendMessage("§7You feel something stirring within you... You may need another component.");
+                player.sendMessage(CHAT_INFO + "You feel something stirring within you... You may need another component.");
             }
         }
         
@@ -2764,14 +2811,14 @@ function handleGoldenApple(player, item) {
                     if (!codex.items.checkJournalMessageShown) {
                         codex.items.checkJournalMessageShown = true;
                         markCodex(player, "items.checkJournalMessageShown");
-                        player.sendMessage("§7Check your journal.");
+                        player.sendMessage(CHAT_INFO + "Check your journal.");
                         if (isDebugEnabled("main", "conversion")) {
                             console.warn(`[CODEX] "Check your journal" sent to ${player.name} (trigger: golden apple infection reduction)`);
                         }
                         player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
                     }
                 } else {
-                    player.sendMessage("§7You feel slightly better for a moment after eating the golden apple... This seems important to remember.");
+                    player.sendMessage(CHAT_INFO + "You feel slightly better for a moment after eating the golden apple... This seems important to remember.");
                     player.playSound("random.orb", { pitch: 1.8, volume: 0.6 * volumeMultiplier });
                 }
                 
@@ -2820,9 +2867,9 @@ function handleGoldenCarrot(player, item) {
         } else {
             // Progress message
             if (hasGoldenApple) {
-                player.sendMessage("§eYou've consumed both components. The cure is taking effect...");
+                player.sendMessage(CHAT_WARNING + "You've consumed both components. The cure is taking effect...");
             } else {
-                player.sendMessage("§7You feel something stirring within you... You may need another component.");
+                player.sendMessage(CHAT_INFO + "You feel something stirring within you... You may need another component.");
             }
         }
         
@@ -3901,7 +3948,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                     handleInfectionExpiration(player, infectionState);
                 } else if (infectionState.ticksLeft <= 1200 && !infectionState.warningSent) { // 1 minute before transformation
                     // Send warning message a minute before transformation
-                    player.sendMessage("§4You don't feel so good...");
+                    player.sendMessage(CHAT_DANGER_STRONG + "You don't feel so good...");
                     infectionState.warningSent = true;
                     playerInfection.set(player.id, infectionState);
                 }
@@ -3945,13 +3992,13 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 const codex = getCodex(player);
                 if (!codex.status.immuneKnown) {
                     markCodex(player, "status.immuneKnown");
-                    player.sendMessage("§bYou realize you are immune to infection! Hopefully?");
+                    player.sendMessage(CHAT_SPECIAL + "You realize you are immune to infection! Hopefully?");
                 }
             } catch { }
             
             // Only show message once per immunity period
             if (!player.hasTag("mb_immune_hit_message")) {
-                player.sendMessage("§eYou are lucky cuh...");
+                player.sendMessage(CHAT_WARNING + "You are lucky cuh...");
                 player.addTag("mb_immune_hit_message");
             }
             return;
@@ -4007,10 +4054,10 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 
                 if (hasBeenMajorInfected) {
                     // Reduced text for subsequent major infections (sounds still play)
-                    player.sendMessage("§cMajor infection.");
+                    player.sendMessage(CHAT_DANGER + "Major infection.");
                 } else {
                     // Full text for first major infection
-                    player.sendMessage("§cYour immunity has been overcome! You are now infected with a major infection!");
+                    player.sendMessage(CHAT_DANGER + "Your immunity has been overcome! You are now infected with a major infection!");
                     // Mark as having been major infected
                     setPlayerProperty(player, MAJOR_INFECTED_BEFORE_PROPERTY, true);
                 }
@@ -4024,7 +4071,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 const firstTime = firstTimeMessages.get(player.id) || { hasBeenHit: false, hasBeenInfected: false, snowTier: 0 };
                 if (!firstTime.hasBeenHit) {
                     const hitsLeft = hitsNeeded - newHitCount;
-                    player.sendMessage(`§7You've been hit by a Maple Bear. (${hitsLeft} more hit${hitsLeft === 1 ? '' : 's'} until infection)`);
+                    player.sendMessage(CHAT_INFO + `You've been hit by a Maple Bear. (${CHAT_HIGHLIGHT}${hitsLeft}${CHAT_INFO} more hit${hitsLeft === 1 ? '' : 's'} until infection)`);
                     firstTime.hasBeenHit = true;
                     firstTimeMessages.set(player.id, firstTime);
                 }
@@ -4096,7 +4143,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 
                 if (hasBeenMajorInfected) {
                     // Reduced text for subsequent major infections (sounds still play)
-                    player.sendMessage("§cMajor infection.");
+                    player.sendMessage(CHAT_DANGER + "Major infection.");
                 } else {
                     // Full text for first major infection
                     player.onScreenDisplay.setTitle("§c§lMAJOR INFECTION", {
@@ -4105,9 +4152,9 @@ world.afterEvents.entityHurt.subscribe((event) => {
                         fadeOutDuration: 20
                     });
                     
-                    player.sendMessage("§4§lSOMETHING IS WRONG!");
-                    player.sendMessage("§c§lYour infection has worsened dramatically!");
-                    player.sendMessage("§7The effects are now severe.");
+                    player.sendMessage(CHAT_DANGER_STRONG + "§lSOMETHING IS WRONG!");
+                    player.sendMessage(CHAT_DANGER + "§lYour infection has worsened dramatically!");
+                    player.sendMessage(CHAT_INFO + "The effects are now severe.");
                     
                     // Only show time information if player has Powdery Journal
                     try {
@@ -4115,9 +4162,9 @@ world.afterEvents.entityHurt.subscribe((event) => {
                         if (codex.items.snowBookCrafted) {
                             const daysLeft = Math.ceil(preservedTicks / 24000);
                             if (preservedTicks < maxMajorTicks) {
-                                player.sendMessage(`§7You have ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left.`);
+                                player.sendMessage(CHAT_INFO + `You have ${CHAT_HIGHLIGHT}${daysLeft}${CHAT_INFO} day${daysLeft !== 1 ? 's' : ''} left.`);
                             } else {
-                                player.sendMessage("§7Your timer has been reduced to 5 days.");
+                                player.sendMessage(CHAT_INFO + "Your timer has been reduced to 5 days.");
                             }
                         }
                     } catch { }
@@ -4142,7 +4189,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 // Show progress message for each hit - vague and mysterious (like normal infection system)
                 const hitsLeft = hitsNeeded - newHitCount;
                 const hitMessage = getInfectionMessage("bear", "hit");
-                player.sendMessage(`${hitMessage} (${hitsLeft} more hit${hitsLeft === 1 ? '' : 's'} until something happens)`);
+                player.sendMessage(CHAT_INFO + hitMessage + ` (${CHAT_HIGHLIGHT}${hitsLeft}${CHAT_INFO} more hit${hitsLeft === 1 ? '' : 's'} until something happens)`);
                 
                 // Apply staged effects based on hit count (pre-progression)
                 if (newHitCount === 1) {
@@ -4214,7 +4261,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
             const firstTime = firstTimeMessages.get(player.id) || { hasBeenHit: false, hasBeenInfected: false, snowTier: 0 };
             
             if (!firstTime.hasBeenInfected) {
-                player.sendMessage(getInfectionMessage("bear", "infected"));
+                player.sendMessage(CHAT_WARNING + getInfectionMessage("bear", "infected"));
                 firstTime.hasBeenInfected = true;
             }
             // No message for subsequent infections - they already know they're infected
@@ -4240,7 +4287,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
             if (!firstTime.hasBeenHit) {
                 const hitsLeft = hitsNeeded - newHitCount;
                 const hitMessage = getInfectionMessage("bear", "hit");
-                player.sendMessage(`${hitMessage} (${hitsLeft} more hit${hitsLeft === 1 ? '' : 's'} until infection)`);
+                player.sendMessage(CHAT_INFO + hitMessage + ` (${CHAT_HIGHLIGHT}${hitsLeft}${CHAT_INFO} more hit${hitsLeft === 1 ? '' : 's'} until infection)`);
                 firstTime.hasBeenHit = true;
                 firstTimeMessages.set(player.id, firstTime);
             }
@@ -4381,7 +4428,7 @@ system.runInterval(() => {
                 handleInfectionExpiration(player, state);
             } else if (state.ticksLeft <= 1200 && !state.warningSent) {
                 // Send warning message a minute before transformation
-                player.sendMessage("§4Your minor infection is reaching its final stages...");
+                player.sendMessage(CHAT_DANGER_STRONG + "Your minor infection is reaching its final stages...");
                 state.warningSent = true;
                 playerInfection.set(id, state);
             }
@@ -4438,7 +4485,7 @@ system.runInterval(() => {
             handleInfectionExpiration(player, state);
         } else if (state.ticksLeft <= 1200 && !state.warningSent) { // 1 minute before transformation
             // Send warning message a minute before transformation
-            player.sendMessage("§4You don't feel so good...");
+            player.sendMessage(CHAT_DANGER_STRONG + "You don't feel so good...");
             state.warningSent = true;
             playerInfection.set(id, state);
     } else {
@@ -4507,7 +4554,7 @@ system.runInterval(() => {
                     const goodEffect = goodEffects[Math.floor(Math.random() * goodEffects.length)];
                     try {
                         applyEffect(player, goodEffect.effect, goodEffect.duration, { amplifier: goodEffect.amp, showParticles: true });
-                        player.sendMessage("§7You feel a brief moment of clarity.");
+                        player.sendMessage(CHAT_INFO + "You feel a brief moment of clarity.");
                         const volumeMultiplier = getPlayerSoundVolume(player);
                         player.playSound("random.levelup", { pitch: 1.5, volume: 0.6 * volumeMultiplier });
                         console.log(`[INFECTION] ${player.name} received rare good effect: ${goodEffect.effect}`);
@@ -4664,7 +4711,7 @@ system.runInterval(() => {
                             if (!codex.items?.bookCraftMessageShown) {
                                 markCodex(p, "items.bookCraftMessageShown");
                                 codex.items.bookCraftMessageShown = true;
-                            p.sendMessage("§7You feel your knowledge pulled into the book...");
+                            p.sendMessage(CHAT_INFO + "You feel your knowledge pulled into the book...");
                             
                             // Dramatic sound effects
                             const volumeMultiplier = getPlayerSoundVolume(p);
@@ -4709,7 +4756,7 @@ system.runInterval(() => {
                     if (!codex.biomes.infectedBiomeSeen) {
                         codex.biomes.infectedBiomeSeen = true;
                         markCodex(p, "biomes.infectedBiomeSeen");
-                        p.sendMessage("§7You notice the ground beneath you feels... different. The air is heavy with an unsettling presence.");
+                        p.sendMessage(CHAT_INFO + "You notice the ground beneath you feels... different. The air is heavy with an unsettling presence.");
                         const volumeMultiplier = getPlayerSoundVolume(p);
                         p.playSound("mob.villager.idle", { pitch: 1.2, volume: 0.6 * volumeMultiplier });
                         saveCodex(p, codex);
@@ -4975,7 +5022,7 @@ system.runInterval(() => {
                             if (isDebugEnabled("ground_infection", "warnings") || isDebugEnabled("ground_infection", "all")) {
                                 console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Biome warning triggered`);
                             }
-                            player.sendMessage("§7The air itself feels tainted...");
+                            player.sendMessage(CHAT_INFO + "The air itself feels tainted...");
                             state.biomeWarningSent = true;
                             try {
                                 markCodex(player, "biomes.biomeAmbientPressureSeen");
@@ -5025,7 +5072,8 @@ system.runInterval(() => {
                         if (isDebugEnabled("ground_infection", "warnings") || isDebugEnabled("ground_infection", "all")) {
                             console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Minor infection ground warning triggered at ${state.groundSeconds.toFixed(1)}s`);
                         }
-                        player.sendMessage("§eThe ground beneath you feels wrong...");
+                        player.sendMessage(CHAT_WARNING + "The ground beneath you feels wrong...");
+                        applyEffect(player, "minecraft:nausea", GROUND_NAUSIA_DURATION_TICKS, { amplifier: 0 });
                         state.minorGroundWarningSent = true;
                         try {
                             // Mark codex entries for ground infection discovery
@@ -5041,7 +5089,8 @@ system.runInterval(() => {
                         if (isDebugEnabled("ground_infection", "warnings") || isDebugEnabled("ground_infection", "all")) {
                             console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Ground warning triggered at ${state.groundSeconds.toFixed(1)}s`);
                         }
-                        player.sendMessage("§eYou start to feel off...");
+                        player.sendMessage(CHAT_WARNING + "You start to feel off...");
+                        applyEffect(player, "minecraft:nausea", GROUND_NAUSIA_DURATION_TICKS, { amplifier: 0 });
                         state.groundWarningSent = true;
                         try {
                             // Mark codex entries for ground infection discovery
@@ -5057,7 +5106,8 @@ system.runInterval(() => {
                         if (isDebugEnabled("ground_infection", "warnings") || isDebugEnabled("ground_infection", "all")) {
                             console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Ambient warning triggered at ${state.ambientSeconds.toFixed(1)}s`);
                         }
-                        player.sendMessage("§eYou start to feel off...");
+                        player.sendMessage(CHAT_WARNING + "You start to feel off...");
+                        applyEffect(player, "minecraft:nausea", GROUND_NAUSIA_DURATION_TICKS, { amplifier: 0 });
                         state.ambientWarningSent = true;
                     }
                     
@@ -5694,8 +5744,8 @@ world.afterEvents.playerSpawn.subscribe((event) => {
                     fadeOutDuration: 20
                 });
                 
-                player.sendMessage("§eYou are still infected with a minor infection.");
-                player.sendMessage("§7The infection persists even after death.");
+                player.sendMessage(CHAT_WARNING + "You are still infected with a minor infection.");
+                player.sendMessage(CHAT_INFO + "The infection persists even after death.");
                 
                 // Play infection sounds (milder than major infection)
                 const volumeMultiplier = getPlayerSoundVolume(player);
@@ -5706,7 +5756,7 @@ world.afterEvents.playerSpawn.subscribe((event) => {
                 setPlayerProperty(player, MINOR_RESPAWNED_PROPERTY, true);
             } else {
                 // Subsequent respawns - minimal message
-                player.sendMessage("§eMinor infection.");
+                player.sendMessage(CHAT_WARNING + "Minor infection.");
             }
             
             console.log(`[SPAWN] ${player.name} respawned with minor infection active`);
@@ -5913,7 +5963,7 @@ function initializeMinorInfection(player) {
         if (!introInProgress.has(player.id)) {
             if (hasBeenReinfected) {
                 // Minimal text for subsequent reinfections
-                player.sendMessage("§eMinor infection.");
+                player.sendMessage(CHAT_WARNING + "Minor infection.");
             } else {
                 // Full text for first reinfection
                 player.onScreenDisplay.setTitle("§e§lMINOR INFECTION", {
@@ -5922,8 +5972,8 @@ function initializeMinorInfection(player) {
                     fadeOutDuration: 20
                 });
                 
-                player.sendMessage("§eYou have been infected with a minor infection.");
-                player.sendMessage("§7The effects are mild, but it can progress to major if not treated.");
+                player.sendMessage(CHAT_WARNING + "You have been infected with a minor infection.");
+                player.sendMessage(CHAT_INFO + "The effects are mild, but it can progress to major if not treated.");
                 
                 // Mark as reinfected for future minimal messages
                 setPlayerProperty(player, MINOR_REINFECTED_PROPERTY, true);
@@ -6602,16 +6652,16 @@ function giveBasicJournalIfNeeded(player) {
                     // Chat message
                     system.runTimeout(() => {
                         if (player && player.isValid) {
-                            player.sendMessage("§eA journal appeared in your inventory!");
-                            player.sendMessage("§7Right-click it to open and learn about your world.");
+                            player.sendMessage(CHAT_WARNING + "A journal appeared in your inventory!");
+                            player.sendMessage(CHAT_INFO + "Right-click it to open and learn about your world.");
                         }
                     }, 20);
                 } else {
                     // Inventory full - drop it
                     player.dimension.spawnItem(journal, player.location);
                     setWorldProperty(playerKey, true);
-                    player.sendMessage("§eA journal fell from your inventory!");
-                    player.sendMessage("§7Right-click it to open and learn about your world.");
+                    player.sendMessage(CHAT_WARNING + "A journal fell from your inventory!");
+                    player.sendMessage(CHAT_INFO + "Right-click it to open and learn about your world.");
                     player.playSound("random.pop", { pitch: 1.0, volume: 0.5 });
                 }
             } catch (error) {
@@ -6848,7 +6898,7 @@ world.beforeEvents.itemUse.subscribe((event) => {
                     // Only send message if not already sent (prevent duplicates)
                     if (!codex.items.bookCraftMessageShown) {
                         markCodex(player, "items.bookCraftMessageShown");
-                    player.sendMessage("§7You feel your knowledge pulled into the book...");
+                    player.sendMessage(CHAT_INFO + "You feel your knowledge pulled into the book...");
                     
                     // Dramatic sound effects
                     player.playSound("mob.enderman.portal", { pitch: 0.8, volume: 1.0 });
@@ -7260,6 +7310,7 @@ function unlockAllContentForDay(day) {
                     // Day 20 world lore (unlocked at milestone)
                     if (!codex.journal.day20WorldLoreUnlocked) {
                         codex.journal.day20WorldLoreUnlocked = true;
+                        markSubsectionUnlock(player, "lateLore.world");
                         const reflectionDay = day + 1;
                         const loreEntry = "Day 20 pressed down like a heavy weight. The journal says the world remembers our missteps.";
                         recordDailyEvent(player, reflectionDay, loreEntry, "lore", codex);
@@ -7311,12 +7362,12 @@ function describeSpawnDifficultyLabel(value) {
 function applySpawnDifficulty(value, sender) {
     const clamped = Math.max(-5, Math.min(5, value));
     setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, clamped);
-    sender?.sendMessage?.(`§7[MBI] Spawn difficulty set to ${describeSpawnDifficultyLabel(clamped)} (§f${clamped}§7).`);
+    sender?.sendMessage?.(CHAT_DEV + "[MBI] " + CHAT_INFO + `Spawn difficulty set to ${describeSpawnDifficultyLabel(clamped)} (${CHAT_HIGHLIGHT}${clamped}${CHAT_INFO}).`);
 }
 
 function executeMbCommand(sender, subcommand, args = []) {
     if (!sender || !playerHasCheats(sender)) {
-        sender?.sendMessage?.("§7[MBI] You lack permission to run Maple Bear debug commands.");
+        sender?.sendMessage?.(CHAT_DEV + "[MBI] " + CHAT_INFO + "You lack permission to run Maple Bear debug commands.");
         return;
     }
 
@@ -7327,33 +7378,33 @@ function executeMbCommand(sender, subcommand, args = []) {
             if (targetName) {
                 const target = world.getAllPlayers().find(p => p.name === targetName);
                 if (!target) {
-                    sender.sendMessage(`§7[MBI] No player named ${targetName} found.`);
+                    sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${targetName} found.`);
                     return;
                 }
                 clearPlayerCodexState(target);
-                sender.sendMessage(`§7[MBI] Reset codex data for ${target.name}.`);
-                target.sendMessage("§7[MBI] Your Powdery Journal feels blank again.");
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Reset codex data for ${target.name}.`);
+                target.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Your Powdery Journal feels blank again.");
             } else {
                 clearPlayerCodexState(sender);
-                sender.sendMessage("§7[MBI] Your Powdery Journal data has been reset.");
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Your Powdery Journal data has been reset.");
             }
             return;
         }
         case "reset_day":
         case "reset_daycount": {
             setWorldProperty("mb_day_count", 1);
-            sender.sendMessage("§7[MBI] Day counter reset to 1.");
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Day counter reset to 1.");
             return;
         }
         case "set_day": {
             const dayNumber = parseInt(args[0], 10);
             if (Number.isNaN(dayNumber) || dayNumber < 1) {
-                sender.sendMessage("§7[MBI] Usage: /scriptevent mb:cmd <base64('set_day\u0001<number>')>");
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: /scriptevent mb:cmd <base64('set_day\u0001<number>')>");
                 return;
             }
             // Use setCurrentDay to ensure both dynamic property and scoreboard are updated
             setCurrentDay(dayNumber);
-            sender.sendMessage(`§7[MBI] Forced current day to ${dayNumber}.`);
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Forced current day to ${dayNumber}.`);
             
             // Unlock all content that would normally unlock up to this day
             unlockAllContentForDay(dayNumber);
@@ -7371,7 +7422,7 @@ function executeMbCommand(sender, subcommand, args = []) {
         case "set_spawn_difficulty_value": {
             const raw = parseInt(args[0], 10);
             if (Number.isNaN(raw)) {
-                sender.sendMessage("§7[MBI] Usage: set_spawn_difficulty_value <number between -5 and 5>");
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: set_spawn_difficulty_value <number between -5 and 5>");
                 return;
             }
             applySpawnDifficulty(raw, sender);
@@ -7379,7 +7430,7 @@ function executeMbCommand(sender, subcommand, args = []) {
         }
         case "clear_infection": {
             const target = args[0] ? world.getAllPlayers().find(p => p.name === args[0]) : sender;
-            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[0]} found.`); return; }
+            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[0]} found.`); return; }
             playerInfection.delete(target.id);
             bearHitCount.delete(target.id);
             curedPlayers.delete(target.id);
@@ -7387,13 +7438,13 @@ function executeMbCommand(sender, subcommand, args = []) {
             setPlayerProperty(target, "mb_infection_type", undefined);
             setPlayerProperty(target, "mb_immunity_end", undefined);
             setPlayerProperty(target, "mb_bear_hit_count", undefined);
-            sender.sendMessage(`§7[MBI] Cleared infection state for ${target.name}.`);
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Cleared infection state for ${target.name}.`);
             return;
         }
         case "set_infection": {
             const kind = (args[0] || "minor").toLowerCase();
             const target = args[1] ? world.getAllPlayers().find(p => p.name === args[1]) : sender;
-            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[1]} found.`); return; }
+            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[1]} found.`); return; }
             const isMinor = kind === "minor";
             const ticks = isMinor ? MINOR_INFECTION_TICKS : INFECTION_TICKS;
             const type = isMinor ? MINOR_INFECTION_TYPE : MAJOR_INFECTION_TYPE;
@@ -7415,13 +7466,13 @@ function executeMbCommand(sender, subcommand, args = []) {
                 lastActiveTick: system.currentTick
             });
             saveInfectionData(target);
-            sender.sendMessage(`§7[MBI] Set ${target.name} to ${type} infection.`);
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Set ${target.name} to ${type} infection.`);
             return;
         }
         case "grant_immunity": {
             const mode = (args[0] || "permanent").toLowerCase();
             const target = args[1] ? world.getAllPlayers().find(p => p.name === args[1]) : sender;
-            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[1]} found.`); return; }
+            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[1]} found.`); return; }
             playerInfection.delete(target.id);
             bearHitCount.delete(target.id);
             setPlayerProperty(target, "mb_infection", undefined);
@@ -7436,24 +7487,24 @@ function executeMbCommand(sender, subcommand, args = []) {
                 curedPlayers.delete(target.id);
                 setPlayerProperty(target, "mb_immunity_end", undefined);
             }
-            sender.sendMessage(`§7[MBI] Granted ${target.name} ${mode} immunity.`);
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Granted ${target.name} ${mode} immunity.`);
             return;
         }
         case "remove_immunity": {
             const target = args[0] ? world.getAllPlayers().find(p => p.name === args[0]) : sender;
-            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[0]} found.`); return; }
+            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[0]} found.`); return; }
             setPlayerProperty(target, PERMANENT_IMMUNITY_PROPERTY, undefined);
             setPlayerProperty(target, MINOR_INFECTION_CURED_PROPERTY, undefined);
             curedPlayers.delete(target.id);
             setPlayerProperty(target, "mb_immunity_end", undefined);
-            sender.sendMessage(`§7[MBI] Removed immunity from ${target.name}.`);
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Removed immunity from ${target.name}.`);
             return;
         }
         case "reset_intro": {
             const target = args[0] ? world.getAllPlayers().find(p => p.name === args[0]) : sender;
-            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[0]} found.`); return; }
+            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[0]} found.`); return; }
             setPlayerProperty(target, PLAYER_INTRO_SEEN_PROPERTY, undefined);
-            sender.sendMessage(`§7[MBI] Reset intro for ${target.name}. They will see the intro again on next join.`);
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Reset intro for ${target.name}. They will see the intro again on next join.`);
             return;
         }
         case "list_bears": {
@@ -7470,10 +7521,10 @@ function executeMbCommand(sender, subcommand, args = []) {
                         counts[id] = (counts[id] || 0) + 1;
                     }
                 }
-                const lines = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([id, n]) => `§7${id}: §f${n}`);
-                sender.sendMessage("§7[MBI] Bears within 128 blocks:\n" + (lines.length ? lines.join("\n") : "§8None"));
+                const lines = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([id, n]) => CHAT_INFO + id + ": " + CHAT_HIGHLIGHT + n);
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Bears within 128 blocks:\n" + (lines.length ? lines.join("\n") : CHAT_DEV + "None"));
             } catch (err) {
-                sender.sendMessage("§7[MBI] Error listing bears: " + (err?.message || err));
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Error listing bears: " + (err?.message || err));
             }
             return;
         }
@@ -7493,7 +7544,7 @@ function executeMbCommand(sender, subcommand, args = []) {
                     target = world.getAllPlayers().find(p => p.name === args[1]) || sender;
                 }
             }
-            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[1]} found.`); return; }
+            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[1]} found.`); return; }
             let distance = 2;
             if (distanceArg === "random" || (typeof distanceArg === "string" && distanceArg.toLowerCase() === "random")) {
                 distance = 1 + Math.floor(Math.random() * 20);
@@ -7508,23 +7559,23 @@ function executeMbCommand(sender, subcommand, args = []) {
                 const dz = Math.sin(angle) * distance;
                 const offset = { x: loc.x + dx, y: loc.y, z: loc.z + dz };
                 target.dimension.spawnEntity(entityId, offset);
-                sender.sendMessage(`§7[MBI] Spawned §f${entityId}§7 ${distance} block${distance !== 1 ? "s" : ""} from ${target.name}.`);
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Spawned ${CHAT_HIGHLIGHT}${entityId}${CHAT_INFO} ${distance} block${distance !== 1 ? "s" : ""} from ${target.name}.`);
             } catch (err) {
-                sender.sendMessage("§7[MBI] Spawn failed: " + (err?.message || err));
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Spawn failed: " + (err?.message || err));
             }
             return;
         }
         case "dump_codex": {
             const target = args[0] ? world.getAllPlayers().find(p => p.name === args[0]) : sender;
-            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[0]} found.`); return; }
+            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[0]} found.`); return; }
             try {
                 const codex = getCodex(target);
                 const str = JSON.stringify(codex);
                 const maxLen = 256;
                 const snippet = str.length > maxLen ? str.slice(0, maxLen) + "…" : str;
-                sender.sendMessage("§7[MBI] Codex (truncated): §8" + snippet);
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Codex (truncated): " + CHAT_DEV + snippet);
             } catch (err) {
-                sender.sendMessage("§7[MBI] Error: " + (err?.message || err));
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Error: " + (err?.message || err));
             }
             return;
         }
@@ -7532,20 +7583,20 @@ function executeMbCommand(sender, subcommand, args = []) {
             const mobKey = args[0] || "tinyBearKills";
             const value = parseInt(args[1], 10);
             const target = args[2] ? world.getAllPlayers().find(p => p.name === args[2]) : sender;
-            if (!target) { sender.sendMessage(`§7[MBI] No player named ${args[2]} found.`); return; }
+            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[2]} found.`); return; }
             if (Number.isNaN(value) || value < 0) {
-                sender.sendMessage("§7[MBI] Usage: set_kill_count <mobKey> <number> [playerName]. Keys: tinyBearKills, infectedBearKills, buffBearKills, flyingBearKills, miningBearKills, torpedoBearKills, infectedPigKills, infectedCowKills.");
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: set_kill_count <mobKey> <number> [playerName]. Keys: tinyBearKills, infectedBearKills, buffBearKills, flyingBearKills, miningBearKills, torpedoBearKills, infectedPigKills, infectedCowKills.");
                 return;
             }
             const codex = getCodex(target);
             if (!codex.mobs) codex.mobs = {};
             codex.mobs[mobKey] = value;
             saveCodex(target, codex);
-            sender.sendMessage(`§7[MBI] Set ${target.name} §f${mobKey}§7 to §f${value}§7.`);
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Set ${target.name} ${CHAT_HIGHLIGHT}${mobKey}${CHAT_INFO} to ${CHAT_HIGHLIGHT}${value}${CHAT_INFO}.`);
             return;
         }
         default:
-            sender.sendMessage("§7[MBI] Unknown debug command.");
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Unknown debug command.");
             return;
     }
 }
@@ -7555,7 +7606,7 @@ if (system.afterEvents && system.afterEvents.scriptEventReceive) {
         if (!event || event.sourceType !== "Player") return;
         const player = event.sourceEntity;
         if (!playerHasCheats(player)) {
-            player.sendMessage("§7[MBI] You lack permission to run Maple Bear debug commands.");
+            player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "You lack permission to run Maple Bear debug commands.");
             return;
         }
 
