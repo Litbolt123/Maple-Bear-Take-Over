@@ -1513,10 +1513,16 @@ const loggedMaintainedGroupsThisTick = new Set(); // Track which groups have bee
 
 // Check if a player is isolated (>96 blocks from all other players)
 // Returns { isolated: boolean, nearbyPlayerCount: number }
+// Isolated = multiplayer only: other players exist but none nearby. Single player is never isolated.
 // Cached per tick to avoid repeated calculations
 const isolatedPlayerCache = new Map(); // playerId -> { isolated, nearbyPlayerCount, tick }
 function isPlayerIsolated(player, allPlayers) {
     if (!player || !player.isValid || !player.location) {
+        return { isolated: false, nearbyPlayerCount: 0 };
+    }
+    
+    // Single player in world = not isolated (isolation is a multiplayer concept)
+    if (!allPlayers || allPlayers.length <= 1) {
         return { isolated: false, nearbyPlayerCount: 0 };
     }
     
@@ -1547,7 +1553,7 @@ function isPlayerIsolated(player, allPlayers) {
         }
     }
     
-    const isolated = nearbyPlayerCount === 0;
+    const isolated = nearbyPlayerCount === 0; // Other players exist (length > 1) but none nearby
     
     // Cache result
     isolatedPlayerCache.set(playerId, { isolated, nearbyPlayerCount, tick: currentTick });
@@ -1949,13 +1955,13 @@ function scanAroundDustedDirt(dimension, centerX, centerY, centerZ, seen, candid
                     if (!block) continue;
                     
                     const dimensionId = dimension.id;
-                    if (isValidTargetBlock(block.typeId, dimensionId)) {
+                        if (isValidTargetBlock(block.typeId, dimensionId)) {
                         const blockAbove = dimension.getBlock({ x, y: y + 1, z });
                         localQueries++;
                         if (localQueries < maxLocalQueries) {
                             const blockTwoAbove = dimension.getBlock({ x, y: y + 2, z });
                             localQueries++;
-                            if (isAir(blockAbove) && isAir(blockTwoAbove)) {
+                            if (isAirOrWater(blockAbove) && isAirOrWater(blockTwoAbove)) {
                                 seen.add(yKey);
                                 candidates.push({ x, y, z });
                                 // Register with dimension for proper cache validation
@@ -1969,6 +1975,8 @@ function scanAroundDustedDirt(dimension, centerX, centerY, centerZ, seen, candid
                     }
                     
                     if (!isAir(block)) {
+                        // Don't break on water - dusted dirt can be below water (ocean floor)
+                        if (isAirOrWater(block)) continue;
                         break; // Hit solid non-target block, move to next XZ
                     }
                 } catch (error) {
@@ -2267,17 +2275,17 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
             continue;
         }
         
-        // Filter: Only use cached blocks within valid spawn distance range
-        // Skip blocks that are too close (< minDistance) or too far (> maxDistance)
-        // Note: maxDistance may be reduced for new chunks (20-30 blocks instead of 45)
+        // Filter: Only use cached blocks within valid spawn distance range (15-45)
+        // Blocks that are too close (< minDistance) or too far (> maxDistance) are NOT used for spawning
+        // but we keep them in the cache - when the player moves away, they become valid spawn tiles
         if (distSq < minSq || distSq > cacheMaxSq) {
             cacheOutsideRange++;
             if (isDebugEnabled('spawn', 'distance') || isDebugEnabled('spawn', 'all')) {
                 if (cacheOutsideRange <= 3) { // Only log first few to avoid spam
-                    console.warn(`[SPAWN DEBUG] Cache entry ${key}: Outside spawn range (dist: ${dist.toFixed(1)}, range: ${minDistance}-${cacheMaxDistance})`);
+                    console.warn(`[SPAWN DEBUG] Cache entry ${key}: Outside spawn range (dist: ${dist.toFixed(1)}, range: ${minDistance}-${cacheMaxDistance}) - kept in cache for when player moves`);
                 }
             }
-            continue; // Outside valid range
+            continue; // Don't use for spawning this run, but block stays in cache
         }
         if (Math.abs(dy) > 30) {
             cacheTooFarVertically++;
@@ -2716,7 +2724,9 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     }
                     
                     if (!isAir(block)) {
-                        break; // Hit solid non-target block, move to next XZ
+                        // Don't break on water - continue scanning down to find dusted dirt on ocean floor
+                        if (isAirOrWater(block)) continue;
+                        break; // Hit solid non-target block (stone, gravel, etc.), move to next XZ
                     }
                 }
             }
@@ -2725,16 +2735,17 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
 
     // Two-phase scanning system:
     // - Discovery Phase: Scan 0-DISCOVERY_RADIUS (75 blocks) to find ALL dusted_dirt/snow_layer blocks
+    //   (including right next to/under the player) - all found blocks are cached
     // - Validation Phase: Filter discovered blocks by 15-45 spawn range before returning
-    // - This allows blocks to be pre-cached before players move into range
+    // - Close blocks (0-15) are cached but not used for spawning until the player moves away
     // - Y: Initially ±10 blocks from player (20 blocks), expand if needed by ±15 more (30 more blocks)
     
     // Discovery phase: Use DISCOVERY_RADIUS for scanning (find all blocks in larger area)
     // For new chunks, still use reduced radius to prevent lag
-    // Isolated players use reduced discovery radius (40 blocks instead of 75)
+    // Isolated = multiplayer only (far from other players). Single player is never isolated.
     let discoveryRadius = isNewChunk ? effectiveMaxDistance : DISCOVERY_RADIUS;
     if (isIsolated) {
-        discoveryRadius = 40; // Reduced from 75 for isolated players
+        discoveryRadius = 40; // Reduced from 75 for isolated players (multiplayer, far from others)
     }
     
     if (isDebugEnabled('spawn', 'discovery') || isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
@@ -3063,8 +3074,25 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     const blocksPerTickBudget = BLOCKS_PER_TICK_BUDGET[Math.min(totalPlayerCount, 4)] || BLOCKS_PER_TICK_BUDGET[4];
     let blocksCheckedThisTick = 0;
     
-    // Scan XZ rectangle, checking Y levels
+    // Build XZ positions sorted by distance from center (closest first) so we find nearby dusted dirt before budget runs out
+    const discoveryRadiusSqForOrder = discoveryRadius * discoveryRadius;
+    const xzPositionsByDistance = [];
     for (let x = xStart; x <= xEnd; x++) {
+        for (let z = zStart; z <= zEnd; z++) {
+            const dx = x + 0.5 - center.x;
+            const dz = z + 0.5 - center.z;
+            const distSq = dx * dx + dz * dz;
+            if (distSq <= discoveryRadiusSqForOrder) {
+                xzPositionsByDistance.push({ x, z, distSq });
+            }
+        }
+    }
+    xzPositionsByDistance.sort((a, b) => a.distSq - b.distSq);
+    
+    // Scan XZ positions (center-out order), checking Y levels
+    for (const pos of xzPositionsByDistance) {
+        const x = pos.x;
+        const z = pos.z;
         // Early exit: If we have enough candidates, stop scanning (especially important for Nether/End)
         if (candidates.length >= limit) {
             if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
@@ -3087,8 +3115,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
             }
             break;
         }
-        
-        for (let z = zStart; z <= zEnd; z++) {
+        {
             // Early exit: Check candidates before each XZ position
             if (candidates.length >= limit) break;
             if (blocksCheckedThisTick >= blocksPerTickBudget) break; // Per-tick budget check
@@ -3103,19 +3130,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                 continue; // Skip this XZ position if chunk isn't loaded
             }
             
-            // Discovery phase: Check if within discovery radius (0-75 blocks)
-            // No distance filtering during discovery - all blocks in range are cached
-            // Validation phase: Filter by 15-45 range before returning candidates
-            const dx = x + 0.5 - center.x;
-            const dz = z + 0.5 - center.z;
-            const distSq = dx * dx + dz * dz;
-            const dist = Math.sqrt(distSq);
-            const discoveryRadiusSq = discoveryRadius * discoveryRadius;
-            if (distSq > discoveryRadiusSq) {
-                xzPositionsSkipped++;
-                continue; // Skip blocks outside discovery radius
-            }
-            
+            // Positions already filtered by discovery radius (center-out order)
+            const dist = Math.sqrt(pos.distSq);
             xzPositionsInRange++;
             
             // TEMPORARY: Log first 20 XZ positions being checked
@@ -3170,7 +3186,6 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                 // Debug: Log block type for first few non-air blocks to verify TARGET_BLOCK constant
                 if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
                     if (blocksChecked <= 10 && !isAir(block) && block.typeId) {
-                        const dist = Math.sqrt(dx * dx + dz * dz);
                         const dimensionId = dimension.id;
                         const isTarget = isValidTargetBlock(block.typeId, dimensionId);
                         console.warn(`[SPAWN DEBUG] Block at (${x}, ${y}, ${z}): typeId="${block.typeId}", TARGET_BLOCK="${TARGET_BLOCK}" or "${TARGET_BLOCK_2}", match=${isTarget}, dist: ${dist.toFixed(1)}`);
@@ -3181,13 +3196,13 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                 const dimensionId = dimension.id;
                 if (isValidTargetBlock(block.typeId, dimensionId)) {
                     blocksFound++;
-                    // Check for air above before logging/adding - only valid spawn locations
+                    // Check for air or water above (allows underwater spawning on dusted dirt/snow layers)
                     const blockAbove = dimension.getBlock({ x, y: y + 1, z });
                     blockQueryCount++;
                     if (blockQueryCount < queryLimit) {
                         const blockTwoAbove = dimension.getBlock({ x, y: y + 2, z });
                         blockQueryCount++;
-                        if (isAir(blockAbove) && isAir(blockTwoAbove)) {
+                        if (isAirOrWater(blockAbove) && isAirOrWater(blockTwoAbove)) {
                             // Only log when we find a VALID spawn tile (has air above)
                             if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
                                 const dist = Math.sqrt(dx * dx + dz * dz);
@@ -3248,7 +3263,6 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                     // Debug: Log some non-air blocks to see what we're actually finding, and check if any match TARGET_BLOCK
                     if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
                         if (otherBlocks <= 5 && block.typeId) { // Only log first 5 to avoid spam
-                            const dist = Math.sqrt(dx * dx + dz * dz);
                             const dimensionId = dimension.id;
                             const isTarget = isValidTargetBlock(block.typeId, dimensionId);
                             console.warn(`[SPAWN DEBUG] Found non-air block at (${x}, ${y}, ${z}): typeId="${block.typeId}", TARGET_BLOCK="${TARGET_BLOCK}" or "${TARGET_BLOCK_2}", match=${isTarget}, dist: ${dist.toFixed(1)}`);
@@ -3354,19 +3368,11 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         const expandedYStart = cy + yRangeUp + expandYRange;
         const expandedYEnd = cy - yRangeDown - expandYRange;
         
-        for (let x = xStart; x <= xEnd; x++) {
+        // Use same center-out XZ order as main scan for consistency
+        for (const pos of xzPositionsByDistance) {
             if (blockQueryCount >= queryLimit) break;
-            
-            for (let z = zStart; z <= zEnd; z++) {
-                if (blockQueryCount >= queryLimit) break;
-                
-                const dx = x + 0.5 - center.x;
-                const dz = z + 0.5 - center.z;
-                const distSq = dx * dx + dz * dz;
-                // Discovery phase: Check if within discovery radius (0-75 blocks)
-                // No distance filtering during discovery - all blocks in range are cached
-                const discoveryRadiusSq = discoveryRadius * discoveryRadius;
-                if (distSq > discoveryRadiusSq) continue; // Skip if outside discovery radius
+            const x = pos.x;
+            const z = pos.z;
                 
                 // Check expanded Y range (skip already checked area)
                 // Minecraft Bedrock minimum Y is -64, maximum is 320
@@ -3404,7 +3410,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                         if (blockQueryCount < queryLimit) {
                             const blockTwoAbove = dimension.getBlock({ x, y: y + 2, z });
                             blockQueryCount++;
-                            if (isAir(blockAbove) && isAir(blockTwoAbove)) {
+                            if (isAirOrWater(blockAbove) && isAirOrWater(blockTwoAbove)) {
                                 const key = `${x},${y},${z}`;
                                 if (!seen.has(key)) {
                                 seen.add(key);
@@ -3432,12 +3438,80 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
                         // Dusted_dirt could be below other blocks
                     }
                 }
-            }
         }
         
         // Debug: Log expanded scan results
         if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
             console.warn(`[SPAWN DEBUG] Expanded scan complete: Found ${candidates.length} total tiles (${cachedTiles.length} from cache), queries used: ${blockQueryCount}/${queryLimit}${isSinglePlayer ? ' [SINGLE PLAYER MODE]' : ''}`);
+        }
+    }
+
+    // Third pass: If still few tiles and in overworld, scan around nearby infected biomes
+    if (!isNetherOrEnd && candidates.length < 8 && blockQueryCount < queryLimit * 0.8 && typeof dimension.findClosestBiome === 'function') {
+        try {
+            const biomeSearchRadius = 96;
+            const biomeLoc = dimension.findClosestBiome(
+                { x: center.x, y: center.y, z: center.z },
+                "mb:infected_biome",
+                { boundingSize: { x: biomeSearchRadius, y: 128, z: biomeSearchRadius } }
+            );
+            if (biomeLoc) {
+                const bx = Math.floor(biomeLoc.x);
+                const by = Math.floor(biomeLoc.y);
+                const bz = Math.floor(biomeLoc.z);
+                const distToBiome = Math.sqrt((bx - cx) ** 2 + (bz - cz) ** 2);
+                if (distToBiome <= discoveryRadius + 24) {
+                    const biomeScanRadius = 20;
+                    const bioXStart = bx - biomeScanRadius;
+                    const bioXEnd = bx + biomeScanRadius;
+                    const bioZStart = bz - biomeScanRadius;
+                    const bioZEnd = bz + biomeScanRadius;
+                    const bioYStart = Math.min(by + 15, 320);
+                    const bioYEnd = Math.max(by - 15, -64);
+                    if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                        console.warn(`[SPAWN DEBUG] Infected biome fallback: Scanning around biome at (${bx}, ${by}, ${bz}), dist: ${distToBiome.toFixed(1)}`);
+                    }
+                    for (let ix = bioXStart; ix <= bioXEnd && blockQueryCount < queryLimit && candidates.length < limit; ix++) {
+                        for (let iz = bioZStart; iz <= bioZEnd && blockQueryCount < queryLimit && candidates.length < limit; iz++) {
+                            if (!isChunkLoadedCached(dimension, ix, iz)) continue;
+                            for (let iy = bioYStart; iy >= bioYEnd && blockQueryCount < queryLimit; iy--) {
+                                if (blockQueryCount >= queryLimit) break;
+                                let block;
+                                try {
+                                    block = dimension.getBlock({ x: ix, y: iy, z: iz });
+                                    blockQueryCount++;
+                                } catch { continue; }
+                                if (!block) continue;
+                                if (isValidTargetBlock(block.typeId, dimensionId)) {
+                                    const blockAbove = dimension.getBlock({ x: ix, y: iy + 1, z: iz });
+                                    blockQueryCount++;
+                                    if (blockQueryCount < queryLimit) {
+                                        const blockTwoAbove = dimension.getBlock({ x: ix, y: iy + 2, z: iz });
+                                        blockQueryCount++;
+                                        if (isAirOrWater(blockAbove) && isAirOrWater(blockTwoAbove)) {
+                                            const key = `${ix},${iy},${iz}`;
+                                            if (!seen.has(key)) {
+                                                seen.add(key);
+                                                candidates.push({ x: ix, y: iy, z: iz });
+                                                registerDustedDirtBlock(ix, iy, iz, dimension);
+                                                if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                                                    console.warn(`[SPAWN DEBUG] Infected biome scan found dusted_dirt at (${ix}, ${iy}, ${iz})`);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    break;
+                                }
+                                if (!isAir(block) && !isAirOrWater(block)) break;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
+                console.warn(`[SPAWN DEBUG] Infected biome scan skipped:`, e?.message || e);
+            }
         }
     }
 
@@ -3476,8 +3550,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     }
     
     // Validation Phase: Filter discovered blocks by spawn range
-    // Discovery phase found all blocks in discovery radius (0-75 for normal chunks, 0-20/30 for new chunks)
-    // But we only return blocks in valid spawn range (15-maxDistance, where maxDistance is 45 for normal, 20/30 for new chunks)
+    // Discovery found and cached all blocks 0-75; we only return blocks in spawn range (15-45)
+    // Close blocks (0-15) stay in cache - when player moves away they become valid spawn tiles
     // Adaptive: If no blocks found in normal range, allow closer blocks (minimum 10 blocks instead of 15)
     let filteredCandidates = candidates.filter(tile => {
         const dx = tile.x + 0.5 - center.x;

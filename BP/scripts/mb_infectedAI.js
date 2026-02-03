@@ -44,8 +44,10 @@ const FALLBACK_IMPULSE = 0.04;
 const angerTargetMap = new Map(); // entityId -> { entity: Player, expireTick: number }
 const ANGER_DURATION_TICKS = 600; // 30 seconds
 const ANGER_SPREAD_RADIUS = 24;
+const ANGER_CLEANUP_INTERVAL_TICKS = 60; // Run cleanup every 60 ticks (~3s) to limit cost
 
 let infectedAIIntervalId = null;
+let lastAngerCleanupTick = -ANGER_CLEANUP_INTERVAL_TICKS;
 
 function getTargetPlayer(entity) {
     const loc = entity.location;
@@ -260,10 +262,36 @@ function processInfectedEntity(entity, targetInfo, tick) {
     }
 }
 
+/**
+ * Remove stale entries from angerTargetMap: expired or whose stored player is no longer valid/alive.
+ * Runs every ANGER_CLEANUP_INTERVAL_TICKS to limit cost.
+ */
+function pruneAngerTargetMap(currentTick) {
+    for (const [entityId, anger] of angerTargetMap.entries()) {
+        let shouldDelete = anger.expireTick <= currentTick;
+        if (!shouldDelete && anger.entity) {
+            try {
+                const valid = typeof anger.entity.isValid === "function"
+                    ? anger.entity.isValid() : Boolean(anger.entity.isValid);
+                const alive = typeof anger.entity.isAlive === "function"
+                    ? anger.entity.isAlive() : (anger.entity.isAlive !== false);
+                if (!valid || !alive) shouldDelete = true;
+            } catch {
+                shouldDelete = true; // Reference invalid or throws on access
+            }
+        }
+        if (shouldDelete) angerTargetMap.delete(entityId);
+    }
+}
+
 function runInfectedAI() {
     if (!isScriptEnabled(SCRIPT_IDS.infected) || !isBetaInfectedAIEnabled()) return;
     try {
         const tick = system.currentTick;
+        if (tick - lastAngerCleanupTick >= ANGER_CLEANUP_INTERVAL_TICKS) {
+            pruneAngerTargetMap(tick);
+            lastAngerCleanupTick = tick;
+        }
         const players = getCachedPlayers();
         const processedIds = new Set();
         let processedCount = 0;

@@ -256,9 +256,12 @@ export function getPlayerSettings(player) {
         if (raw) {
             let parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
             if (parsed && typeof parsed === 'object') {
+                const criticalWarningsOnly = ('criticalWarningsOnly' in parsed)
+                    ? Boolean(parsed.criticalWarningsOnly)
+                    : Boolean(s?.criticalWarningsOnly);
                 return {
                     showInfectionTimer,
-                    criticalWarningsOnly: Boolean(parsed.criticalWarningsOnly)
+                    criticalWarningsOnly
                 };
             }
         }

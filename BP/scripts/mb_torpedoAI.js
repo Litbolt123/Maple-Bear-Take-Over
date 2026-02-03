@@ -376,12 +376,11 @@ function findTarget(entity, maxDistance) {
     
     const origin = entity.location;
     const maxDistSq = maxDistance * maxDistance;
-    const dimensionId = dimension?.id;
 
     // Dev tool: force all bears to target a specific player
     const forceTargetName = getWorldProperty("mb_force_target_player");
-    if (forceTargetName && typeof forceTargetName === "string" && dimensionId) {
-        const forcePlayer = getCachedPlayers().find(p => p && p.name === forceTargetName && p.dimension?.id === dimensionId);
+    if (forceTargetName && typeof forceTargetName === "string" && dimension) {
+        const forcePlayer = getCachedPlayers().find(p => p && p.name === forceTargetName && p.dimension === dimension);
         if (forcePlayer) {
             try {
                 if (forcePlayer.getGameMode?.() !== "creative" && forcePlayer.getGameMode?.() !== "spectator") {

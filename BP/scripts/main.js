@@ -669,6 +669,13 @@ function checkVariantUnlock(player, codexParam = null) {
         const pendingUnlocks = [];
         let messageDelay = 0; // Start with no delay, increment for each unlock
 
+        // Helpers: only show unlock chat message when player has actually killed/experienced a variant
+        const v = codex.mobs.variantKills;
+        const hasKilledDay4Variant = (v?.tinyBear?.day4 || 0) >= 1 || (v?.infectedPig?.day4 || 0) >= 1 || (v?.infectedCow?.day4 || 0) >= 1;
+        const hasKilledDay8Variant = (v?.tinyBear?.day8 || 0) >= 1 || (v?.infectedBear?.day8 || 0) >= 1 || (v?.infectedPig?.day8 || 0) >= 1 || (v?.infectedCow?.day8 || 0) >= 1 || (v?.buffBear?.day8 || 0) >= 1 || (v?.flyingBear?.day15 || 0) >= 1;
+        const hasKilledDay13Variant = (v?.tinyBear?.day13 || 0) >= 1 || (v?.infectedBear?.day13 || 0) >= 1 || (v?.buffBear?.day13 || 0) >= 1 || (v?.infectedPig?.day13 || 0) >= 1 || (v?.infectedCow?.day13 || 0) >= 1 || (v?.miningBear?.original || 0) >= 1 || (v?.flyingBear?.day15 || 0) >= 1;
+        const hasKilledDay20Variant = (v?.tinyBear?.day20 || 0) >= 1 || (v?.infectedBear?.day20 || 0) >= 1 || (v?.buffBear?.day20 || 0) >= 1 || (v?.infectedPig?.day20 || 0) >= 1 || (v?.infectedCow?.day20 || 0) >= 1 || (v?.flyingBear?.day20 || 0) >= 1 || (v?.miningBear?.day20 || 0) >= 1 || (v?.torpedoBear?.day20 || 0) >= 1;
+
         // Check for day 4+ variant unlock - only when day 4 variants can actually spawn
         const dayUnlock4 = currentDay >= 4 && (codex.mobs.mapleBearSeen || codex.mobs.infectedBearSeen);
 
@@ -686,8 +693,8 @@ function checkVariantUnlock(player, codexParam = null) {
             const eventMessage = "New variants of the Maple Bears have been observed. They appear stronger and more aggressive than before.";
             recordDailyEvent(player, tomorrowDay, eventMessage, "variants", codex);
 
-            // Schedule unlock message with delay
-            if (!codex.mobs.day4MessageShown) {
+            // Only show unlock message when player has killed/experienced at least one day 4 variant
+            if (!codex.mobs.day4MessageShown && hasKilledDay4Variant) {
                 codex.mobs.day4MessageShown = true;
                 pendingUnlocks.push({
                     delay: messageDelay,
@@ -699,6 +706,18 @@ function checkVariantUnlock(player, codexParam = null) {
                 messageDelay += 40; // 2 seconds delay (40 ticks) for next message
                 console.log(`[CODEX] ${player.name} unlocked day 4+ variants`);
             }
+        }
+        // Delayed: already unlocked but message not shown; now they killed a day 4 variant
+        else if (codex.mobs.day4VariantsUnlocked && !codex.mobs.day4MessageShown && hasKilledDay4Variant) {
+            codex.mobs.day4MessageShown = true;
+            pendingUnlocks.push({
+                delay: messageDelay,
+                message: codex.items.snowBookCrafted ? (CHAT_DEV + "Day 4+ variants unlocked.") : (CHAT_INFO + "You feel your knowledge expanding..."),
+                sounds: codex.items.snowBookCrafted ? 
+                    [{ sound: "random.orb", pitch: 1.5, volume: 0.8 }, { sound: "mob.villager.idle", pitch: 1.2, volume: 0.6 }] :
+                    [{ sound: "random.orb", pitch: 1.3, volume: 0.6 }, { sound: "mob.villager.idle", pitch: 1.0, volume: 0.4 }]
+            });
+            messageDelay += 40;
         }
         
         // Check for day 8+ variant unlock (either by day OR by 3 kills of day 4+ variants, but only if day >= 8)
@@ -721,8 +740,8 @@ function checkVariantUnlock(player, codexParam = null) {
                 const eventMessage = "The most dangerous Maple Bear variants yet have been documented. The infection continues to evolve.";
                 recordDailyEvent(player, tomorrowDay, eventMessage, "variants", codex);
 
-                // Schedule unlock message with delay
-                if (!codex.mobs.day8MessageShown) {
+                // Only show unlock message when player has killed/experienced at least one day 8 variant
+                if (!codex.mobs.day8MessageShown && hasKilledDay8Variant) {
                     codex.mobs.day8MessageShown = true;
                     pendingUnlocks.push({
                         delay: messageDelay,
@@ -735,6 +754,17 @@ function checkVariantUnlock(player, codexParam = null) {
                     console.log(`[CODEX] ${player.name} unlocked day 8+ variants`);
                 }
             }
+        }
+        else if (codex.mobs.day8VariantsUnlocked && !codex.mobs.day8MessageShown && hasKilledDay8Variant) {
+            codex.mobs.day8MessageShown = true;
+            pendingUnlocks.push({
+                delay: messageDelay,
+                message: codex.items.snowBookCrafted ? (CHAT_DEV + "Day 8+ variants unlocked.") : (CHAT_INFO + "You feel your knowledge expanding..."),
+                sounds: codex.items.snowBookCrafted ? 
+                    [{ sound: "random.orb", pitch: 1.5, volume: 0.8 }, { sound: "mob.villager.idle", pitch: 1.2, volume: 0.6 }] :
+                    [{ sound: "random.orb", pitch: 1.3, volume: 0.6 }, { sound: "mob.villager.idle", pitch: 1.0, volume: 0.4 }]
+            });
+            messageDelay += 40;
         }
         
         // Check for day 13+ variant unlock (either by day OR by 3 kills of day 8+ variants, but only if day >= 13)
@@ -757,8 +787,8 @@ function checkVariantUnlock(player, codexParam = null) {
                 const eventMessage = "The most advanced Maple Bear variants have been observed. The infection has reached unprecedented levels.";
                 recordDailyEvent(player, tomorrowDay, eventMessage, "variants", codex);
 
-                // Schedule unlock message with delay
-                if (!codex.mobs.day13MessageShown) {
+                // Only show unlock message when player has killed/experienced at least one day 13 variant
+                if (!codex.mobs.day13MessageShown && hasKilledDay13Variant) {
                     codex.mobs.day13MessageShown = true;
                     pendingUnlocks.push({
                         delay: messageDelay,
@@ -771,6 +801,17 @@ function checkVariantUnlock(player, codexParam = null) {
                     console.log(`[CODEX] ${player.name} unlocked day 13+ variants`);
                 }
             }
+        }
+        else if (codex.mobs.day13VariantsUnlocked && !codex.mobs.day13MessageShown && hasKilledDay13Variant) {
+            codex.mobs.day13MessageShown = true;
+            pendingUnlocks.push({
+                delay: messageDelay,
+                message: codex.items.snowBookCrafted ? (CHAT_DEV + "Day 13+ variants unlocked.") : (CHAT_INFO + "You feel your knowledge expanding..."),
+                sounds: codex.items.snowBookCrafted ? 
+                    [{ sound: "random.orb", pitch: 1.5, volume: 0.8 }, { sound: "mob.villager.idle", pitch: 1.2, volume: 0.6 }] :
+                    [{ sound: "random.orb", pitch: 1.3, volume: 0.6 }, { sound: "mob.villager.idle", pitch: 1.0, volume: 0.4 }]
+            });
+            messageDelay += 40;
         }
 
         // Check for day 20+ variant unlock (either by day OR by 5 kills of day 13+ variants, but only if day >= 20)
@@ -795,8 +836,8 @@ function checkVariantUnlock(player, codexParam = null) {
                 const eventMessage = "Day 20+ Maple Bear forms have surfaced, displaying unmatched ferocity and influence over the infection.";
                 recordDailyEvent(player, tomorrowDay, eventMessage, "variants", codex);
 
-                // Schedule unlock message with delay
-                if (!codex.mobs.day20MessageShown) {
+                // Only show unlock message when player has killed/experienced at least one day 20 variant
+                if (!codex.mobs.day20MessageShown && hasKilledDay20Variant) {
                     codex.mobs.day20MessageShown = true;
                     pendingUnlocks.push({
                         delay: messageDelay,
@@ -808,6 +849,16 @@ function checkVariantUnlock(player, codexParam = null) {
                     console.log(`[CODEX] ${player.name} unlocked day 20+ variants`);
                 }
             }
+        }
+        else if (codex.mobs.day20VariantsUnlocked && !codex.mobs.day20MessageShown && hasKilledDay20Variant) {
+            codex.mobs.day20MessageShown = true;
+            pendingUnlocks.push({
+                delay: messageDelay,
+                message: codex.items.snowBookCrafted ? (CHAT_DEV + "Day 20+ variants unlocked.") : (CHAT_INFO + "You feel your knowledge pulled toward something dreadful..."),
+                sounds: codex.items.snowBookCrafted ? 
+                    [{ sound: "random.orb", pitch: 1.5, volume: 0.8 }, { sound: "mob.villager.idle", pitch: 1.2, volume: 0.6 }] :
+                    [{ sound: "random.orb", pitch: 1.3, volume: 0.6 }, { sound: "mob.villager.idle", pitch: 1.0, volume: 0.4 }]
+            });
         }
 
         // Schedule all pending unlock messages with staggered delays (each plays once per discovery; flags prevent repeat)
@@ -7653,9 +7704,15 @@ function executeMbCommand(sender, subcommand, args = []) {
             const entityId = args[0] || "mb:mb_day20";
             let target = sender;
             let distanceArg = "2";
-            if (args.length >= 3) {
+            let quantity = 1;
+            // Menu sends: [entityId, distance, quantity] when "Near me", or [entityId, targetName, distance, quantity] when another player
+            if (args.length === 3) {
+                distanceArg = args[1];
+                quantity = Math.min(10, Math.max(1, parseInt(args[2], 10) || 1));
+            } else if (args.length >= 4) {
                 target = args[1] ? world.getAllPlayers().find(p => p.name === args[1]) : sender;
                 distanceArg = args[2];
+                quantity = Math.min(10, Math.max(1, parseInt(args[3], 10) || 1));
             } else if (args.length === 2) {
                 const second = String(args[1]);
                 const asNum = parseInt(second, 10);
@@ -7673,7 +7730,6 @@ function executeMbCommand(sender, subcommand, args = []) {
                 const parsed = parseInt(String(distanceArg), 10);
                 if (!Number.isNaN(parsed) && parsed >= 0) distance = Math.min(64, Math.max(0, parsed));
             }
-            const quantity = Math.min(10, Math.max(1, parseInt(args[3], 10) || 1));
             try {
                 const loc = target.location;
                 let spawned = 0;

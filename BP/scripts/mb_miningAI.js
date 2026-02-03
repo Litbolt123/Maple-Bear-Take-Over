@@ -6508,8 +6508,38 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS, useCache = 
     if (!dimension) return null;
     const entityId = entity.id;
     const currentTick = system.currentTick;
-    
-    // Check cache first (performance optimization)
+    const origin = entity.location;
+    const maxDistSq = maxDistance * maxDistance;
+    const dimensionId = dimension?.id;
+
+    // Dev tool: force all bears to target a specific player (must run before cache so override is not hidden)
+    const forceTargetName = getWorldProperty("mb_force_target_player");
+    if (forceTargetName && typeof forceTargetName === "string" && dimensionId) {
+        targetCache.delete(entityId); // bypass cache while override is active
+        const forcePlayer = getCachedPlayers().find(p => p && p.name === forceTargetName && p.dimension?.id === dimensionId);
+        if (forcePlayer) {
+            try {
+                if (forcePlayer.getGameMode?.() !== "creative" && forcePlayer.getGameMode?.() !== "spectator") {
+                    const dx = forcePlayer.location.x - origin.x;
+                    const dy = forcePlayer.location.y - origin.y;
+                    const dz = forcePlayer.location.z - origin.z;
+                    const distSq = dx * dx + dy * dy + dz * dz;
+                    if (distSq <= maxDistSq) {
+                        const targetInfo = {
+                            entity: forcePlayer,
+                            location: forcePlayer.location,
+                            vector: { x: dx, y: dy, z: dz },
+                            distanceSq: distSq
+                        };
+                        targetCache.set(entityId, { target: targetInfo, tick: currentTick });
+                        return targetInfo;
+                    }
+                }
+            } catch { }
+        }
+    }
+
+    // Check cache (performance optimization; skipped when force-target override was applied above)
     if (useCache) {
         const cached = targetCache.get(entityId);
         if (cached && (currentTick - cached.tick) < TARGET_CACHE_TICKS) {
@@ -6544,7 +6574,6 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS, useCache = 
                         } catch { }
                     }
                     
-                    const origin = entity.location;
                     const targetLoc = cached.target.entity.location;
                     const dx = targetLoc.x - origin.x;
                     const dy = targetLoc.y - origin.y;
@@ -6567,36 +6596,6 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS, useCache = 
                     }
                 }
             }
-        }
-    }
-    
-    const origin = entity.location;
-    const maxDistSq = maxDistance * maxDistance;
-    const dimensionId = dimension?.id;
-
-    // Dev tool: force all bears to target a specific player
-    const forceTargetName = getWorldProperty("mb_force_target_player");
-    if (forceTargetName && typeof forceTargetName === "string" && dimensionId) {
-        const forcePlayer = getCachedPlayers().find(p => p && p.name === forceTargetName && p.dimension?.id === dimensionId);
-        if (forcePlayer) {
-            try {
-                if (forcePlayer.getGameMode?.() !== "creative" && forcePlayer.getGameMode?.() !== "spectator") {
-                    const dx = forcePlayer.location.x - origin.x;
-                    const dy = forcePlayer.location.y - origin.y;
-                    const dz = forcePlayer.location.z - origin.z;
-                    const distSq = dx * dx + dy * dy + dz * dz;
-                    if (distSq <= maxDistSq) {
-                        const targetInfo = {
-                            entity: forcePlayer,
-                            location: forcePlayer.location,
-                            vector: { x: dx, y: dy, z: dz },
-                            distanceSq: distSq
-                        };
-                        targetCache.set(entityId, { target: targetInfo, tick: currentTick });
-                        return targetInfo;
-                    }
-                }
-            } catch { }
         }
     }
 
