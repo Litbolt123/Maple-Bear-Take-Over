@@ -56,6 +56,7 @@ let buffAIIntervalId = null;
 const MAX_BUFF_INIT_ATTEMPTS = 10;
 const BUFF_INIT_DELAY_TICKS = 20;
 let buffInitAttempts = 0;
+let buffAIInitialized = false;
 
 // Track spawn time and position history for stuck detection
 const BUFF_SPAWN_TIME = new Map(); // entityId -> spawnTick
@@ -161,7 +162,6 @@ function handleTwoBlockPlant(dimension, checkX, topSolidY, checkZ, topSolidBlock
     const blockBelow = dimension.getBlock({ x: checkX, y: topSolidY - 1, z: checkZ });
     const blockType = topSolidBlock.typeId;
     if (!SNOW_TWO_BLOCK_PLANTS.has(blockType)) return;
-    const prefix = isAbove ? "2-block above: " : "2-block: ";
     if (blockAbove && SNOW_TWO_BLOCK_PLANTS.has(blockAbove.typeId)) {
         try { topSolidBlock.setType("mb:snow_layer"); } catch { topSolidBlock.setType("minecraft:snow_layer"); }
         try { blockAbove.setType("minecraft:air"); } catch { }
@@ -710,7 +710,7 @@ function initializeBuffAI() {
                     // Get players in this dimension
                     const playersInDim = allPlayers.filter(p => {
                         try {
-                            if (typeof p.isValid === "function" && !p.isValid()) return false;
+                            if (!p?.isValid) return false;
                             const playerDimId = p.dimension?.id;
                             const normalizedDimId = playerDimId?.startsWith("minecraft:") ? playerDimId.substring(10) : playerDimId;
                             return normalizedDimId === dimId || normalizedDimId === `minecraft:${dimId}`;
@@ -728,7 +728,7 @@ function initializeBuffAI() {
                             const seenEntities = new Set();
                             for (const player of playersInDim) {
                                 try {
-                                    if (typeof player.isValid === "function" && !player.isValid()) continue;
+                                    if (!player?.isValid) continue;
                                     
                                     const entities = dimension.getEntities({
                                         type: bearType.id,
@@ -965,7 +965,6 @@ world.afterEvents.entityHurt.subscribe((event) => {
 // Auto-initialize on script load
 // Don't call getDebugGeneral() at module load time - world might not be ready
 // Just log basic info and initialize
-let buffAIInitialized = false;
 
 // Try to initialize after delay (with error handling)
 try {

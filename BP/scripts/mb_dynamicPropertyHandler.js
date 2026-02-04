@@ -78,7 +78,8 @@ function loadPlayerProperties(player) {
         const playerId = player.id;
         const cache = new Map();
         
-        // List of all player properties to load
+        // List of ALL player properties to load. Must include every key ever written via setPlayerProperty
+        // so that values persist across rejoins. Add new keys here when adding new player persistence.
         const playerProps = [
             "mb_codex",
             "mb_infection",
@@ -93,7 +94,13 @@ function loadPlayerProperties(player) {
             "mb_minor_cure_golden_carrot",
             "mb_infection_experience",
             "mb_debug_settings",
-            // Add any other player properties here
+            "mb_intro_seen",
+            "mb_bear_infection",
+            "mb_snow_infection",
+            "mb_major_infected_before",
+            "mb_minor_respawned",
+            "mb_minor_reinfected",
+            "mb_world_intro_seen", // legacy; intro is now per-player (mb_intro_seen)
         ];
         
         for (const key of playerProps) {
