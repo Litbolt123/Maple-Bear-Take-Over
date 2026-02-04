@@ -6,6 +6,7 @@ import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTrac
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 import { getBuffBearCountdowns } from "./mb_buffAI.js";
+import { getSpawnConfigsForDevTools, getDisabledSpawnTypes, setDisabledSpawnTypes } from "./mb_spawnController.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
@@ -3478,6 +3479,7 @@ export function showCodexBook(player, context) {
             { label: "§fReset World Day to 1", action: () => triggerDebugCommand("reset_day") },
             { label: "§fSet Day...", action: () => promptSetDay() },
             { label: "§fSpawn Difficulty", action: () => openSpawnDifficultyMenu() },
+            { label: "§fSpawn Type Toggles", action: () => openSpawnTypeTogglesMenu() },
             { label: "§fClear / Set Infection", action: () => openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name)) },
             { label: "§fGrant / Remove Immunity", action: () => openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name)) },
             { label: "§fReset Intro", action: () => triggerDebugCommand("reset_intro", [], () => openDeveloperTools()) },
@@ -3634,6 +3636,37 @@ export function showCodexBook(player, context) {
 
             triggerDebugCommand("set_spawn_difficulty_value", [String(parsed)], () => openSpawnDifficultyMenu());
         }).catch(() => openSpawnDifficultyMenu());
+    }
+
+    function openSpawnTypeTogglesMenu() {
+        const configs = getSpawnConfigsForDevTools();
+        const disabled = getDisabledSpawnTypes();
+        const form = new ModalFormData().title("§cSpawn Type Toggles");
+        form.toggle("§7§oUncheck a type to disable it from natural spawning.", { defaultValue: false });
+        for (const { id, label } of configs) {
+            const allowed = !disabled.has(id);
+            form.toggle(`§f${label} §8(${id})`, { defaultValue: allowed });
+        }
+        form.show(player).then((res) => {
+            if (!res || res.canceled) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openDeveloperTools();
+            }
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
+            const formValues = res.formValues || [];
+            const newDisabled = new Set();
+            configs.forEach((cfg, idx) => {
+                const toggleIdx = idx + 1;
+                const allowed = formValues[toggleIdx] === true;
+                if (!allowed) newDisabled.add(cfg.id);
+            });
+            setDisabledSpawnTypes(newDisabled);
+            const count = newDisabled.size;
+            player.sendMessage(CHAT_SUCCESS + (count === 0 ? "All bear types can spawn." : `Spawn disabled for ${count} type(s).`));
+            openDeveloperTools();
+        }).catch(() => openDeveloperTools());
     }
 
     function openInfectionDevMenu(targetName) {
@@ -4924,18 +4957,19 @@ export function saveDebugSettings(player, settings) {
 
 // Helper function to check if any player has a specific debug flag enabled
 // Performance: Uses caching to avoid iterating all players on every call
+// Wrapped in try-catch: can be called during module load before debugStateCache is initialized
 export function isDebugEnabled(category, flag) {
-    // Initialize cache if needed
-    if (typeof debugStateCache === 'undefined') {
-        debugStateCache = null;
-    }
-    
-    // Return cached result if available
-    if (debugStateCache && debugStateCache[category]?.[flag]) {
-        return true;
-    }
-    
     try {
+        // Initialize cache if needed (may throw if called before codex finished loading - TDZ)
+        if (typeof debugStateCache === 'undefined') {
+            debugStateCache = null;
+        }
+        
+        // Return cached result if available
+        if (debugStateCache && debugStateCache[category]?.[flag]) {
+            return true;
+        }
+        
         // Check if world is available
         if (typeof world === 'undefined' || !world || typeof world.getAllPlayers !== 'function') {
             return false; // World not ready yet
@@ -4961,7 +4995,7 @@ export function isDebugEnabled(category, flag) {
             }
         }
     } catch (error) {
-        // Silent fail - debug is optional, world might not be ready
+        // Silent fail: debugStateCache not initialized yet, or world not ready
         return false;
     }
     return false;

@@ -28,6 +28,8 @@ const BUFF_BEAR_TYPES = [
     { id: "mb:buff_mb_day13", breaksPerTick: 3, maxHeight: 4 },
     { id: "mb:buff_mb_day20", breaksPerTick: 3, maxHeight: 4 }
 ];
+/** Set for quick lookup when filtering by type */
+const BUFF_BEAR_TYPE_IDS = new Set(BUFF_BEAR_TYPES.map(t => t.id));
 
 const AI_TICK_INTERVAL = 2; // Run every 2 ticks (50% reduction in processing frequency)
 const MAX_PROCESSING_DISTANCE = 64; // Only process buff bears within 64 blocks of players
@@ -686,34 +688,44 @@ function initializeBuffAI() {
     buffAIInitialized = true;
     
     buffAIIntervalId = system.runInterval(() => {
-        if (!isScriptEnabled(SCRIPT_IDS.buff)) return;
-        const currentTick = system.currentTick;
+        try {
+            if (!isScriptEnabled(SCRIPT_IDS.buff)) return;
+            const currentTick = system.currentTick;
         
-        // Cleanup tracking maps for entities that no longer exist
-        const seen = new Set();
+            // Cleanup tracking maps for entities that no longer exist
+            const seen = new Set();
         const loggedThisTick = new Set(); // Track which entities we've logged countdown for this tick
         
         // Only process every AI_TICK_INTERVAL ticks
         if (currentTick % AI_TICK_INTERVAL !== 0) return;
         
         try {
-            // Performance: Use shared player cache
-            const allPlayers = getCachedPlayers();
+            // Use cached players when available; fallback to getAllPlayers() so we detect players
+            let allPlayers = getCachedPlayers();
+            if (allPlayers.length === 0) {
+                try {
+                    allPlayers = world.getAllPlayers();
+                } catch {
+                    return;
+                }
+            }
             if (allPlayers.length === 0) return;
             
-            // Process each dimension
+            // Process each dimension (use minecraft: prefix for getDimension)
             for (const dimId of DIMENSION_IDS) {
                 try {
-                    const dimension = world.getDimension(dimId);
+                    const fullDimId = dimId.includes(":") ? dimId : `minecraft:${dimId}`;
+                    const dimension = world.getDimension(fullDimId);
                     if (!dimension) continue;
                     
                     // Get players in this dimension
                     const playersInDim = allPlayers.filter(p => {
                         try {
                             if (!p?.isValid) return false;
-                            const playerDimId = p.dimension?.id;
-                            const normalizedDimId = playerDimId?.startsWith("minecraft:") ? playerDimId.substring(10) : playerDimId;
-                            return normalizedDimId === dimId || normalizedDimId === `minecraft:${dimId}`;
+                            const playerDimId = p.dimension?.id || "";
+                            const normalizedDimId = playerDimId.replace(/^minecraft:/, "");
+                            const normalizedLoopId = dimId.replace(/^minecraft:/, "");
+                            return normalizedDimId === normalizedLoopId || playerDimId === fullDimId;
                         } catch {
                             return false;
                         }
@@ -721,98 +733,74 @@ function initializeBuffAI() {
                     
                     if (playersInDim.length === 0) continue;
                     
-                    // Process each buff bear type
-                    for (const bearType of BUFF_BEAR_TYPES) {
+                    // Query by type + location (efficient: engine returns only buff bears in range)
+                    const seenEntities = new Set();
+                    for (const player of playersInDim) {
                         try {
-                            // Query entities near each player
-                            const seenEntities = new Set();
-                            for (const player of playersInDim) {
-                                try {
-                                    if (!player?.isValid) continue;
-                                    
-                                    const entities = dimension.getEntities({
-                                        type: bearType.id,
-                                        maxDistance: MAX_PROCESSING_DISTANCE,
-                                        location: player.location
-                                    });
-                                    
-                                    for (const entity of entities) {
-                                        if (!entity?.isValid) continue;
-                                        const entityId = entity.id;
-                                        if (seenEntities.has(entityId)) continue; // Avoid processing same entity twice
-                                        seenEntities.add(entityId);
-                                        seen.add(entityId); // Track for cleanup
-                                        
-                                        // Track spawn time (if not already tracked)
-                                        // For existing bears (spawned before script initialized), initialize spawn time
-                                        // to MIN_ALIVE_TIME_TICKS ago so they're immediately eligible for explosion checks
-                                        if (!BUFF_SPAWN_TIME.has(entityId)) {
-                                            // Assume existing bears have been alive at least MIN_ALIVE_TIME_TICKS
-                                            // This allows them to immediately be checked for stuck explosions
-                                            BUFF_SPAWN_TIME.set(entityId, currentTick - MIN_ALIVE_TIME_TICKS);
+                            if (!player?.isValid) continue;
+                            for (const bearType of BUFF_BEAR_TYPES) {
+                                const entities = dimension.getEntities({
+                                    type: bearType.id,
+                                    location: player.location,
+                                    maxDistance: MAX_PROCESSING_DISTANCE
+                                });
+                                for (const entity of entities) {
+                                    if (!entity?.isValid) continue;
+                                    const entityId = entity.id;
+                                if (seenEntities.has(entityId)) continue;
+                                seenEntities.add(entityId);
+                                seen.add(entityId);
+                                
+                                if (!BUFF_SPAWN_TIME.has(entityId)) {
+                                    BUFF_SPAWN_TIME.set(entityId, currentTick - MIN_ALIVE_TIME_TICKS);
+                                }
+                                const spawnTick = BUFF_SPAWN_TIME.get(entityId);
+                                const aliveTime = currentTick - spawnTick;
+                                const loc = entity.location;
+                                
+                                if (isClimbing(entity)) {
+                                    const broken = breakBlocksAboveEntity(entity, bearType.maxHeight, bearType);
+                                    if (getDebugBlockBreaking() && broken > 0) {
+                                        console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} broke ${broken} blocks above while climbing`);
+                                    }
+                                }
+                                
+                                if (aliveTime >= MIN_ALIVE_TIME_TICKS && currentTick % STUCK_CHECK_INTERVAL === 0) {
+                                    const history = BUFF_POSITION_HISTORY.get(entityId);
+                                    if (history && history.stuckStartTick !== null && !loggedThisTick.has(entityId)) {
+                                        const ticksStuck = currentTick - history.stuckStartTick;
+                                        const secondsStuck = Math.floor(ticksStuck / 20);
+                                        const ticksUntilExplosion = STUCK_TIME_TICKS - ticksStuck;
+                                        const secondsUntilExplosion = Math.ceil(ticksUntilExplosion / 20);
+                                        if (getDebugGeneral()) {
+                                            console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} STUCK COUNTDOWN: ${secondsStuck}s stuck, ${secondsUntilExplosion}s until explosion (at ${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
+                                            loggedThisTick.add(entityId);
                                         }
-                                        
-                                        const spawnTick = BUFF_SPAWN_TIME.get(entityId);
-                                        const aliveTime = currentTick - spawnTick;
-                                        const loc = entity.location;
-                                        
-                                        // Check if buff bear is climbing
-                                        if (isClimbing(entity)) {
-                                            // Break blocks above when climbing
-                                            const broken = breakBlocksAboveEntity(entity, bearType.maxHeight, bearType);
-                                            if (getDebugBlockBreaking() && broken > 0) {
-                                                console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} broke ${broken} blocks above while climbing`);
-                                            }
-                                        }
-                                        
-                                        // Check for stuck explosion (only if alive for 30+ seconds)
-                                        if (aliveTime >= MIN_ALIVE_TIME_TICKS && currentTick % STUCK_CHECK_INTERVAL === 0) {
-                                            const history = BUFF_POSITION_HISTORY.get(entityId);
-                                            if (history && history.stuckStartTick !== null && !loggedThisTick.has(entityId)) {
-                                                // Bear is stuck - show countdown
-                                                const ticksStuck = currentTick - history.stuckStartTick;
-                                                const secondsStuck = Math.floor(ticksStuck / 20);
-                                                const ticksUntilExplosion = STUCK_TIME_TICKS - ticksStuck;
-                                                const secondsUntilExplosion = Math.ceil(ticksUntilExplosion / 20);
-                                                
-                                                if (getDebugGeneral()) {
-                                                    console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} STUCK COUNTDOWN: ${secondsStuck}s stuck, ${secondsUntilExplosion}s until explosion (at ${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
-                                                    loggedThisTick.add(entityId);
-                                                }
-                                            } else if (!loggedThisTick.has(entityId) && getDebugGeneral()) {
-                                                // Bear is eligible but not stuck yet - show status
-                                                console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} COUNTDOWN: Can explode if stuck for 15s (alive ${Math.floor(aliveTime / 20)}s, at ${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
-                                                loggedThisTick.add(entityId);
-                                            }
-                                            
-                                            if (checkIfStuck(entity, currentTick)) {
-                                                // Bear is stuck - create explosion
-                                                createBuffExplosion(entity);
-                                                if (getDebugGeneral()) {
-                                                    console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} was stuck for 15 seconds, created explosion`);
-                                                }
-                                            }
-                                        } else if (aliveTime < MIN_ALIVE_TIME_TICKS && currentTick % STUCK_CHECK_INTERVAL === 0) {
-                                            // Log countdown until bear can explode (only once per tick)
-                                            if (!loggedThisTick.has(entityId)) {
-                                                const ticksUntilCanExplode = MIN_ALIVE_TIME_TICKS - aliveTime;
-                                                const secondsUntilCanExplode = Math.ceil(ticksUntilCanExplode / 20);
-                                                if (getDebugGeneral()) {
-                                                    console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} COUNTDOWN: Can explode in ${secondsUntilCanExplode}s (then needs 15s stuck) (alive ${Math.floor(aliveTime / 20)}s, at ${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
-                                                    loggedThisTick.add(entityId);
-                                                }
-                                            }
+                                    } else if (!loggedThisTick.has(entityId) && getDebugGeneral()) {
+                                        console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} COUNTDOWN: Can explode if stuck for 15s (alive ${Math.floor(aliveTime / 20)}s, at ${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
+                                        loggedThisTick.add(entityId);
+                                    }
+                                    if (checkIfStuck(entity, currentTick)) {
+                                        createBuffExplosion(entity);
+                                        if (getDebugGeneral()) {
+                                            console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} was stuck for 15 seconds, created explosion`);
                                         }
                                     }
-                                } catch (error) {
-                                    if (getDebugGeneral()) {
-                                        console.warn(`[BUFF AI] Error querying entities near player:`, error);
+                                } else if (aliveTime < MIN_ALIVE_TIME_TICKS && currentTick % STUCK_CHECK_INTERVAL === 0) {
+                                    if (!loggedThisTick.has(entityId)) {
+                                        const ticksUntilCanExplode = MIN_ALIVE_TIME_TICKS - aliveTime;
+                                        const secondsUntilCanExplode = Math.ceil(ticksUntilCanExplode / 20);
+                                        if (getDebugGeneral()) {
+                                            console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} COUNTDOWN: Can explode in ${secondsUntilCanExplode}s (then needs 15s stuck) (alive ${Math.floor(aliveTime / 20)}s, at ${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
+                                            loggedThisTick.add(entityId);
+                                        }
                                     }
                                 }
                             }
+                            }
                         } catch (error) {
                             if (getDebugGeneral()) {
-                                console.warn(`[BUFF AI] Error processing ${bearType.id}:`, error);
+                                console.warn(`[BUFF AI] Error querying entities near player:`, error);
                             }
                         }
                     }
@@ -833,6 +821,9 @@ function initializeBuffAI() {
         } catch (error) {
             console.error("[BUFF AI] Error in AI loop:", error);
         }
+    } catch (outerError) {
+        console.warn("[BUFF AI] Error in interval callback:", outerError);
+    }
     }, AI_TICK_INTERVAL);
 }
 
@@ -850,22 +841,18 @@ export function getBuffBearCountdowns(player) {
         const dimension = player.dimension;
         if (!dimension) return results;
         
-        // Get all buff bears within 64 blocks
-        // Query each type separately since getEntities doesn't accept array for type
-        const allEntities = [];
-        for (const bearType of BUFF_BEAR_TYPES) {
-            try {
-                const entities = dimension.getEntities({
-                    type: bearType.id,
-                    maxDistance: 64,
-                    location: player.location
-                });
-                for (const entity of entities) {
-                    allEntities.push(entity);
-                }
-            } catch {
-                // Skip if query fails
+        // Get all entities within 64 blocks, then filter to buff bears (type filter often empty for addon entities)
+        let allEntities = [];
+        try {
+            const raw = dimension.getEntities({
+                location: player.location,
+                maxDistance: 64
+            });
+            for (const entity of raw) {
+                if (entity?.typeId && BUFF_BEAR_TYPE_IDS.has(entity.typeId)) allEntities.push(entity);
             }
+        } catch {
+            // Skip if query fails
         }
         
         for (const entity of allEntities) {
@@ -989,6 +976,7 @@ try {
 }
 
 // Fallback: Also try to initialize when first player joins (in case world wasn't ready)
+// When last player leaves, tear down the interval so rejoin will trigger a fresh init.
 try {
     if (typeof world !== "undefined" && world?.afterEvents) {
         world.afterEvents.playerJoin.subscribe(() => {
@@ -1008,6 +996,41 @@ try {
                 }
             }
         });
+
+        // When last player leaves, clear the interval so next join will re-initialize (fixes rejoin not starting).
+        world.afterEvents.playerLeave.subscribe(() => {
+            try {
+                const remaining = world.getPlayers?.()?.length ?? 0;
+                if (remaining === 0 && buffAIIntervalId !== null) {
+                    if (typeof system?.clearRun === "function") {
+                        system.clearRun(buffAIIntervalId);
+                    }
+                    buffAIIntervalId = null;
+                    buffAIInitialized = false;
+                    buffInitAttempts = 0;
+                    console.warn("[BUFF AI] Last player left, interval cleared. Will re-initialize on next join.");
+                }
+            } catch (e) {
+                console.warn("[BUFF AI] Error in playerLeave cleanup:", e);
+            }
+        });
+
+        // Extra fallback: initialize on initial spawn (player fully in world) if still not running.
+        if (world.afterEvents.playerSpawn) {
+            world.afterEvents.playerSpawn.subscribe((event) => {
+                if (!event.initialSpawn) return;
+                if (buffAIInitialized && buffAIIntervalId !== null) return;
+                console.warn("[BUFF AI] Player spawned (initial), attempting initialization as fallback...");
+                buffInitAttempts = 0;
+                try {
+                    if (typeof system !== "undefined" && system?.runTimeout) {
+                        system.runTimeout(() => initializeBuffAI(), 15);
+                    }
+                } catch (error) {
+                    console.warn("[BUFF AI] Failed to schedule spawn fallback initialization:", error);
+                }
+            });
+        }
     } else {
         console.warn("[BUFF AI] World API not ready for fallback subscription");
     }

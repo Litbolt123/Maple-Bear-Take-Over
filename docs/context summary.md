@@ -2,6 +2,33 @@
 
 **Date:** 2026-02-04
 
+## Buff AI: Rejoin fix – world load / leave / spawn pipeline (mb_buffAI.js)
+
+After the previous init hardening, the Buff AI still sometimes failed to run after **leaving the world and rejoining**: the timer/loop would not start, and sometimes even debug/init logs did not appear. Cause: the script stays loaded when leaving the world, so module-level state (`buffAIIntervalId`, `buffAIInitialized`) persisted, but the **interval was no longer valid** after world unload. The fallback only ran when `buffAIIntervalId === null`, so it never re-initialized on rejoin.
+
+### Changes made
+
+1. **playerLeave cleanup**  
+   When the last player leaves (`world.getPlayers().length === 0`), the script now:
+   - Calls `system.clearRun(buffAIIntervalId)` to cancel the interval
+   - Sets `buffAIIntervalId = null`, `buffAIInitialized = false`, `buffInitAttempts = 0`  
+   So on next join the fallback sees “not initialized” and starts a fresh interval.
+
+2. **playerSpawn (initialSpawn) fallback**  
+   Subscribed to `world.afterEvents.playerSpawn` with `event.initialSpawn` check. If the AI is still not initialized, it schedules `initializeBuffAI()` after 15 ticks so initialization can run after the player is fully in the world.
+
+3. **Heartbeat `scriptEnabled` fix**  
+   The heartbeat line used `enabled=${scriptEnabled}` but `scriptEnabled` was never defined in scope (causing a ReferenceError and potentially breaking the interval). It now uses `isScriptEnabled(SCRIPT_IDS.buff)` and logs correctly.
+
+4. **Outer try/catch in interval callback**  
+   The interval callback had an outer `try` without a `catch`; the inner `try/catch` was the only one. Added an outer `catch` so any error in the callback is logged and does not prevent the interval from continuing.
+
+Result: Leaving the world clears the Buff AI interval; rejoining triggers playerJoin and/or playerSpawn fallback and re-initializes the AI loop. Multiple hooks (script load delay, playerJoin, playerSpawn) plus leave cleanup ensure the pipeline turns on reliably on world load and after rejoin.
+
+---
+
+**Date:** 2026-02-04
+
 ## Buff AI: Robust initialization with error handling (mb_buffAI.js)
 
 The Buff AI script had intermittent initialization failures - sometimes it wouldn't initialize on world load, requiring multiple rejoin attempts. The issue was caused by:

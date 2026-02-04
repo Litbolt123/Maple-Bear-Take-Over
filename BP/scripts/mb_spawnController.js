@@ -139,6 +139,8 @@ const MINING_BEAR_DAY20_ID = "mb:mining_mb_day20";
 const TORPEDO_BEAR_ID = "mb:torpedo_mb";
 const TORPEDO_BEAR_DAY20_ID = "mb:torpedo_mb_day20";
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
+/** World property: JSON array of entity IDs that are disabled from natural spawning (dev tools) */
+export const SPAWN_DISABLED_TYPES_PROPERTY = "mb_spawn_disabled_types";
 
 // ============================================================================
 // SECTION 2.1: ENTITY TYPE CONSTANTS AND CAPS
@@ -1181,6 +1183,64 @@ const SPAWN_CONFIGS = [
         }
     }
 ];
+
+/** Display names for dev tools spawn type toggles (id -> label) */
+const SPAWN_CONFIG_DISPLAY_NAMES = {
+    [TINY_BEAR_ID]: "Tiny (Day 0)",
+    [DAY4_BEAR_ID]: "Tiny (Day 4)",
+    [DAY8_BEAR_ID]: "Tiny (Day 8)",
+    [DAY13_BEAR_ID]: "Tiny (Day 13)",
+    [DAY20_BEAR_ID]: "Tiny (Day 20)",
+    [INFECTED_BEAR_ID]: "Infected (Day 4)",
+    [INFECTED_BEAR_DAY8_ID]: "Infected (Day 8)",
+    [INFECTED_BEAR_DAY13_ID]: "Infected (Day 13)",
+    [INFECTED_BEAR_DAY20_ID]: "Infected (Day 20)",
+    [FLYING_BEAR_ID]: "Flying (Day 8)",
+    [FLYING_BEAR_DAY15_ID]: "Flying (Day 15)",
+    [FLYING_BEAR_DAY20_ID]: "Flying (Day 20)",
+    [MINING_BEAR_ID]: "Mining (Day 15)",
+    [MINING_BEAR_DAY20_ID]: "Mining (Day 20)",
+    [BUFF_BEAR_ID]: "Buff (Day 13)",
+    [BUFF_BEAR_DAY13_ID]: "Buff (Day 20)",
+    [BUFF_BEAR_DAY20_ID]: "Buff (Day 20 max)",
+    [TORPEDO_BEAR_ID]: "Torpedo (Day 17)",
+    [TORPEDO_BEAR_DAY20_ID]: "Torpedo (Day 20)"
+};
+
+/**
+ * Get set of entity IDs that are disabled from natural spawning (dev tools).
+ * @returns {Set<string>}
+ */
+export function getDisabledSpawnTypes() {
+    try {
+        const raw = getWorldProperty(SPAWN_DISABLED_TYPES_PROPERTY);
+        if (raw === undefined || raw === null || raw === "") return new Set();
+        const arr = typeof raw === "string" ? JSON.parse(raw) : raw;
+        return Array.isArray(arr) ? new Set(arr) : new Set();
+    } catch {
+        return new Set();
+    }
+}
+
+/**
+ * Set which entity IDs are disabled from natural spawning (dev tools).
+ * @param {Set<string>|string[]} disabledSet - Set or array of entity IDs to disable
+ */
+export function setDisabledSpawnTypes(disabledSet) {
+    const arr = Array.from(disabledSet || []);
+    setWorldProperty(SPAWN_DISABLED_TYPES_PROPERTY, arr.length ? JSON.stringify(arr) : undefined);
+}
+
+/**
+ * List of spawn configs for dev tools: { id, label }.
+ * @returns {{ id: string, label: string }[]}
+ */
+export function getSpawnConfigsForDevTools() {
+    return SPAWN_CONFIGS.map(c => ({
+        id: c.id,
+        label: SPAWN_CONFIG_DISPLAY_NAMES[c.id] || c.id
+    }));
+}
 
 const lastSpawnTickByType = new Map();
 let lastProcessedDay = 0;
@@ -5253,7 +5313,7 @@ function getPerTypeSpawnLimit(day, config) {
 if (ERROR_LOGGING) {
     console.warn("[SPAWN] Maple Bear spawn controller initialized.");
 }
-debugLog('spawn', "Maple Bear spawn controller initialized with debugging enabled");
+// Don't call debugLog at top-level: codex may not be ready yet (debugStateCache not initialized)
 
 system.runInterval(() => {
     try {
@@ -5867,6 +5927,9 @@ system.runInterval(() => {
             if (config.id === TORPEDO_BEAR_ID && currentDay >= 20) shouldSkip = true; // Skip if day20+ torpedo variants available
             
             if (shouldSkip) continue;
+            
+            // Skip if this type/variant is disabled via dev tools
+            if (getDisabledSpawnTypes().has(config.id)) continue;
             
             // Allow mining and torpedo bears to spawn even if safety cap is reached (they cause mayhem!)
             const configType = getEntityType(config.id);
