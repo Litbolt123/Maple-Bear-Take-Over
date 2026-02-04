@@ -5,6 +5,7 @@ import { getAllScriptToggles, setScriptEnabled, SCRIPT_IDS, isBetaInfectedAIEnab
 import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTracker.js";
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
+import { getBuffBearCountdowns } from "./mb_buffAI.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
@@ -3523,10 +3524,11 @@ export function showCodexBook(player, context) {
             [SCRIPT_IDS.infected]: "Infected AI",
             [SCRIPT_IDS.flying]: "Flying AI",
             [SCRIPT_IDS.torpedo]: "Torpedo AI",
+            [SCRIPT_IDS.buff]: "Buff AI",
             [SCRIPT_IDS.biomeAmbience]: "Biome Ambience",
             [SCRIPT_IDS.spawnController]: "Spawn Controller"
         };
-        const ids = [SCRIPT_IDS.mining, SCRIPT_IDS.infected, SCRIPT_IDS.flying, SCRIPT_IDS.torpedo, SCRIPT_IDS.biomeAmbience, SCRIPT_IDS.spawnController];
+        const ids = [SCRIPT_IDS.mining, SCRIPT_IDS.infected, SCRIPT_IDS.flying, SCRIPT_IDS.torpedo, SCRIPT_IDS.buff, SCRIPT_IDS.biomeAmbience, SCRIPT_IDS.spawnController];
         const body = ids.map(id => `§7${labels[id]}: §${toggles[id] ? "aON" : "cOFF"}`).join("\n");
         const form = new ActionFormData()
             .title("§cScript Toggles")
@@ -3984,6 +3986,7 @@ export function showCodexBook(player, context) {
         form.button("§fInfected AI");
         form.button("§fTorpedo AI");
         form.button("§fFlying AI");
+        form.button("§fBuff AI");
         form.button("§fSpawn Controller");
         form.button("§fMain Script");
         form.button("§fBiome Ambience");
@@ -3999,7 +4002,7 @@ export function showCodexBook(player, context) {
                 return openMain();
             }
 
-            if (res.selection === 10) {
+            if (res.selection === 11) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openMain();
@@ -4012,12 +4015,13 @@ export function showCodexBook(player, context) {
                 case 1: return openInfectedDebugMenu(settings);
                 case 2: return openTorpedoDebugMenu(settings);
                 case 3: return openFlyingDebugMenu(settings);
-                case 4: return openSpawnDebugMenu(settings);
-                case 5: return openMainDebugMenu(settings);
-                case 6: return openBiomeAmbienceDebugMenu(settings);
-                case 7: return openDynamicPropertyDebugMenu(settings);
-                case 8: return openCodexDebugMenu(settings);
-                case 9: return openGroundInfectionDebugMenu(settings);
+                case 4: return openBuffDebugMenu(settings);
+                case 5: return openSpawnDebugMenu(settings);
+                case 6: return openMainDebugMenu(settings);
+                case 7: return openBiomeAmbienceDebugMenu(settings);
+                case 8: return openDynamicPropertyDebugMenu(settings);
+                case 9: return openCodexDebugMenu(settings);
+                case 10: return openGroundInfectionDebugMenu(settings);
                 default: return openDebugMenu();
             }
         }).catch(() => openMain());
@@ -4156,6 +4160,84 @@ export function showCodexBook(player, context) {
                 console.warn(`[DEBUG MENU] Flying AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
             }
                 return openFlyingDebugMenu(getDebugSettings(player));
+        }).catch(() => openDebugMenu());
+    }
+
+    function openBuffDebugMenu(settings) {
+        const buff = settings.buff || {};
+        
+        // Get countdown info for nearby buff bears
+        let countdownText = "";
+        try {
+            const countdowns = getBuffBearCountdowns(player);
+            if (countdowns.length > 0) {
+                countdownText = "\n\n§8=== Explosion Countdown ===\n";
+                for (const info of countdowns) {
+                    const loc = info.location;
+                    countdownText += `§7Bear ${info.entityId}:\n`;
+                    countdownText += `§7  Location: (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})\n`;
+                    countdownText += `§7  Alive: ${info.aliveSeconds}s\n`;
+                    
+                    if (info.canExplode) {
+                        if (info.stuckInfo.isStuck) {
+                            countdownText += `§c  STUCK: ${info.stuckInfo.secondsStuck}s\n`;
+                            countdownText += `§c  Explosion in: ${info.stuckInfo.secondsUntilExplosion}s\n`;
+                        } else {
+                            countdownText += `§7  Not stuck (needs 15s stuck to explode)\n`;
+                            countdownText += `§7  Will explode in: ${info.stuckInfo.secondsUntilExplosion}s if stuck\n`;
+                        }
+                    } else {
+                        countdownText += `§7  Can explode in: ${info.secondsUntilCanExplode}s\n`;
+                        countdownText += `§7  Then needs 15s stuck to explode\n`;
+                    }
+                    countdownText += "\n";
+                }
+            } else {
+                countdownText = "\n\n§8No buff bears nearby (within 64 blocks)";
+            }
+        } catch (error) {
+            countdownText = "\n\n§cError getting countdown info";
+            if (buff.general) {
+                console.warn(`[BUFF DEBUG] Error:`, error);
+            }
+        }
+        
+        const form = new ActionFormData().title("§bBuff AI Debug");
+        form.body(`§7Toggle debug logging for Buff Bears:\n\n§8Current settings:\n§7• General: ${buff.general ? "§aON" : "§cOFF"}\n§7• Block Breaking: ${buff.blockBreaking ? "§aON" : "§cOFF"}${countdownText}`);
+        
+        form.button(`§${buff.general ? "a" : "c"}General Logging`);
+        form.button(`§${buff.blockBreaking ? "a" : "c"}Block Breaking`);
+        form.button(`§${buff.all ? "a" : "c"}Toggle All`);
+        form.button("§eShow Countdown");
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 4) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openDebugMenu();
+            }
+
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
+            
+            if (res.selection === 3) {
+                // Show countdown button - just refresh the menu to update countdown
+                return openBuffDebugMenu(getDebugSettings(player));
+            }
+            
+            const flags = ["general", "blockBreaking", "all"];
+            if (res.selection < flags.length) {
+                const newState = toggleDebugFlag("buff", flags[res.selection]);
+                const stateText = newState ? "§aON" : "§cOFF";
+                player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Buff AI ${flags[res.selection]} debug: ${stateText}`);
+                // Log to console for confirmation
+                console.warn(`[DEBUG MENU] Buff AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+                invalidateDebugCache();
+                return openBuffDebugMenu(getDebugSettings(player));
+            }
+            
+            return openBuffDebugMenu(getDebugSettings(player));
         }).catch(() => openDebugMenu());
     }
 
@@ -4740,6 +4822,11 @@ function getDefaultDebugSettings() {
             pathfinding: false,
             all: false
         },
+        buff: {
+            general: false,
+            blockBreaking: false,
+            all: false
+        },
         spawn: {
             general: false,
             discovery: false,
@@ -4838,12 +4925,22 @@ export function saveDebugSettings(player, settings) {
 // Helper function to check if any player has a specific debug flag enabled
 // Performance: Uses caching to avoid iterating all players on every call
 export function isDebugEnabled(category, flag) {
+    // Initialize cache if needed
+    if (typeof debugStateCache === 'undefined') {
+        debugStateCache = null;
+    }
+    
     // Return cached result if available
     if (debugStateCache && debugStateCache[category]?.[flag]) {
         return true;
     }
     
     try {
+        // Check if world is available
+        if (typeof world === 'undefined' || !world || typeof world.getAllPlayers !== 'function') {
+            return false; // World not ready yet
+        }
+        
         const allPlayers = world.getAllPlayers();
         if (!debugStateCache) {
             debugStateCache = {};
@@ -4864,7 +4961,8 @@ export function isDebugEnabled(category, flag) {
             }
         }
     } catch (error) {
-        // Silent fail - debug is optional
+        // Silent fail - debug is optional, world might not be ready
+        return false;
     }
     return false;
 }

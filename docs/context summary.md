@@ -1,5 +1,26 @@
 # Context Summary
 
+**Date:** 2026-02-04
+
+## Buff AI: Robust initialization with error handling (mb_buffAI.js)
+
+The Buff AI script had intermittent initialization failures - sometimes it wouldn't initialize on world load, requiring multiple rejoin attempts. The issue was caused by:
+1. `buffAIInitialized` flag being set inside the interval callback (too late)
+2. Missing error handling around `system.runTimeout` and `world.afterEvents.playerJoin.subscribe` calls
+3. No checks for API availability before using them
+
+### Changes made
+
+- **Set `buffAIInitialized = true` immediately** when initialization succeeds (before creating the interval), not inside the callback, so the fallback knows not to retry
+- **Comprehensive error handling**: All `system.runTimeout` calls wrapped in try-catch with logging
+- **API availability checks**: Check `typeof system !== "undefined"` and `typeof world !== "undefined"` before using APIs
+- **Robust fallback subscription**: The `world.afterEvents.playerJoin` fallback now has full error handling and checks system availability before scheduling retries
+- **Better retry error handling**: All retry attempts in `initializeBuffAI` now have try-catch around `system.runTimeout` calls with error logging
+
+Result: The Buff AI script now reliably initializes on world load with multiple fallback mechanisms and clear error logging for debugging. Initialization attempts are logged at every step, making it easier to diagnose any remaining issues.
+
+---
+
 **Date:** 2026-02-03
 
 ## Spawn controller: ocean floor detection + isolation fix (mb_spawnController.js)

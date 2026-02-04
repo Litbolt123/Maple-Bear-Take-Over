@@ -12,6 +12,7 @@ import { collectedBlocks } from "./mb_miningAI.js";
 import { setInfectedAngerTarget, angerNearbyInfectedAtPlayer } from "./mb_infectedAI.js";
 import { setFlyingBearAngerTarget, angerNearbyFlyingBearsAtPlayer } from "./mb_flyingAI.js";
 import "./mb_torpedoAI.js";
+import "./mb_buffAI.js";
 import "./mb_dimensionAdaptation.js";
 import "./mb_biomeAmbience.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";

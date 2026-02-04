@@ -4781,18 +4781,20 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
                              (entityCounts[BUFF_BEAR_DAY20_ID] || 0);
         
         // Dynamic cap based on player count (passed as parameter):
-        // 1 player: 1 buff bear
+        // IMPORTANT: Single player is limited to 1 buff bear (they're very dangerous!)
+        // Only when multiple players are nearby can more buff bears spawn naturally
+        // 1 player: 1 buff bear (single player limit)
         // 2 players: 1 buff bear
         // 3 players: 2 buff bears
         // 4 players: 2 buff bears
         // 5+ players: 3 buff bears
         let maxBuffBears;
         if (nearbyPlayerCount <= 2) {
-            maxBuffBears = 1;
+            maxBuffBears = 1; // Single player or 2 players: max 1 buff bear
         } else if (nearbyPlayerCount <= 4) {
-            maxBuffBears = 2;
+            maxBuffBears = 2; // 3-4 players: max 2 buff bears
         } else {
-            maxBuffBears = 3;
+            maxBuffBears = 3; // 5+ players: max 3 buff bears
         }
         
         if (buffBearCount >= maxBuffBears) {
