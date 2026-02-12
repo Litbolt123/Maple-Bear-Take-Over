@@ -1,5 +1,8 @@
-// Shared block lists for snow replacement (death/torpedo snow placement).
-// Used by main.js and mb_torpedoAI.js.
+// Shared block lists for snow replacement.
+// NOTE: Distinction for future work:
+// - STORM never replaces: SNOW_NEVER_REPLACE_BLOCKS (storm places snow only in air above these).
+// - Death/torpedo/buff snow placement: SNOW_REPLACEABLE_BLOCKS (these blocks can be replaced with snow).
+// Used by main.js, mb_torpedoAI.js, mb_buffAI.js, mb_snowStorm.js.
 
 /** Full ground blocks that must NEVER be replaced by snow (storm only places in air above these). */
 export const SNOW_NEVER_REPLACE_BLOCKS = new Set([
@@ -7,9 +10,9 @@ export const SNOW_NEVER_REPLACE_BLOCKS = new Set([
     "minecraft:mycelium", "minecraft:dirt_with_roots", "minecraft:moss_block", "minecraft:mud"
 ]);
 
-/** Blocks that should be replaced by snow (grass, flowers, foliage). */
+/** Blocks that death/torpedo/buff snow placement can replace (grass, flowers, foliage). Excludes grass_block - full ground blocks stay. */
 export const SNOW_REPLACEABLE_BLOCKS = new Set([
-    "minecraft:grass_block", "minecraft:grass", "minecraft:short_grass", "minecraft:tall_grass", "minecraft:double_tall_grass", "minecraft:fern", "minecraft:large_fern",
+    "minecraft:grass", "minecraft:short_grass", "minecraft:tall_grass", "minecraft:double_tall_grass", "minecraft:fern", "minecraft:large_fern",
     "minecraft:dandelion", "minecraft:poppy", "minecraft:blue_orchid", "minecraft:allium", "minecraft:azure_bluet", "minecraft:red_tulip",
     "minecraft:orange_tulip", "minecraft:white_tulip", "minecraft:pink_tulip", "minecraft:oxeye_daisy", "minecraft:cornflower", "minecraft:lily_of_the_valley",
     "minecraft:sunflower", "minecraft:lilac", "minecraft:rose_bush", "minecraft:peony", "minecraft:dead_bush", "minecraft:cactus",

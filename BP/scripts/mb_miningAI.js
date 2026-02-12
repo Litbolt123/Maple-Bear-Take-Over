@@ -6542,7 +6542,6 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS, useCache = 
     // Persisted target: if this bear was targeting a player, try to find them first (survives world reload)
     const persistedTargetName = entity.getDynamicProperty?.("mb_target_player");
     if (persistedTargetName && typeof persistedTargetName === "string" && dimensionId) {
-        targetCache.delete(entityId); // bypass cache to re-check persisted target
         const persistedPlayer = getCachedPlayers().find(p => p && p.name === persistedTargetName && p.dimension?.id === dimensionId);
         if (persistedPlayer) {
             try {
@@ -6552,6 +6551,7 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS, useCache = 
                     const dz = persistedPlayer.location.z - origin.z;
                     const distSq = dx * dx + dy * dy + dz * dz;
                     if (distSq <= maxDistSq) {
+                        targetCache.delete(entityId); // only bypass when actually using persisted target
                         const targetInfo = {
                             entity: persistedPlayer,
                             location: persistedPlayer.location,
@@ -6564,6 +6564,10 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS, useCache = 
                 }
             } catch { }
         }
+        // Persisted target invalid (missing, out of range, wrong mode, or exception): clear property so normal targeting/caching resumes
+        try {
+            entity.setDynamicProperty?.("mb_target_player", undefined);
+        } catch { }
     }
 
     // Check cache (performance optimization; skipped when force-target override was applied above)
