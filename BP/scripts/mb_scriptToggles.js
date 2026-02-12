@@ -27,7 +27,8 @@ export const SCRIPT_IDS = {
     torpedo: "torpedo_ai",
     buff: "buff_ai",
     biomeAmbience: "biome_ambience",
-    spawnController: "spawn_controller"
+    spawnController: "spawn_controller",
+    snowStorm: "snow_storm"
 };
 
 /** Default: all scripts enabled. Only explicit false disables. */
@@ -51,12 +52,14 @@ export function getAllScriptToggles() {
         [SCRIPT_IDS.torpedo]: isScriptEnabled(SCRIPT_IDS.torpedo),
         [SCRIPT_IDS.buff]: isScriptEnabled(SCRIPT_IDS.buff),
         [SCRIPT_IDS.biomeAmbience]: isScriptEnabled(SCRIPT_IDS.biomeAmbience),
-        [SCRIPT_IDS.spawnController]: isScriptEnabled(SCRIPT_IDS.spawnController)
+        [SCRIPT_IDS.spawnController]: isScriptEnabled(SCRIPT_IDS.spawnController),
+        [SCRIPT_IDS.snowStorm]: isScriptEnabled(SCRIPT_IDS.snowStorm)
     };
 }
 
 // --- Beta Settings (Settings menu, owner-only) ---
 const BETA_INFECTED_AI = "mb_beta_infected_ai";
+const BETA_DUST_STORMS = "mb_beta_dust_storms";
 const BETA_VISIBLE_TO_ALL = "mb_beta_visible_to_all";
 const BETA_OWNER_ID = "mb_beta_settings_owner_id";
 
@@ -69,6 +72,17 @@ export function isBetaInfectedAIEnabled() {
 
 export function setBetaInfectedAIEnabled(enabled) {
     setWorldProperty(BETA_INFECTED_AI, enabled ? 1 : 0);
+}
+
+/** Beta: Dust storms (snow storms) enabled. Default OFF on world load - must be turned on in book. */
+export function isBetaDustStormsEnabled() {
+    const val = getWorldProperty(BETA_DUST_STORMS);
+    if (val === true || val === 1 || val === "1") return true;
+    return false;
+}
+
+export function setBetaDustStormsEnabled(enabled) {
+    setWorldProperty(BETA_DUST_STORMS, enabled ? 1 : 0);
 }
 
 /** Beta section visible to non-owners in their book */

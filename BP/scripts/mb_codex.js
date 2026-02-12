@@ -1,12 +1,13 @@
 import { system, world } from "@minecraft/server";
 import { ActionFormData, ModalFormData, FormCancelationReason } from "@minecraft/server-ui";
-import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getPlayerPropertyChunked, setPlayerPropertyChunked, getWorldPropertyChunked, setWorldPropertyChunked, ADDON_DIFFICULTY_PROPERTY, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
-import { getAllScriptToggles, setScriptEnabled, SCRIPT_IDS, isBetaInfectedAIEnabled, setBetaInfectedAIEnabled, isBetaVisibleToAll, setBetaVisibleToAll, getBetaOwnerId, setBetaOwnerId } from "./mb_scriptToggles.js";
+import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getPlayerPropertyChunked, setPlayerPropertyChunked, getWorldPropertyChunked, setWorldPropertyChunked, saveAllProperties, ADDON_DIFFICULTY_PROPERTY, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
+import { getAllScriptToggles, setScriptEnabled, SCRIPT_IDS, isBetaInfectedAIEnabled, setBetaInfectedAIEnabled, isBetaDustStormsEnabled, setBetaDustStormsEnabled, isBetaVisibleToAll, setBetaVisibleToAll, getBetaOwnerId, setBetaOwnerId } from "./mb_scriptToggles.js";
 import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTracker.js";
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 import { getBuffBearCountdowns } from "./mb_buffAI.js";
 import { getSpawnConfigsForDevTools, getDisabledSpawnTypes, setDisabledSpawnTypes } from "./mb_spawnController.js";
+import { summonStorm, endStorm, getStormState, getStormDebugInfo, setStormOverride, resetStormOverride } from "./mb_snowStorm.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
@@ -156,7 +157,10 @@ export function getDefaultCodex() {
             biomeAmbientPressureSeen: false,
             minorToMajorFromGround: false, // Minor infection converted to major from ground exposure
             majorGroundWarningSeen: false, // Major infection warning from ground exposure
-            majorSnowIncreaseFromGround: false // Snow level increased from ground exposure with major infection
+            majorSnowIncreaseFromGround: false, // Snow level increased from ground exposure with major infection
+            stormSeen: false,
+            stormMinorSeen: false,
+            stormMajorSeen: false
         },
         knowledge: {
             // Knowledge levels: 0 = no knowledge, 1 = basic awareness, 2 = understanding, 3 = expert
@@ -258,22 +262,54 @@ export function getPlayerSettings(player) {
         if (raw) {
             let parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
             if (parsed && typeof parsed === 'object') {
-                const criticalWarningsOnly = ('criticalWarningsOnly' in parsed)
-                    ? Boolean(parsed.criticalWarningsOnly)
-                    : Boolean(s?.criticalWarningsOnly);
-                return {
-                    showInfectionTimer,
-                    criticalWarningsOnly
+                const fromParsed = {
+                    showInfectionTimer: ('showInfectionTimer' in parsed) ? Boolean(parsed.showInfectionTimer) : showInfectionTimer,
+                    criticalWarningsOnly: ('criticalWarningsOnly' in parsed) ? Boolean(parsed.criticalWarningsOnly) : Boolean(s?.criticalWarningsOnly),
+                    stormParticles: typeof parsed.stormParticles === 'number' ? Math.max(0, Math.min(2, parsed.stormParticles)) : (s?.stormParticles ?? 0)
                 };
+                return fromParsed;
             }
         }
         return {
             showInfectionTimer,
-            criticalWarningsOnly: Boolean(s?.criticalWarningsOnly)
+            criticalWarningsOnly: Boolean(s?.criticalWarningsOnly),
+            stormParticles: s?.stormParticles ?? 0
         };
     } catch (e) {
-        return { showInfectionTimer: false, criticalWarningsOnly: false };
+        return { showInfectionTimer: false, criticalWarningsOnly: false, stormParticles: 0 };
     }
+}
+
+/** Get storm particle density (0=Low, 1=Medium, 2=High) - uses max of all players in dimension */
+export function getStormParticleDensity(dimension) {
+    try {
+        const players = dimension?.getPlayers?.() ?? [];
+        if (players.length === 0) return 0;
+        let max = 0;
+        for (const p of players) {
+            const s = getPlayerSettingsFull(p);
+            const v = typeof s?.stormParticles === 'number' ? Math.max(0, Math.min(2, s.stormParticles)) : 0;
+            if (v > max) max = v;
+        }
+        return max;
+    } catch { return 0; }
+}
+
+function getPlayerSettingsFull(player) {
+    try {
+        const codex = getCodex(player);
+        const s = codex?.settings;
+        const settingsKey = `mb_player_settings_${player.id}`;
+        const raw = getWorldPropertyChunked(settingsKey);
+        let stormParticles = s?.stormParticles ?? 0;
+        if (raw) {
+            const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
+            if (parsed && typeof parsed === 'object') {
+                if ('stormParticles' in parsed) stormParticles = Math.max(0, Math.min(2, Number(parsed.stormParticles) || 0));
+            }
+        }
+        return { ...s, stormParticles };
+    } catch { return { stormParticles: 0 }; }
 }
 
 /** Map codex path prefix to main menu section id for new/updated tracking */
@@ -908,7 +944,8 @@ export function showCodexBook(player, context) {
                     showTips: true,
                     audioMessages: true,
                     showInfectionTimer: false,
-                    criticalWarningsOnly: false
+                    criticalWarningsOnly: false,
+                    stormParticles: 0 // 0=Less, 1=Medium, 2=More
                 };
                 saveCodex(player, codex);
             } else {
@@ -927,6 +964,9 @@ export function showCodexBook(player, context) {
                 }
                 if (codex.settings.criticalWarningsOnly === undefined) {
                     codex.settings.criticalWarningsOnly = false;
+                }
+                if (codex.settings.stormParticles === undefined) {
+                    codex.settings.stormParticles = 0;
                 }
             }
             
@@ -957,6 +997,9 @@ export function showCodexBook(player, context) {
                     // showInfectionTimer is Powdery-only; do not sync from Basic
                     if (typeof parsedBasicSettings.criticalWarningsOnly === 'boolean') {
                         codex.settings.criticalWarningsOnly = parsedBasicSettings.criticalWarningsOnly;
+                    }
+                    if (typeof parsedBasicSettings.stormParticles === 'number') {
+                        codex.settings.stormParticles = Math.max(0, Math.min(2, parsedBasicSettings.stormParticles));
                     }
                 }
             }
@@ -1197,7 +1240,7 @@ export function showCodexBook(player, context) {
             addSectionButton("§fItems", "items", () => openItems());
         }
         
-        const hasAnyBiomes = codex.biomes.infectedBiomeSeen || codex.biomes.dustedDirtSeen || codex.biomes.snowLayerSeen;
+        const hasAnyBiomes = codex.biomes.infectedBiomeSeen || codex.biomes.dustedDirtSeen || codex.biomes.snowLayerSeen || codex.biomes.stormSeen;
         if (hasAnyBiomes) {
             addSectionButton("§fBiomes and Blocks", "biomes", () => openBiomes());
         }
@@ -1218,6 +1261,15 @@ export function showCodexBook(player, context) {
 
         const hasDebugOptions = (player.hasTag && player.hasTag("mb_cheats")) || Boolean(system?.isEnableCheats?.());
         if (hasDebugOptions) {
+            // Pinned dev tools (quick access from main menu)
+            const pinned = getPinnedDevItems(player);
+            for (const itemId of pinned) {
+                const item = PINNABLE_DEV_ITEMS.find(i => i.id === itemId);
+                if (item) {
+                    buttons.push("§f" + item.label + " §8(pinned)");
+                    buttonActions.push(item.action);
+                }
+            }
             buttons.push("§bDebug Menu");
             buttonActions.push(() => openDebugMenu());
             buttons.push("§cDeveloper Tools");
@@ -2930,6 +2982,23 @@ export function showCodexBook(player, context) {
             }
         }
 
+        // Storm Entry
+        if (codex.biomes.stormSeen) {
+            hasEntries = true;
+            const stormKnowledge = (codex.biomes.stormMinorSeen ? 1 : 0) + (codex.biomes.stormMajorSeen ? 1 : 0);
+            body += "§fInfection Storm\n";
+            if (stormKnowledge >= 2) {
+                body += "§7A moving wall of white dust that sweeps across the land. Bears spawn inside it. Standing in it causes blindness and speeds infection—similar to standing on corrupted blocks, but worse. You can hear it from far away.\n\n";
+                body += "§6Storm Types:\n§7Minor storms are smaller and shorter. Major storms are larger, last longer, and place more dust. After day 20, only major storms occur.\n\n";
+                body += "§6Expert Notes:\n§7The storm carries the infection through the air. Maple Bears thrive in it.";
+            } else if (stormKnowledge >= 1) {
+                body += "§7A moving wall of white dust. It blinds you and speeds infection. You can hear it from a distance before it reaches you.";
+            } else {
+                body += "§7A wall of white dust that moves across the land. It blinds you and spreads the infection.";
+            }
+            body += "\n\n";
+        }
+
         if (!hasEntries) {
             body += "§8No biomes or blocks discovered yet.";
         }
@@ -3471,8 +3540,66 @@ export function showCodexBook(player, context) {
         }).catch(() => openDeveloperTools());
     }
 
+    const PINNABLE_DEV_ITEMS = [
+        { id: "script_toggles", label: "Script Toggles", action: () => openScriptTogglesMenu() },
+        { id: "summon_storm", label: "Summon Storm", action: () => openSummonStormMenu() },
+        { id: "storm_state", label: "Storm State", action: () => openStormStateMenu() },
+        { id: "storm_override", label: "Storm Override", action: () => openStormOverrideMenu() },
+        { id: "debug_menu", label: "Debug Menu", action: () => openDebugMenu() },
+        { id: "spawn_difficulty", label: "Spawn Difficulty", action: () => openSpawnDifficultyMenu() },
+        { id: "force_spawn", label: "Force Spawn", action: () => openForceSpawnMenu() },
+        { id: "clear_bears", label: "Clear Bears", action: () => openClearBearsMenu() }
+    ];
+
+    function getPinnedDevItems(p) {
+        try {
+            const raw = getPlayerProperty(p, "mb_pinned_dev_items");
+            if (!raw || typeof raw !== "string") return [];
+            const arr = JSON.parse(raw);
+            return Array.isArray(arr) ? arr : [];
+        } catch { return []; }
+    }
+
+    function setPinnedDevItems(p, ids) {
+        try {
+            setPlayerProperty(p, "mb_pinned_dev_items", JSON.stringify(ids));
+        } catch { }
+    }
+
+    function openPinUnpinMenu() {
+        const pinned = new Set(getPinnedDevItems(player));
+        const form = new ActionFormData()
+            .title("§fPin/Unpin to Main Menu")
+            .body("§7Pinned items appear on the journal main menu for quick access.\n§8Current pins: " + (pinned.size ? Array.from(pinned).join(", ") : "none"));
+        for (const item of PINNABLE_DEV_ITEMS) {
+            const isPinned = pinned.has(item.id);
+            form.button((isPinned ? "§a" : "§f") + item.label + (isPinned ? " §8(pinned)" : ""));
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === PINNABLE_DEV_ITEMS.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            const item = PINNABLE_DEV_ITEMS[res.selection];
+            if (item) {
+                if (pinned.has(item.id)) {
+                    pinned.delete(item.id);
+                    player.sendMessage(CHAT_DEV + "[PIN] " + CHAT_INFO + `Unpinned "${item.label}" from main menu`);
+                } else {
+                    pinned.add(item.id);
+                    player.sendMessage(CHAT_DEV + "[PIN] " + CHAT_INFO + `Pinned "${item.label}" to main menu`);
+                }
+                setPinnedDevItems(player, Array.from(pinned));
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            openPinUnpinMenu(); // Refresh
+        }).catch(() => openDeveloperTools());
+    }
+
     function openDeveloperTools() {
         const options = [
+            { label: "§fPin/Unpin to Main Menu", action: () => openPinUnpinMenu() },
             { label: "§fScript Toggles", action: () => openScriptTogglesMenu() },
             { label: "§aFully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked."); openDeveloperTools(); } },
             { label: "§fReset My Codex", action: () => openTargetPlayerMenu("Reset Codex", (name) => { triggerDebugCommand("reset_codex", name ? [name] : []); openDeveloperTools(); }) },
@@ -3491,7 +3618,10 @@ export function showCodexBook(player, context) {
             { label: "§fInspect Nearest Bear", action: () => triggerDebugCommand("inspect_entity", [], () => openDeveloperTools()) },
             { label: "§fReset Codex Section", action: () => openResetCodexSectionMenu() },
             { label: "§fDump Codex State", action: () => openDumpCodexTargetMenu() },
-            { label: "§fSet Kill Counts", action: () => openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name)) }
+            { label: "§fSet Kill Counts", action: () => openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name)) },
+            { label: "§bSummon Storm", action: () => openSummonStormMenu() },
+            { label: "§bStorm State", action: () => openStormStateMenu() },
+            { label: "§bStorm Override", action: () => openStormOverrideMenu() }
         ];
 
         const form = new ActionFormData().title("§cDeveloper Tools");
@@ -3882,6 +4012,169 @@ export function showCodexBook(player, context) {
         }).catch(() => openDeveloperTools());
     }
 
+    function openSummonStormMenu() {
+        const state = getStormState();
+        const form = new ActionFormData()
+            .title("§cSummon Storm")
+            .body("§7Summon or end a snow storm for testing.");
+        form.button("§bMinor Storm");
+        form.button("§cMajor Storm");
+        form.button(state.active ? "§4End Storm" : "§8End Storm §7(no storm active)");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 3) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            if (res.selection === 2) {
+                if (state.active) {
+                    endStorm(true);
+                    player.sendMessage(CHAT_INFO + "Storm ended.");
+                }
+                return openSummonStormMenu();
+            }
+            const type = res.selection === 0 ? "minor" : "major";
+            openSummonStormTargetMenu(type);
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openSummonStormTargetMenu(type) {
+        const allPlayers = world.getAllPlayers();
+        const otherPlayers = allPlayers.filter(p => p && p.id !== player.id);
+        const form = new ActionFormData()
+            .title("§cSummon Storm — Target")
+            .body(`§7Summon §f${type}§7 storm near whom?`);
+        form.button("§aNear me");
+        for (const p of otherPlayers) {
+            form.button(`§f${p.name}`);
+        }
+        form.button("§8Back");
+        const totalOptions = 1 + otherPlayers.length;
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === totalOptions) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openSummonStormMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const targetName = res.selection === 0 ? undefined : (otherPlayers[res.selection - 1]?.name);
+            if (res.selection === 0 || targetName) {
+                openSummonStormDistanceMenu(type, targetName);
+            } else {
+                openSummonStormMenu();
+            }
+        }).catch(() => openSummonStormMenu());
+    }
+
+    const STORM_DISTANCES = [
+        { value: 0, label: "At player" },
+        { value: 10, label: "10 blocks away" },
+        { value: 20, label: "20 blocks away" },
+        { value: 50, label: "50 blocks away" },
+        { value: 100, label: "100 blocks away" }
+    ];
+
+    function openSummonStormDistanceMenu(type, targetName) {
+        const form = new ActionFormData()
+            .title("§cSummon Storm — Distance")
+            .body(`§7How far from target? §8(Target: ${targetName ? targetName : "you"})`);
+        for (const d of STORM_DISTANCES) {
+            form.button(`§f${d.label}`);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === STORM_DISTANCES.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openSummonStormTargetMenu(type);
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const distOpt = STORM_DISTANCES[res.selection];
+            if (distOpt) {
+                // Always pass [type, targetName, distance] so distance is never mistaken for player name
+                const args = [type, targetName ?? "", String(distOpt.value)];
+                triggerDebugCommand("summon_storm", args, () => openSummonStormMenu());
+            } else {
+                openSummonStormTargetMenu(type);
+            }
+        }).catch(() => openSummonStormTargetMenu(type));
+    }
+
+    function openStormStateMenu() {
+        try {
+            const state = getStormState();
+            const currentTick = system.currentTick;
+            const activeStatus = state.active ? `§aYes §7(Type: §f${state.type}§7)` : "§cNo";
+            const endTime = state.active && state.endTick > currentTick 
+                ? `§f${Math.floor((state.endTick - currentTick) / 20)}s`
+                : "§7N/A";
+            const cooldownTime = state.cooldownEndTick > currentTick
+                ? `§f${Math.floor((state.cooldownEndTick - currentTick) / 20)}s`
+                : "§aReady";
+            const overrideStatus = state.override ? "§cEnabled" : "§aDisabled";
+            
+            const form = new ActionFormData()
+                .title("§cStorm State")
+                .body(`§7Current storm status:\n\n§7Active: ${activeStatus}\n§7Ends in: ${endTime}\n§7Cooldown: ${cooldownTime}\n§7Players in storm: §f${state.playersInStorm}\n§7Override: ${overrideStatus}`);
+            form.button("§8Back");
+            form.show(player).then((res) => {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                openDeveloperTools();
+            }).catch(() => openDeveloperTools());
+        } catch (err) {
+            console.warn("[CODEX] Error getting storm state:", err);
+            player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Error getting storm state: " + (err?.message || err));
+            openDeveloperTools();
+        }
+    }
+
+    function openStormOverrideMenu() {
+        const form = new ActionFormData()
+            .title("§cStorm Override")
+            .body("§7Manually override storm settings or reset to day-based.");
+        form.button("§cReset Override");
+        form.button("§eSet Override (Advanced)");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 2) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            if (res.selection === 0) {
+                triggerDebugCommand("storm_override", ["reset"], () => openDeveloperTools());
+            } else {
+                openStormOverrideSetMenu();
+            }
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openStormOverrideSetMenu() {
+        const modal = new ModalFormData()
+            .title("§cStorm Override Settings")
+            .textField("Minor Duration Min (seconds)", "60")
+            .textField("Minor Duration Max (seconds)", "240")
+            .textField("Major Duration Min (seconds)", "180")
+            .textField("Major Duration Max (seconds)", "600")
+            .textField("Cooldown Min (seconds)", "300")
+            .textField("Cooldown Max (seconds)", "1200")
+            .textField("Start Chance (0.0-1.0)", "0.001")
+            .textField("Major Chance (0.0-1.0)", "0.05");
+        
+        modal.show(player).then((res) => {
+            if (!res || res.canceled) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openStormOverrideMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const values = res.formValues || [];
+            const args = ["set"];
+            for (let i = 0; i < 8; i++) {
+                args.push(values[i] || "");
+            }
+            triggerDebugCommand("storm_override", args, () => openStormOverrideMenu());
+        }).catch(() => openStormOverrideMenu());
+    }
+
     function triggerDebugCommand(subcommand, args = [], onComplete = () => openDeveloperTools()) {
         try {
             const payload = JSON.stringify({ command: subcommand, args });
@@ -4026,6 +4319,7 @@ export function showCodexBook(player, context) {
         form.button("§fDynamic Properties");
         form.button("§fCodex/Knowledge");
         form.button("§fGround Infection Timer");
+        form.button("§fSnow Storm");
         form.button("§8Back");
 
         form.show(player).then((res) => {
@@ -4035,7 +4329,7 @@ export function showCodexBook(player, context) {
                 return openMain();
             }
 
-            if (res.selection === 11) {
+            if (res.selection === 12) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openMain();
@@ -4055,6 +4349,7 @@ export function showCodexBook(player, context) {
                 case 8: return openDynamicPropertyDebugMenu(settings);
                 case 9: return openCodexDebugMenu(settings);
                 case 10: return openGroundInfectionDebugMenu(settings);
+                case 11: return openSnowStormDebugMenu(settings);
                 default: return openDebugMenu();
             }
         }).catch(() => openMain());
@@ -4515,6 +4810,78 @@ export function showCodexBook(player, context) {
         }).catch(() => openDebugMenu());
     }
 
+    function openSnowStormDebugMenu(settings) {
+        try {
+            const stormSettings = settings.snow_storm || {};
+            const info = getStormDebugInfo();
+            const body = `§7Snow Storm system status and parameters:
+
+§8=== Current State ===
+§7Active: ${info.active}
+§7Center: §f${info.stormCenter ?? "N/A"} §7(rolls randomly)
+§7Radius: §f${info.currentRadius ?? 0} blocks §7(size: small→big→small)
+§7Progress: §f${info.sizeProgress ?? 0}%
+§7Ends in: §f${info.endsIn}
+§7Cooldown: §f${info.cooldown}
+§7Players in storm: §f${info.playersInStorm}
+§7Last particle pass: §f${info.lastParticlesSpawned ?? 0} spawned, ${info.lastParticlesSkipped ?? 0} skipped
+§7Manual override: ${info.override}
+
+§8=== Day-Based Parameters ===
+§7Current day: §f${info.currentDay}
+§7Storm start day (by difficulty): §f${info.startDay}
+§7Minor duration: §f${info.minorDurationMin}s–${info.minorDurationMax}s
+§7Major duration: §f${info.majorDurationMin}s–${info.majorDurationMax}s
+§7Cooldown range: §f${info.cooldownMin}s–${info.cooldownMax}s
+§7Start chance per check: §f${info.startChance}
+§7Major chance (when storm starts): §f${info.majorChance}
+
+§8=== Behavior ===
+§7Before day 20: minor and major storms possible; major chance scales up.
+§7After day 20: only major storms occur.
+
+§8=== Debug Logging ===
+§7General: ${stormSettings.general ? "§aON" : "§cOFF"}
+§7Movement: ${stormSettings.movement ? "§aON" : "§cOFF"}
+§7Placement: ${stormSettings.placement ? "§aON" : "§cOFF"}
+§7Particles: ${stormSettings.particles ? "§aON" : "§cOFF"}`;
+            
+            const form = new ActionFormData().title("§bSnow Storm Debug");
+            form.body(body);
+            form.button(`§${stormSettings.general ? "a" : "c"}General Logging`);
+            form.button(`§${stormSettings.movement ? "a" : "c"}Movement`);
+            form.button(`§${stormSettings.placement ? "a" : "c"}Placement`);
+            form.button(`§${stormSettings.particles ? "a" : "c"}Particles`);
+            form.button(`§${stormSettings.all ? "a" : "c"}Toggle All`);
+            form.button("§eRefresh");
+            form.button("§8Back");
+
+            form.show(player).then((res) => {
+                if (!res || res.canceled || res.selection === 6) {
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                    return openDebugMenu();
+                }
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
+                if (res.selection < 5) {
+                    const flags = ["general", "movement", "placement", "particles", "all"];
+                    const flagName = flags[res.selection];
+                    const newState = toggleDebugFlag("snow_storm", flagName);
+                    const stateText = newState ? "§aON" : "§cOFF";
+                    player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Snow Storm ${flagName} debug: ${stateText}`);
+                    console.warn(`[DEBUG MENU] Snow Storm ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+                    invalidateDebugCache();
+                }
+                return openSnowStormDebugMenu(getDebugSettings(player));
+            }).catch(() => openDebugMenu());
+        } catch (err) {
+            console.warn("[CODEX] Error in Snow Storm debug:", err);
+            player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Error: " + (err?.message || err));
+            openDebugMenu();
+        }
+    }
+
     function openSettings() {
         // Show settings chooser: General vs Beta Features
         const canSee = canSeeBeta(player);
@@ -4547,19 +4914,21 @@ export function showCodexBook(player, context) {
     function openBetaSettingsMenu() {
         const canEdit = canChangeBeta(player);
         const infectedOn = isBetaInfectedAIEnabled();
+        const dustStormsOn = isBetaDustStormsEnabled();
         const visibleToAll = isBetaVisibleToAll();
         const form = new ActionFormData()
             .title("§dBeta Features")
-            .body(`§7Experimental features. §8(First joiner + mb_cheats can change)\n\n§7Infected AI (beta): §${infectedOn ? "aON" : "cOFF"}\n§7Visible to others in book: §${visibleToAll ? "aON" : "cOFF"}\n${!canEdit ? "\n§8You are viewing read-only." : ""}`);
+            .body(`§7Experimental features. §8(First joiner + mb_cheats can change)\n\n§7Infected AI (beta): §${infectedOn ? "aON" : "cOFF"}\n§7Dust storms (beta): §${dustStormsOn ? "aON" : "cOFF"}\n§7Visible to others in book: §${visibleToAll ? "aON" : "cOFF"}\n${!canEdit ? "\n§8You are viewing read-only." : ""}`);
 
         if (canEdit) {
             form.button(infectedOn ? "§aInfected AI §8(ON) → OFF" : "§cInfected AI §8(OFF) → ON");
+            form.button(dustStormsOn ? "§aDust Storms §8(ON) → OFF" : "§cDust Storms §8(OFF) → ON");
             form.button(visibleToAll ? "§aVisible to others §8(ON) → OFF" : "§cVisible to others §8(OFF) → ON");
         }
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === (canEdit ? 2 : 0)) {
+            if (!res || res.canceled || res.selection === (canEdit ? 3 : 0)) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return openSettings();
@@ -4568,6 +4937,9 @@ export function showCodexBook(player, context) {
                 setBetaInfectedAIEnabled(!infectedOn);
                 player.sendMessage(CHAT_INFO + "Infected AI (beta): " + (infectedOn ? CHAT_DANGER + "OFF" : CHAT_SUCCESS + "ON"));
             } else if (canEdit && res.selection === 1) {
+                setBetaDustStormsEnabled(!dustStormsOn);
+                player.sendMessage(CHAT_INFO + "Dust storms (beta): " + (dustStormsOn ? CHAT_DANGER + "OFF" : CHAT_SUCCESS + "ON"));
+            } else if (canEdit && res.selection === 2) {
                 setBetaVisibleToAll(!visibleToAll);
                 player.sendMessage(CHAT_INFO + "Visible to others: " + (visibleToAll ? CHAT_DANGER + "OFF" : CHAT_SUCCESS + "ON"));
             }
@@ -4605,6 +4977,8 @@ export function showCodexBook(player, context) {
         
         const showInfectionTimer = settings.showInfectionTimer === true;
         const criticalWarningsOnly = settings.criticalWarningsOnly === true;
+        const stormParticlesIndex = Math.max(0, Math.min(2, settings.stormParticles ?? 0));
+        const particleOptions = ["Less", "Medium", "More"];
         try {
             const form = new ModalFormData()
                 .title("§eSettings")
@@ -4613,6 +4987,7 @@ export function showCodexBook(player, context) {
                 .toggle("Audio Messages", { defaultValue: settings.audioMessages !== false })
                 .dropdown("Bear Sound Volume", volumeOptions, { defaultValueIndex: bearVolIndex })
                 .dropdown("Block Break Volume", volumeOptions, { defaultValueIndex: breakVolIndex })
+                .dropdown("Storm Particles §8(Less = better performance)", particleOptions, { defaultValueIndex: stormParticlesIndex })
                 .toggle("Show Search Button", { defaultValue: settings.showSearchButton !== false })
                 .toggle("Infection timer on screen (top, small)", { defaultValue: showInfectionTimer })
                 .toggle("Only critical infection/day warnings", { defaultValue: criticalWarningsOnly })
@@ -4621,7 +4996,7 @@ export function showCodexBook(player, context) {
             form.show(player).then((res) => {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 
-                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 9) {
+                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 10) {
                     const sliderValue = typeof res.formValues[0] === 'number' 
                         ? Math.max(0, Math.min(10, Math.round(Number(res.formValues[0]))))
                         : volumeSliderValue;
@@ -4632,12 +5007,13 @@ export function showCodexBook(player, context) {
                     settings.audioMessages = Boolean(res.formValues[2]);
                     settings.bearSoundVolume = typeof res.formValues[3] === 'number' ? Math.max(0, Math.min(2, res.formValues[3])) : bearVolIndex;
                     settings.blockBreakVolume = typeof res.formValues[4] === 'number' ? Math.max(0, Math.min(2, res.formValues[4])) : breakVolIndex;
-                    settings.showSearchButton = Boolean(res.formValues[5]);
-                    settings.showInfectionTimer = Boolean(res.formValues[6]);
-                    settings.criticalWarningsOnly = Boolean(res.formValues[7]);
+                    settings.stormParticles = typeof res.formValues[5] === 'number' ? Math.max(0, Math.min(2, Math.floor(res.formValues[5]))) : stormParticlesIndex;
+                    settings.showSearchButton = Boolean(res.formValues[6]);
+                    settings.showInfectionTimer = Boolean(res.formValues[7]);
+                    settings.criticalWarningsOnly = Boolean(res.formValues[8]);
                     
-                    if (canEditDifficulty && typeof res.formValues[8] === 'number') {
-                        const selectedIndex = Math.max(0, Math.min(2, Math.floor(res.formValues[8])));
+                    if (canEditDifficulty && typeof res.formValues[9] === 'number') {
+                        const selectedIndex = Math.max(0, Math.min(2, Math.floor(res.formValues[9])));
                         const newAddonValue = selectedIndex === 0 ? -1 : selectedIndex === 1 ? 0 : 1;
                         setWorldProperty(ADDON_DIFFICULTY_PROPERTY, newAddonValue);
                         setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, newAddonValue);
@@ -4651,10 +5027,12 @@ export function showCodexBook(player, context) {
                         showTips: settings.showTips,
                         audioMessages: settings.audioMessages,
                         showInfectionTimer: settings.showInfectionTimer,
-                        criticalWarningsOnly: settings.criticalWarningsOnly
+                        criticalWarningsOnly: settings.criticalWarningsOnly,
+                        stormParticles: settings.stormParticles ?? 0
                     };
                     try {
                         setWorldPropertyChunked(basicSettingsKey, JSON.stringify(basicSettings));
+                        saveAllProperties();
                     } catch (error) {
                         console.warn(`[SETTINGS] Error saving Basic Journal settings:`, error);
                     }
@@ -4911,6 +5289,13 @@ function getDefaultDebugSettings() {
             biome: false,
             decay: false,
             warnings: false,
+            all: false
+        },
+        snow_storm: {
+            general: false,
+            movement: false,
+            placement: false,
+            particles: false,
             all: false
         }
     };
@@ -5254,19 +5639,21 @@ function showGoalScreen(player) {
 function showBetaSettingsScreen(player, onBack) {
     const canEdit = canChangeBeta(player);
     const infectedOn = isBetaInfectedAIEnabled();
+    const dustStormsOn = isBetaDustStormsEnabled();
     const visibleToAll = isBetaVisibleToAll();
     const form = new ActionFormData()
         .title("§dBeta Features")
-        .body(`§7Experimental features. §8(First joiner + mb_cheats can change)\n\n§7Infected AI (beta): §${infectedOn ? "aON" : "cOFF"}\n§7Visible to others in book: §${visibleToAll ? "aON" : "cOFF"}\n${!canEdit ? "\n§8You are viewing read-only." : ""}`);
+        .body(`§7Experimental features. §8(First joiner + mb_cheats can change)\n\n§7Infected AI (beta): §${infectedOn ? "aON" : "cOFF"}\n§7Dust storms (beta): §${dustStormsOn ? "aON" : "cOFF"}\n§7Visible to others in book: §${visibleToAll ? "aON" : "cOFF"}\n${!canEdit ? "\n§8You are viewing read-only." : ""}`);
 
     if (canEdit) {
         form.button(infectedOn ? "§aInfected AI §8(ON) → OFF" : "§cInfected AI §8(OFF) → ON");
+        form.button(dustStormsOn ? "§aDust Storms §8(ON) → OFF" : "§cDust Storms §8(OFF) → ON");
         form.button(visibleToAll ? "§aVisible to others §8(ON) → OFF" : "§cVisible to others §8(OFF) → ON");
     }
     form.button("§8Back");
 
     form.show(player).then((res) => {
-        if (!res || res.canceled || res.selection === (canEdit ? 2 : 0)) {
+        if (!res || res.canceled || res.selection === (canEdit ? 3 : 0)) {
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             return onBack();
@@ -5275,6 +5662,9 @@ function showBetaSettingsScreen(player, onBack) {
             setBetaInfectedAIEnabled(!infectedOn);
             player.sendMessage(CHAT_INFO + "Infected AI (beta): " + (infectedOn ? CHAT_DANGER + "OFF" : CHAT_SUCCESS + "ON"));
         } else if (canEdit && res.selection === 1) {
+            setBetaDustStormsEnabled(!dustStormsOn);
+            player.sendMessage(CHAT_INFO + "Dust storms (beta): " + (dustStormsOn ? CHAT_DANGER + "OFF" : CHAT_SUCCESS + "ON"));
+        } else if (canEdit && res.selection === 2) {
             setBetaVisibleToAll(!visibleToAll);
             player.sendMessage(CHAT_INFO + "Visible to others: " + (visibleToAll ? CHAT_DANGER + "OFF" : CHAT_SUCCESS + "ON"));
         }
@@ -5336,7 +5726,8 @@ function showGeneralSettingsBasic(player) {
                 showTips: parsedSettings.showTips !== false,
                 audioMessages: parsedSettings.audioMessages !== false,
                 showInfectionTimer: parsedSettings.showInfectionTimer === true,
-                criticalWarningsOnly: parsedSettings.criticalWarningsOnly === true
+                criticalWarningsOnly: parsedSettings.criticalWarningsOnly === true,
+                stormParticles: typeof parsedSettings.stormParticles === 'number' ? Math.max(0, Math.min(2, parsedSettings.stormParticles)) : 0
             };
         } else {
             settings = {
@@ -5344,7 +5735,8 @@ function showGeneralSettingsBasic(player) {
                 showTips: true,
                 audioMessages: true,
                 showInfectionTimer: false,
-                criticalWarningsOnly: false
+                criticalWarningsOnly: false,
+                stormParticles: 0
             };
         }
     } else {
@@ -5353,13 +5745,15 @@ function showGeneralSettingsBasic(player) {
             showTips: true,
             audioMessages: true,
             showInfectionTimer: false,
-            criticalWarningsOnly: false
+            criticalWarningsOnly: false,
+            stormParticles: 0
         };
     }
     
     if (settings.audioMessages === undefined) settings.audioMessages = true;
     if (settings.showInfectionTimer === undefined) settings.showInfectionTimer = false;
     if (settings.criticalWarningsOnly === undefined) settings.criticalWarningsOnly = false;
+    if (settings.stormParticles === undefined) settings.stormParticles = 0;
     if (settings.soundVolume === undefined || typeof settings.soundVolume !== 'number') {
         settings.soundVolume = 1.0;
     }
@@ -5375,11 +5769,14 @@ function showGeneralSettingsBasic(player) {
     // Convert volume to integer scale (0-10) for slider (sliders only accept integers)
     const volumeSliderValue = Math.round(soundVolume * 10);
     
+    const stormParticlesIndex = Math.max(0, Math.min(2, settings.stormParticles ?? 0));
+    const particleOptions = ["Less", "Medium", "More"];
     const form = new ModalFormData()
         .title("§bSettings")
         .slider("Sound Volume (0-10)", 0, 10, { valueStep: 1, defaultValue: volumeSliderValue })
         .toggle("Show Tips", { defaultValue: showTips })
         .toggle("Audio Messages", { defaultValue: audioMessages })
+        .dropdown("Storm Particles §8(Less = better performance)", particleOptions, { defaultValueIndex: stormParticlesIndex })
         .toggle("Only critical infection/day warnings", { defaultValue: Boolean(settings.criticalWarningsOnly) });
     
     form.show(player).then((response) => {
@@ -5393,25 +5790,28 @@ function showGeneralSettingsBasic(player) {
         const volumeMultiplier = getPlayerSoundVolume(player);
         player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
         
-        if (response.formValues && response.formValues.length >= 4) {
+        if (response.formValues && response.formValues.length >= 5) {
             const sliderValue = typeof response.formValues[0] === 'number' 
                 ? Math.max(0, Math.min(10, Math.round(Number(response.formValues[0]))))
                 : volumeSliderValue;
             const normalizedVolume = Math.round((sliderValue / 10) * 100) / 100;
             const showTipsValue = Boolean(response.formValues[1]);
             const audioMessagesValue = Boolean(response.formValues[2]);
-            const criticalWarningsOnlyValue = Boolean(response.formValues[3]);
+            const stormParticlesValue = typeof response.formValues[3] === 'number' ? Math.max(0, Math.min(2, Math.floor(response.formValues[3]))) : 0;
+            const criticalWarningsOnlyValue = Boolean(response.formValues[4]);
             
             const newSettings = {
                 soundVolume: Number(normalizedVolume),
                 showTips: Boolean(showTipsValue),
                 audioMessages: Boolean(audioMessagesValue),
+                stormParticles: stormParticlesValue,
                 criticalWarningsOnly: criticalWarningsOnlyValue
             };
             
             try {
                 // Stringify the object for storage (like other dynamic properties in the codebase)
                 setWorldPropertyChunked(settingsKey, JSON.stringify(newSettings));
+                saveAllProperties();
                 player.sendMessage(CHAT_INFO + "Settings saved!");
             } catch (error) {
                 console.warn(`[BASIC JOURNAL] Error saving settings:`, error);

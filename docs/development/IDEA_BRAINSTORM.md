@@ -27,6 +27,8 @@ Based on existing lore: white powder/dust infection (mysterious white powdery su
 (yes. Eating a normal golden apple will reduce your infection "snow" level by a certain amount. An Enchanted Golden Apple still is the only cure, while having weakness.)
 6. **Infection Prevention Items** - Consumables that grant temporary immunity or reduce infection chance
 (possibly. Vanilla items?)
+6a. **Protective Mask** - Item that grants immunity to storm/dust infection, has durability that decreases with usage (wearable or held)
+6b. **Filter Items** - Similar to mask, provides protection against storm exposure (durability-based)
 7. **Bear Mutation System** - Bears evolve/transform based on player actions (kill certain mobs, build structures)
 8. **Weather Effects on Infection** - Rain washes away dust, snow increases infection rates, thunderstorms cause mutations
 9. **Seasonal Infection Patterns** - Different bear variants spawn more/less based on in-game season

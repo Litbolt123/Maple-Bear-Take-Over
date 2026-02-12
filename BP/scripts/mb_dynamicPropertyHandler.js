@@ -94,6 +94,7 @@ function loadPlayerProperties(player) {
             "mb_minor_cure_golden_carrot",
             "mb_infection_experience",
             "mb_debug_settings",
+            "mb_pinned_dev_items",
             "mb_intro_seen",
             "mb_bear_infection",
             "mb_snow_infection",

@@ -6539,6 +6539,33 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS, useCache = 
         }
     }
 
+    // Persisted target: if this bear was targeting a player, try to find them first (survives world reload)
+    const persistedTargetName = entity.getDynamicProperty?.("mb_target_player");
+    if (persistedTargetName && typeof persistedTargetName === "string" && dimensionId) {
+        targetCache.delete(entityId); // bypass cache to re-check persisted target
+        const persistedPlayer = getCachedPlayers().find(p => p && p.name === persistedTargetName && p.dimension?.id === dimensionId);
+        if (persistedPlayer) {
+            try {
+                if (persistedPlayer.getGameMode?.() !== "creative" && persistedPlayer.getGameMode?.() !== "spectator") {
+                    const dx = persistedPlayer.location.x - origin.x;
+                    const dy = persistedPlayer.location.y - origin.y;
+                    const dz = persistedPlayer.location.z - origin.z;
+                    const distSq = dx * dx + dy * dy + dz * dz;
+                    if (distSq <= maxDistSq) {
+                        const targetInfo = {
+                            entity: persistedPlayer,
+                            location: persistedPlayer.location,
+                            vector: { x: dx, y: dy, z: dz },
+                            distanceSq: distSq
+                        };
+                        targetCache.set(entityId, { target: targetInfo, tick: currentTick });
+                        return targetInfo;
+                    }
+                }
+            } catch { }
+        }
+    }
+
     // Check cache (performance optimization; skipped when force-target override was applied above)
     if (useCache) {
         const cached = targetCache.get(entityId);
@@ -6804,6 +6831,15 @@ function findNearestTarget(entity, maxDistance = TARGET_SCAN_RADIUS, useCache = 
             z: best.location.z - origin.z
         }
     };
+    
+    // Persist player target across sessions (only for player targets)
+    try {
+        if (best.typeId === "minecraft:player") {
+            entity.setDynamicProperty?.("mb_target_player", best.name);
+        } else {
+            entity.setDynamicProperty?.("mb_target_player", undefined);
+        }
+    } catch { }
     
     // Cache the result
     if (useCache) {

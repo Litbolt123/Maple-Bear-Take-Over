@@ -2,6 +2,72 @@
 
 ## Recent Changes (Latest Session)
 
+### Vanilla Snow Fix & Storm Changes (Feb 8)
+- **Vanilla snow infection fix**: Removed `minecraft:snow_layer` from `INFECTED_GROUND_BLOCKS`. Only `mb:snow_layer` and `mb:dusted_dirt` cause ground infection now. Vanilla snow no longer infects.
+- **Storm cooldown**: Base cooldown changed from 5–20 min to 5–10 min at start. Scales down by day 20 to 3 min. After day 20, storms can occur every 3 minutes. Uses linear interpolation from storm start day to day 20.
+- **Storm shelter brainstorm**: Created `docs/development/STORM_SHELTER_BRAINSTORM.md`. Proposed upward raycast from player head — if solid block above within 64 blocks, player is sheltered (cave, house, 3-block hole). Glass blocks when intact; when storm breaks glass, hole exposes player. Not yet implemented.
+
+### Minecraft 1.26 Compatibility (Feb 12)
+- **Analysis doc**: Created `docs/development/MINECRAFT_1.26_COMPATIBILITY.md` with full changelog review.
+- **Infected Cow migration**: Split `minecraft:breedable` into `minecraft:offspring_data` + `minecraft:breedable` for 1.26. Required for addon to load.
+- **Infected Pig breeding**: Added breeding (pig + pig, mb:snow) using 1.26 offspring_data format. Includes ageable, follow_parent, pig_adult component group, spawn_adult/entity_transformed events.
+- **Manifest update**: BP and RP `min_engine_version` set to [26,0,0]. Addon now targets Minecraft 1.26+.
+- **AI goal schemas**: Stricter parsing in 1.26—validate in-game; addon usage appears standard.
+- **New feature ideas**: EntityItemPickup events, command macros, camera splines, biome tags, World.seed.
+
+### Storm Mob Damage and Conversion (Feb 8)
+- **Mob storm damage**: Mobs inside the storm radius take 0.5 HP damage every 2 seconds. Excludes players, Maple Bears, infected pig/cow, items, projectiles.
+- **Storm death conversion**: When a mob dies from storm damage, it can transform like being killed by an infected mob (pig→infected pig, cow→infected cow, others→Maple Bear). Uses same conversion rate and nearby bear limits as bear kills.
+- **Tracking**: `stormKillCandidates` Map tracks entities we damaged; `wasKilledByStorm(entityId)` consumed on entityDie to trigger `handleStormMobConversion`. Conversion deferred via `system.run` and uses `convertEntityAtLocation` (location/dimension) since entity may be invalid.
+
+### Storm Placement, Spawn, Ambience, Journal (Feb 8)
+- **Placement debug**: Snow placement now restricted to positions within 96 blocks of any player (loaded chunks only). Placement always logs summary when 0 placed; full details when Placement debug on.
+- **Storm infection**: Verified—storm exposure (`isPlayerInStorm`) increases `stormSeconds` in main.js; when it reaches infection seconds, triggers infection like standing on infected blocks.
+- **Nearby ambience**: Players within 1.8× storm radius (but outside) hear storm ambience at reduced volume (0.4).
+- **Storm journal entry**: Added "Infection Storm" to Biomes and Blocks section. Progressive knowledge: basic (seen), intermediate (minor/major types), expert (details on bears spawning in storm, types, day gates).
+- **Maple Bears in storm**: Spawn controller merges storm spawn tiles via `getStormSpawnTiles()`. Up to 15 surface positions in storm radius within spawn range are added as valid spawn tiles. Debug: "Added X storm spawn tiles" when spawn general/tileScanning on.
+- **Particles debug conditional**: Particle logs only when Particles debug toggle on (Codex → Storm Debug → Particles).
+- **Codex storm discovery**: `stormSeen`, `stormMinorSeen`, `stormMajorSeen` in biomes; marked when player enters storm.
+- **Exports**: `isPositionInStormRadius(x,z)`, `getStormSpawnInfo()`, `getStormSpawnTiles()` for spawn controller integration.
+
+### Storm Particles Fix & Debug (Feb 8)
+- **No particles visible**: Switched to `dimension.spawnParticle("mb:white_dust_particle", loc)` only (no runCommand – Bedrock /particle syntax differs). Vanilla snowflake unreliable; custom particle works.
+- **Loaded chunks**: Spawn around ALL overworld players (not just those in storm) so we always spawn in loaded chunks; center spawns can be in unloaded area.
+- **Debug: particle count**: Movement debug line includes `particles=X, skipped=Y`. Storm State shows "Last particle pass: X spawned, Y skipped".
+
+### Infection Timer Persistence Fix (Feb 8)
+- **Root cause**: Dynamic property handler uses cached writes; actual `setDynamicProperty` runs in a batch every 600 ticks (~30s). If the player closed the world before the batch ran, infection timer and other settings were lost.
+- **Fix**: Import `saveAllProperties` from `mb_dynamicPropertyHandler.js` and call it immediately after saving settings in both Powdery Journal (`openGeneralSettings`) and Basic Journal settings. This forces an immediate flush of dirty player and world properties so settings persist right away.
+
+### Storm & Mining Persistence (Feb 8)
+- **Storm persistence**: Storm state (active/type/center/ticks remaining/cooldown) saved to world property `mb_storm_state` every 5 seconds and on start/end. Restored on world load so storms continue across sessions.
+- **Mining MB target persistence**: When a mining bear targets a player, that player name is stored on the entity (`mb_target_player`). On world reload, the bear prefers its persisted target first; if that player is online and in range, it resumes targeting them.
+
+### Snow Storm Enhancements & Dev Tools (Feb 8)
+- **Storm debug toggles**: Added `snow_storm` debug category with General, Movement, Placement, Particles, Toggle All buttons in the Storm Debug menu (Codex → Debug Menu → Snow Storm).
+- **Storm Y variance**: Storm center Y now drifts up/down (±12 blocks) so it doesn’t stay stuck on tree tops; blends with surface over time.
+- **Storm movement**: More movement (2 blocks/1s vs 0.5/2s). Persistent drift direction with occasional erratic turns; ~25% chance for big direction change.
+- **Pin/Unpin to Main Menu**: New Developer Tools option “Pin/Unpin to Main Menu” to pin shortcuts (Script Toggles, Summon Storm, Storm State, etc.) on the journal main menu for quick access.
+- **Snow never replaces dirt**: Added `SNOW_NEVER_REPLACE_BLOCKS` (dirt, grass_block, coarse_dirt, podzol, mycelium, etc.). Storm placement only puts snow in air above solid blocks; never replaces full ground blocks.
+- **Major storm particles**: Switched to uniform distribution inside the circle (r = radius * sqrt(random)) so particles fill the area instead of only a ring at the edge.
+- **Vanilla snow particles**: Using `minecraft:snowflake_particle` (Bedrock working particle ID) via `dimension.spawnParticle`.
+- **Blindness in storm**: Blindness 1 applied while player is in storm; removed when they leave.
+- **Storage**: `mb_pinned_dev_items` added to dynamic property list for pin persistence.
+
+### Snow Storm Design (Feb 8)
+- **New doc**: `docs/development/SNOW_STORM_DESIGN.md` – design for a “snow storm” (dust-storm style) that places snow layers during the storm.
+- **Integration**: New script module `mb_snowStorm.js` recommended; reuse existing snow placement rules (`tryPlaceSnowLayerUnder`-style, `SNOW_REPLACEABLE_BLOCKS`), particles (`mb:white_dust_particle`, snowflake), and runInterval pattern. No existing dust storm implementation in this addon (Raboy’s is external); area/region logic would be new.
+- **Area**: Start with per-player radius (e.g. 48–64 blocks); optional later: world AABB or biome-based (e.g. only in infected biome where fog already exists).
+- **Fog**: Script API cannot set fog; foggy = use existing infected-biome fog when in storm there, or optional blindness effect elsewhere.
+- **Random**: Storm start/cooldown random; snow placement at random positions in area, same rules as bears (no snow-on-snow, replace grass).
+- **Open questions** (for user): dimension (overworld only?), day gate, infection from storm-placed snow, Raboy addon compatibility.
+
+### QoL Brainstorm & Edge Cases Doc (Feb 4)
+- **New doc**: `docs/development/QOL_AND_EDGE_CASES.md` created.
+- **QoL ideas**: Infection/cure reminders and checklist, codex bookmark/"new" badges and quick stats, bear-type subtitle on first hit, optional day in HUD, next-milestone teaser, biome warning, settings presets and sound categories, co-op "who is infected" and knowledge-share reminder, addon-active and settings-confirmation messages.
+- **Edge cases**: Player disconnect and ID reuse, entity validity and stale Maps, infection/cure same-tick ordering, timer/snow overflow and NaN, immunity persistence, day rollback and tick overflow, chunk unload and spawn validation, codex size/corruption and knowledge-share merge, multiplayer ordering, AI target/block validity, division-by-zero and coordinate bounds, addon lifecycle and script reload.
+- **Purpose**: Checklist for UX polish and robustness; prioritize by player impact.
+
 ### Snow Layer Placement: No Stacking, Replace Grass/Small Blocks (Jan 31)
 - **Problem**: Snow layers were placed on top of other snow layers and on grass/small blocks, making things look messy.
 - **Desired behavior**: (1) Never place snow on top of existing snow layers. (2) Replace grass and other small/non-full blocks with snow instead of stacking.

@@ -4,6 +4,7 @@ import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSection
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
+import { isBetaDustStormsEnabled } from "./mb_scriptToggles.js";
 import { findItem, hasItem } from "./mb_itemFinder.js";
 import { initializeItemRegistry, registerItemHandler } from "./mb_itemRegistry.js";
 import "./mb_spawnController.js";
@@ -15,6 +16,8 @@ import "./mb_torpedoAI.js";
 import "./mb_buffAI.js";
 import "./mb_dimensionAdaptation.js";
 import "./mb_biomeAmbience.js";
+import "./mb_snowStorm.js";
+import { isPlayerInStorm, getStormExposureRates, summonStorm, setStormOverride, resetStormOverride, getStormState, wasKilledByStorm } from "./mb_snowStorm.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_DANGER_STRONG, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 
@@ -108,20 +111,21 @@ const SNOW_ITEM_ID = "mb:snow";
 const INFECTED_TAG = "mb_infected";
 const INFECTED_CORPSE_ID = "mb:infected_corpse";
 const SNOW_LAYER_BLOCK = "minecraft:snow_layer";
-const INFECTED_GROUND_BLOCKS = new Set(["mb:dusted_dirt", "mb:snow_layer", "minecraft:snow_layer"]);
+const INFECTED_GROUND_BLOCKS = new Set(["mb:dusted_dirt", "mb:snow_layer"]);
 // SNOW_REPLACEABLE_BLOCKS and SNOW_TWO_BLOCK_PLANTS imported from mb_blockLists.js
 
 // Adaptive checking intervals (like biome ambience system)
 const GROUND_CHECK_INTERVAL_ON = 20; // Every 1 second when on infected ground (more frequent)
 const GROUND_CHECK_INTERVAL_OFF = 60; // Every 3 seconds when off infected ground (less frequent)
-const GROUND_EXPOSURE_SECONDS_PER_TICK = 2; // Seconds gained per tick when on ground
-const GROUND_WARNING_SECONDS = 60;
-const GROUND_MINOR_WARNING_SECONDS = 10; // Warning for minor infection players (earlier warning)
-const GROUND_INFECTION_SECONDS = 90;
-const GROUND_DECAY_SECONDS_PER_TICK = 1; // Every check when off, reduce by 1 second
-const GROUND_MAJOR_SNOW_INTERVAL_SECONDS = 90; // Increased from 30 to 90 seconds
+// Ground exposure rates DOUBLED (slower) - storm exposure uses old rates (faster)
+const GROUND_EXPOSURE_SECONDS_PER_TICK = 4; // Doubled from 2 - Seconds gained per tick when on ground (slower infection)
+const GROUND_WARNING_SECONDS = 120; // Doubled from 60
+const GROUND_MINOR_WARNING_SECONDS = 20; // Doubled from 10 - Warning for minor infection players (earlier warning)
+const GROUND_INFECTION_SECONDS = 180; // Doubled from 90
+const GROUND_DECAY_SECONDS_PER_TICK = 2; // Doubled from 1 - Every check when off, reduce by 2 seconds
+const GROUND_MAJOR_SNOW_INTERVAL_SECONDS = 180; // Doubled from 90 seconds
 const GROUND_MAJOR_SNOW_INCREASE_AMOUNT = 0.25; // Increase snow level by 0.25 instead of 1
-const GROUND_MAJOR_DECAY_SECONDS_PER_TICK = 0.5; // Every check when off, reduce by 0.5 seconds
+const GROUND_MAJOR_DECAY_SECONDS_PER_TICK = 1; // Doubled from 0.5 - Every check when off, reduce by 1 second
 
 const AMBIENT_PRESSURE_RADIUS = 32;
 const AMBIENT_PRESSURE_THRESHOLD = 100;
@@ -129,6 +133,9 @@ const AMBIENT_WARNING_SECONDS = 600; // 10 minutes
 const AMBIENT_INFECTION_SECONDS = 630; // 10 minutes + 30 seconds
 const GROUND_NAUSIA_DURATION_TICKS = 100; // 5 seconds when standing on infected ground triggers warning
 const AMBIENT_DECAY_SECONDS_PER_TICK = 2; // Every 1 second, reduce by 1 second (2s interval -> -2)
+
+// Storm exposure decay (uses old rate - same as old ground decay)
+const STORM_EXPOSURE_DECAY_SECONDS_PER_TICK = 1; // Every check when not in storm, reduce by 1 second
 
 // Biome check optimization
 const BIOME_CHECK_COOLDOWN = 200; // 10 seconds in ticks (200 ticks = 10 seconds)
@@ -1086,7 +1093,10 @@ function getGroundExposureState(playerId) {
         majorSeconds: 0,
         majorGroundMessagesSent: 0, // Track how many messages sent for major infection ground exposure
         biomeSeconds: 0,
-        biomeWarningSent: false
+        biomeWarningSent: false,
+        stormSeconds: 0, // Storm exposure (uses old rates - faster)
+        stormWarningSent: false,
+        minorStormWarningSent: false
     };
     groundExposureState.set(playerId, created);
     if (isDebugEnabled("ground_infection", "timer") || isDebugEnabled("ground_infection", "all")) {
@@ -1126,7 +1136,7 @@ function isStandingOnInfectedGround(player) {
         // Prioritize block at feet (snow layer) over block below (dusted dirt)
         // This ensures snow layer is detected when on top of dusted dirt
         if (blockAtFeet && INFECTED_GROUND_BLOCKS.has(blockAtFeet.typeId)) {
-            const isSnowLayer = blockAtFeet.typeId === "mb:snow_layer" || blockAtFeet.typeId === "minecraft:snow_layer";
+            const isSnowLayer = blockAtFeet.typeId === "mb:snow_layer";
             if (isDebugEnabled("ground_infection", "groundCheck") || isDebugEnabled("ground_infection", "all")) {
                 console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Standing on ${blockAtFeet.typeId} at feet (speed multiplier: ${isSnowLayer ? 2 : 1})`);
             }
@@ -1134,7 +1144,7 @@ function isStandingOnInfectedGround(player) {
         }
         // Check block below only if nothing at feet
         if (blockBelow && INFECTED_GROUND_BLOCKS.has(blockBelow.typeId)) {
-            const isSnowLayer = blockBelow.typeId === "mb:snow_layer" || blockBelow.typeId === "minecraft:snow_layer";
+            const isSnowLayer = blockBelow.typeId === "mb:snow_layer";
             if (isDebugEnabled("ground_infection", "groundCheck") || isDebugEnabled("ground_infection", "all")) {
                 console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Standing on ${blockBelow.typeId} (speed multiplier: ${isSnowLayer ? 2 : 1})`);
             }
@@ -1637,9 +1647,13 @@ function sendDiscoveryMessage(player, codex, messageType = "interesting", itemTy
 
 // --- Helper: Common entity conversion logic ---
 function convertEntity(deadEntity, killer, targetEntityId, conversionName) {
-    // Validate entities
-    if (!deadEntity || !deadEntity.isValid || !killer || !killer.isValid) {
-        // console.log(`[${conversionName}] Skipping - entity or killer is invalid`);
+    // Validate entity; killer is optional (null for storm conversions)
+    if (!deadEntity || !deadEntity.isValid) {
+        // console.log(`[${conversionName}] Skipping - entity is invalid`);
+        return null;
+    }
+    if (killer && !killer.isValid) {
+        // console.log(`[${conversionName}] Skipping - killer is invalid`);
         return null;
     }
     
@@ -1682,6 +1696,38 @@ function convertEntity(deadEntity, killer, targetEntityId, conversionName) {
     }
         
     // console.log(`[${conversionName}] Conversion complete`);
+    return newEntity;
+}
+
+// --- Helper: Convert at location (for storm kills when entity may be invalid) ---
+function convertEntityAtLocation(deadEntityOrLoc, killer, targetEntityId, conversionName) {
+    const location = deadEntityOrLoc?.location ?? deadEntityOrLoc;
+    const dimension = deadEntityOrLoc?.dimension ?? deadEntityOrLoc?.dimension;
+    if (!location || !dimension) return null;
+    if (killer && !killer.isValid) return null;
+    
+    try {
+        dimension.getBlock({ x: Math.floor(location.x), y: Math.floor(location.y), z: Math.floor(location.z) });
+    } catch {
+        return null;
+    }
+    
+    const newEntity = dimension.spawnEntity(targetEntityId, location);
+    dimension.spawnParticle("mb:white_dust_particle", location);
+    
+    try {
+        const spawnY = Math.floor(location.y - 1);
+        const snowLoc = { x: Math.floor(location.x), y: spawnY, z: Math.floor(location.z) };
+        const snowBlock = dimension.getBlock(snowLoc);
+        const aboveBlock = dimension.getBlock({ x: snowLoc.x, y: spawnY + 1, z: snowLoc.z });
+        const belowType = snowBlock?.typeId;
+        if (belowType === "minecraft:snow_layer") {
+            try { snowBlock.setType("mb:snow_layer"); } catch { snowBlock.setType(SNOW_LAYER_BLOCK); }
+        } else if (belowType !== "mb:snow_layer" && snowBlock && aboveBlock && !snowBlock.isAir && !snowBlock.isLiquid && aboveBlock.isAir) {
+            try { aboveBlock.setType("mb:snow_layer"); } catch { aboveBlock.setType(SNOW_LAYER_BLOCK); }
+        }
+    } catch { }
+    
     return newEntity;
 }
 
@@ -3035,6 +3081,120 @@ function handlePlayerDeath(player) {
     }
 }
 
+// Handle mob conversion when killed by storm (small damage over time in storm radius)
+function handleStormMobConversion(entity) {
+    if (!entity || !entity.isValid) return;
+    
+    const entityType = entity.typeId;
+    
+    // Don't convert items, XP orbs, or other non-mob entities
+    if (entityType === "minecraft:item" || entityType === "minecraft:xp_orb" || entityType === "minecraft:arrow" ||
+        entityType === "minecraft:fireball" || entityType === "minecraft:small_fireball" || entityType === "minecraft:firework_rocket") {
+        return;
+    }
+    
+    const currentDay = getCurrentDay();
+    const conversionRate = getInfectionRate(currentDay);
+    
+    // Don't convert Maple Bears or already-infected creatures
+    const allMapleBearTypes = [
+        MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
+        INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
+        BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID,
+        FLYING_BEAR_ID, FLYING_BEAR_DAY15_ID, FLYING_BEAR_DAY20_ID,
+        MINING_BEAR_ID, MINING_BEAR_DAY20_ID,
+        TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID
+    ];
+    if (allMapleBearTypes.includes(entityType) || entityType === INFECTED_PIG_ID || entityType === INFECTED_COW_ID) {
+        return;
+    }
+    
+    // Check nearby bear count (same limits as bear kills)
+    try {
+        const nearbyEntities = entity.dimension.getEntities({
+            location: entity.location,
+            maxDistance: 64,
+            families: ["maple_bear", "infected"]
+        });
+        let totalBearCount = 0;
+        let buffBearCount = 0;
+        const mbTypePrefixes = ["mb:mb_day00", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+        for (const nearby of nearbyEntities) {
+            const typeId = nearby.typeId;
+            if (mbTypePrefixes.some(prefix => typeId.startsWith(prefix))) {
+                totalBearCount++;
+                if (typeId === BUFF_BEAR_ID || typeId === BUFF_BEAR_DAY8_ID || typeId === BUFF_BEAR_DAY13_ID || typeId === BUFF_BEAR_DAY20_ID) {
+                    buffBearCount++;
+                }
+            }
+        }
+        if (totalBearCount >= 40) return;
+        if (buffBearCount >= 5) {
+            const willBeBuff = (entityType.includes('warden') || entityType.includes('ravager') ||
+                entityType.includes('iron_golem') || entityType.includes('wither') ||
+                entityType.includes('ender_dragon') || entityType.includes('giant'));
+            if (willBeBuff) return;
+        }
+    } catch { }
+    
+    if (Math.random() >= conversionRate) return;
+    
+    const loc = entity.location;
+    const dim = entity.dimension;
+    const entType = entityType;
+    
+    system.run(() => {
+        try {
+            if (entType === "minecraft:pig") {
+                const r = convertEntityAtLocation({ location: loc, dimension: dim }, null, INFECTED_PIG_ID, "STORM PIG CONVERSION");
+                if (r) console.warn(`[SNOW STORM] Conversion: pig -> infected_pig at (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
+            } else if (entType === "minecraft:cow") {
+                const r = convertEntityAtLocation({ location: loc, dimension: dim }, null, INFECTED_COW_ID, "STORM COW CONVERSION");
+                if (r) console.warn(`[SNOW STORM] Conversion: cow -> infected_cow at (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
+            } else {
+                const r = convertMobToMapleBearFromStormAtLocation(loc, dim, entType);
+                if (r) console.warn(`[SNOW STORM] Conversion: ${entType} -> Maple Bear at (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`);
+            }
+        } catch (err) {
+            console.warn("[STORM CONVERSION] Error:", err);
+        }
+    });
+}
+
+// Convert mob to Maple Bear when killed by storm (uses mob size + day; takes location/dimension for deferred run)
+function convertMobToMapleBearFromStormAtLocation(location, dimension, mobType) {
+    try {
+        if (mobType === "minecraft:pig" || mobType === "minecraft:cow") return null;
+        
+        const currentDay = getCurrentDay();
+        const mobSize = getMobSize(mobType);
+        let newBearType;
+        
+        if (mobSize === "tiny") {
+            if (currentDay >= 20) newBearType = MAPLE_BEAR_DAY20_ID;
+            else if (currentDay >= 13) newBearType = MAPLE_BEAR_DAY13_ID;
+            else if (currentDay >= 8) newBearType = MAPLE_BEAR_DAY8_ID;
+            else if (currentDay >= 4) newBearType = MAPLE_BEAR_DAY4_ID;
+            else newBearType = MAPLE_BEAR_ID;
+        } else if (mobSize === "large") {
+            if (currentDay >= 20) newBearType = BUFF_BEAR_DAY20_ID;
+            else if (currentDay >= 13) newBearType = BUFF_BEAR_DAY13_ID;
+            else if (currentDay >= 8) newBearType = BUFF_BEAR_DAY8_ID;
+            else newBearType = INFECTED_BEAR_ID;
+        } else {
+            if (currentDay >= 20) newBearType = INFECTED_BEAR_DAY20_ID;
+            else if (currentDay >= 13) newBearType = INFECTED_BEAR_DAY13_ID;
+            else if (currentDay >= 8) newBearType = INFECTED_BEAR_DAY8_ID;
+            else newBearType = INFECTED_BEAR_ID;
+        }
+        
+        return convertEntityAtLocation({ location, dimension }, null, newBearType, "STORM MOB CONVERSION");
+    } catch (err) {
+        console.warn("[STORM CONVERSION] Mob conversion error:", err);
+        return null;
+    }
+}
+
 // Handle mob conversion when killed by Maple Bears
 function handleMobConversion(entity, killer) {
     // Validate entities are still valid before processing
@@ -3575,6 +3735,11 @@ world.afterEvents.entityDie.subscribe((event) => {
     // Handle mob conversion when killed by Maple Bears
     if (source && source.damagingEntity && !(entity instanceof Player)) {
         handleMobConversion(entity, source.damagingEntity);
+    }
+    
+    // Handle mob conversion when storm-damaged mob dies (convert regardless of what kills it - storm exposure counts)
+    if (!(entity instanceof Player) && wasKilledByStorm(entity.id)) {
+        handleStormMobConversion(entity);
     }
     
     // Handle Maple Bear kill tracking
@@ -5218,7 +5383,7 @@ system.runInterval(() => {
                     if (stillAboveInfected && airborneBlockType) {
                         activeBlockType = airborneBlockType;
                         // Snow layers tick 2x faster
-                        activeSpeedMultiplier = (airborneBlockType === "mb:snow_layer" || airborneBlockType === "minecraft:snow_layer") ? 2 : 1;
+                        activeSpeedMultiplier = airborneBlockType === "mb:snow_layer" ? 2 : 1;
                     }
                     
                     // Apply speed multiplier (2x for snow layers)
@@ -5242,7 +5407,7 @@ system.runInterval(() => {
                             // Mark codex entries for ground infection discovery
                             if (groundCheck.blockType === "mb:dusted_dirt") {
                                 markCodex(player, "biomes.dustedDirtSeen");
-                            } else if (groundCheck.blockType === "mb:snow_layer" || groundCheck.blockType === "minecraft:snow_layer") {
+                            } else if (groundCheck.blockType === "mb:snow_layer") {
                                 markCodex(player, "biomes.snowLayerSeen");
                             }
                         } catch { }
@@ -5259,7 +5424,7 @@ system.runInterval(() => {
                             // Mark codex entries for ground infection discovery
                             if (groundCheck.blockType === "mb:dusted_dirt") {
                                 markCodex(player, "biomes.dustedDirtSeen");
-                            } else if (groundCheck.blockType === "mb:snow_layer" || groundCheck.blockType === "minecraft:snow_layer") {
+                            } else if (groundCheck.blockType === "mb:snow_layer") {
                                 markCodex(player, "biomes.snowLayerSeen");
                             }
                         } catch { }
@@ -5274,16 +5439,63 @@ system.runInterval(() => {
                         state.ambientWarningSent = true;
                     }
                     
-                    if (state.groundSeconds >= GROUND_INFECTION_SECONDS || state.ambientSeconds >= AMBIENT_INFECTION_SECONDS) {
+                    // Storm exposure (stacks with ground exposure - uses old rates, faster)
+                    const inStorm = isPlayerInStorm(player.id);
+                    const stormRates = getStormExposureRates(); // Get once for this check
+                    if (inStorm) {
+                        const oldStorm = state.stormSeconds;
+                        state.stormSeconds += (stormRates.secondsPerTick * gainMultiplier);
+                        
+                        if ((isDebugEnabled("ground_infection", "timer") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.stormSeconds - oldStorm) > 0.01) {
+                            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Storm timer ${oldStorm.toFixed(1)}s -> ${state.stormSeconds.toFixed(1)}s (multiplier: ${gainMultiplier})`);
+                        }
+                        
+                        // Storm warnings (uses old rates)
+                        const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE && !infectionState.cured;
+                        if (hasMinorInfection && !state.minorStormWarningSent && state.stormSeconds >= stormRates.minorWarningSeconds) {
+                            if (isDebugEnabled("ground_infection", "warnings") || isDebugEnabled("ground_infection", "all")) {
+                                console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Minor infection storm warning triggered at ${state.stormSeconds.toFixed(1)}s`);
+                            }
+                            player.sendMessage(CHAT_WARNING + "The storm is overwhelming...");
+                            applyEffect(player, "minecraft:nausea", GROUND_NAUSIA_DURATION_TICKS, { amplifier: 0 });
+                            state.minorStormWarningSent = true;
+                        }
+                        
+                        if (!state.stormWarningSent && state.stormSeconds >= stormRates.warningSeconds) {
+                            if (isDebugEnabled("ground_infection", "warnings") || isDebugEnabled("ground_infection", "all")) {
+                                console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Storm warning triggered at ${state.stormSeconds.toFixed(1)}s`);
+                            }
+                            player.sendMessage(CHAT_WARNING + "The storm is affecting you...");
+                            applyEffect(player, "minecraft:nausea", GROUND_NAUSIA_DURATION_TICKS, { amplifier: 0 });
+                            state.stormWarningSent = true;
+                        }
+                    } else {
+                        // Decay storm exposure when not in storm
+                        const oldStorm = state.stormSeconds;
+                        state.stormSeconds = Math.max(0, state.stormSeconds - STORM_EXPOSURE_DECAY_SECONDS_PER_TICK);
+                        if ((isDebugEnabled("ground_infection", "decay") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.stormSeconds - oldStorm) > 0.01) {
+                            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Storm decayed ${oldStorm.toFixed(1)}s -> ${state.stormSeconds.toFixed(1)}s`);
+                        }
+                        if (state.stormSeconds === 0) {
+                            state.stormWarningSent = false;
+                            state.minorStormWarningSent = false;
+                        }
+                    }
+                    
+                    // Check for infection (ground, ambient, OR storm - any can trigger)
+                    if (state.groundSeconds >= GROUND_INFECTION_SECONDS || state.ambientSeconds >= AMBIENT_INFECTION_SECONDS || state.stormSeconds >= stormRates.infectionSeconds) {
                         if (isDebugEnabled("ground_infection", "timer") || isDebugEnabled("ground_infection", "all")) {
-                            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: INFECTION TRIGGERED! Ground: ${state.groundSeconds.toFixed(1)}s/${GROUND_INFECTION_SECONDS}s, Ambient: ${state.ambientSeconds.toFixed(1)}s/${AMBIENT_INFECTION_SECONDS}s`);
+                            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: INFECTION TRIGGERED! Ground: ${state.groundSeconds.toFixed(1)}s/${GROUND_INFECTION_SECONDS}s, Ambient: ${state.ambientSeconds.toFixed(1)}s/${AMBIENT_INFECTION_SECONDS}s, Storm: ${state.stormSeconds.toFixed(1)}s/${stormRates.infectionSeconds}s`);
                         }
                         applyMajorInfectionFromGround(player, infectionState);
                         state.groundSeconds = 0;
                         state.ambientSeconds = 0;
+                        state.stormSeconds = 0;
                         state.groundWarningSent = false;
                         state.minorGroundWarningSent = false;
                         state.ambientWarningSent = false;
+                        state.stormWarningSent = false;
+                        state.minorStormWarningSent = false;
                     }
                 }
             } else {
@@ -5299,6 +5511,18 @@ system.runInterval(() => {
                         console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Biome decayed (immune) ${oldBiome.toFixed(1)}s -> ${state.biomeSeconds.toFixed(1)}s`);
                     }
                 }
+                // Storm exposure decay when immune
+                if (state.stormSeconds) {
+                    const oldStorm = state.stormSeconds;
+                    state.stormSeconds = Math.max(0, state.stormSeconds - STORM_EXPOSURE_DECAY_SECONDS_PER_TICK);
+                    if ((isDebugEnabled("ground_infection", "decay") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.stormSeconds - oldStorm) > 0.01) {
+                        console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Storm decayed (immune) ${oldStorm.toFixed(1)}s -> ${state.stormSeconds.toFixed(1)}s`);
+                    }
+                    if (state.stormSeconds === 0) {
+                        state.stormWarningSent = false;
+                        state.minorStormWarningSent = false;
+                    }
+                }
             }
             
             if (isMajorInfected && !hasTemporaryImmunity) {
@@ -5312,7 +5536,7 @@ system.runInterval(() => {
                     if (stillAboveInfected && airborneBlockType) {
                         activeBlockType = airborneBlockType;
                         // Snow layers tick 2x faster
-                        activeSpeedMultiplier = (airborneBlockType === "mb:snow_layer" || airborneBlockType === "minecraft:snow_layer") ? 2 : 1;
+                        activeSpeedMultiplier = airborneBlockType === "mb:snow_layer" ? 2 : 1;
                     }
                     
                     // Apply speed multiplier (2x for snow layers)
@@ -7917,6 +8141,63 @@ function executeMbCommand(sender, subcommand, args = []) {
             codex.mobs[mobKey] = value;
             saveCodex(target, codex);
             sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Set ${target.name} ${CHAT_HIGHLIGHT}${mobKey}${CHAT_INFO} to ${CHAT_HIGHLIGHT}${value}${CHAT_INFO}.`);
+            return;
+        }
+        case "summon_storm": {
+            const type = (args[0] || "minor").toLowerCase();
+            if (type !== "minor" && type !== "major") {
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: summon_storm <minor|major> [playerName] [distance]");
+                return;
+            }
+            const targetName = args[1];
+            const distance = parseInt(args[2], 10) || 0;
+            let target = sender;
+            if (targetName && String(targetName).trim()) {
+                target = world.getAllPlayers().find(p => p.name === targetName);
+                if (!target) {
+                    sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${targetName} found.`);
+                    return;
+                }
+            }
+            if (!isBetaDustStormsEnabled()) {
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Enable Dust storms (beta) in Settings > Beta Features first.");
+                return;
+            }
+            const success = summonStorm(type, target, distance);
+            if (success) {
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Summoned ${type} storm near ${target.name}${distance > 0 ? ` (${distance} blocks away)` : ""}.`);
+            } else {
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Failed to summon storm.");
+            }
+            return;
+        }
+        case "storm_state": {
+            const state = getStormState();
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Storm State:\n§7Active: ${state.active ? "§aYes" : "§cNo"}${state.active ? `\n§7Type: §f${state.type}\n§7Ends in: §f${Math.floor((state.endTick - system.currentTick) / 20)}s` : ""}\n§7Cooldown ends in: §f${state.cooldownEndTick > system.currentTick ? Math.floor((state.cooldownEndTick - system.currentTick) / 20) + "s" : "§aReady"}\n§7Players in storm: §f${state.playersInStorm}\n§7Override: ${state.override ? "§cEnabled" : "§aDisabled"}`);
+            return;
+        }
+        case "storm_override": {
+            const action = (args[0] || "").toLowerCase();
+            if (action === "reset") {
+                resetStormOverride();
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Storm override reset - using day-based settings.");
+                return;
+            }
+            if (action === "set") {
+                const settings = {};
+                if (args[1]) settings.minorDurationMin = parseInt(args[1], 10) * 20; // Convert seconds to ticks
+                if (args[2]) settings.minorDurationMax = parseInt(args[2], 10) * 20;
+                if (args[3]) settings.majorDurationMin = parseInt(args[3], 10) * 20;
+                if (args[4]) settings.majorDurationMax = parseInt(args[4], 10) * 20;
+                if (args[5]) settings.cooldownMin = parseInt(args[5], 10) * 20;
+                if (args[6]) settings.cooldownMax = parseInt(args[6], 10) * 20;
+                if (args[7]) settings.startChance = parseFloat(args[7]);
+                if (args[8]) settings.majorChance = parseFloat(args[8]);
+                setStormOverride(settings);
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Storm override settings updated.");
+                return;
+            }
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: storm_override <reset|set> [minorMin] [minorMax] [majorMin] [majorMax] [cooldownMin] [cooldownMax] [startChance] [majorChance]");
             return;
         }
         default:

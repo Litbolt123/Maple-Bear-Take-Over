@@ -1,5 +1,7 @@
 # Quality of Life & Developer Tools Ideas
 
+THIS WAS IMPLEMENTED!
+
 Ideas for **player-facing QoL** and **additional dev tools** for the Maple Bear Takeover addon. Drawn from existing features (codex, settings, day tracking, infection, dev menu) and gaps in the current toolset.
 
 ---

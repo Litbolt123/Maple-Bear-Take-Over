@@ -10,7 +10,7 @@
 		},
 		"sound": "mb:snow_layer",
 		"components": {
-			"minecraft:display_name": "\"Snow\" layer",
+			"minecraft:display_name": "Snow layer",
 			"minecraft:destructible_by_mining": {
 				"seconds_to_destroy": 0.1
 			},

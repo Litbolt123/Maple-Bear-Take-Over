@@ -10,6 +10,7 @@ import { getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./m
 import { getCurrentDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { isDebugEnabled, getPlayerSoundVolume } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
+import { getStormSpawnTiles } from "./mb_snowStorm.js";
 
 // ============================================================================
 // SECTION 1: DEBUG AND ERROR LOGGING
@@ -4438,6 +4439,28 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
         if (validTiles.length > 0 && (isDebugEnabled('spawn', 'validation') || isDebugEnabled('spawn', 'distance') || isDebugEnabled('spawn', 'all'))) {
             const adaptiveMin = Math.sqrt(adaptiveMinSq).toFixed(0);
             debugLog('groups', `${player.name}: Using adaptive range (${adaptiveMin}-${MAX_SPAWN_DISTANCE}) for group cache - found ${validTiles.length} tiles`);
+        }
+    }
+
+    // Add storm spawn tiles when storm is active (overworld only)
+    if (dimension?.id === "minecraft:overworld") {
+        try {
+            const stormTiles = getStormSpawnTiles(dimension, playerPos, minSq, maxSq, 15);
+            if (stormTiles.length > 0) {
+                const validSet = new Set(validTiles.map(t => `${t.x},${t.y},${t.z}`));
+                for (const t of stormTiles) {
+                    const key = `${t.x},${t.y},${t.z}`;
+                    if (!validSet.has(key)) {
+                        validTiles.push(t);
+                        validSet.add(key);
+                    }
+                }
+                if (isDebugEnabled('spawn', 'general') || isDebugEnabled('spawn', 'all') || isDebugEnabled('spawn', 'tileScanning')) {
+                    console.warn(`[SPAWN DEBUG] ${player.name}: Added ${stormTiles.length} storm spawn tiles, total valid: ${validTiles.length}`);
+                }
+            }
+        } catch (e) {
+            if (isDebugEnabled('spawn', 'all')) console.warn(`[SPAWN DEBUG] Storm tiles error:`, e);
         }
     }
 
