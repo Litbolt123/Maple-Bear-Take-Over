@@ -1,5 +1,19 @@
 # Context Summary
 
+**Date:** 2026-02-15
+
+## Achievements: persisted Powdery Journal unlock – IMPLEMENTED
+
+Achievements were hidden if the journal was obtained earlier but not carried, because `playerHasPowderyJournal` only checks inventory.
+
+### Changes made (mb_codex.js)
+1. **isPowderyJournalUnlocked(p)** – New helper that reads persisted `codex.items.snowBookCrafted`.
+2. **openAchievements()** – Gate changed from `if (!playerHasPowderyJournal(player))` to `if (!playerHasPowderyJournal(player) && !isPowderyJournalUnlocked(player))`.
+
+Achievements now show if the player either has the journal in inventory OR has ever crafted/obtained it. The `snowBookCrafted` flag is already set in main.js when the journal is crafted or opened (periodic inventory check + itemUseBeforeItemUse).
+
+---
+
 **Date:** 2026-02-14
 
 ## Mining AI optimization (3-bear lag) – IMPLEMENTED

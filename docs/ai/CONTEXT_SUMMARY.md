@@ -2,6 +2,12 @@
 
 ## Recent Changes (Latest Session)
 
+### Achievements Gating: Persisted Powdery Journal State (Feb 15)
+- **Problem**: `playerHasPowderyJournal(player)` only checks inventory; achievements stayed hidden if the journal was obtained earlier but not carried.
+- **Fix**: Replaced single-condition gate with combined check: `if (!playerHasPowderyJournal(player) && !isPowderyJournalUnlocked(player))`.
+- **New helper**: `isPowderyJournalUnlocked(p)` reads persisted `codex.items.snowBookCrafted` (set when journal is crafted or obtained).
+- **Result**: Achievements show if the player either has the journal in inventory OR has ever crafted/obtained it (persisted codex state). No changes needed to crafting/obtainment code—`snowBookCrafted` already set in main.js (periodic inventory check and when opening codex via snow_book).
+
 ### Mining Interval & Dev Tools Fixes (Feb 8)
 - **Mining Min Interval menu fix**: Slider now uses object form `{ valueStep, defaultValue }`; `.catch()` returns to `openAIThrottleMenu()` instead of Developer Tools to avoid main-menu redirect. Clamped default and result values.
 - **Settings confirmation**: Every AI throttle change (dynamic interval, min interval, override, reset) sends a chat message and `console.warn` for logging.

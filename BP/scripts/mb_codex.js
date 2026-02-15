@@ -27,6 +27,16 @@ function playerHasPowderyJournal(p) {
     return false;
 }
 
+/** Returns true if the player has ever crafted/obtained the Powdery Journal (persisted codex state). Achievements stay visible even when the journal is not carried. */
+function isPowderyJournalUnlocked(p) {
+    try {
+        const codex = getCodex(p);
+        return !!(codex?.items?.snowBookCrafted);
+    } catch {
+        return false;
+    }
+}
+
 /** Designated owner = first player to join the world */
 function isBetaOwner(p) {
     const ownerId = getBetaOwnerId();
@@ -3309,8 +3319,8 @@ export function showCodexBook(player, context) {
         const codex = getCodex(player);
         let body = `§6Achievements\n\n`;
 
-        // Achievements are earned in the background, but hidden until you have the Powdery Journal
-        if (!playerHasPowderyJournal(player)) {
+        // Achievements are earned in the background, but hidden until you have the Powdery Journal (inventory OR persisted unlocked state)
+        if (!playerHasPowderyJournal(player) && !isPowderyJournalUnlocked(player)) {
             body += `§7Well that was something!\n\n§8Your deeds are being recorded... but you'll need the Powdery Journal to make sense of these notes.`;
             const form = new ActionFormData().title("§6Achievements").body(body).button("§8Back");
             form.show(player).then((res) => {

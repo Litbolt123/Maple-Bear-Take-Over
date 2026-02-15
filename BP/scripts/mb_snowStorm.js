@@ -706,8 +706,8 @@ function startStorm(type, initialCenter = null) {
 
     for (const p of players) {
         if (p?.id) {
-            lastStormSoundTickByPlayer.set(p.id, now);
-            lastStormNauseaTickByPlayer.set(p.id, now);
+            if (!lastStormSoundTickByPlayer.has(p.id)) lastStormSoundTickByPlayer.set(p.id, now);
+            if (!lastStormNauseaTickByPlayer.has(p.id)) lastStormNauseaTickByPlayer.set(p.id, now);
         }
     }
 
@@ -949,10 +949,6 @@ system.runInterval(() => {
         if (!isScriptEnabled(SCRIPT_IDS.snowStorm) || !isBetaDustStormsEnabled()) return;
         
         const currentTick = system.currentTick;
-        
-        if (storms.length > 0 && !isBetaDustStormsEnabled()) {
-            endStorm(true);
-        }
 
         const beforeCount = storms.length;
         storms = storms.filter(s => s.endTick > currentTick);
