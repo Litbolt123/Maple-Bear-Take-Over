@@ -208,9 +208,13 @@ The multi-direction raycast is a good middle ground: no flood fill, handles late
 
 ---
 
+## Implemented (Feb 8)
+
+- **Phase 1+2**: `isEntityShelteredFromStorm(entity)` — 6-direction raycast (up, down, ±x, ±z) from entity head. Only called for entities in storm radius. Players: no infection/blindness/nausea when sheltered. Mobs: no storm damage when sheltered.
+- **Phase 3**: Storm drift deflects when target is inside terrain; 70% deflect when mountain ahead (prefer going around); storm can still climb.
+- **Storm intensity**: Random 0.85–1.15 per storm, applied to radius, placement, particles, mob damage.
+
 ## Next Steps
 
-1. Implement `isPlayerShelteredFromStorm(player)` using `getBlockFromRay` or `getBlockAbove`
-2. In storm loop, only add to `playersInStorm` (or gate storm exposure) when `!isPlayerShelteredFromStorm(player)`
-3. Test: cave, house, 3-block hole, glass window (before/after break)
-4. Tune `maxDistance`, `includePassableBlocks`, slab/leaf behavior if needed
+1. Test: cave, house, 3-block hole, hollow cube with/without hole, glass window (before/after break)
+2. Tune `SHELTER_RAY_UP_MAX`, `SHELTER_RAY_HORIZ_MAX`, slab/leaf behavior if needed

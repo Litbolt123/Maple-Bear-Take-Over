@@ -20,7 +20,8 @@ export const SNOW_REPLACEABLE_BLOCKS = new Set([
     "minecraft:big_dripleaf", "minecraft:big_dripleaf_stem", "minecraft:spore_blossom", "minecraft:glow_lichen", "minecraft:moss_carpet",
     "minecraft:vine", "minecraft:weeping_vines", "minecraft:twisting_vines", "minecraft:cave_vines", "minecraft:sea_pickle", "minecraft:kelp",
     "minecraft:seagrass", "minecraft:tall_seagrass", "minecraft:waterlily", "minecraft:lily_pad",
-    "minecraft:torchflower", "minecraft:pitcher_plant", "minecraft:pitcher_crop"
+    "minecraft:torchflower", "minecraft:pitcher_plant", "minecraft:pitcher_crop",
+    "minecraft:leaf_litter"
 ]);
 
 /** Blocks that storm particles pass through to find ground (leaves, foliage - don't treat as surface). */
@@ -38,10 +39,11 @@ export const STORM_PARTICLE_PASS_THROUGH = new Set([
     "minecraft:weeping_vines", "minecraft:twisting_vines", "minecraft:cave_vines",
     "minecraft:glow_lichen", "minecraft:moss_carpet", "minecraft:spore_blossom",
     "minecraft:torchflower", "minecraft:pitcher_plant", "minecraft:pitcher_crop",
-    "minecraft:small_dripleaf", "minecraft:big_dripleaf", "minecraft:big_dripleaf_stem"
+    "minecraft:small_dripleaf", "minecraft:big_dripleaf", "minecraft:big_dripleaf_stem",
+    "minecraft:leaf_litter"
 ]);
 
-/** Blocks major storms can destroy when big (leaves, grass, flowers). */
+/** Blocks major storms can destroy when big (leaves, grass, flowers, bamboo). */
 export const STORM_DESTRUCT_BLOCKS = new Set([
     "minecraft:oak_leaves", "minecraft:spruce_leaves", "minecraft:birch_leaves", "minecraft:jungle_leaves",
     "minecraft:acacia_leaves", "minecraft:dark_oak_leaves", "minecraft:mangrove_leaves", "minecraft:cherry_leaves",
@@ -53,7 +55,9 @@ export const STORM_DESTRUCT_BLOCKS = new Set([
     "minecraft:lily_of_the_valley", "minecraft:sunflower", "minecraft:lilac", "minecraft:rose_bush",
     "minecraft:peony", "minecraft:dead_bush", "minecraft:vine", "minecraft:torchflower", "minecraft:pitcher_plant",
     "minecraft:pitcher_crop", "minecraft:small_dripleaf", "minecraft:big_dripleaf", "minecraft:big_dripleaf_stem",
-    "minecraft:glow_lichen", "minecraft:moss_carpet", "minecraft:spore_blossom"
+    "minecraft:glow_lichen", "minecraft:moss_carpet", "minecraft:spore_blossom",
+    "minecraft:leaf_litter",
+    "minecraft:bamboo", "minecraft:bamboo_sapling"
 ]);
 
 /** Glass blocks storm cannot break (tinted glass blocks light, hardened - Education). */

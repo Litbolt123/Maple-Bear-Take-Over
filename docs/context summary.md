@@ -1,5 +1,129 @@
 # Context Summary
 
+**Date:** 2026-02-14
+
+## Mining AI optimization (3-bear lag) – IMPLEMENTED
+
+User reported major lag when 3 mining bears are active. Quick wins implemented; natural spawn capped at 3.
+
+### Changes made (mb_miningAI.js)
+1. **Bear-count threshold** – BEAR_COUNT_THRESHOLD_FEW = 3 (was 5); 3+ bears now process every 2 ticks instead of every tick.
+2. **Pathfinding Set** – `closed` uses `Set` instead of array; `closed.has()` instead of `closed.includes()` for O(1) lookup.
+3. **Pathfinding constants** – PATHFINDING_MAX_NODES 180→120, PATHFINDING_NODES_PER_CHUNK 25→15, PATHFINDING_MAX_CONCURRENT 5→3.
+4. **Pathfinding entity lookup** – Store `entityTypeId` in state; single `getEntities` per chunk instead of 8×; fallback to other types if entity not found.
+5. **Stagger** – When 3+ bears have targets, spread processing across ticks via `(tick + entityId.charCodeAt(0)) % 2` so not all run same tick.
+
+### Changes made (mb_spawnController.js)
+- **ENTITY_TYPE_CAPS** – Mining 20→3. Max 3 mining bears (both variants) from natural spawn.
+- **SPAWN_CONFIGS** – MINING_BEAR_ID and MINING_BEAR_DAY20_ID maxCountCap set to 3.
+- Debug log and comment updated for new cap.
+
+### Minecraft 1.26 check
+- No Script API changes in 1.26 that would make mining AI more taxing. Lag was pre-existing; optimizations address script cost. Note added to MINING_AI_OPTIMIZATION_OPTIONS.md.
+
+---
+
+**Date:** 2026-02-12
+
+## Achievements: hidden until Powdery Journal
+
+Achievements are earned in the background (first cure, first kills, Day 25, etc.) even without the Powdery Journal. They remain **hidden from view** until the player has the Powdery Journal (`mb:snow_book`) in their inventory.
+
+### Changes made (mb_codex.js)
+
+1. **playerHasPowderyJournal(player)** – Helper that checks if `mb:snow_book` exists in the player's inventory.
+2. **openAchievements()** – If the player does not have the journal, shows a placeholder instead of the full list:
+   - "§7Well that was something!\n\n§8Your deeds are being recorded... but you'll need the Powdery Journal to make sense of these notes."
+
+When the player obtains and holds the Powdery Journal, the full achievement list is visible. This applies whether the codex is opened via snow_book use or via Debug/Developer Tools from the Basic Journal (with cheats).
+
+---
+
+**Date:** 2026-02-12
+
+## Infected Pig: natural spawn and birth event handlers (BP/entities/infected_pig.json)
+
+Added handlers so naturally spawned adults get `pig_adult` and newborns from breeding get `pig_baby`.
+
+### Changes made
+
+1. **pig_baby component group** – Added to component_groups with `minecraft:is_baby` (scale removed to fix "huge babies").
+2. **minecraft:entity_spawned** – Adds `pig_adult` component group when the entity spawns naturally (world spawn).
+3. **minecraft:entity_born** – Adds `pig_baby` component group when born via breeding.
+4. **breed_event** – Explicit `breed_event` in breedable so bred babies reliably receive `entity_born` → `pig_baby`.
+
+Flow: natural spawns → entity_spawned → pig_adult; breeding → entity_born → pig_baby; baby grows up → entity_transformed → pig_adult.
+
+### Baby size fix (same session)
+
+Baby infected pigs appeared huge or "crazy". Removed redundant `minecraft:scale` (0.5) from pig_baby; `minecraft:is_baby` alone applies correct baby sizing. Adding both could conflict and cause wrong scale. Also added explicit `breed_event` in breedable to ensure bred babies receive entity_born.
+
+### Baby head scale fix (same session)
+
+Babies still had big heads despite normal body size. Cause: `animation.pig.baby_transform` in `RP/animations/infected_pig.animation.json` set head bone `scale` to 2 (designed for vanilla pig geometry). Custom `geometry.infected_pig` has different proportions—scale 2 made heads huge. Changed head scale from 2 to 1 so head scales uniformly with the entity.
+
+### Infected pig adult head (reverted Feb 12)
+
+Adults had heads offset from body; attempted fix removed head position from setup.v1.0, which caused heads to render inside the body. Reverted—head position [0,9,7] restored. Heads may remain slightly offset but no longer clipped.
+
+### Snow and leaf litter (Feb 12)
+
+Added `minecraft:leaf_litter` to SNOW_REPLACEABLE_BLOCKS, STORM_PARTICLE_PASS_THROUGH, STORM_DESTRUCT_BLOCKS. Death/torpedo/buff/trail snow placement now replaces leaf litter with snow. Storm skips placing on leaf litter (treats it like grass); particles pass through it to find ground; major storms can destroy it.
+
+---
+
+**Date:** 2026-02-12
+
+## Mining AI: persisted target (mb_target_player) clear when invalid – stop cache bypass
+
+The `mb_target_player` dynamic property (persisted target) was never cleared when the saved player was missing, out of range, or in creative/spectator, causing `targetCache.delete(entityId)` every tick and bypassing caching indefinitely.
+
+### Changes made (mb_miningAI.js, findNearestTarget)
+
+1. **Removed unconditional cache bypass** – No longer call `targetCache.delete(entityId)` at the start of the persisted-target block.
+2. **Bypass only when using persisted target** – `targetCache.delete(entityId)` runs only when the persisted player passes all checks (exists, not creative/spectator, in range), right before caching and returning.
+3. **Clear dynamic property when invalid** – When the persisted player is missing, out of range, wrong game mode, or any exception occurs, the code now calls `entity.setDynamicProperty?.("mb_target_player", undefined)` so normal targeting and caching can resume.
+4. **Catch path** – The inner try/catch around game-mode and distance checks is unchanged; the outer clear runs after the block, so any exception also triggers the clear.
+
+Result: Bears with a stale `mb_target_player` (e.g. player left, switched to creative, or moved out of range) clear the property once and then use normal `targetCache`, `entityId`, and `currentTick` logic instead of bypassing every tick.
+
+---
+
+**Date:** 2026-02-12
+
+## mb_snowStorm: Remove unreachable VANILLA_SNOW_LAYER block in tryPlaceSnowLayerMajor
+
+The `if (belowType === VANILLA_SNOW_LAYER)` block that calls `blockBelow.setType(SNOW_LAYER_BLOCK)` (lines 444–451) was unreachable because the earlier guard `if (belowType === SNOW_LAYER_BLOCK || belowType === VANILLA_SNOW_LAYER) return false;` already returned for VANILLA_SNOW_LAYER.
+
+### Fix
+
+- Relaxed the early guard so only `SNOW_LAYER_BLOCK` returns: `if (belowType === SNOW_LAYER_BLOCK) return false;`
+- Kept a single handling path for VANILLA_SNOW_LAYER: the replacement block now runs and correctly converts vanilla snow to custom via `blockBelow.setType(SNOW_LAYER_BLOCK)`
+- `aboveType` still returns for both SNOW_LAYER_BLOCK and VANILLA_SNOW_LAYER (never place snow on top of existing snow)
+
+---
+
+**Date:** 2026-02-12
+
+## Snow block lists: grass_block contradiction fix & storm vs death/torpedo distinction
+
+`minecraft:grass_block` appeared in both `SNOW_NEVER_REPLACE_BLOCKS` and `SNOW_REPLACEABLE_BLOCKS`, causing contradictory membership. Removed from `SNOW_REPLACEABLE_BLOCKS` so it only appears in `SNOW_NEVER_REPLACE_BLOCKS`.
+
+### Changes made
+
+1. **`BP/scripts/mb_blockLists.js`**
+   - Removed `minecraft:grass_block` from `SNOW_REPLACEABLE_BLOCKS`.
+   - Added header comment distinguishing: storm never replaces (SNOW_NEVER_REPLACE_BLOCKS) vs death/torpedo/buff replaceable (SNOW_REPLACEABLE_BLOCKS).
+   - Updated JSDoc for `SNOW_REPLACEABLE_BLOCKS`: "Excludes grass_block - full ground blocks stay."
+
+### Impact
+
+- Death, torpedo, and buff bear snow placement no longer replace grass_block with snow; full ground stays.
+- Storm (mb_snowStorm.js) already used SNOW_NEVER_REPLACE_BLOCKS for grass_block; no change needed.
+- No other references expect grass_block to be replaceable (main.js uses grass_block only for dusted-dirt conversion, not snow).
+
+---
+
 **Date:** 2026-02-04
 
 ## Buff AI: Rejoin fix – world load / leave / spawn pipeline (mb_buffAI.js)
@@ -145,7 +269,7 @@ Rate-limited mining debug (DEBUG_LOG_INTERVAL / shouldLogMiningDebug) was revert
 1. **New `BP/scripts/mb_blockLists.js`**  
    - Exports `SNOW_REPLACEABLE_BLOCKS` and `SNOW_TWO_BLOCK_PLANTS` (same names).  
    - Contains the canonical Sets used for death/torpedo snow placement (grass, flowers, foliage; 2-block-tall plants).  
-   - `SNOW_REPLACEABLE_BLOCKS` includes `minecraft:grass_block` (from torpedo list).
+   - `SNOW_REPLACEABLE_BLOCKS` originally included `minecraft:grass_block`; removed Feb 12 (see above) to avoid contradiction with SNOW_NEVER_REPLACE_BLOCKS.
 
 2. **`BP/scripts/mb_torpedoAI.js`**  
    - Removed inline `SNOW_REPLACEABLE_BLOCKS` and `SNOW_TWO_BLOCK_PLANTS` definitions.  

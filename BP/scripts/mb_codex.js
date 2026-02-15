@@ -6,13 +6,25 @@ import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTrac
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 import { getBuffBearCountdowns } from "./mb_buffAI.js";
-import { getSpawnConfigsForDevTools, getDisabledSpawnTypes, setDisabledSpawnTypes } from "./mb_spawnController.js";
-import { summonStorm, endStorm, getStormState, getStormDebugInfo, setStormOverride, resetStormOverride } from "./mb_snowStorm.js";
+import { getSpawnConfigsForDevTools, getDisabledSpawnTypes, setDisabledSpawnTypes, getSpawnSpeedMultiplier, SPAWN_SPEED_PROPERTY, getBlockQueryMultiplier, getMaxGlobalSpawnsPerTick, getSpawnDistanceRange, getTileIntensityMultiplier, getBlocksPerTickMultiplier, SPAWN_OVERRIDE_PROPERTIES } from "./mb_spawnController.js";
+import { summonStorm, endStorm, getStormState, getStormDebugInfo, setStormOverride, resetStormOverride, getStormControlParams, isMultiStormEnabled, setMultiStormEnabled, getStorms, endStormById, setStormEnabled } from "./mb_snowStorm.js";
+import { getMiningAIState } from "./mb_miningAI.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
 function hasCheats(p) {
     return (p?.hasTag && p.hasTag("mb_cheats")) || Boolean(typeof system !== "undefined" && system?.isEnableCheats?.());
+}
+
+/** Returns true if the player has the Powdery Journal (snow_book) in their inventory. Achievements are hidden until obtained. */
+function playerHasPowderyJournal(p) {
+    const inventory = p?.getComponent?.("inventory")?.container;
+    if (!inventory) return false;
+    for (let i = 0; i < inventory.size; i++) {
+        const item = inventory.getItem(i);
+        if (item && item.typeId === "mb:snow_book") return true;
+    }
+    return false;
 }
 
 /** Designated owner = first player to join the world */
@@ -1263,8 +1275,10 @@ export function showCodexBook(player, context) {
         if (hasDebugOptions) {
             // Pinned dev tools (quick access from main menu)
             const pinned = getPinnedDevItems(player);
+            const LEGACY_PIN_IDS = { spawn_difficulty: "spawn_controller", spawn_type_toggles: "spawn_controller", force_spawn: "spawn_controller" };
             for (const itemId of pinned) {
-                const item = PINNABLE_DEV_ITEMS.find(i => i.id === itemId);
+                const resolvedId = LEGACY_PIN_IDS[itemId] || itemId;
+                const item = PINNABLE_DEV_ITEMS.find(i => i.id === resolvedId);
                 if (item) {
                     buttons.push("§f" + item.label + " §8(pinned)");
                     buttonActions.push(item.action);
@@ -3294,7 +3308,24 @@ export function showCodexBook(player, context) {
         markSectionViewed(player, "achievements");
         const codex = getCodex(player);
         let body = `§6Achievements\n\n`;
-        
+
+        // Achievements are earned in the background, but hidden until you have the Powdery Journal
+        if (!playerHasPowderyJournal(player)) {
+            body += `§7Well that was something!\n\n§8Your deeds are being recorded... but you'll need the Powdery Journal to make sense of these notes.`;
+            const form = new ActionFormData().title("§6Achievements").body(body).button("§8Back");
+            form.show(player).then((res) => {
+                if (!res || res.canceled) {
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                    return openMain();
+                }
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openMain();
+            }).catch(() => { openMain(); });
+            return;
+        }
+
         const achievements = codex.achievements || {};
         
         if (achievements.day25Victory) {
@@ -3460,6 +3491,127 @@ export function showCodexBook(player, context) {
         }).catch(() => openDeveloperTools());
     }
 
+    const KILL_BEARS_TYPES = [
+        { id: "tiny", label: "§fTiny §7(mb:mb_*)" },
+        { id: "infected", label: "§cInfected bears §7(mb:infected*)" },
+        { id: "buff", label: "§6Buff §7(mb:buff_mb*)" },
+        { id: "flying", label: "§bFlying §7(mb:flying_mb*)" },
+        { id: "mining", label: "§7Mining §7(mb:mining_mb*)" },
+        { id: "torpedo", label: "§4Torpedo §7(mb:torpedo_mb*)" },
+        { id: "infected_pig", label: "§dInfected Pig" },
+        { id: "infected_cow", label: "§dInfected Cow" }
+    ];
+
+    const KILL_BEARS_VARIANTS = [
+        { id: "mb:mb_day00", label: "Tiny (day 0)" },
+        { id: "mb:mb_day04", label: "Tiny (day 4)" },
+        { id: "mb:mb_day08", label: "Tiny (day 8)" },
+        { id: "mb:mb_day13", label: "Tiny (day 13)" },
+        { id: "mb:mb_day20", label: "Tiny (day 20)" },
+        { id: "mb:infected", label: "Infected" },
+        { id: "mb:infected_day08", label: "Infected (day 8)" },
+        { id: "mb:infected_day13", label: "Infected (day 13)" },
+        { id: "mb:infected_day20", label: "Infected (day 20)" },
+        { id: "mb:buff_mb", label: "Buff" },
+        { id: "mb:buff_mb_day13", label: "Buff (day 13)" },
+        { id: "mb:buff_mb_day20", label: "Buff (day 20)" },
+        { id: "mb:flying_mb", label: "Flying" },
+        { id: "mb:flying_mb_day15", label: "Flying (day 15)" },
+        { id: "mb:flying_mb_day20", label: "Flying (day 20)" },
+        { id: "mb:mining_mb", label: "Mining" },
+        { id: "mb:mining_mb_day20", label: "Mining (day 20)" },
+        { id: "mb:torpedo_mb", label: "Torpedo" },
+        { id: "mb:torpedo_mb_day20", label: "Torpedo (day 20)" },
+        { id: "mb:infected_pig", label: "Infected Pig" },
+        { id: "mb:infected_cow", label: "Infected Cow" }
+    ];
+
+    function openKillBearsMenu() {
+        const form = new ActionFormData()
+            .title("§cKill Bears %")
+            .body("§7Kill a percentage of bears within radius. §8Choose scope: all, by type, or by specific variant.");
+        form.button("§fX% of All Bears");
+        form.button("§eBy Type §7(tiny, infected, buff, etc.)");
+        form.button("§bBy Variant §7(specific entity)");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 3) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            if (res.selection === 0) promptKillBearsPct("all", "", () => openKillBearsMenu());
+            else if (res.selection === 1) openKillBearsByTypeMenu();
+            else if (res.selection === 2) openKillBearsByVariantMenu();
+            else openDeveloperTools();
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openKillBearsByTypeMenu() {
+        const form = new ActionFormData()
+            .title("§eKill Bears % — By Type")
+            .body("§7Select bear type, then enter % and radius.");
+        for (const t of KILL_BEARS_TYPES) form.button(t.label);
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === KILL_BEARS_TYPES.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openKillBearsMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const t = KILL_BEARS_TYPES[res.selection];
+            if (t) promptKillBearsPct("type", t.id, () => openKillBearsByTypeMenu());
+            else openKillBearsMenu();
+        }).catch(() => openKillBearsMenu());
+    }
+
+    function openKillBearsByVariantMenu() {
+        const form = new ActionFormData()
+            .title("§bKill Bears % — By Variant")
+            .body("§7Select exact entity variant, then enter % and radius.");
+        for (const v of KILL_BEARS_VARIANTS) form.button(`§f${v.label} §8(${v.id})`);
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === KILL_BEARS_VARIANTS.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openKillBearsMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const v = KILL_BEARS_VARIANTS[res.selection];
+            if (v) promptKillBearsPct("variant", v.id, () => openKillBearsByVariantMenu());
+            else openKillBearsMenu();
+        }).catch(() => openKillBearsMenu());
+    }
+
+    function promptKillBearsPct(scope, filter, onBack) {
+        const modal = new ModalFormData()
+            .title("§cKill Bears %")
+            .dropdown("Center", ["Near me", "Per player (each player's area)", "At specific player"], { defaultValueIndex: 0 })
+            .textField("Percentage (0-100)", "50")
+            .textField("Radius (blocks)", "64");
+        modal.show(player).then((res) => {
+            if (!res || res.canceled) return onBack();
+            const centerIdx = Number(res.formValues?.[0]) ?? 0;
+            const pctStr = (res.formValues?.[1] ?? "50").trim();
+            const radiusStr = (res.formValues?.[2] ?? "64").trim();
+            const pct = Math.min(100, Math.max(0, parseFloat(pctStr) || 50));
+            const radius = Math.min(256, Math.max(32, parseInt(radiusStr, 10) || 64));
+            const baseArgs = [String(radius), scope, filter, String(pct)];
+            if (centerIdx === 2) {
+                openTargetPlayerMenu("Kill Bears %", (targetName) => {
+                    if (targetName === undefined) return onBack();
+                    const centerMode = "player";
+                    const args = [...baseArgs, centerMode, targetName || player.name];
+                    triggerDebugCommand("kill_bears_pct", args, onBack);
+                });
+            } else {
+                const centerMode = centerIdx === 1 ? "per_player" : "me";
+                const args = [...baseArgs, centerMode];
+                triggerDebugCommand("kill_bears_pct", args, onBack);
+            }
+        }).catch(() => onBack());
+    }
+
     function openResetCodexSectionMenu() {
         openTargetPlayerMenu("Reset Codex Section", (targetName) => {
             const form = new ActionFormData()
@@ -3542,13 +3694,26 @@ export function showCodexBook(player, context) {
 
     const PINNABLE_DEV_ITEMS = [
         { id: "script_toggles", label: "Script Toggles", action: () => openScriptTogglesMenu() },
-        { id: "summon_storm", label: "Summon Storm", action: () => openSummonStormMenu() },
-        { id: "storm_state", label: "Storm State", action: () => openStormStateMenu() },
-        { id: "storm_override", label: "Storm Override", action: () => openStormOverrideMenu() },
+        { id: "spawn_controller", label: "Spawn Controller", action: () => openSpawnControllerMenu() },
+        { id: "clear_bears", label: "Clear Bears", action: () => openClearBearsMenu() },
+        { id: "kill_bears", label: "Kill Bears %", action: () => openKillBearsMenu() },
+        { id: "storm", label: "Storm", action: () => openStormHubMenu() },
+        { id: "ai_throttle", label: "AI Throttle & Speed", action: () => openAIThrottleMenu() },
         { id: "debug_menu", label: "Debug Menu", action: () => openDebugMenu() },
-        { id: "spawn_difficulty", label: "Spawn Difficulty", action: () => openSpawnDifficultyMenu() },
-        { id: "force_spawn", label: "Force Spawn", action: () => openForceSpawnMenu() },
-        { id: "clear_bears", label: "Clear Bears", action: () => openClearBearsMenu() }
+        { id: "fully_unlock", label: "Fully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked."); openDeveloperTools(); } },
+        { id: "reset_codex", label: "Reset My Codex", action: () => openTargetPlayerMenu("Reset Codex", (name) => { triggerDebugCommand("reset_codex", name ? [name] : []); openDeveloperTools(); }) },
+        { id: "reset_day", label: "Reset World Day to 1", action: () => triggerDebugCommand("reset_day") },
+        { id: "set_day", label: "Set Day...", action: () => promptSetDay() },
+        { id: "infection", label: "Clear / Set Infection", action: () => openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name)) },
+        { id: "immunity", label: "Grant / Remove Immunity", action: () => openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name)) },
+        { id: "reset_intro", label: "Reset Intro", action: () => triggerDebugCommand("reset_intro", [], () => openDeveloperTools()) },
+        { id: "bears_target", label: "Bears Target Player", action: () => openBearsTargetPlayerMenu() },
+        { id: "list_bears", label: "List Nearby Bears", action: () => openListBearsMenu() },
+        { id: "simulate_day", label: "Simulate Next Day", action: () => { triggerDebugCommand("simulate_next_day", [], () => openDeveloperTools()); } },
+        { id: "inspect_bear", label: "Inspect Nearest Bear", action: () => triggerDebugCommand("inspect_entity", [], () => openDeveloperTools()) },
+        { id: "reset_section", label: "Reset Codex Section", action: () => openResetCodexSectionMenu() },
+        { id: "dump_codex", label: "Dump Codex State", action: () => openDumpCodexTargetMenu() },
+        { id: "set_kill_counts", label: "Set Kill Counts", action: () => openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name)) }
     ];
 
     function getPinnedDevItems(p) {
@@ -3556,7 +3721,18 @@ export function showCodexBook(player, context) {
             const raw = getPlayerProperty(p, "mb_pinned_dev_items");
             if (!raw || typeof raw !== "string") return [];
             const arr = JSON.parse(raw);
-            return Array.isArray(arr) ? arr : [];
+            const ids = Array.isArray(arr) ? arr : [];
+            const LEGACY_TO_SPAWN_CONTROLLER = ["spawn_difficulty", "spawn_type_toggles", "force_spawn"];
+            const LEGACY_TO_STORM = ["storm_control", "summon_storm", "storm_state", "storm_override"];
+            const migrated = ids.map(id =>
+                LEGACY_TO_SPAWN_CONTROLLER.includes(id) ? "spawn_controller" :
+                LEGACY_TO_STORM.includes(id) ? "storm" : id
+            );
+            const deduped = [...new Set(migrated)];
+            if (migrated.some((id, i) => id !== ids[i]) || deduped.length !== ids.length) {
+                setPinnedDevItems(p, deduped);
+            }
+            return deduped;
         } catch { return []; }
     }
 
@@ -3570,7 +3746,7 @@ export function showCodexBook(player, context) {
         const pinned = new Set(getPinnedDevItems(player));
         const form = new ActionFormData()
             .title("§fPin/Unpin to Main Menu")
-            .body("§7Pinned items appear on the journal main menu for quick access.\n§8Current pins: " + (pinned.size ? Array.from(pinned).join(", ") : "none"));
+            .body("§7Pinned items appear on the journal main menu for quick access.\n§8Current pins: " + (pinned.size ? Array.from(pinned).map(id => PINNABLE_DEV_ITEMS.find(i => i.id === id)?.label || id).join(", ") : "none"));
         for (const item of PINNABLE_DEV_ITEMS) {
             const isPinned = pinned.has(item.id);
             form.button((isPinned ? "§a" : "§f") + item.label + (isPinned ? " §8(pinned)" : ""));
@@ -3599,33 +3775,38 @@ export function showCodexBook(player, context) {
 
     function openDeveloperTools() {
         const options = [
+            { label: "§8§l── Codex ──", action: () => openDeveloperTools(), group: true },
             { label: "§fPin/Unpin to Main Menu", action: () => openPinUnpinMenu() },
-            { label: "§fScript Toggles", action: () => openScriptTogglesMenu() },
             { label: "§aFully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked."); openDeveloperTools(); } },
             { label: "§fReset My Codex", action: () => openTargetPlayerMenu("Reset Codex", (name) => { triggerDebugCommand("reset_codex", name ? [name] : []); openDeveloperTools(); }) },
-            { label: "§fReset World Day to 1", action: () => triggerDebugCommand("reset_day") },
-            { label: "§fSet Day...", action: () => promptSetDay() },
-            { label: "§fSpawn Difficulty", action: () => openSpawnDifficultyMenu() },
-            { label: "§fSpawn Type Toggles", action: () => openSpawnTypeTogglesMenu() },
-            { label: "§fClear / Set Infection", action: () => openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name)) },
-            { label: "§fGrant / Remove Immunity", action: () => openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name)) },
-            { label: "§fReset Intro", action: () => triggerDebugCommand("reset_intro", [], () => openDeveloperTools()) },
-            { label: "§fBears Target Player", action: () => openBearsTargetPlayerMenu() },
-            { label: "§fList Nearby Bears", action: () => openListBearsMenu() },
-            { label: "§fForce Spawn", action: () => openForceSpawnMenu() },
-            { label: "§fSimulate Next Day", action: () => { triggerDebugCommand("simulate_next_day", [], () => openDeveloperTools()); } },
-            { label: "§fClear Bears (radius)", action: () => openClearBearsMenu() },
-            { label: "§fInspect Nearest Bear", action: () => triggerDebugCommand("inspect_entity", [], () => openDeveloperTools()) },
             { label: "§fReset Codex Section", action: () => openResetCodexSectionMenu() },
             { label: "§fDump Codex State", action: () => openDumpCodexTargetMenu() },
+            { label: "§8§l── World & Day ──", action: () => openDeveloperTools(), group: true },
+            { label: "§fReset World Day to 1", action: () => triggerDebugCommand("reset_day") },
+            { label: "§fSet Day...", action: () => promptSetDay() },
+            { label: "§fSimulate Next Day", action: () => { triggerDebugCommand("simulate_next_day", [], () => openDeveloperTools()); } },
+            { label: "§fReset Intro", action: () => triggerDebugCommand("reset_intro", [], () => openDeveloperTools()) },
+            { label: "§8§l── Spawn & Bears ──", action: () => openDeveloperTools(), group: true },
+            { label: "§fScript Toggles", action: () => openScriptTogglesMenu() },
+            { label: "§fSpawn Controller", action: () => openSpawnControllerMenu() },
+            { label: "§fClear Bears (radius)", action: () => openClearBearsMenu() },
+            { label: "§fKill Bears % §7(all/type/variant)", action: () => openKillBearsMenu() },
+            { label: "§fBears Target Player", action: () => openBearsTargetPlayerMenu() },
+            { label: "§fList Nearby Bears", action: () => openListBearsMenu() },
+            { label: "§fInspect Nearest Bear", action: () => triggerDebugCommand("inspect_entity", [], () => openDeveloperTools()) },
+            { label: "§8§l── Storm ──", action: () => openDeveloperTools(), group: true },
+            { label: "§bStorm", action: () => openStormHubMenu() },
+            { label: "§8§l── Infection & Players ──", action: () => openDeveloperTools(), group: true },
+            { label: "§fClear / Set Infection", action: () => openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name)) },
+            { label: "§fGrant / Remove Immunity", action: () => openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name)) },
             { label: "§fSet Kill Counts", action: () => openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name)) },
-            { label: "§bSummon Storm", action: () => openSummonStormMenu() },
-            { label: "§bStorm State", action: () => openStormStateMenu() },
-            { label: "§bStorm Override", action: () => openStormOverrideMenu() }
+            { label: "§8§l── AI & Debug ──", action: () => openDeveloperTools(), group: true },
+            { label: "§eAI Throttle & Speed", action: () => openAIThrottleMenu() },
+            { label: "§fDebug Menu", action: () => openDebugMenu(true) }
         ];
 
         const form = new ActionFormData().title("§cDeveloper Tools");
-        form.body("§7Debug utilities. §8Fully Unlock: unlock all codex content. Reset: clear all codex data. Script Toggles: enable/disable scripts if things break.");
+        form.body("§7Debug utilities grouped by category. §8Group headers can be clicked to refresh.");
         for (const opt of options) {
             form.button(opt.label);
         }
@@ -3646,7 +3827,7 @@ export function showCodexBook(player, context) {
             } else {
                 openDeveloperTools();
             }
-        });
+        }).catch(() => openMain());
     }
 
     function openScriptTogglesMenu() {
@@ -3688,6 +3869,224 @@ export function showCodexBook(player, context) {
         }).catch(() => openDeveloperTools());
     }
 
+    function openSpawnControllerMenu() {
+        const spawnEnabled = getAllScriptToggles()[SCRIPT_IDS.spawnController];
+        const diffRaw = Number(getWorldProperty(SPAWN_DIFFICULTY_PROPERTY) ?? 0);
+        const diffLabel = getSpawnDifficultyLabel(diffRaw);
+        const speedMult = getSpawnSpeedMultiplier();
+        const speedLabel = speedMult === 1 ? "Normal" : `${(speedMult * 100).toFixed(0)}%`;
+        const disabledCount = getDisabledSpawnTypes().size;
+        const typeLabel = disabledCount === 0 ? "All enabled" : `${disabledCount} disabled`;
+        const blockQ = getBlockQueryMultiplier();
+        const blockQLabel = blockQ === 1 ? "Normal" : `${(blockQ * 100).toFixed(0)}%`;
+        const maxGlobal = getMaxGlobalSpawnsPerTick();
+        const range = getSpawnDistanceRange();
+        const rangeLabel = range.min === 20 ? "Close" : range.max === 55 ? "Far" : "Normal";
+        const tileInt = getTileIntensityMultiplier();
+        const tileLabel = tileInt === 1 ? "Normal" : `${(tileInt * 100).toFixed(0)}%`;
+        const blocksTick = getBlocksPerTickMultiplier();
+        const blocksLabel = blocksTick === 1 ? "Normal" : `${(blocksTick * 100).toFixed(0)}%`;
+
+        const form = new ActionFormData()
+            .title("§cSpawn Controller")
+            .body(`§7All spawn-related settings.\n\n§fScript: §7${spawnEnabled ? "§aON" : "§cOFF"}\n§fDifficulty: §7${diffLabel}\n§fSpeed: §7${speedLabel}\n§fTypes: §7${typeLabel}\n§8Advanced: §7BlockQ ${blockQLabel} | Max ${maxGlobal}/tick | Range ${rangeLabel} | Tiles ${tileLabel} | BlocksTick ${blocksLabel}`);
+
+        form.button(spawnEnabled ? "§cSpawn Controller OFF" : "§aSpawn Controller ON");
+        form.button("§fSpawn Difficulty");
+        form.button("§fSpawn Speed");
+        form.button("§fSpawn Type Toggles");
+        form.button("§eForce Spawn");
+        form.button("§f§lPresets §8(Low → High)");
+        form.button("§6Advanced Options");
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 7) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            switch (res.selection) {
+                case 0:
+                    setScriptEnabled(SCRIPT_IDS.spawnController, !spawnEnabled);
+                    player.sendMessage(CHAT_SUCCESS + "Spawn Controller: " + (!spawnEnabled ? "ON" : "OFF"));
+                    return openSpawnControllerMenu();
+                case 1: return openSpawnDifficultyMenu();
+                case 2: return openSpawnSpeedMenu();
+                case 3: return openSpawnTypeTogglesMenu();
+                case 4: return openForceSpawnMenu();
+                case 5: return openSpawnPresetsMenu(false);
+                case 6: return openSpawnAdvancedMenu();
+                default: return openDeveloperTools();
+            }
+        }).catch(() => openDeveloperTools());
+    }
+
+    const SPAWN_PRESETS = {
+        low: { label: "§aLow", desc: "Minimal load, least lag", blockQuery: 0.25, maxGlobal: 12, range: "close", tileIntensity: 0.5, blocksPerTick: 0.5, spawnSpeed: 0.5, spawnDifficulty: -1 },
+        medLow: { label: "§2Med-Low", desc: "Light load", blockQuery: 0.5, maxGlobal: 18, range: "close", tileIntensity: 0.75, blocksPerTick: 0.7, spawnSpeed: 0.75, spawnDifficulty: -1 },
+        med: { label: "§fMed", desc: "Balanced (default)", blockQuery: 1, maxGlobal: 24, range: "normal", tileIntensity: 1, blocksPerTick: 1, spawnSpeed: 1, spawnDifficulty: 0 },
+        medHigh: { label: "§6Med-High", desc: "More active", blockQuery: 1.25, maxGlobal: 36, range: "normal", tileIntensity: 1.2, blocksPerTick: 1.2, spawnSpeed: 1.5, spawnDifficulty: 1 },
+        high: { label: "§cHigh", desc: "Aggressive, most spawns", blockQuery: 1.5, maxGlobal: 48, range: "far", tileIntensity: 1.25, blocksPerTick: 1.5, spawnSpeed: 2, spawnDifficulty: 1 }
+    };
+
+    function applySpawnPreset(presetKey) {
+        const p = SPAWN_PRESETS[presetKey];
+        if (!p) return;
+        setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.blockQueryMult, p.blockQuery);
+        setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.maxGlobal, p.maxGlobal);
+        setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.range, p.range);
+        setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.tileIntensity, p.tileIntensity);
+        setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.blocksPerTickMult, p.blocksPerTick);
+        setWorldProperty(SPAWN_SPEED_PROPERTY, p.spawnSpeed);
+        setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, p.spawnDifficulty);
+    }
+
+    function openSpawnPresetsMenu(fromAdvanced = false) {
+        const body = Object.entries(SPAWN_PRESETS).map(([k, v]) => `${v.label} §8– §8${v.desc}`).join("\n");
+        const form = new ActionFormData()
+            .title("§c§lSpawn Presets")
+            .body(`§f§lApply a coordinated preset to all spawn settings.\n§8Speed, difficulty, block budget, range, etc.\n\n${body}`);
+
+        form.button("§aLow §8(minimal lag)");
+        form.button("§2Med-Low §8(light)");
+        form.button("§fMed §8(balanced)");
+        form.button("§6Med-High §8(active)");
+        form.button("§cHigh §8(aggressive)");
+        form.button("§8Back");
+
+        const onBack = () => fromAdvanced ? openSpawnAdvancedMenu() : openSpawnControllerMenu();
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 5) return onBack();
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const keys = ["low", "medLow", "med", "medHigh", "high"];
+            if (res.selection < 5) {
+                applySpawnPreset(keys[res.selection]);
+                player.sendMessage(CHAT_SUCCESS + "Preset applied: " + SPAWN_PRESETS[keys[res.selection]].label.replace(/§./g, "") + ".");
+            }
+            openSpawnPresetsMenu(fromAdvanced);
+        }).catch(() => onBack());
+    }
+
+    function openSpawnAdvancedMenu() {
+        const form = new ActionFormData()
+            .title("§cSpawn Advanced Options")
+            .body("§7Performance and spawn range tuning.\n§8Block Query: fewer = less lag. Max Spawns: cap per tick. Range: spawn distance. Tile/BlocksTick: scan intensity.");
+
+        form.button("§f§lPresets §8(Low / Med / High)");
+        form.button("§fBlock Query Budget");
+        form.button("§fMax Spawns Per Tick");
+        form.button("§fSpawn Range");
+        form.button("§fTile Scan Intensity");
+        form.button("§fBlocks Per Tick Budget");
+        form.button("§cReset All Advanced");
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 7) return openSpawnControllerMenu();
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            switch (res.selection) {
+                case 0: return openSpawnPresetsMenu(true);
+                case 1: return openSpawnBlockQueryMenu();
+                case 2: return openSpawnMaxGlobalMenu();
+                case 3: return openSpawnRangeMenu();
+                case 4: return openSpawnTileIntensityMenu();
+                case 5: return openSpawnBlocksPerTickMenu();
+                case 6:
+                    for (const key of Object.values(SPAWN_OVERRIDE_PROPERTIES)) setWorldProperty(key, undefined);
+                    setWorldProperty(SPAWN_SPEED_PROPERTY, undefined);
+                    setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, 0);
+                    player.sendMessage(CHAT_SUCCESS + "Advanced spawn options reset.");
+                    return openSpawnAdvancedMenu();
+                default: return openSpawnControllerMenu();
+            }
+        }).catch(() => openSpawnControllerMenu());
+    }
+
+    function openSpawnBlockQueryMenu() {
+        const cur = getBlockQueryMultiplier();
+        const form = new ActionFormData().title("§cBlock Query Budget").body(`§7Reduce block scans when laggy.\n§8Current: §f${(cur * 100).toFixed(0)}%`);
+        form.button("§aLow §7(25%)"); form.button("§2Medium §7(50%)"); form.button("§fNormal §7(100%)");
+        form.button("§6High §7(150%)"); form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 4) return openSpawnAdvancedMenu();
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const vals = [0.25, 0.5, 1, 1.5];
+            if (res.selection < 4) {
+                setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.blockQueryMult, vals[res.selection]);
+                player.sendMessage(CHAT_SUCCESS + "Block query: " + (vals[res.selection] * 100).toFixed(0) + "%.");
+            }
+            openSpawnBlockQueryMenu();
+        }).catch(() => openSpawnAdvancedMenu());
+    }
+
+    function openSpawnMaxGlobalMenu() {
+        const cur = getMaxGlobalSpawnsPerTick();
+        const form = new ActionFormData().title("§cMax Spawns Per Tick").body(`§7Cap total spawns across all players per tick.\n§8Current: §f${cur}`);
+        form.button("§a12"); form.button("§218"); form.button("§f24 §7(default)"); form.button("§636"); form.button("§c48"); form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 5) return openSpawnAdvancedMenu();
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const vals = [12, 18, 24, 36, 48];
+            if (res.selection < 5) {
+                setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.maxGlobal, vals[res.selection]);
+                player.sendMessage(CHAT_SUCCESS + "Max spawns/tick: " + vals[res.selection] + ".");
+            }
+            openSpawnMaxGlobalMenu();
+        }).catch(() => openSpawnAdvancedMenu());
+    }
+
+    function openSpawnRangeMenu() {
+        const r = getSpawnDistanceRange();
+        const label = r.min === 20 ? "Close (20-35)" : r.max === 55 ? "Far (10-55)" : "Normal (15-45)";
+        const form = new ActionFormData().title("§cSpawn Range").body(`§7Distance from player for spawns.\n§8Current: §f${label}`);
+        form.button("§aClose §7(20-35)"); form.button("§fNormal §7(15-45)"); form.button("§cFar §7(10-55)"); form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 3) return openSpawnAdvancedMenu();
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const vals = ["close", "normal", "far"];
+            if (res.selection < 3) {
+                setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.range, vals[res.selection]);
+                player.sendMessage(CHAT_SUCCESS + "Spawn range: " + vals[res.selection] + ".");
+            }
+            openSpawnRangeMenu();
+        }).catch(() => openSpawnAdvancedMenu());
+    }
+
+    function openSpawnTileIntensityMenu() {
+        const cur = getTileIntensityMultiplier();
+        const form = new ActionFormData().title("§cTile Scan Intensity").body(`§7Tiles scanned per cycle.\n§8Current: §f${(cur * 100).toFixed(0)}%`);
+        form.button("§aLow §7(60%)"); form.button("§2Medium §7(75%)"); form.button("§fNormal §7(100%)");
+        form.button("§6High §7(125%)"); form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 4) return openSpawnAdvancedMenu();
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const vals = [0.6, 0.75, 1, 1.25];
+            if (res.selection < 4) {
+                setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.tileIntensity, vals[res.selection]);
+                player.sendMessage(CHAT_SUCCESS + "Tile intensity: " + (vals[res.selection] * 100).toFixed(0) + "%.");
+            }
+            openSpawnTileIntensityMenu();
+        }).catch(() => openSpawnAdvancedMenu());
+    }
+
+    function openSpawnBlocksPerTickMenu() {
+        const cur = getBlocksPerTickMultiplier();
+        const form = new ActionFormData().title("§cBlocks Per Tick").body(`§7Block scan spread. Lower = fewer blocks/tick (less lag).\n§8Current: §f${(cur * 100).toFixed(0)}%`);
+        form.button("§aLow §7(60%)"); form.button("§2Medium §7(80%)"); form.button("§fNormal §7(100%)");
+        form.button("§6High §7(150%)"); form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 4) return openSpawnAdvancedMenu();
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const vals = [0.6, 0.8, 1, 1.5];
+            if (res.selection < 4) {
+                setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.blocksPerTickMult, vals[res.selection]);
+                player.sendMessage(CHAT_SUCCESS + "Blocks/tick: " + (vals[res.selection] * 100).toFixed(0) + "%.");
+            }
+            openSpawnBlocksPerTickMenu();
+        }).catch(() => openSpawnAdvancedMenu());
+    }
+
     function getSpawnDifficultyLabel(value) {
         if (value === -1) return "Easy";
         if (value === 0) return "Normal";
@@ -3722,7 +4121,7 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled || res.selection === 4) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDeveloperTools();
+                return openSpawnControllerMenu();
             }
 
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -3737,9 +4136,9 @@ export function showCodexBook(player, context) {
                 case 3:
                     return promptCustomSpawnDifficulty(currentRaw);
                 default:
-                    return openDeveloperTools();
+                    return openSpawnControllerMenu();
             }
-        }).catch(() => openDeveloperTools());
+        }).catch(() => openSpawnControllerMenu());
     }
 
     function promptCustomSpawnDifficulty(currentValue = 0) {
@@ -3768,6 +4167,66 @@ export function showCodexBook(player, context) {
         }).catch(() => openSpawnDifficultyMenu());
     }
 
+    function openSpawnSpeedMenu() {
+        const current = getSpawnSpeedMultiplier();
+        const label = current === 1 ? "Normal" : current < 1 ? `${(current * 100).toFixed(0)}% speed` : `${(current * 100).toFixed(0)}% speed`;
+        const form = new ActionFormData()
+            .title("§cSpawn Speed")
+            .body(`§7How often the spawn controller runs.\n§8Throttle to reduce lag; increase for more frequent spawns.\n\n§7Current: §f${label}`);
+
+        form.button("§aVery Slow §7(0.25×)");
+        form.button("§2Slow §7(0.5×)");
+        form.button("§fNormal §7(1×)");
+        form.button("§6Fast §7(2×)");
+        form.button("§cVery Fast §7(3×)");
+        form.button("§eCustom §7(0.25–4)");
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 6) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openSpawnControllerMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            let mult;
+            if (res.selection === 5) {
+                return promptCustomSpawnSpeed(current);
+            }
+            switch (res.selection) {
+                case 0: mult = 0.25; break;
+                case 1: mult = 0.5; break;
+                case 2: mult = 1; break;
+                case 3: mult = 2; break;
+                case 4: mult = 3; break;
+                default: return openSpawnControllerMenu();
+            }
+            setWorldProperty(SPAWN_SPEED_PROPERTY, mult);
+            const msg = mult === 1 ? "Normal" : `${(mult * 100).toFixed(0)}%`;
+            player.sendMessage(CHAT_SUCCESS + "Spawn speed: " + msg + ".");
+            openSpawnSpeedMenu();
+        }).catch(() => openSpawnControllerMenu());
+    }
+
+    function promptCustomSpawnSpeed(currentValue = 1) {
+        const modal = new ModalFormData()
+            .title("§cCustom Spawn Speed")
+            .textField("Multiplier (0.25–4). 1=normal, 0.5=half, 2=double", String(currentValue));
+
+        modal.show(player).then((res) => {
+            if (!res || res.canceled) return openSpawnSpeedMenu();
+            const rawInput = res.formValues?.[0] ?? "";
+            const parsed = parseFloat(rawInput);
+            if (!Number.isFinite(parsed)) {
+                player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Invalid value.");
+                return openSpawnSpeedMenu();
+            }
+            const clamped = Math.max(0.25, Math.min(4, parsed));
+            setWorldProperty(SPAWN_SPEED_PROPERTY, clamped);
+            player.sendMessage(CHAT_SUCCESS + "Spawn speed: " + (clamped * 100).toFixed(0) + "%.");
+            openSpawnSpeedMenu();
+        }).catch(() => openSpawnSpeedMenu());
+    }
+
     function openSpawnTypeTogglesMenu() {
         const configs = getSpawnConfigsForDevTools();
         const disabled = getDisabledSpawnTypes();
@@ -3781,7 +4240,7 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDeveloperTools();
+                return openSpawnControllerMenu();
             }
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
@@ -3795,30 +4254,96 @@ export function showCodexBook(player, context) {
             setDisabledSpawnTypes(newDisabled);
             const count = newDisabled.size;
             player.sendMessage(CHAT_SUCCESS + (count === 0 ? "All bear types can spawn." : `Spawn disabled for ${count} type(s).`));
-            openDeveloperTools();
-        }).catch(() => openDeveloperTools());
+            openSpawnControllerMenu();
+        }).catch(() => openSpawnControllerMenu());
     }
 
     function openInfectionDevMenu(targetName) {
+        const target = targetName ? world.getAllPlayers().find(p => p.name === targetName) : player;
         const form = new ActionFormData()
-            .title("§cClear / Set Infection")
-            .body("§7Clear infection state or set minor/major infection for testing." + (targetName ? ` §8(Target: ${targetName})` : ""));
+            .title("§cInfection Dev Tools")
+            .body("§7View status, adjust timer/snow, or set infection type." + (targetName ? ` §8(Target: ${targetName})` : " §8(Target: you)"));
+        form.button("§bView Infection Status");
+        form.button("§eAdjust Infection Timer");
+        form.button("§dAdjust Snow Level");
         form.button("§cClear Infection");
         form.button("§eSet Minor Infection");
         form.button("§4Set Major Infection");
         form.button("§8Back");
         const infectArgs = (extra) => (targetName ? [...extra, targetName] : extra);
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 3) {
+            if (!res || res.canceled || res.selection === 6) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
                 return openDeveloperTools();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
-            if (res.selection === 0) triggerDebugCommand("clear_infection", infectArgs([]), () => openInfectionDevMenu(targetName));
-            else if (res.selection === 1) triggerDebugCommand("set_infection", infectArgs(["minor"]), () => openInfectionDevMenu(targetName));
-            else if (res.selection === 2) triggerDebugCommand("set_infection", infectArgs(["major"]), () => openInfectionDevMenu(targetName));
+            if (res.selection === 0) {
+                showInfectionStatus(target, () => openInfectionDevMenu(targetName));
+            } else if (res.selection === 1) {
+                promptAdjustInfectionTimer(targetName, () => openInfectionDevMenu(targetName));
+            } else if (res.selection === 2) {
+                promptAdjustSnowLevel(targetName, () => openInfectionDevMenu(targetName));
+            } else if (res.selection === 3) triggerDebugCommand("clear_infection", infectArgs([]), () => openInfectionDevMenu(targetName));
+            else if (res.selection === 4) triggerDebugCommand("set_infection", infectArgs(["minor"]), () => openInfectionDevMenu(targetName));
+            else if (res.selection === 5) triggerDebugCommand("set_infection", infectArgs(["major"]), () => openInfectionDevMenu(targetName));
             else openDeveloperTools();
         }).catch(() => openDeveloperTools());
+    }
+
+    function showInfectionStatus(target, onBack) {
+        const inf = playerInfection.get(target?.id);
+        const maxSnow = maxSnowLevels.get(target?.id) || { maxLevel: 0, achievedAt: 0 };
+        const display = target ? (
+            inf
+                ? `§f${target.name} §7infection status:\n§8• Type: §f${inf.infectionType || "?"}\n§8• Ticks left: §e${inf.ticksLeft ?? "?"}\n§8• Current snow (severity): §d${inf.snowCount ?? 0}\n§8• Max snow level achieved: §d${maxSnow.maxLevel ?? 0}`
+                : `§f${target.name} §7has §8no active infection.\n§8• Max snow level achieved: §d${maxSnow.maxLevel ?? 0}`
+        ) : "§8No target.";
+        const form = new ActionFormData().title("§bInfection Status").body(display).button("§8Back");
+        form.show(player).then((r) => {
+            if (r?.canceled !== true) player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+            onBack();
+        }).catch(() => onBack());
+    }
+
+    function promptAdjustInfectionTimer(targetName, onBack) {
+        const target = targetName ? world.getAllPlayers().find(p => p.name === targetName) : player;
+        const inf = target ? playerInfection.get(target.id) : null;
+        const currentTicks = inf?.ticksLeft ?? 0;
+        const modal = new ModalFormData()
+            .title("§eAdjust Infection Timer")
+            .textField("Ticks remaining (0 = nearly instant)", String(currentTicks));
+        modal.show(player).then((res) => {
+            if (!res || res.canceled) return onBack();
+            const raw = res.formValues?.[0] ?? "";
+            const ticks = parseInt(raw, 10);
+            if (Number.isNaN(ticks) || ticks < 0) {
+                player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Invalid ticks. Enter a number ≥ 0.");
+                return onBack();
+            }
+            const args = targetName ? [targetName, String(ticks)] : [String(ticks)]; // [target?, ticks] or [ticks] for self
+            triggerDebugCommand("set_infection_timer", args, onBack);
+        }).catch(() => onBack());
+    }
+
+    function promptAdjustSnowLevel(targetName, onBack) {
+        const target = targetName ? world.getAllPlayers().find(p => p.name === targetName) : player;
+        const inf = target ? playerInfection.get(target.id) : null;
+        const maxSnow = target ? (maxSnowLevels.get(target.id) || { maxLevel: 0 }) : { maxLevel: 0 };
+        const current = inf ? inf.snowCount : maxSnow.maxLevel;
+        const modal = new ModalFormData()
+            .title("§dAdjust Snow Level")
+            .textField("Snow level (current infection severity / max achieved). 0–500 typical.", String(current));
+        modal.show(player).then((res) => {
+            if (!res || res.canceled) return onBack();
+            const raw = res.formValues?.[0] ?? "";
+            const level = parseInt(raw, 10);
+            if (Number.isNaN(level) || level < 0) {
+                player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Invalid level. Enter a number ≥ 0.");
+                return onBack();
+            }
+            const args = targetName ? [targetName, String(level)] : [String(level)]; // [target?, level] or [level] for self
+            triggerDebugCommand("set_snow_level", args, onBack);
+        }).catch(() => onBack());
     }
 
     function openImmunityDevMenu(targetName) {
@@ -3876,13 +4401,13 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === FORCE_SPAWN_OPTIONS.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openDeveloperTools();
+                return openSpawnControllerMenu();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             const opt = FORCE_SPAWN_OPTIONS[res.selection];
             if (opt) openForceSpawnTargetMenu(opt);
-            else openDeveloperTools();
-        }).catch(() => openDeveloperTools());
+            else openSpawnControllerMenu();
+        }).catch(() => openSpawnControllerMenu());
     }
 
     const FORCE_SPAWN_DISTANCES = [
@@ -3963,7 +4488,7 @@ export function showCodexBook(player, context) {
                 const args = [opt.id];
                 if (targetName) args.push(targetName);
                 args.push(distanceValue, String(qOpt.value));
-                triggerDebugCommand("force_spawn", args, () => openForceSpawnMenu());
+                triggerDebugCommand("force_spawn", args, () => openSpawnControllerMenu());
             } else openForceSpawnMenu();
         }).catch(() => openForceSpawnMenu());
     }
@@ -4012,31 +4537,121 @@ export function showCodexBook(player, context) {
         }).catch(() => openDeveloperTools());
     }
 
-    function openSummonStormMenu() {
+    function openStormHubMenu() {
         const state = getStormState();
+        const ctrl = getStormControlParams();
+        const multiOn = isMultiStormEnabled();
+        const info = getStormDebugInfo();
+        const countStr = state.stormCount > 1 ? ` §8(${state.stormCount})` : "";
+        const body = `§6§lStorm §r§7— Snow storm controls
+
+§8=== Status ===
+§7Active: ${info.active}${countStr}
+§7Multi-storm: §f${multiOn ? "§aON" : "§cOFF"}
+§7Players in storm: §f${state.playersInStorm}
+
+§8=== Settings ===
+§7Intensity: §f${ctrl.intensity != null ? ctrl.intensity.toFixed(2) : "auto"} §7| Max storms: §f${ctrl.maxConcurrentStorms} §7| Secondary: §f${(ctrl.secondaryStormChance * 100).toFixed(0)}%`;
+
         const form = new ActionFormData()
-            .title("§cSummon Storm")
-            .body("§7Summon or end a snow storm for testing.");
-        form.button("§bMinor Storm");
-        form.button("§cMajor Storm");
-        form.button(state.active ? "§4End Storm" : "§8End Storm §7(no storm active)");
+            .title("§6Storm")
+            .body(body);
+        form.button(multiOn ? "§cMulti-storm OFF" : "§aMulti-storm ON");
+        form.button("§bSummon Minor Storm");
+        form.button("§cSummon Major Storm");
+        form.button(state.active ? "§4End All Storms" : "§8End All §7(none)");
+        form.button("§eStorm List §7(enable/disable, end)");
+        form.button("§eStorm Override §7(duration, cooldown)");
+        form.button("§eStorm Control Settings §7(intensity, multi-storm)");
+        form.button("§8Snow Storm Debug");
         form.button("§8Back");
+
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 3) {
+            if (!res || res.canceled || res.selection === 8) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
                 return openDeveloperTools();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
-            if (res.selection === 2) {
-                if (state.active) {
-                    endStorm(true);
-                    player.sendMessage(CHAT_INFO + "Storm ended.");
+            try {
+                switch (res.selection) {
+                    case 0:
+                        setMultiStormEnabled(!multiOn);
+                        player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Multi-storm: ${!multiOn ? "ON" : "OFF"}`);
+                        openStormHubMenu();
+                        break;
+                    case 1: openSummonStormTargetMenu("minor"); break;
+                    case 2: openSummonStormTargetMenu("major"); break;
+                    case 3:
+                        if (state.active) {
+                            endStorm(true);
+                            player.sendMessage(CHAT_INFO + "All storms ended.");
+                        }
+                        openStormHubMenu();
+                        break;
+                    case 4: openStormListMenu(); break;
+                    case 5: openStormOverrideMenu(); break;
+                    case 6: openStormControlSettingsMenu(); break;
+                    case 7: openSnowStormDebugMenu(getDebugSettings(player), true); break;
+                    default: openStormHubMenu();
                 }
-                return openSummonStormMenu();
+            } catch (err) {
+                console.warn("[CODEX] Storm menu error:", err);
+                openStormHubMenu();
             }
-            const type = res.selection === 0 ? "minor" : "major";
-            openSummonStormTargetMenu(type);
-        }).catch(() => openDeveloperTools());
+        }).catch(() => openStormHubMenu());
+    }
+
+    function openStormListMenu() {
+        const stormList = getStorms();
+        if (stormList.length === 0) {
+            player.sendMessage(CHAT_INFO + "No active storms.");
+            return openStormHubMenu();
+        }
+        const form = new ActionFormData()
+            .title("§eStorm List")
+            .body(`§7${stormList.length} storm(s). Toggle or end individually.\n§8Boost = intensity increase when storms overlap.`);
+        for (const s of stormList) {
+            const status = s.enabled ? "§a" : "§c";
+            const boostStr = s.intersectionBoost > 0.01 ? ` §8+${(s.intersectionBoost * 100).toFixed(0)}%` : "";
+            form.button(`${status}#${s.id} ${s.type} §7(${Math.floor(s.centerX)},${Math.floor(s.centerZ)}) §8${Math.floor(s.ticksLeft / 20)}s${boostStr}`);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === stormList.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openStormHubMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const s = stormList[res.selection];
+            openStormListItemMenu(s.id);
+        }).catch(() => openStormHubMenu());
+    }
+
+    function openStormListItemMenu(stormId) {
+        const stormList = getStorms();
+        const s = stormList.find(st => st.id === stormId);
+        if (!s) return openStormHubMenu();
+        const form = new ActionFormData()
+            .title(`§eStorm #${stormId}`)
+            .body(`§7Type: §f${s.type} §7| Center: §f(${Math.floor(s.centerX)}, ${Math.floor(s.centerZ)}) §7| Intensity: §f${s.intensity.toFixed(2)} §7| Ends in: §f${Math.floor(s.ticksLeft / 20)}s\n§7Enabled: §f${s.enabled ? "Yes" : "No"}`);
+        form.button(s.enabled ? "§cDisable Storm" : "§aEnable Storm");
+        form.button("§4End This Storm");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 2) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openStormListMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            if (res.selection === 0) {
+                setStormEnabled(stormId, !s.enabled);
+                player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Storm #${stormId} ${!s.enabled ? "enabled" : "disabled"}.`);
+            } else {
+                endStormById(stormId);
+                player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Storm #${stormId} ended.`);
+            }
+            openStormListMenu();
+        }).catch(() => openStormHubMenu());
     }
 
     function openSummonStormTargetMenu(type) {
@@ -4054,16 +4669,16 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === totalOptions) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openSummonStormMenu();
+                return openStormHubMenu();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             const targetName = res.selection === 0 ? undefined : (otherPlayers[res.selection - 1]?.name);
             if (res.selection === 0 || targetName) {
                 openSummonStormDistanceMenu(type, targetName);
             } else {
-                openSummonStormMenu();
+                openStormHubMenu();
             }
-        }).catch(() => openSummonStormMenu());
+        }).catch(() => openStormHubMenu());
     }
 
     const STORM_DISTANCES = [
@@ -4085,18 +4700,17 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === STORM_DISTANCES.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openSummonStormTargetMenu(type);
+                return openStormHubMenu();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             const distOpt = STORM_DISTANCES[res.selection];
             if (distOpt) {
-                // Always pass [type, targetName, distance] so distance is never mistaken for player name
                 const args = [type, targetName ?? "", String(distOpt.value)];
-                triggerDebugCommand("summon_storm", args, () => openSummonStormMenu());
+                triggerDebugCommand("summon_storm", args, () => openStormHubMenu());
             } else {
-                openSummonStormTargetMenu(type);
+                openStormHubMenu();
             }
-        }).catch(() => openSummonStormTargetMenu(type));
+        }).catch(() => openStormHubMenu());
     }
 
     function openStormStateMenu() {
@@ -4137,15 +4751,15 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 2) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openDeveloperTools();
+                return openStormHubMenu();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             if (res.selection === 0) {
-                triggerDebugCommand("storm_override", ["reset"], () => openDeveloperTools());
+                triggerDebugCommand("storm_override", ["reset"], () => openStormHubMenu());
             } else {
                 openStormOverrideSetMenu();
             }
-        }).catch(() => openDeveloperTools());
+        }).catch(() => openStormHubMenu());
     }
 
     function openStormOverrideSetMenu() {
@@ -4173,6 +4787,188 @@ export function showCodexBook(player, context) {
             }
             triggerDebugCommand("storm_override", args, () => openStormOverrideMenu());
         }).catch(() => openStormOverrideMenu());
+    }
+
+    function openStormControlSettingsMenu() {
+        const ctrl = getStormControlParams();
+        const intensityOpts = ["Auto (0.85–1.15)", "0.5", "0.75", "1.0", "1.25", "1.5", "2.0"];
+        let intensityIdx = 0;
+        if (ctrl.intensity != null) {
+            const v = ctrl.intensity;
+            if (v <= 0.6) intensityIdx = 1;
+            else if (v <= 0.87) intensityIdx = 2;
+            else if (v <= 1.12) intensityIdx = 3;
+            else if (v <= 1.37) intensityIdx = 4;
+            else if (v <= 1.75) intensityIdx = 5;
+            else intensityIdx = 6;
+        }
+        const maxStormsIdx = Math.min(2, Math.max(0, ctrl.maxConcurrentStorms - 1));
+        const secondaryVal = Math.min(50, Math.max(0, Math.round(ctrl.secondaryStormChance * 100)));
+        const modal = new ModalFormData()
+            .title("§6Storm Control Settings")
+            .dropdown("Intensity override", intensityOpts, { defaultValueIndex: intensityIdx })
+            .dropdown("Max concurrent storms", ["1", "2", "3"], { defaultValueIndex: maxStormsIdx })
+            .slider("Secondary storm chance when 1+ active (0–50%)", 0, 50, { valueStep: 5, defaultValue: secondaryVal });
+
+        modal.show(player).then((res) => {
+            if (!res || res.canceled) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openStormHubMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const values = res.formValues || [];
+            const intensitySel = Number(values[0]) || 0;
+            const intensity = intensitySel === 0 ? null : parseFloat(intensityOpts[intensitySel]);
+            const maxStorms = Number(values[1]) + 1 || 1;
+            const secondaryPct = Number(values[2]) / 100 || 0;
+            const settings = {};
+            if (intensity != null && intensity >= 0.5 && intensity <= 2) settings.intensity = intensity;
+            else if (intensitySel === 0) settings.intensity = null;
+            settings.maxConcurrentStorms = maxStorms;
+            settings.secondaryStormChance = secondaryPct;
+            setStormOverride(settings);
+            player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Storm control: intensity=${intensity != null ? intensity : "auto"}, maxStorms=${maxStorms}, secondaryChance=${(secondaryPct * 100).toFixed(0)}%`);
+            openStormHubMenu();
+        }).catch(() => openStormHubMenu());
+    }
+
+    const AI_THROTTLE_KEYS = {
+        dynamicInterval: "mb_ai_mining_dynamic_interval",
+        miningIntervalMin: "mb_ai_mining_interval_min",
+        miningIntervalOverride: "mb_ai_mining_interval_override"
+    };
+
+    function openAIThrottleMenu() {
+        const miningState = getMiningAIState();
+        const dynOverride = getWorldProperty(AI_THROTTLE_KEYS.dynamicInterval);
+        const minOverride = getWorldProperty(AI_THROTTLE_KEYS.miningIntervalMin);
+        const intervalOverride = getWorldProperty(AI_THROTTLE_KEYS.miningIntervalOverride);
+
+        let body = `§6§lMining AI §r§7(live)\n`;
+        body += `§7Bears: §f${miningState.bearCount} §7| Players: §f${miningState.playerCount} §7| Effective load: §f${miningState.effectiveLoad.toFixed(1)}\n`;
+        body += `§7Dynamic interval: §f${miningState.dynamicInterval} §8ticks (1=full, 2=half, 3=third)\n`;
+        body += `§7Mining interval Day15: §f${miningState.miningIntervalDay15} §7| Day20: §f${miningState.miningIntervalDay20} §8ticks between block breaks\n`;
+        if (dynOverride != null || minOverride != null || intervalOverride != null) {
+            body += `\n§eOverrides: §7`;
+            const parts = [];
+            if (dynOverride != null) parts.push(`dynamic=${dynOverride}`);
+            if (minOverride != null) parts.push(`min=${minOverride}`);
+            if (intervalOverride != null) parts.push(`override=${intervalOverride}`);
+            body += parts.join(", ") + "\n";
+        }
+        body += `\n§6§lOther AIs §r§8(ticks)\n`;
+        body += `§7Flying: §f2 §7| Torpedo: §f2 §7| Buff: §f2 §7| Infected: §f6\n`;
+
+        const form = new ActionFormData().title("§eAI Throttle & Speed").body(body);
+        form.button("§fMining: Dynamic Interval (1/2/3/Auto)");
+        form.button("§fMining: Min Interval (ticks)");
+        form.button("§fMining: Force Interval Override");
+        form.button("§cReset All Overrides");
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 4) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            switch (res.selection) {
+                case 0: return openAIDynamicIntervalMenu();
+                case 1: return openAIMiningIntervalMinMenu();
+                case 2: return openAIMiningIntervalOverrideMenu();
+                case 3:
+                    setWorldProperty(AI_THROTTLE_KEYS.dynamicInterval, undefined);
+                    setWorldProperty(AI_THROTTLE_KEYS.miningIntervalMin, undefined);
+                    setWorldProperty(AI_THROTTLE_KEYS.miningIntervalOverride, undefined);
+                    player.sendMessage(CHAT_SUCCESS + "AI throttle overrides reset.");
+                    console.warn(`[MBI] AI throttle overrides reset by ${player.name}`);
+                    return openAIThrottleMenu();
+                default: return openDeveloperTools();
+            }
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openAIDynamicIntervalMenu() {
+        const current = getWorldProperty(AI_THROTTLE_KEYS.dynamicInterval);
+        const form = new ActionFormData()
+            .title("§eMining Dynamic Interval")
+            .body(`§7How often Mining AI processes bears with targets.\n§81=tick §7(full) §82=every 2 §83=every 3 §8ticks.\n§7Current override: §f${current ?? "Auto"}`);
+
+        form.button("§a1 §8(full speed)");
+        form.button("§f2 §8(half)");
+        form.button("§e3 §8(third)");
+        form.button("§7Auto §8(remove override)");
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 4) return openAIThrottleMenu();
+            if (res.selection === 3) {
+                setWorldProperty(AI_THROTTLE_KEYS.dynamicInterval, undefined);
+                player.sendMessage(CHAT_SUCCESS + "Dynamic interval: Auto.");
+                console.warn(`[MBI] Mining dynamic interval set to Auto by ${player.name}`);
+            } else {
+                const val = res.selection + 1;
+                setWorldProperty(AI_THROTTLE_KEYS.dynamicInterval, val);
+                player.sendMessage(CHAT_SUCCESS + "Dynamic interval: " + val + " ticks.");
+                console.warn(`[MBI] Mining dynamic interval set to ${val} ticks by ${player.name}`);
+            }
+            openAIThrottleMenu();
+        }).catch((err) => {
+            console.warn("[MBI] Mining dynamic interval menu error:", err);
+            openAIThrottleMenu();
+        });
+    }
+
+    function openAIMiningIntervalMinMenu() {
+        const current = getWorldProperty(AI_THROTTLE_KEYS.miningIntervalMin) ?? "2";
+        const defaultVal = Math.min(20, Math.max(2, Number(current) || 2));
+        const modal = new ModalFormData()
+            .title("§eMining Min Interval")
+            .slider("Min ticks between block breaks (2–20)", 2, 20, { valueStep: 1, defaultValue: defaultVal });
+
+        modal.show(player).then((res) => {
+            if (!res || res.canceled) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openAIThrottleMenu();
+            }
+            const val = Math.min(20, Math.max(2, Number(res.formValues?.[0]) || 2));
+            setWorldProperty(AI_THROTTLE_KEYS.miningIntervalMin, val);
+            player.sendMessage(CHAT_SUCCESS + "Mining min interval set to " + val + " ticks.");
+            console.warn(`[MBI] Mining min interval set to ${val} ticks by ${player.name}`);
+            openAIThrottleMenu();
+        }).catch((err) => {
+            console.warn("[MBI] Mining min interval menu error:", err);
+            openAIThrottleMenu();
+        });
+    }
+
+    function openAIMiningIntervalOverrideMenu() {
+        const current = getWorldProperty(AI_THROTTLE_KEYS.miningIntervalOverride) ?? "0";
+        const modal = new ModalFormData()
+            .title("§eMining Interval Override")
+            .textField("Force mining interval (ticks). 0 = use computed (day-scaled). Overrides the normal formula so all bears break blocks every N ticks regardless of day.", String(current));
+
+        modal.show(player).then((res) => {
+            if (!res || res.canceled) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openAIThrottleMenu();
+            }
+            const raw = res.formValues?.[0] ?? "";
+            const val = parseInt(raw, 10);
+            if (Number.isNaN(val) || val < 1) {
+                setWorldProperty(AI_THROTTLE_KEYS.miningIntervalOverride, undefined);
+                player.sendMessage(CHAT_SUCCESS + "Override cleared. Mining interval uses day-scaled formula.");
+                console.warn(`[MBI] Mining interval override cleared by ${player.name}`);
+            } else {
+                setWorldProperty(AI_THROTTLE_KEYS.miningIntervalOverride, val);
+                player.sendMessage(CHAT_SUCCESS + "Mining interval override: " + val + " ticks.");
+                console.warn(`[MBI] Mining interval override set to ${val} ticks by ${player.name}`);
+            }
+            openAIThrottleMenu();
+        }).catch((err) => {
+            console.warn("[MBI] Mining interval override menu error:", err);
+            openAIThrottleMenu();
+        });
     }
 
     function triggerDebugCommand(subcommand, args = [], onComplete = () => openDeveloperTools()) {
@@ -4302,9 +5098,10 @@ export function showCodexBook(player, context) {
         }
     }
 
-    function openDebugMenu() {
+    function openDebugMenu(fromDevTools = false) {
         const settings = getDebugSettings(player);
-        
+        const onBack = () => fromDevTools ? openDeveloperTools() : openMain();
+
         const form = new ActionFormData().title("§bDebug Menu");
         form.body("§7Toggle debug logging for different AI systems:\n\n§8Select a category to configure:");
         
@@ -4326,36 +5123,36 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openMain();
+                return onBack();
             }
 
             if (res.selection === 12) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openMain();
+                return onBack();
             }
 
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
             switch (res.selection) {
-                case 0: return openMiningDebugMenu(settings);
-                case 1: return openInfectedDebugMenu(settings);
-                case 2: return openTorpedoDebugMenu(settings);
-                case 3: return openFlyingDebugMenu(settings);
-                case 4: return openBuffDebugMenu(settings);
-                case 5: return openSpawnDebugMenu(settings);
-                case 6: return openMainDebugMenu(settings);
-                case 7: return openBiomeAmbienceDebugMenu(settings);
-                case 8: return openDynamicPropertyDebugMenu(settings);
-                case 9: return openCodexDebugMenu(settings);
-                case 10: return openGroundInfectionDebugMenu(settings);
-                case 11: return openSnowStormDebugMenu(settings);
-                default: return openDebugMenu();
+                case 0: return openMiningDebugMenu(settings, fromDevTools);
+                case 1: return openInfectedDebugMenu(settings, fromDevTools);
+                case 2: return openTorpedoDebugMenu(settings, fromDevTools);
+                case 3: return openFlyingDebugMenu(settings, fromDevTools);
+                case 4: return openBuffDebugMenu(settings, fromDevTools);
+                case 5: return openSpawnDebugMenu(settings, fromDevTools);
+                case 6: return openMainDebugMenu(settings, fromDevTools);
+                case 7: return openBiomeAmbienceDebugMenu(settings, fromDevTools);
+                case 8: return openDynamicPropertyDebugMenu(settings, fromDevTools);
+                case 9: return openCodexDebugMenu(settings, fromDevTools);
+                case 10: return openGroundInfectionDebugMenu(settings, fromDevTools);
+                case 11: return openSnowStormDebugMenu(settings, false, fromDevTools);
+                default: return openDebugMenu(fromDevTools);
             }
-        }).catch(() => openMain());
+        }).catch(() => onBack());
     }
 
-    function openMiningDebugMenu(settings) {
+    function openMiningDebugMenu(settings, fromDevTools = false) {
         const mining = settings.mining || {};
         const form = new ActionFormData().title("§bMining AI Debug");
         form.body(`§7Toggle debug logging for Mining Bears:\n\n§8Current settings:\n§7• Pitfall: ${mining.pitfall ? "§aON" : "§cOFF"}\n§7• General: ${mining.general ? "§aON" : "§cOFF"}\n§7• Target: ${mining.target ? "§aON" : "§cOFF"}\n§7• Pathfinding: ${mining.pathfinding ? "§aON" : "§cOFF"}\n§7• Vertical: ${mining.vertical ? "§aON" : "§cOFF"}\n§7• Mining: ${mining.mining ? "§aON" : "§cOFF"}\n§7• Movement: ${mining.movement ? "§aON" : "§cOFF"}\n§7• Stair Creation: ${mining.stairCreation ? "§aON" : "§cOFF"}`);
@@ -4375,7 +5172,7 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled || res.selection === 9) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDebugMenu();
+                return openDebugMenu(fromDevTools);
             }
 
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4388,11 +5185,11 @@ export function showCodexBook(player, context) {
                 // Log to console for confirmation
                 console.warn(`[DEBUG MENU] Mining AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
             }
-                return openMiningDebugMenu(getDebugSettings(player));
-        }).catch(() => openDebugMenu());
+                return openMiningDebugMenu(getDebugSettings(player), fromDevTools);
+        }).catch(() => openDebugMenu(fromDevTools));
     }
 
-    function openInfectedDebugMenu(settings) {
+    function openInfectedDebugMenu(settings, fromDevTools = false) {
         const infected = settings.infected || {};
         const form = new ActionFormData().title("§bInfected AI Debug");
         form.body(`§7Toggle debug logging for Infected AI (bears/pig/cow):\n\n§8Current settings:\n§7• General: ${infected.general ? "§aON" : "§cOFF"}\n§7• Pathfinding: ${infected.pathfinding ? "§aON" : "§cOFF"}\n§7• Gap Jump: ${infected.gapJump ? "§aON" : "§cOFF"}`);
@@ -4407,7 +5204,7 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled || res.selection === 4) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDebugMenu();
+                return openDebugMenu(fromDevTools);
             }
 
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4420,11 +5217,11 @@ export function showCodexBook(player, context) {
                 console.warn(`[DEBUG MENU] Infected AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 invalidateDebugCache();
             }
-            return openInfectedDebugMenu(getDebugSettings(player));
-        }).catch(() => openDebugMenu());
+            return openInfectedDebugMenu(getDebugSettings(player), fromDevTools);
+        }).catch(() => openDebugMenu(fromDevTools));
     }
 
-    function openTorpedoDebugMenu(settings) {
+    function openTorpedoDebugMenu(settings, fromDevTools = false) {
         const torpedo = settings.torpedo || {};
         const form = new ActionFormData().title("§bTorpedo AI Debug");
         form.body(`§7Toggle debug logging for Torpedo Bears:\n\n§8Current settings:\n§7• General: ${torpedo.general ? "§aON" : "§cOFF"}\n§7• Targeting: ${torpedo.targeting ? "§aON" : "§cOFF"}\n§7• Diving: ${torpedo.diving ? "§aON" : "§cOFF"}\n§7• Block Breaking: ${torpedo.blockBreaking ? "§aON" : "§cOFF"}\n§7• Block Placement: ${torpedo.blockPlacement ? "§aON" : "§cOFF"}`);
@@ -4441,7 +5238,7 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled || res.selection === 6) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDebugMenu();
+                return openDebugMenu(fromDevTools);
             }
 
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4455,11 +5252,11 @@ export function showCodexBook(player, context) {
                 console.warn(`[DEBUG MENU] Torpedo AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 invalidateDebugCache();
             }
-                return openTorpedoDebugMenu(getDebugSettings(player));
-        }).catch(() => openDebugMenu());
+                return openTorpedoDebugMenu(getDebugSettings(player), fromDevTools);
+        }).catch(() => openDebugMenu(fromDevTools));
     }
 
-    function openFlyingDebugMenu(settings) {
+    function openFlyingDebugMenu(settings, fromDevTools = false) {
         const flying = settings.flying || {};
         const form = new ActionFormData().title("§bFlying AI Debug");
         form.body(`§7Toggle debug logging for Flying Bears:\n\n§8Current settings:\n§7• General: ${flying.general ? "§aON" : "§cOFF"}\n§7• Targeting: ${flying.targeting ? "§aON" : "§cOFF"}\n§7• Pathfinding: ${flying.pathfinding ? "§aON" : "§cOFF"}`);
@@ -4474,7 +5271,7 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled || res.selection === 4) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDebugMenu();
+                return openDebugMenu(fromDevTools);
             }
 
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4487,11 +5284,11 @@ export function showCodexBook(player, context) {
                 // Log to console for confirmation
                 console.warn(`[DEBUG MENU] Flying AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
             }
-                return openFlyingDebugMenu(getDebugSettings(player));
-        }).catch(() => openDebugMenu());
+                return openFlyingDebugMenu(getDebugSettings(player), fromDevTools);
+        }).catch(() => openDebugMenu(fromDevTools));
     }
 
-    function openBuffDebugMenu(settings) {
+    function openBuffDebugMenu(settings, fromDevTools = false) {
         const buff = settings.buff || {};
         
         // Get countdown info for nearby buff bears
@@ -4543,15 +5340,14 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled || res.selection === 4) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDebugMenu();
+                return openDebugMenu(fromDevTools);
             }
 
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
             
             if (res.selection === 3) {
-                // Show countdown button - just refresh the menu to update countdown
-                return openBuffDebugMenu(getDebugSettings(player));
+                return openBuffDebugMenu(getDebugSettings(player), fromDevTools);
             }
             
             const flags = ["general", "blockBreaking", "all"];
@@ -4559,17 +5355,16 @@ export function showCodexBook(player, context) {
                 const newState = toggleDebugFlag("buff", flags[res.selection]);
                 const stateText = newState ? "§aON" : "§cOFF";
                 player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Buff AI ${flags[res.selection]} debug: ${stateText}`);
-                // Log to console for confirmation
                 console.warn(`[DEBUG MENU] Buff AI ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 invalidateDebugCache();
-                return openBuffDebugMenu(getDebugSettings(player));
+                return openBuffDebugMenu(getDebugSettings(player), fromDevTools);
             }
             
-            return openBuffDebugMenu(getDebugSettings(player));
-        }).catch(() => openDebugMenu());
+            return openBuffDebugMenu(getDebugSettings(player), fromDevTools);
+        }).catch(() => openDebugMenu(fromDevTools));
     }
 
-    function openSpawnDebugMenu(settings) {
+    function openSpawnDebugMenu(settings, fromDevTools = false) {
         const spawn = settings.spawn || {};
         const form = new ActionFormData().title("§bSpawn Controller Debug");
         form.body(`§7Toggle debug logging for Spawn Controller:\n\n§8Current settings:\n§7• General: ${spawn.general ? "§aON" : "§cOFF"}\n§7• Discovery: ${spawn.discovery ? "§aON" : "§cOFF"}\n§7• Tile Scanning: ${spawn.tileScanning ? "§aON" : "§cOFF"}\n§7• Cache: ${spawn.cache ? "§aON" : "§cOFF"}\n§7• Validation: ${spawn.validation ? "§aON" : "§cOFF"}\n§7• Distance: ${spawn.distance ? "§aON" : "§cOFF"}\n§7• Spacing: ${spawn.spacing ? "§aON" : "§cOFF"}\n§7• Isolated: ${spawn.isolated ? "§aON" : "§cOFF"}`);
@@ -4589,7 +5384,7 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled || res.selection === 9) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDebugMenu();
+                return openDebugMenu(fromDevTools);
             }
 
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4600,16 +5395,14 @@ export function showCodexBook(player, context) {
                 const newState = toggleDebugFlag("spawn", flagName);
                 const stateText = newState ? "§aON" : "§cOFF";
                 player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Spawn Controller ${flagName} debug: ${stateText}`);
-                // Log to console for confirmation
                 console.warn(`[DEBUG MENU] Spawn Controller ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
-                // Invalidate cache to ensure changes take effect immediately
                 invalidateDebugCache();
             }
-                return openSpawnDebugMenu(getDebugSettings(player));
-        }).catch(() => openDebugMenu());
+                return openSpawnDebugMenu(getDebugSettings(player), fromDevTools);
+        }).catch(() => openDebugMenu(fromDevTools));
     }
 
-    function openMainDebugMenu(settings) {
+    function openMainDebugMenu(settings, fromDevTools = false) {
         const main = settings.main || {};
         const form = new ActionFormData().title("§bMain Script Debug");
         form.body(`§7Toggle debug logging for Main Script:\n\n§8Current settings:\n§7• Death Events: ${main.death ? "§aON" : "§cOFF"}\n§7• Snow Placement: ${main.snow_placement ? "§aON" : "§cOFF"}\n§7• Mob Conversion: ${main.conversion ? "§aON" : "§cOFF"}\n§7• Infection: ${main.infection ? "§aON" : "§cOFF"}\n§7• Minor Infection: ${main.minorInfection ? "§aON" : "§cOFF"}`);
@@ -4626,7 +5419,7 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled || res.selection === 6) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDebugMenu();
+                return openDebugMenu(fromDevTools);
             }
 
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4636,15 +5429,14 @@ export function showCodexBook(player, context) {
                 const newState = toggleDebugFlag("main", flags[res.selection]);
                 const stateText = newState ? "§aON" : "§cOFF";
                 player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Main Script ${flags[res.selection]} debug: ${stateText}`);
-                // Log to console for confirmation
                 console.warn(`[DEBUG MENU] Main Script ${flags[res.selection]} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 invalidateDebugCache();
             }
-                return openMainDebugMenu(getDebugSettings(player));
-        }).catch(() => openDebugMenu());
+                return openMainDebugMenu(getDebugSettings(player), fromDevTools);
+        }).catch(() => openDebugMenu(fromDevTools));
     }
 
-    function openBiomeAmbienceDebugMenu(settings) {
+    function openBiomeAmbienceDebugMenu(settings, fromDevTools = false) {
         const biome = settings.biome_ambience || {};
         const form = new ActionFormData().title("§bBiome Ambience Debug");
         form.body(`§7Toggle debug logging for Biome Ambience:\n\n§8Current settings:\n§7• Biome Check: ${biome.biome_check ? "§aON" : "§cOFF"}\n§7• Player Check: ${biome.player_check ? "§aON" : "§cOFF"}\n§7• Sound Playback: ${biome.sound_playback ? "§aON" : "§cOFF"}\n§7• Loop Status: ${biome.loop_status ? "§aON" : "§cOFF"}\n§7• Initialization: ${biome.initialization ? "§aON" : "§cOFF"}\n§7• Cleanup: ${biome.cleanup ? "§aON" : "§cOFF"}\n§7• Errors: ${biome.errors ? "§aON" : "§cOFF"}`);
@@ -4663,7 +5455,7 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled || res.selection === 8) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDebugMenu();
+                return openDebugMenu(fromDevTools);
             }
 
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4674,16 +5466,14 @@ export function showCodexBook(player, context) {
                 const newState = toggleDebugFlag("biome_ambience", flagName);
                 const stateText = newState ? "§aON" : "§cOFF";
                 player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Biome Ambience ${flagName} debug: ${stateText}`);
-                // Log to console for confirmation
                 console.warn(`[DEBUG MENU] Biome Ambience ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
-                // Invalidate cache to ensure changes take effect immediately
                 invalidateDebugCache();
             }
-                return openBiomeAmbienceDebugMenu(getDebugSettings(player));
-        }).catch(() => openDebugMenu());
+                return openBiomeAmbienceDebugMenu(getDebugSettings(player), fromDevTools);
+        }).catch(() => openDebugMenu(fromDevTools));
     }
 
-    function openDynamicPropertyDebugMenu(settings) {
+    function openDynamicPropertyDebugMenu(settings, fromDevTools = false) {
         const dp = settings.dynamic_properties || {};
         const form = new ActionFormData().title("§bDynamic Properties Debug");
         form.body(`§7Toggle debug logging for Dynamic Property Handler:\n\n§8Current settings:\n§7• Chunking: ${dp.chunking ? "§aON" : "§cOFF"}\n§7• Caching: ${dp.caching ? "§aON" : "§cOFF"}\n§7• Reads: ${dp.reads ? "§aON" : "§cOFF"}\n§7• Writes: ${dp.writes ? "§aON" : "§cOFF"}\n§7• Errors: ${dp.errors ? "§aON" : "§cOFF"}`);
@@ -4700,14 +5490,13 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDebugMenu();
+                return openDebugMenu(fromDevTools);
             }
 
-            // Back button is at index 6 (after 5 flag buttons + 1 Toggle All button)
             if (res.selection === 6) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDebugMenu();
+                return openDebugMenu(fromDevTools);
             }
 
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4721,11 +5510,11 @@ export function showCodexBook(player, context) {
                 console.warn(`[DEBUG MENU] Dynamic Properties ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 invalidateDebugCache();
             }
-            return openDynamicPropertyDebugMenu(getDebugSettings(player));
-        }).catch(() => openDebugMenu());
+            return openDynamicPropertyDebugMenu(getDebugSettings(player), fromDevTools);
+        }).catch(() => openDebugMenu(fromDevTools));
     }
 
-    function openCodexDebugMenu(settings) {
+    function openCodexDebugMenu(settings, fromDevTools = false) {
         const codex = settings.codex || {};
         const form = new ActionFormData().title("§bCodex/Knowledge Debug");
         form.body(`§7Toggle debug logging for Codex/Knowledge System:\n\n§8Current settings:\n§7• Progressive: ${codex.progressive ? "§aON" : "§cOFF"}\n§7• Experience: ${codex.experience ? "§aON" : "§cOFF"}\n§7• Flags: ${codex.flags ? "§aON" : "§cOFF"}\n§7• Chunking: ${codex.chunking ? "§aON" : "§cOFF"}\n§7• Saving: ${codex.saving ? "§aON" : "§cOFF"}`);
@@ -4742,14 +5531,13 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDebugMenu();
+                return openDebugMenu(fromDevTools);
             }
 
-            // Back button is at index 6 (after 5 flag buttons + 1 Toggle All button)
             if (res.selection === 6) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDebugMenu();
+                return openDebugMenu(fromDevTools);
             }
 
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4763,11 +5551,11 @@ export function showCodexBook(player, context) {
                 console.warn(`[DEBUG MENU] Codex/Knowledge ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 invalidateDebugCache();
             }
-            return openCodexDebugMenu(getDebugSettings(player));
-        }).catch(() => openDebugMenu());
+            return openCodexDebugMenu(getDebugSettings(player), fromDevTools);
+        }).catch(() => openDebugMenu(fromDevTools));
     }
 
-    function openGroundInfectionDebugMenu(settings) {
+    function openGroundInfectionDebugMenu(settings, fromDevTools = false) {
         const ground = settings.ground_infection || {};
         const form = new ActionFormData().title("§bGround Infection Timer Debug");
         form.body(`§7Toggle debug logging for Ground Infection Timer:\n\n§8Current settings:\n§7• Timer: ${ground.timer ? "§aON" : "§cOFF"}\n§7• Ground Check: ${ground.groundCheck ? "§aON" : "§cOFF"}\n§7• Ambient Pressure: ${ground.ambient ? "§aON" : "§cOFF"}\n§7• Biome Pressure: ${ground.biome ? "§aON" : "§cOFF"}\n§7• Decay: ${ground.decay ? "§aON" : "§cOFF"}\n§7• Warnings: ${ground.warnings ? "§aON" : "§cOFF"}`);
@@ -4785,14 +5573,13 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDebugMenu();
+                return openDebugMenu(fromDevTools);
             }
 
-            // Back button is at index 7 (after 6 flag buttons + 1 Toggle All button)
             if (res.selection === 7) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openDebugMenu();
+                return openDebugMenu(fromDevTools);
             }
 
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4806,11 +5593,12 @@ export function showCodexBook(player, context) {
                 console.warn(`[DEBUG MENU] Ground Infection Timer ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                 invalidateDebugCache();
             }
-            return openGroundInfectionDebugMenu(getDebugSettings(player));
-        }).catch(() => openDebugMenu());
+            return openGroundInfectionDebugMenu(getDebugSettings(player), fromDevTools);
+        }).catch(() => openDebugMenu(fromDevTools));
     }
 
-    function openSnowStormDebugMenu(settings) {
+    function openSnowStormDebugMenu(settings, fromStormHub = false, fromDevTools = false) {
+        const onBack = () => fromStormHub ? openStormHubMenu() : openDebugMenu(fromDevTools);
         try {
             const stormSettings = settings.snow_storm || {};
             const info = getStormDebugInfo();
@@ -4860,7 +5648,7 @@ export function showCodexBook(player, context) {
                 if (!res || res.canceled || res.selection === 6) {
                     const volumeMultiplier = getPlayerSoundVolume(player);
                     player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                    return openDebugMenu();
+                    return onBack();
                 }
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
@@ -4873,12 +5661,12 @@ export function showCodexBook(player, context) {
                     console.warn(`[DEBUG MENU] Snow Storm ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
                     invalidateDebugCache();
                 }
-                return openSnowStormDebugMenu(getDebugSettings(player));
-            }).catch(() => openDebugMenu());
+                return openSnowStormDebugMenu(getDebugSettings(player), fromStormHub, fromDevTools);
+            }).catch(() => onBack());
         } catch (err) {
             console.warn("[CODEX] Error in Snow Storm debug:", err);
             player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Error: " + (err?.message || err));
-            openDebugMenu();
+            onBack();
         }
     }
 

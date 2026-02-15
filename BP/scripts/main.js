@@ -7862,6 +7862,46 @@ function executeMbCommand(sender, subcommand, args = []) {
             sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Set ${target.name} to ${type} infection.`);
             return;
         }
+        case "set_infection_timer": {
+            const target = (args.length >= 2 && args[0]) ? world.getAllPlayers().find(p => p.name === args[0]) : sender;
+            const ticksRaw = (args.length >= 2 ? args[1] : args[0]) ?? "";
+            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[0]} found.`); return; }
+            const ticks = parseInt(ticksRaw, 10);
+            if (Number.isNaN(ticks) || ticks < 0) {
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: set_infection_timer <targetName?> <ticks>");
+                return;
+            }
+            const state = playerInfection.get(target.id);
+            if (!state) {
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `${target.name} has no active infection. Set one first.`);
+                return;
+            }
+            state.ticksLeft = ticks;
+            saveInfectionData(target);
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Set ${target.name} infection timer to ${CHAT_HIGHLIGHT}${ticks}${CHAT_INFO} ticks.`);
+            console.warn(`[MBI] Infection timer for ${target.name} set to ${ticks} ticks by ${sender.name}`);
+            return;
+        }
+        case "set_snow_level": {
+            const target = (args.length >= 2 && args[0]) ? world.getAllPlayers().find(p => p.name === args[0]) : sender;
+            const levelRaw = (args.length >= 2 ? args[1] : args[0]) ?? "";
+            if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[0]} found.`); return; }
+            const level = parseInt(levelRaw, 10);
+            if (Number.isNaN(level) || level < 0) {
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: set_snow_level <targetName?> <0–n>");
+                return;
+            }
+            const state = playerInfection.get(target.id);
+            if (state) {
+                state.snowCount = Math.max(0, level);
+            }
+            const maxSnow = maxSnowLevels.get(target.id) || { maxLevel: 0, achievedAt: 0 };
+            maxSnowLevels.set(target.id, { maxLevel: Math.max(maxSnow.maxLevel, level), achievedAt: Date.now() });
+            setPlayerProperty(target, "mb_max_snow_level", JSON.stringify({ maxLevel: Math.max(maxSnow.maxLevel || 0, level), achievedAt: Date.now() }));
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Set ${target.name} snow level to ${CHAT_HIGHLIGHT}${level}${CHAT_INFO}.`);
+            console.warn(`[MBI] Snow level for ${target.name} set to ${level} by ${sender.name}`);
+            return;
+        }
         case "grant_immunity": {
             const mode = (args[0] || "permanent").toLowerCase();
             const target = args[1] ? world.getAllPlayers().find(p => p.name === args[1]) : sender;
@@ -7978,7 +8018,17 @@ function executeMbCommand(sender, subcommand, args = []) {
                 const day = getCurrentDay();
                 const newDay = day + 1;
                 setCurrentDay(newDay);
-                if (typeof isMilestoneDay === "function" && isMilestoneDay(newDay) && typeof mbiHandleMilestoneDay === "function") {
+                const isMilestone = typeof isMilestoneDay === "function" && isMilestoneDay(newDay);
+                if (isMilestone) {
+                    const displayInfo = getDayDisplayInfo(newDay);
+                    if (newDay > 25) {
+                        const daysPastVictory = newDay - 25;
+                        world.sendMessage(`${displayInfo.color}${displayInfo.symbols} Day ${newDay} ${CHAT_INFO}(+${daysPastVictory} past victory) - The infection intensifies...`);
+                    } else {
+                        world.sendMessage(`${displayInfo.color}${displayInfo.symbols} A new day begins... Day ${newDay}`);
+                    }
+                }
+                if (isMilestone && typeof mbiHandleMilestoneDay === "function") {
                     mbiHandleMilestoneDay(newDay);
                 }
                 sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Day advanced to ${CHAT_HIGHLIGHT}${newDay}${CHAT_INFO}.`);
@@ -8003,6 +8053,93 @@ function executeMbCommand(sender, subcommand, args = []) {
                     }
                 }
                 sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Cleared ${CHAT_HIGHLIGHT}${killed}${CHAT_INFO} bears within ${radius} blocks.`);
+            } catch (err) {
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Error: " + (err?.message || err));
+            }
+            return;
+        }
+        case "kill_bears_pct": {
+            const radius = Math.min(256, Math.max(32, parseInt(args[0], 10) || 64));
+            const scope = (args[1] || "all").toLowerCase();
+            const filter = args[2] || "";
+            const pctRaw = parseFloat(args[3]);
+            const pct = Number.isNaN(pctRaw) ? 50 : Math.min(100, Math.max(0, pctRaw)) / 100;
+            const centerMode = (args[4] || "me").toLowerCase();
+            const targetPlayerName = args[5] || "";
+            const dim = sender.dimension;
+            const bearPrefixes = ["mb:mb_", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+            const isBear = (id) => bearPrefixes.some(p => id.startsWith(p)) || id === "mb:infected_pig" || id === "mb:infected_cow";
+            const matchFilter = (id) => {
+                if (scope === "all") return true;
+                if (scope === "variant") return id === filter;
+                if (scope === "type") {
+                    if (filter === "tiny") return id.startsWith("mb:mb_");
+                    if (filter === "infected") return id.startsWith("mb:infected") && id !== "mb:infected_pig" && id !== "mb:infected_cow";
+                    if (filter === "buff") return id.startsWith("mb:buff_mb");
+                    if (filter === "flying") return id.startsWith("mb:flying_mb");
+                    if (filter === "mining") return id.startsWith("mb:mining_mb");
+                    if (filter === "torpedo") return id.startsWith("mb:torpedo_mb");
+                    if (filter === "infected_pig") return id === "mb:infected_pig";
+                    if (filter === "infected_cow") return id === "mb:infected_cow";
+                    return false;
+                }
+                return false;
+            };
+            const runKillAt = (loc) => {
+                const entities = dim.getEntities({ location: loc, maxDistance: radius });
+                const candidates = [];
+                for (const e of entities) {
+                    const id = e.typeId || "";
+                    if (isBear(id) && matchFilter(id)) candidates.push(e);
+                }
+                const toKill = Math.floor(candidates.length * pct);
+                for (let i = 0; i < toKill && i < candidates.length; i++) {
+                    const j = i + Math.floor(Math.random() * (candidates.length - i));
+                    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+                }
+                let killed = 0;
+                for (let i = 0; i < toKill; i++) {
+                    try {
+                        if (candidates[i] && candidates[i].isValid !== false) {
+                            candidates[i].kill();
+                            killed++;
+                        }
+                    } catch { }
+                }
+                return { killed, total: candidates.length };
+            };
+            try {
+                const desc = scope === "all" ? "all bears" : scope === "type" ? `${filter} bears` : filter;
+                if (centerMode === "per_player") {
+                    const players = world.getAllPlayers().filter(p => p && p.dimension && p.dimension.id === dim?.id);
+                    let totalKilled = 0;
+                    let totalBears = 0;
+                    const parts = [];
+                    for (const p of players) {
+                        if (!p || !p.isValid) continue;
+                        try {
+                            const loc = p.location;
+                            const { killed, total } = runKillAt(loc);
+                            totalKilled += killed;
+                            totalBears += total;
+                            if (total > 0) parts.push(`${p.name}: ${killed}/${total}`);
+                        } catch { }
+                    }
+                    const summary = parts.length ? parts.join("; ") : "no players";
+                    sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Per-player: killed ${CHAT_HIGHLIGHT}${totalKilled}${CHAT_INFO} of ${totalBears} ${desc} (${(pct * 100).toFixed(0)}%). §8(${summary})`);
+                } else if (centerMode === "player" && targetPlayerName) {
+                    const target = world.getAllPlayers().find(p => p && p.name === targetPlayerName);
+                    if (!target || !target.dimension || target.dimension.id !== dim?.id) {
+                        sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Player ${targetPlayerName} not found or in different dimension.`);
+                        return;
+                    }
+                    const { killed, total } = runKillAt(target.location);
+                    sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Killed ${CHAT_HIGHLIGHT}${killed}${CHAT_INFO} of ${total} ${desc} near ${CHAT_HIGHLIGHT}${targetPlayerName}${CHAT_INFO} (${(pct * 100).toFixed(0)}%) within ${radius} blocks.`);
+                } else {
+                    const loc = sender.location;
+                    const { killed, total } = runKillAt(loc);
+                    sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Killed ${CHAT_HIGHLIGHT}${killed}${CHAT_INFO} of ${total} ${desc} (${(pct * 100).toFixed(0)}%) within ${radius} blocks.`);
+                }
             } catch (err) {
                 sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Error: " + (err?.message || err));
             }
@@ -8185,7 +8322,7 @@ function executeMbCommand(sender, subcommand, args = []) {
             }
             if (action === "set") {
                 const settings = {};
-                if (args[1]) settings.minorDurationMin = parseInt(args[1], 10) * 20; // Convert seconds to ticks
+                if (args[1]) settings.minorDurationMin = parseInt(args[1], 10) * 20;
                 if (args[2]) settings.minorDurationMax = parseInt(args[2], 10) * 20;
                 if (args[3]) settings.majorDurationMin = parseInt(args[3], 10) * 20;
                 if (args[4]) settings.majorDurationMax = parseInt(args[4], 10) * 20;
@@ -8193,11 +8330,49 @@ function executeMbCommand(sender, subcommand, args = []) {
                 if (args[6]) settings.cooldownMax = parseInt(args[6], 10) * 20;
                 if (args[7]) settings.startChance = parseFloat(args[7]);
                 if (args[8]) settings.majorChance = parseFloat(args[8]);
+                if (args[9] !== undefined && args[9] !== "") settings.intensity = parseFloat(args[9]);
+                if (args[10] !== undefined && args[10] !== "") settings.maxConcurrentStorms = parseInt(args[10], 10);
+                if (args[11] !== undefined && args[11] !== "") settings.secondaryStormChance = parseFloat(args[11]);
                 setStormOverride(settings);
                 sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Storm override settings updated.");
                 return;
             }
-            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: storm_override <reset|set> [minorMin] [minorMax] [majorMin] [majorMax] [cooldownMin] [cooldownMax] [startChance] [majorChance]");
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: storm_override <reset|set> [minorMin] [minorMax] [majorMin] [majorMax] [cooldownMin] [cooldownMax] [startChance] [majorChance] [intensity] [maxStorms] [secondaryChance]");
+            return;
+        }
+        case "storm_control": {
+            const sub = (args[0] || "").toLowerCase();
+            if (sub === "intensity") {
+                const v = parseFloat(args[1]);
+                if (isNaN(v) || v < 0.5 || v > 2) {
+                    sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: storm_control intensity <0.5-2.0>");
+                    return;
+                }
+                setStormOverride({ intensity: v });
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Storm intensity override: ${v}`);
+                return;
+            }
+            if (sub === "maxstorms") {
+                const v = parseInt(args[1], 10);
+                if (isNaN(v) || v < 1 || v > 3) {
+                    sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: storm_control maxstorms <1-3>");
+                    return;
+                }
+                setStormOverride({ maxConcurrentStorms: v });
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Max concurrent storms: ${v}`);
+                return;
+            }
+            if (sub === "secondarychance") {
+                const v = parseFloat(args[1]);
+                if (isNaN(v) || v < 0 || v > 0.5) {
+                    sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: storm_control secondarychance <0-0.5>");
+                    return;
+                }
+                setStormOverride({ secondaryStormChance: v });
+                sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Secondary storm chance: ${v}`);
+                return;
+            }
+            sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Usage: storm_control <intensity|maxstorms|secondarychance> <value>");
             return;
         }
         default:

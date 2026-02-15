@@ -140,8 +140,96 @@ const MINING_BEAR_DAY20_ID = "mb:mining_mb_day20";
 const TORPEDO_BEAR_ID = "mb:torpedo_mb";
 const TORPEDO_BEAR_DAY20_ID = "mb:torpedo_mb_day20";
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
+/** World property: spawn speed multiplier (0.25-4). 1=normal, <1=slower, >1=faster. Dev tools override. */
+export const SPAWN_SPEED_PROPERTY = "mb_spawn_speed_multiplier";
 /** World property: JSON array of entity IDs that are disabled from natural spawning (dev tools) */
 export const SPAWN_DISABLED_TYPES_PROPERTY = "mb_spawn_disabled_types";
+/** Dev tools spawn override property keys (for codex UI) */
+export const SPAWN_OVERRIDE_PROPERTIES = {
+    blockQueryMult: "mb_spawn_block_query_mult",
+    maxGlobal: "mb_spawn_max_global",
+    range: "mb_spawn_range",
+    tileIntensity: "mb_spawn_tile_intensity",
+    blocksPerTickMult: "mb_spawn_blocks_per_tick_mult"
+};
+
+/** Get spawn speed multiplier from dev tools override. 1 = normal, 0.5 = half speed, 2 = double speed. */
+export function getSpawnSpeedMultiplier() {
+    const raw = getWorldProperty(SPAWN_SPEED_PROPERTY);
+    if (raw === undefined || raw === null || raw === "") return 1;
+    const num = Number(raw);
+    if (!Number.isFinite(num) || num <= 0) return 1;
+    return Math.max(0.25, Math.min(4, num)); // Clamp 0.25-4
+}
+
+// Dev tools overrides for spawn tuning
+const SPAWN_BLOCK_QUERY_MULT_PROPERTY = "mb_spawn_block_query_mult";
+const SPAWN_MAX_GLOBAL_PROPERTY = "mb_spawn_max_global";
+const SPAWN_RANGE_PROPERTY = "mb_spawn_range";
+const SPAWN_TILE_INTENSITY_PROPERTY = "mb_spawn_tile_intensity";
+const SPAWN_BLOCKS_PER_TICK_MULT_PROPERTY = "mb_spawn_blocks_per_tick_mult";
+
+/** Block query limit multiplier. <1 = fewer block scans (less lag). */
+export function getBlockQueryMultiplier() {
+    const raw = getWorldProperty(SPAWN_BLOCK_QUERY_MULT_PROPERTY);
+    if (raw === undefined || raw === null || raw === "") return 1;
+    const num = Number(raw);
+    if (!Number.isFinite(num) || num <= 0) return 1;
+    return Math.max(0.25, Math.min(2, num));
+}
+
+/** Max global spawns per tick override. Default 24. */
+export function getMaxGlobalSpawnsPerTick() {
+    const raw = getWorldProperty(SPAWN_MAX_GLOBAL_PROPERTY);
+    if (raw === undefined || raw === null || raw === "") return 24;
+    const num = parseInt(raw, 10);
+    if (!Number.isFinite(num) || num < 1) return 24;
+    return Math.max(6, Math.min(60, num));
+}
+
+/** Spawn distance range: "close" (20-35), "normal" (15-45), "far" (10-55). */
+export function getSpawnDistanceRange() {
+    const raw = getWorldProperty(SPAWN_RANGE_PROPERTY);
+    if (raw === "close") return { min: 20, max: 35 };
+    if (raw === "far") return { min: 10, max: 55 };
+    return { min: 15, max: 45 }; // normal default
+}
+
+/** Effective min spawn distance (from override or default). */
+function getMinSpawnDistance() {
+    return getSpawnDistanceRange().min;
+}
+/** Effective max spawn distance (from override or default). */
+function getMaxSpawnDistance() {
+    return getSpawnDistanceRange().max;
+}
+
+/** Effective max candidates per scan (with tile intensity override). */
+function getEffectiveMaxCandidates() {
+    return Math.floor(MAX_CANDIDATES_PER_SCAN * getTileIntensityMultiplier());
+}
+/** Effective max spaced tiles (with tile intensity override). */
+function getEffectiveMaxSpacedTiles() {
+    return Math.floor(MAX_SPACED_TILES * getTileIntensityMultiplier());
+}
+
+/** Tile scan intensity: multiplies candidates and spaced tiles. <1 = less scanning. */
+export function getTileIntensityMultiplier() {
+    const raw = getWorldProperty(SPAWN_TILE_INTENSITY_PROPERTY);
+    if (raw === undefined || raw === null || raw === "") return 1;
+    const num = Number(raw);
+    if (!Number.isFinite(num) || num <= 0) return 1;
+    return Math.max(0.4, Math.min(1.5, num));
+}
+
+/** Blocks-per-tick budget multiplier for progressive scanning. <1 = spread load more. */
+export function getBlocksPerTickMultiplier() {
+    const raw = getWorldProperty(SPAWN_BLOCKS_PER_TICK_MULT_PROPERTY);
+    if (raw === undefined || raw === null || raw === "") return 1;
+    const num = Number(raw);
+    if (!Number.isFinite(num) || num <= 0) return 1;
+    return Math.max(0.4, Math.min(2, num));
+}
 
 // ============================================================================
 // SECTION 2.1: ENTITY TYPE CONSTANTS AND CAPS
@@ -155,10 +243,11 @@ const FLYING_TYPE = "flying";
 const TORPEDO_TYPE = "torpedo";
 
 // Spawn caps for each type (all variants count toward the same cap)
+// Mining capped at 3 to reduce lag (mining AI is CPU-heavy when multiple active)
 const ENTITY_TYPE_CAPS = {
     [TINY_TYPE]: 50,
     [INFECTED_TYPE]: 35,
-    [MINING_TYPE]: 20,
+    [MINING_TYPE]: 3,
     [FLYING_TYPE]: 30,
     [TORPEDO_TYPE]: 10
 };
@@ -546,7 +635,8 @@ function generateAirSpawnTiles(dimension, playerPos, minAbsoluteY, maxAbsoluteY,
     for (let i = 0; i < count && airTiles.length < count; i++) {
         // Random position around player within spawn distance
         const angle = Math.random() * Math.PI * 2;
-        const distance = MIN_SPAWN_DISTANCE + Math.random() * (MAX_SPAWN_DISTANCE - MIN_SPAWN_DISTANCE);
+        const minD = getMinSpawnDistance(), maxD = getMaxSpawnDistance();
+        const distance = minD + Math.random() * (maxD - minD);
         const x = Math.floor(playerX + Math.cos(angle) * distance);
         const z = Math.floor(playerZ + Math.sin(angle) * distance);
         const y = yLevels[Math.floor(Math.random() * yLevels.length)];
@@ -817,14 +907,14 @@ function getBlockQueryLimit(isSinglePlayer, totalPlayerCount) {
     let baseLimit = isSinglePlayer ? MAX_BLOCK_QUERIES_SINGLE_PLAYER : MAX_BLOCK_QUERIES_PER_SCAN;
     
     // Scale down block queries when multiple players are present
-    // This prevents total block query explosion (4 players × 6000 = 24,000 queries per tick!)
     if (totalPlayerCount > 1) {
-        // More aggressive scaling to reduce lag: 2 players: 0.5x, 3 players: 0.35x, 4+ players: 0.2x
         const multiplier = totalPlayerCount === 2 ? 0.5 : totalPlayerCount === 3 ? 0.35 : 0.2;
         baseLimit = Math.floor(baseLimit * multiplier);
     }
     
-    return baseLimit;
+    // Dev tools override: block query budget multiplier
+    const overrideMult = getBlockQueryMultiplier();
+    return Math.max(500, Math.floor(baseLimit * overrideMult));
 }
 
 const SUNRISE_BOOST_DURATION = 200; // ticks
@@ -1011,7 +1101,7 @@ const SPAWN_CONFIGS = [
         baseMaxCount: 2,
         maxCountStep: 1,
         maxCountStepDays: 3,
-        maxCountCap: 4,
+        maxCountCap: 3, // Cap at 3 to reduce mining AI lag
         delayTicks: 420,
         spreadRadius: 26
     },
@@ -1135,7 +1225,7 @@ const SPAWN_CONFIGS = [
         baseMaxCount: 3,
         maxCountStep: 1,
         maxCountStepDays: 4,
-        maxCountCap: 6,
+        maxCountCap: 3, // Cap at 3 to reduce mining AI lag (matches ENTITY_TYPE_CAPS)
         delayTicks: 420,
         spreadRadius: 28,
         lateRamp: {
@@ -1246,6 +1336,8 @@ export function getSpawnConfigsForDevTools() {
 const lastSpawnTickByType = new Map();
 let lastProcessedDay = 0;
 let sunriseBoostTicks = 0;
+/** Last tick the main spawn loop ran (for spawn speed override). -1 = not yet run. */
+let lastSpawnControllerRunTick = -1;
 const playerTileCache = new Map();
 const entityCountCache = new Map(); // Cache entity counts per player
 // Dynamic entity count cache TTL based on player count (longer for multiplayer to reduce queries)
@@ -1557,8 +1649,13 @@ function setupWeatherEventSubscription() {
 }
 
 // Player grouping system for overlapping spawn rectangles
-const PLAYER_GROUP_OVERLAP_DISTANCE = MAX_SPAWN_DISTANCE * 2; // Players within this distance have overlapping rectangles (96 blocks)
-const PLAYER_GROUP_OVERLAP_DISTANCE_SQ = PLAYER_GROUP_OVERLAP_DISTANCE * PLAYER_GROUP_OVERLAP_DISTANCE;
+function getPlayerGroupOverlapDistance() {
+    return getMaxSpawnDistance() * 2;
+}
+function getPlayerGroupOverlapDistanceSq() {
+    const d = getPlayerGroupOverlapDistance();
+    return d * d;
+}
 // Tight group: Players within 32 blocks are processed as a single unit (most efficient)
 const TIGHT_GROUP_DISTANCE = 32; // Players within this distance are "tight group"
 const TIGHT_GROUP_DISTANCE_SQ = TIGHT_GROUP_DISTANCE * TIGHT_GROUP_DISTANCE;
@@ -1609,7 +1706,7 @@ function isPlayerIsolated(player, allPlayers) {
         const dz = otherPlayer.location.z - playerPos.z;
         const distSq = dx * dx + dz * dz;
         
-        if (distSq <= PLAYER_GROUP_OVERLAP_DISTANCE_SQ) {
+        if (distSq <= getPlayerGroupOverlapDistanceSq()) {
             nearbyPlayerCount++;
         }
     }
@@ -3132,7 +3229,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     const checkedXZPositions = []; // Store first 20 checked positions for logging
     
     // Per-tick block budget: Limit blocks checked per tick to spread load (especially important for 4+ players)
-    const blocksPerTickBudget = BLOCKS_PER_TICK_BUDGET[Math.min(totalPlayerCount, 4)] || BLOCKS_PER_TICK_BUDGET[4];
+    const baseBudget = BLOCKS_PER_TICK_BUDGET[Math.min(totalPlayerCount, 4)] || BLOCKS_PER_TICK_BUDGET[4];
+    const blocksPerTickBudget = Math.max(200, Math.floor(baseBudget * getBlocksPerTickMultiplier()));
     let blocksCheckedThisTick = 0;
     
     // Build XZ positions sorted by distance from center (closest first) so we find nearby dusted dirt before budget runs out
@@ -3416,7 +3514,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         console.warn(`[SPAWN DEBUG] ⚠️ WARNING: No ${expectedBlocks} blocks found in scan area!`);
         console.warn(`[SPAWN DEBUG] Scan area: X[${xStart} to ${xEnd}], Z[${zStart} to ${zEnd}], Y[${clampedYEnd} to ${clampedYStart}], Player: (${cx}, ${cy}, ${cz})`);
         console.warn(`[SPAWN DEBUG] Distance range: ${minDistance}-${maxDistance} blocks horizontally, Y range: +${yRangeUp}/-${yRangeDown} blocks from player Y ${cy}`);
-        console.warn(`[SPAWN DEBUG] Spawn ranges: minDist=${MIN_SPAWN_DISTANCE}, maxDist=${MAX_SPAWN_DISTANCE}, YRange=+${yRangeUp}/-${yRangeDown}`);
+        console.warn(`[SPAWN DEBUG] Spawn ranges: minDist=${getMinSpawnDistance()}, maxDist=${getMaxSpawnDistance()}, YRange=+${yRangeUp}/-${yRangeDown}`);
     }
     
     // Second pass: Expand Y range if we found few tiles and have queries left
@@ -3823,7 +3921,7 @@ function getPlayerGroup(players, dimension) {
                         closestDistance = dist;
                         closestPlayerName = otherPlayer.name;
                     }
-                    if (distSq <= PLAYER_GROUP_OVERLAP_DISTANCE_SQ) {
+                    if (distSq <= getPlayerGroupOverlapDistanceSq()) {
                         stillClose = true;
                         break;
                     }
@@ -3845,7 +3943,7 @@ function getPlayerGroup(players, dimension) {
                     }
                     continue;
                 } else {
-                    debugLog('groups', `${player.name} leaving group ${existingGroupId} (closest: ${closestPlayerName} at ${closestDistance.toFixed(1)} blocks, threshold: ${PLAYER_GROUP_OVERLAP_DISTANCE})`);
+                    debugLog('groups', `${player.name} leaving group ${existingGroupId} (closest: ${closestPlayerName} at ${closestDistance.toFixed(1)} blocks, threshold: ${getPlayerGroupOverlapDistance()})`);
                 }
             }
         }
@@ -3864,7 +3962,7 @@ function getPlayerGroup(players, dimension) {
             const distSq = dx * dx + dz * dz;
             const dist = Math.sqrt(distSq);
             
-            if (distSq <= PLAYER_GROUP_OVERLAP_DISTANCE_SQ) {
+            if (distSq <= getPlayerGroupOverlapDistanceSq()) {
                 // Players are close enough to share a group
                 const otherGroupId = playerToGroup.get(otherPlayer.id);
                 if (otherGroupId) {
@@ -3926,7 +4024,7 @@ function getPlayerGroup(players, dimension) {
                         const dz = player1.location.z - player2.location.z;
                         const distSq = dx * dx + dz * dz;
                         
-                        if (distSq <= PLAYER_GROUP_OVERLAP_DISTANCE_SQ) {
+                        if (distSq <= getPlayerGroupOverlapDistanceSq()) {
                             shouldMerge = true;
                             break;
                         }
@@ -4009,11 +4107,11 @@ function calculateGroupBoundingRect(players, logDetails = false) {
     const maxSpread = Math.max(spreadX, spreadZ);
     
     // Expand rectangle to ensure all players' spawn rectangles are covered
-    // Each player needs MAX_SPAWN_DISTANCE blocks around them
-    const expandedMinX = centerX - MAX_SPAWN_DISTANCE;
-    const expandedMaxX = centerX + MAX_SPAWN_DISTANCE;
-    const expandedMinZ = centerZ - MAX_SPAWN_DISTANCE;
-    const expandedMaxZ = centerZ + MAX_SPAWN_DISTANCE;
+    const maxDist = getMaxSpawnDistance();
+    const expandedMinX = centerX - maxDist;
+    const expandedMaxX = centerX + maxDist;
+    const expandedMinZ = centerZ - maxDist;
+    const expandedMaxZ = centerZ + maxDist;
     
     // Only log when explicitly requested (e.g., when rescanning)
     if (logDetails) {
@@ -4299,7 +4397,7 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
                             // For mining bears, also collect stone/deepslate tiles in caves
                             // Note: For groups, we don't use single player mode (multiple players = more load)
                             // Pass total player count to scale down block queries
-                            const playerTiles = collectMiningSpawnTiles(dimension, pPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN, false, totalPlayerCount, isTightGroupParam, isIsolated);
+                            const playerTiles = collectMiningSpawnTiles(dimension, pPos, getMinSpawnDistance(), getMaxSpawnDistance(), getEffectiveMaxCandidates(), false, totalPlayerCount, isTightGroupParam, isIsolated);
                             
                             tilesPerPlayer.push({ name: p.name, count: playerTiles.length });
                             
@@ -4358,7 +4456,7 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
             // For mining bears, also collect stone/deepslate tiles in caves
             // Single player mode: Use more thorough scanning (double query limit)
             // Pass total player count to scale down block queries when multiple players present
-            const tiles = collectMiningSpawnTiles(dimension, playerPos, MIN_SPAWN_DISTANCE, MAX_SPAWN_DISTANCE, MAX_CANDIDATES_PER_SCAN, isSinglePlayer, totalPlayerCount, isTightGroupParam, isIsolated);
+            const tiles = collectMiningSpawnTiles(dimension, playerPos, getMinSpawnDistance(), getMaxSpawnDistance(), getEffectiveMaxCandidates(), isSinglePlayer, totalPlayerCount, isTightGroupParam, isIsolated);
             
             // Debug: Log tile collection results
             if (isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
@@ -4395,8 +4493,9 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
     
     // Filter tiles to only include those within valid spawn distance for this specific player
     // Use adaptive range: try normal range first (15-45), then fall back to closer ranges if needed
-    const minSq = MIN_SPAWN_DISTANCE * MIN_SPAWN_DISTANCE;
-    const maxSq = MAX_SPAWN_DISTANCE * MAX_SPAWN_DISTANCE;
+    const minD = getMinSpawnDistance(), maxD = getMaxSpawnDistance();
+    const minSq = minD * minD;
+    const maxSq = maxD * maxD;
     
     let validTiles = cache.tiles.filter(tile => {
         const dx = tile.x + 0.5 - playerPos.x;
@@ -4438,7 +4537,7 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
         
         if (validTiles.length > 0 && (isDebugEnabled('spawn', 'validation') || isDebugEnabled('spawn', 'distance') || isDebugEnabled('spawn', 'all'))) {
             const adaptiveMin = Math.sqrt(adaptiveMinSq).toFixed(0);
-            debugLog('groups', `${player.name}: Using adaptive range (${adaptiveMin}-${MAX_SPAWN_DISTANCE}) for group cache - found ${validTiles.length} tiles`);
+            debugLog('groups', `${player.name}: Using adaptive range (${adaptiveMin}-${getMaxSpawnDistance()}) for group cache - found ${validTiles.length} tiles`);
         }
     }
 
@@ -4470,8 +4569,8 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
                 const dx = t.x + 0.5 - playerPos.x;
                 const dz = t.z + 0.5 - playerPos.z;
                 return Math.sqrt(dx * dx + dz * dz) < MIN_SPAWN_DISTANCE;
-            }) ? "adaptive" : MIN_SPAWN_DISTANCE) : MIN_SPAWN_DISTANCE;
-        debugLog('groups', `${player.name}: Filtered group cache tiles from ${cache.tiles.length} to ${validTiles.length} (within ${actualMin}-${MAX_SPAWN_DISTANCE} blocks of player)`);
+            }) ? "adaptive" : getMinSpawnDistance()) : getMinSpawnDistance();
+        debugLog('groups', `${player.name}: Filtered group cache tiles from ${cache.tiles.length} to ${validTiles.length} (within ${actualMin}-${getMaxSpawnDistance()} blocks of player)`);
     }
 
     const density = validTiles.length;
@@ -4486,8 +4585,8 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
     }
     spacing = Math.max(2, spacing);
 
-    const sampled = sampleTiles(validTiles, MAX_CANDIDATES_PER_SCAN);
-    const spacedTiles = filterTilesWithSpacing(sampled, spacing, MAX_SPACED_TILES);
+    const sampled = sampleTiles(validTiles, getEffectiveMaxCandidates());
+    const spacedTiles = filterTilesWithSpacing(sampled, spacing, getEffectiveMaxSpacedTiles());
     
     // Debug: show spacing info
         if ((isDebugEnabled('spawn', 'spacing') || isDebugEnabled('spawn', 'all')) && spacedTiles.length > 0) {
@@ -4667,7 +4766,15 @@ function getBatchEntityCounts(dimension, players, totalPlayerCount = 1) {
         }
         const batchRadius = maxPlayerDistance + maxRadius;
         
-        // Single API call for all players
+        // CRITICAL: When players are spread out, batch query radius explodes (e.g. 200+ blocks)
+        // causing massive entity enumeration and lag. Use individual per-player queries instead.
+        const BATCH_ENTITY_MAX_PLAYER_DISTANCE = 80; // Only batch when players within ~80 blocks
+        if (maxPlayerDistance > BATCH_ENTITY_MAX_PLAYER_DISTANCE) {
+            // Return cached results only - callers will use getEntityCountsForPlayer for uncached
+            return results;
+        }
+        
+        // Single API call for all players (only when they're close enough)
         // Get Y coordinate from first valid player's actual position
         let centerY = 64; // Default fallback
         for (const player of playersNeedingRefresh) {
@@ -4909,7 +5016,7 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     }
     
     // Global spawn limit check (prevents total entity explosion across all players)
-    if (globalSpawnCount >= MAX_GLOBAL_SPAWNS_PER_TICK) {
+    if (globalSpawnCount >= getMaxGlobalSpawnsPerTick()) {
         // console.warn(`[SPAWN DEBUG] Global spawn limit reached (${globalSpawnCount}/${MAX_GLOBAL_SPAWNS_PER_TICK})`);
         return false;
     }
@@ -5078,14 +5185,14 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     }
     // console.warn(`[SPAWN DEBUG] ${config.id} spawn chance: ${(chance * 100).toFixed(1)}% (cap: ${(chanceCap * 100).toFixed(1)}%)`);
 
-    for (let i = 0; i < finalAttemptsThisTick && spawnCount.value < maxSpawnsPerTick && globalSpawnCount < MAX_GLOBAL_SPAWNS_PER_TICK; i++) {
+    for (let i = 0; i < finalAttemptsThisTick && spawnCount.value < maxSpawnsPerTick && globalSpawnCount < getMaxGlobalSpawnsPerTick(); i++) {
         // Check per-type limit again in loop
         if (spawnCount.perType?.[config.id] >= perTypeSpawnLimit) {
             break;
         }
         
         // Check global limit in loop
-        if (globalSpawnCount >= MAX_GLOBAL_SPAWNS_PER_TICK) {
+        if (globalSpawnCount >= getMaxGlobalSpawnsPerTick()) {
             break;
         }
         
@@ -5341,13 +5448,23 @@ if (ERROR_LOGGING) {
 system.runInterval(() => {
     try {
         if (!isScriptEnabled(SCRIPT_IDS.spawnController)) return;
-        // Reset global spawn counter each tick
-        globalSpawnCount = 0;
         
         const currentDay = getCurrentDay(); // Cache this value
         if (currentDay < 2) {
             return;
         }
+        
+        // Spawn speed override (dev tools): throttle or speed up based on multiplier
+        const speedMult = getSpawnSpeedMultiplier();
+        const effectiveInterval = Math.max(20, Math.min(240, Math.round(60 / speedMult)));
+        const now = system.currentTick;
+        if (lastSpawnControllerRunTick >= 0 && (now - lastSpawnControllerRunTick) < effectiveInterval) {
+            return;
+        }
+        lastSpawnControllerRunTick = now;
+        
+        // Reset global spawn counter each tick
+        globalSpawnCount = 0;
 
         // Cleanup old cache entries periodically
         if (system.currentTick % (SCAN_INTERVAL * 5) === 0) {
@@ -5527,30 +5644,25 @@ system.runInterval(() => {
         }
     } else {
         // Spread Group Mode or Solo Mode: Individual processing with shared cache
-        // Calculate base spread interval based on player count
-        // For 2 players, use interval of 2 to ensure at least one player processes each tick
-        const baseSpreadInterval = playerCount === 1 ? 1 : playerCount === 2 ? 2 : playerCount === 3 ? 4 : 10; // More aggressive for 4+ players
+        // CRITICAL: Process only ONE player per tick when spread - prevents lag from multiple
+        // simultaneous getTilesForPlayer + block scans when players are far apart
+        const baseSpreadInterval = playerCount === 1 ? 1 : playerCount === 2 ? 3 : playerCount === 3 ? 6 : 12; // More aggressive stagger for spread players
         
-        // Give each player a unique offset based on their ID hash
-        // This ensures players are processed at different times, not all at once
         for (let i = 0; i < dimensionPlayers.length; i++) {
             const player = dimensionPlayers[i];
             if (!player) continue;
             
-            // Create a consistent offset for this player based on their ID
-            // Use a simple hash of player ID to get a consistent offset (0 to baseSpreadInterval-1)
             let playerHash = 0;
             for (let j = 0; j < player.id.length; j++) {
                 playerHash = ((playerHash << 5) - playerHash) + player.id.charCodeAt(j);
                 playerHash = playerHash & playerHash; // Convert to 32-bit integer
             }
             const playerOffset = Math.abs(playerHash) % baseSpreadInterval;
-            
-            // Check if this player should be processed this tick
-            // Each player processes every baseSpreadInterval ticks, but at different offsets
             const tickOffset = system.currentTick % baseSpreadInterval;
             if (tickOffset === playerOffset) {
                 playersToProcess.push(player);
+                // Only process ONE spread player per tick to prevent lag spike
+                break;
             }
         }
     }
@@ -5578,8 +5690,10 @@ system.runInterval(() => {
         // On error, default to 1
     }
     
-    // Batch entity count check for all players in dimension (more efficient)
-    const batchEntityCounts = dimensionPlayerCount > 1 ? getBatchEntityCounts(dimension, dimensionPlayers, dimensionPlayerCount) : new Map();
+    // Batch entity count only when players are grouped (tight) - spread players use per-player queries
+    const batchEntityCounts = (dimensionPlayerCount > 1 && isTightGroupMode) 
+        ? getBatchEntityCounts(dimension, dimensionPlayers, dimensionPlayerCount) 
+        : new Map();
     
     // Process all selected players
     for (const player of playersToProcess) {
@@ -5719,7 +5833,7 @@ system.runInterval(() => {
                          (entityCounts[BUFF_BEAR_DAY13_ID] || 0) + 
                          (entityCounts[BUFF_BEAR_DAY20_ID] || 0);
         
-        debugLog('spawn', `${player.name}: ${totalNearbyBears} total bears nearby (Tiny: ${tinyCount}/75, Infected: ${infectedCount}/50, Mining: ${miningCount}/20, Flying: ${flyingCount}/30, Torpedo: ${torpedoCount}/10, Buff: ${buffCount}/dynamic), ${spacedTiles.length} spawn tiles available`);
+        debugLog('spawn', `${player.name}: ${totalNearbyBears} total bears nearby (Tiny: ${tinyCount}/75, Infected: ${infectedCount}/50, Mining: ${miningCount}/3, Flying: ${flyingCount}/30, Torpedo: ${torpedoCount}/10, Buff: ${buffCount}/dynamic), ${spacedTiles.length} spawn tiles available`);
         
         // Buff Bear Proximity Ambience Check
         // Only check if current day >= 8 (when day 8 buff bears can be created) and buffCount > 0
@@ -5841,7 +5955,7 @@ system.runInterval(() => {
         }
         
         // Note: Removed the 30-bear global cap check - type-based caps now handle all spawn limiting
-        // Type caps: 75 tiny, 50 infected, 20 mining, 30 flying, 10 torpedo (buff bears have dynamic cap)
+            // Type caps: 75 tiny, 50 infected, 3 mining, 30 flying, 10 torpedo (buff bears have dynamic cap)
 
         // Check if single player (no group cache benefit)
         const isSinglePlayer = !useGroupCache || (dimensionPlayers && dimensionPlayers.length === 1);
@@ -5920,7 +6034,7 @@ system.runInterval(() => {
         // Get nearby player count once (cached for all spawn attempts)
         let nearbyPlayerCount = 1;
         try {
-            const nearbyPlayers = dimension.getPlayers({ location: playerPos, maxDistance: MAX_SPAWN_DISTANCE });
+            const nearbyPlayers = dimension.getPlayers({ location: playerPos, maxDistance: getMaxSpawnDistance() });
             nearbyPlayerCount = nearbyPlayers.length;
         } catch (error) {
             // On error, default to 1
@@ -6044,7 +6158,7 @@ system.runInterval(() => {
     } catch (error) {
         errorLog(`Error in main spawn interval`, error, { currentDay: getCurrentDay() });
     }
-}, SCAN_INTERVAL);
+}, 20); // Run every 20 ticks; actual execution gated by spawn speed multiplier (dev tools)
 
 // ============================================================================
 // BUFF BEAR AMBIENCE FAST CHECK

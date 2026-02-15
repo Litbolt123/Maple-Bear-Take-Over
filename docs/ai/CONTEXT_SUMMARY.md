@@ -2,10 +2,96 @@
 
 ## Recent Changes (Latest Session)
 
-### Vanilla Snow Fix & Storm Changes (Feb 8)
-- **Vanilla snow infection fix**: Removed `minecraft:snow_layer` from `INFECTED_GROUND_BLOCKS`. Only `mb:snow_layer` and `mb:dusted_dirt` cause ground infection now. Vanilla snow no longer infects.
-- **Storm cooldown**: Base cooldown changed from 5–20 min to 5–10 min at start. Scales down by day 20 to 3 min. After day 20, storms can occur every 3 minutes. Uses linear interpolation from storm start day to day 20.
-- **Storm shelter brainstorm**: Created `docs/development/STORM_SHELTER_BRAINSTORM.md`. Proposed upward raycast from player head — if solid block above within 64 blocks, player is sheltered (cave, house, 3-block hole). Glass blocks when intact; when storm breaks glass, hole exposes player. Not yet implemented.
+### Mining Interval & Dev Tools Fixes (Feb 8)
+- **Mining Min Interval menu fix**: Slider now uses object form `{ valueStep, defaultValue }`; `.catch()` returns to `openAIThrottleMenu()` instead of Developer Tools to avoid main-menu redirect. Clamped default and result values.
+- **Settings confirmation**: Every AI throttle change (dynamic interval, min interval, override, reset) sends a chat message and `console.warn` for logging.
+- **Manual Mining Interval Override**: Expanded text field explanation: "0 = use computed (day-scaled). Overrides the normal formula so all bears break blocks every N ticks regardless of day."
+
+### Simulate Next Day Message (Feb 8)
+- **Day change message**: When using Developer Tools → Simulate Next Day, the same "A new day begins... Day X" (or post-victory variant) is broadcast to the world via `world.sendMessage`, using `getDayDisplayInfo(newDay)` for color/symbols.
+
+### Infection Dev Menu: View & Adjust (Feb 8)
+- **Infection Dev Tools** (Developer Tools → Clear/Set Infection): New options:
+  - **View Infection Status**: Shows infection type, ticks left, current snow (severity), max snow level achieved.
+  - **Adjust Infection Timer**: Modal to enter remaining ticks; applies to live infection state.
+  - **Adjust Snow Level**: Modal to set snow count (infection severity) and update max snow level.
+- **New debug commands** in `main.js`: `set_infection_timer <target?> <ticks>`, `set_snow_level <target?> <level>`. Target optional; without target, uses sender.
+- **Files**: `mb_codex.js` (expanded `openInfectionDevMenu`, `showInfectionStatus`, `promptAdjustInfectionTimer`, `promptAdjustSnowLevel`), `main.js` (simulate_next_day message, set_infection_timer, set_snow_level).
+
+### Storm Intersection, Per-Storm Controls & Storm Hub (Feb 8)
+- **Storm intersection**: Overlapping storms boost each other (more violent). When storms overlap (distance < sum of radii), `intersectionBoost` increases each tick; when separated, it decays. Effective intensity capped at 2.5.
+- **Per-storm enable/disable**: Each storm has `enabled`. Disabled storms don't drift, place snow, spawn particles, or affect players. `setStormEnabled(id, enabled)` and `endStormById(id)` for dev.
+- **Multi-storm toggle**: World property `mb_storm_multi_enabled`. When OFF, max 1 storm, 0% secondary chance. `isMultiStormEnabled()`, `setMultiStormEnabled(bool)`.
+- **Storm hub** (like Spawn Controller): Developer Tools → Storm. Single entry with: Multi-storm ON/OFF, Summon Minor/Major, End All, Storm List (per-storm enable/disable, end), Storm Override, Storm Control Settings, Snow Storm Debug. Removed separate Summon Storm, Storm State, Storm Override, Storm Control entries. Pin migration: storm_control, summon_storm, storm_state, storm_override → storm.
+
+### Multi-Storm Support & Storm Control Dev Tool (Feb 8)
+- **Storm Control** journal dev tool: Codex → Developer Tools → Storm Control. Controls all snow storm parameters:
+  - Summon Minor/Major Storm, End Storm, Storm State, Storm Override (duration, cooldown), Storm Control Settings (intensity, multi-storm), Snow Storm Debug
+- **Storm Control Settings** modal: Intensity override (Auto, 0.5–2.0), Max concurrent storms (1–3), Secondary storm chance (0–50% when 1+ storms active)
+- **Multi-storm**: `mb_snowStorm.js` refactored to support 1–3 concurrent storms. Each storm: own center, drift, intensity, particles, placement, mob damage, block destruction
+- **Throttling**: Secondary storms use `secondaryStormChance` (0–50%) when 1+ storms already active; no cooldown between secondary spawns
+- **Persistence**: Saves `storms` array; loads legacy single-storm format for backward compat
+- **Spawn tiles**: `getStormSpawnTiles` merges tiles from all storms for Maple Bear spawning
+- **PINNABLE_DEV_ITEMS**: `storm_control` entry for quick access
+
+### Spawn Presets (Feb 15)
+- **New**: Spawn Controller → Presets (or Advanced → Presets) with 5 coordinated profiles: Low, Med-Low, Med, Med-High, High.
+- Each preset sets: Block Query, Max Spawns/Tick, Range, Tile Intensity, Blocks Per Tick, Spawn Speed, Spawn Difficulty.
+- **Low**: Minimal lag (25% blockQ, 12 spawns/tick, close range, 50% tiles/blocks, 0.5× speed, Easy).
+- **Med**: Balanced default (100% all, 24 spawns, normal range, 1× speed, Normal difficulty).
+- **High**: Aggressive (150% blockQ, 48 spawns, far range, 125% tiles, 1.5× blocks, 2× speed, Hard).
+
+### Spawn Advanced Options (Feb 15)
+- **New**: Spawn Controller → Advanced Options with 5 tunables:
+  - **Block Query Budget**: 25%, 50%, Normal (100%), 150% – multiplies block scan limit (lower = less lag).
+  - **Max Spawns Per Tick**: 12, 18, 24, 36, 48 – cap total spawns across all players.
+  - **Spawn Range**: Close (20–35), Normal (15–45), Far (10–55) – min/max distance from player.
+  - **Tile Scan Intensity**: 60%, 75%, Normal, 125% – candidates and spaced tiles per scan.
+  - **Blocks Per Tick**: 60%, 80%, Normal, 150% – progressive block scan budget (lower = spread load more).
+- World properties: `mb_spawn_block_query_mult`, `mb_spawn_max_global`, `mb_spawn_range`, `mb_spawn_tile_intensity`, `mb_spawn_blocks_per_tick_mult`. Reset All clears overrides.
+
+### Spawn Controller Consolidation (Feb 15)
+- **Hub**: Developer Tools → Spawn Controller now contains all spawn-related settings in one place.
+- **Contents**: Script ON/OFF, Spawn Difficulty, Spawn Speed, Spawn Type Toggles, Force Spawn. Back from submenus returns to hub.
+- **Replaced**: Separate Dev Tools entries for Spawn Difficulty, Spawn Speed, Spawn Type Toggles, Force Spawn.
+- **Pins**: `spawn_difficulty`, `spawn_type_toggles`, `force_spawn` migrated to `spawn_controller` for Pin/Unpin compatibility.
+
+### Spawn Speed Override in Dev Tools (Feb 15)
+- **Feature**: Manual override to throttle or speed up the spawn controller from Developer Tools → Spawn Speed.
+- **Options**: Very Slow (0.25×), Slow (0.5×), Normal (1×), Fast (2×), Very Fast (3×), Custom (0.25–4).
+- **Implementation**: World property `mb_spawn_speed_multiplier`. Spawn loop runs every 20 ticks but executes only when `(tick - lastRun) >= 60/multiplier`. Slower = less frequent runs (helps lag); faster = more frequent runs.
+- **Files**: mb_spawnController.js (getSpawnSpeedMultiplier, SPAWN_SPEED_PROPERTY, tick gating), mb_codex.js (openSpawnSpeedMenu, promptCustomSpawnSpeed).
+
+### Spawn Controller Multi-Player Lag Optimization (Feb 15)
+- **Problem**: Lag with 2+ players spread out or 2 near + 1 far. Batch entity count used huge radius (e.g. 200+ blocks) when players far apart, causing massive entity enumeration.
+- **Fix 1 – Batch entity skip when spread**: `getBatchEntityCounts` now returns early when `maxPlayerDistance > 80` blocks. Each player uses `getEntityCountsForPlayer` (small per-player radius) instead of one giant batch query.
+- **Fix 2 – Skip batch call when not tight group**: Main loop only calls `getBatchEntityCounts` when `isTightGroupMode` (players within 32 blocks). Spread players always use per-player entity queries.
+- **Fix 3 – Single player per tick when spread**: In spread mode, process only ONE player per tick (break after first match). Stagger intervals increased: 2 players 2→3, 3 players 4→6, 4+ players 10→12 ticks between processing.
+- **Impact**: mb_spawnController.js. Reduces entity queries, block scans, and tile collection when players are far apart.
+
+### Achievements Hidden Until Powdery Journal (Feb 12)
+- **Design**: Achievements are earned and tracked in the background regardless of journal ownership. They are **hidden from view** until the player has the Powdery Journal (`mb:snow_book`) in their inventory.
+- **Implementation**: Added `playerHasPowderyJournal(player)` helper in mb_codex.js that checks inventory for `mb:snow_book`. In `openAchievements()`, if the player doesn't have the journal, shows a placeholder instead of the full achievement list: "§7Well that was something!\n\n§8Your deeds are being recorded... but you'll need the Powdery Journal to make sense of these notes."
+- **When visible**: Full achievements list shown when player opens the codex and has snow_book (e.g. opened via snow_book use). If opened via Debug/Developer Tools from Basic Journal without having crafted the Powdery Journal yet, they see the teaser.
+- **Impact**: mb_codex.js only. No linter errors.
+
+### Snow Block Lists: grass_block Contradiction & Storm vs Death/Torpedo Distinction (Feb 12)
+- **Contradiction fix**: `minecraft:grass_block` was in both `SNOW_NEVER_REPLACE_BLOCKS` and `SNOW_REPLACEABLE_BLOCKS`. Removed from `SNOW_REPLACEABLE_BLOCKS` so it only appears in `SNOW_NEVER_REPLACE_BLOCKS`. Full ground blocks (grass_block, dirt, etc.) are never replaced by snow.
+- **Distinction for future work**: Added comments in `mb_blockLists.js` clarifying:
+  - **Storm**: Uses `SNOW_NEVER_REPLACE_BLOCKS` — storm only places snow in air above these; never replaces full ground blocks.
+  - **Death/torpedo/buff snow placement**: Uses `SNOW_REPLACEABLE_BLOCKS` — these blocks (grass, flowers, foliage) can be replaced with snow. Excludes grass_block.
+- **Impact**: main.js, mb_torpedoAI.js, mb_buffAI.js now place snow without replacing grass_block. Storm (mb_snowStorm.js) already treated grass_block as never-replace via `SNOW_NEVER_REPLACE_BLOCKS`. No linter errors.
+
+### Storm Load Fix & Village Freeze Mitigation (Feb 8)
+- **Storm not restoring on rejoin**: `loadStormState` was missing the logic to restore `stormActive`, `stormType`, `stormCenterX/Z/Y`, `stormIntensity`, `stormDriftAngle` from saved state. It only handled ticks; the condition `if (stormActive && ...)` was always false on load. Now all variables are restored and center is validated.
+- **Village freeze mitigation**: Added per-pass cap (80 blocks) to major storm destruction to reduce chunk overload. See `docs/development/STORM_TROUBLESHOOTING.md` for recovery steps (villager pathfinding in heavily modified terrain).
+
+### Storm Intensity, Shelter & Obstacle Deflection (Feb 8)
+- **Storm intensity**: Each storm now has random intensity (0.85–1.15, bell-curve-like) applied to radius, placement count, particle density, mob damage. Persisted with storm state.
+- **Storm drift deflection**: Storm deflects when target is inside terrain. When mountain ahead (8+ blocks higher), 70% chance to deflect (prefer going around); 30% chance to climb. Storm can still go up mountains but prefers going around.
+- **Shelter system (Phase 1+2)**: 6-direction raycast (`isEntityShelteredFromStorm`) from entity head. If any ray reaches max distance without hitting solid = opening = exposed. All 6 hit solid = enclosed = sheltered. Only checked for entities in storm radius (performance). Players: no infection/blindness/nausea when sheltered. Mobs: no storm damage when sheltered.
+- **Vanilla snow infection fix**: Removed `minecraft:snow_layer` from `INFECTED_GROUND_BLOCKS`. Only `mb:snow_layer` and `mb:dusted_dirt` cause ground infection. Vanilla snow no longer infects.
+- **Storm cooldown**: 5–10 min at start, scales to 3 min by day 20 via linear interpolation.
 
 ### Minecraft 1.26 Compatibility (Feb 12)
 - **Analysis doc**: Created `docs/development/MINECRAFT_1.26_COMPATIBILITY.md` with full changelog review.
@@ -76,7 +162,7 @@
 - **main.js – conversion spawn**: Before placing snow at spawn, skip if the block below is already a snow layer (don’t place on snow).
 - **mb_torpedoAI.js – explosion**: At the start of each column, if the block at `topSolidY + 1` is a snow layer, skip the column so we never place or replace in a way that stacks snow.
 - **mb_spawnController.js – spawn**: Skip snow placement when the block below the spawn is already a snow layer.
-- **Replaceable-by-snow list**: Unchanged; grass_block, grass, tall_grass, fern, flowers, vines, lily pad, etc. are still replaced by snow when appropriate (and not creating snow-on-snow).
+- **Replaceable-by-snow list**: grass, tall_grass, fern, flowers, vines, lily pad, etc. are replaced by snow when appropriate (and not creating snow-on-snow). grass_block was removed (Feb 12) — full ground blocks stay; only foliage/small plants are replaced.
 - **Debug**: Toggleable “Snow Placement” (Main) and “Block Placement” (Torpedo) in Debug Menu. “Replace foliage above” logic so grass/tall_grass above solid block is replaced instead of snow stacking on top.
 - **2-block-tall plants (implemented) (lilac, sunflower, rose_bush, peony, large_fern)**: (1) Lilacs (and other 2-block plants) were broken when only the bottom block was replaced; top block left floating. (2) Snow was placed “in the middle” because the “top solid” search can find the upper half of the plant. Fix: treat 2-block plants as a unit—either replace both blocks (bottom → snow, top → air) or skip them; and when top solid is the upper half of a 2-block plant, consider the block below and replace/skip accordingly so snow isn’t placed in the middle.
 

@@ -100,6 +100,13 @@ const WALKABLE_THROUGH_BLOCKS = new Set([
     // Signs
     "minecraft:standing_sign",
     "minecraft:wall_sign",
+    // Rails (minecarts - entities can walk on/through)
+    "minecraft:rail",
+    "minecraft:powered_rail",
+    "minecraft:activator_rail",
+    "minecraft:detector_rail",
+    // Dirt path (grass path - village paths, shovel on grass)
+    "minecraft:dirt_path",
     // Other walkable blocks
     "minecraft:small_dripleaf_block",
     "minecraft:big_dripleaf",
@@ -112,9 +119,11 @@ const WALKABLE_THROUGH_BLOCKS = new Set([
 ]);
 
 // All blocks are breakable by default except unbreakable ones
-// Mining speed: starts at wooden pickaxe speed (11 ticks) at day 15, scales to netherite (1 tick) by day 24
-// Scaled by addon difficulty: Easy = slower (higher interval), Hard = significantly faster (lower interval)
-function getMiningInterval() {
+// Mining speed: starts at wooden pickaxe speed (11 ticks) at day 15, scales to 2 ticks by day 24+
+// Floored at 2 ticks min to reduce lag when breaking many blocks fast (was 1 tick = 20 breaks/sec per bear)
+// Scaled by addon difficulty: Easy = slower (higher interval), Hard = faster (lower interval)
+// Day 15 mining bear (mb:mining_mb) mines 50% slower than day 20 variant
+function getMiningInterval(entityTypeId) {
     const currentDay = getCurrentDay();
     const difficulty = getAddonDifficultyState();
 
@@ -122,16 +131,34 @@ function getMiningInterval() {
     if (currentDay < 15) {
         interval = 11; // Wooden-pick level (slowest) - before mining bears spawn
     } else if (currentDay >= 24) {
-        interval = 1; // Netherite speed (1 tick)
+        interval = 2; // Fast but not every-tick (reduces lag from rapid block breaks)
     } else {
-        // Linear progression: 11 ticks at day 15, 1 tick at day 24
-        const raw = Math.floor(11 - (10 / 9) * (currentDay - 15));
-        interval = Math.max(1, Math.min(11, raw));
+        // Linear progression: 11 ticks at day 15, 2 ticks at day 24
+        const raw = Math.floor(11 - (9 / 9) * (currentDay - 15));
+        interval = Math.max(2, Math.min(11, raw));
     }
     let multiplier = Number(difficulty?.miningIntervalMultiplier);
     if (!isFinite(multiplier)) multiplier = 1;
-    const effective = Math.round(interval * multiplier);
-    return Math.max(1, Math.min(20, effective)); // Clamp 1–20 so Easy doesn't go above 20
+    let effective = Math.round(interval * multiplier);
+    // Day 15 mining bear: 50% slower than day 20 (1.5x interval)
+    if (entityTypeId === "mb:mining_mb") {
+        effective = Math.round(effective * 1.5);
+    }
+    // Multiplayer: more players = slightly slower mining to reduce lag (2 players +10%, 3+ +20%)
+    const playerCount = (getCachedPlayers() || []).length;
+    if (playerCount >= 3) {
+        effective = Math.round(effective * 1.2);
+    } else if (playerCount >= 2) {
+        effective = Math.round(effective * 1.1);
+    }
+    // Dev override: mb_ai_mining_interval_override forces a fixed value; mb_ai_mining_interval_min raises floor
+    const devOverride = Number(getWorldProperty("mb_ai_mining_interval_override"));
+    if (Number.isFinite(devOverride) && devOverride >= 1) {
+        return Math.round(devOverride);
+    }
+    const devMin = Number(getWorldProperty("mb_ai_mining_interval_min"));
+    const minVal = Number.isFinite(devMin) && devMin >= 1 ? devMin : 2;
+    return Math.max(minVal, Math.min(30, effective)); // Clamp 2-30 (min 2 to reduce lag, cap for day 15's slower mining)
   }
   
   const MAX_BLOCKS_PER_ENTITY = 1; // Mine one block at a time to create stairs/tunnels gradually
@@ -191,27 +218,28 @@ const CAVE_AHEAD_SCAN_DISTANCE = 8; // How far ahead to scan for caves
 const CAVE_AHEAD_AIR_THRESHOLD = 3; // Need at least 3 air blocks ahead to consider it a cave entrance
 
 // Performance optimization constants
-// Dynamic AI tick interval based on bear count:
-// - 1-4 bears: every 1 tick (full speed)
-// - 5-9 bears: every 2 ticks (50% reduction)
-// - 10+ bears: every 3 ticks (66% reduction)
-// Bears with targets always run at full speed (every 1 tick)
+// Dynamic AI tick interval based on bear count AND player count:
+// - effectiveLoad = bears + (players - 1) * PLAYER_LOAD_FACTOR (more players = more areas/entities to process)
+// - 1-2 effective load: every 1 tick (full speed)
+// - 3-9 effective load: every 2 ticks (50% reduction)
+// - 10+ effective load: every 3 ticks (66% reduction)
 const AI_TICK_INTERVAL_BASE = 3; // Base interval for many bears
-const AI_TICK_INTERVAL_FEW = 1; // Interval for few bears (1-4)
-const AI_TICK_INTERVAL_MEDIUM = 2; // Interval for medium bears (5-9)
-const BEAR_COUNT_THRESHOLD_FEW = 5; // Switch to medium interval at 5 bears
+const AI_TICK_INTERVAL_FEW = 1; // Interval for few bears (1-2)
+const AI_TICK_INTERVAL_MEDIUM = 2; // Interval for medium bears (3-9)
+const BEAR_COUNT_THRESHOLD_FEW = 3; // Switch to medium interval at 3 bears (helps 3-bear lag)
 const BEAR_COUNT_THRESHOLD_MEDIUM = 10; // Switch to slow interval at 10 bears
+const PLAYER_LOAD_FACTOR = 1.5; // Each extra player adds this much to effective load (2 players ≈ +1.5, 4 players ≈ +4.5)
 const TARGET_CACHE_TICKS = 5; // Cache target lookups for 5 ticks
 const MAX_PROCESSING_DISTANCE = 64; // Only process entities within 64 blocks of any player
 const MAX_PROCESSING_DISTANCE_SQ = MAX_PROCESSING_DISTANCE * MAX_PROCESSING_DISTANCE;
 const BLOCK_CACHE_TICKS = 1; // Cache block lookups for 1 tick (very short, blocks change frequently)
 const PATHFINDING_CACHE_TICKS = 20; // Cache path for 1 second
 const PATHFINDING_RADIUS = 12; // Pathfinding search radius (blocks)
-const PATHFINDING_MAX_NODES = 180; // Hard cap on node expansions for performance
-const PATHFINDING_NODES_PER_CHUNK = 25; // Nodes to process per tick (chunked processing)
+const PATHFINDING_MAX_NODES = 120; // Hard cap on node expansions for performance (reduced for 3-bear optimization)
+const PATHFINDING_NODES_PER_CHUNK = 15; // Nodes to process per tick (chunked processing)
 const PATHFINDING_MAX_AGE_TICKS = 60; // Max ticks before canceling stale pathfinding
 const PATHFINDING_STATE_CLEANUP_INTERVAL = 100; // Cleanup stale states every N ticks
-const PATHFINDING_MAX_CONCURRENT = 5; // Maximum concurrent pathfinding operations (reduced for better performance with many bears)
+const PATHFINDING_MAX_CONCURRENT = 3; // Maximum concurrent pathfinding operations (helps when 3 bears active)
 
 // Debug flags - now controlled via Debug Menu in Journal (Basic Journal → Debug).
 // (isDebugEnabled is imported at the top of the file)
@@ -300,6 +328,20 @@ const leaderTrails = new Map();
 export const collectedBlocks = new Map(); // Map<entityId, Map<itemTypeId, count>>
 // Exported for mb_infectedAI (nox7-style pathfinding + steering)
 export { getPathfindingPath, getPathfindingWaypoint, steerAlongPath };
+
+// Dev tool: last computed state (updated each tick) for AI Throttle menu
+let lastMiningAIState = {
+    bearCount: 0,
+    playerCount: 0,
+    effectiveLoad: 0,
+    dynamicInterval: 1,
+    miningIntervalDay15: 0,
+    miningIntervalDay20: 0
+};
+/** Get current Mining AI state for dev tools. */
+export function getMiningAIState() {
+    return { ...lastMiningAIState };
+}
 
 // Intelligence system state tracking
 const entityStrategies = new Map(); // Map<entityId, {strategy: string, lastCalculated: tick, optimalPosition: {x,y,z}}>
@@ -1856,13 +1898,16 @@ function findPathToTargetAsync(entity, targetLoc, tunnelHeight) {
     const open = [{ ...start, g: 0, f: initialF }];
     const cameFrom = {}; // Object instead of Map
     const costSoFar = {}; // Object instead of Map
-    const closed = []; // Array of keys instead of Set
+    const closed = new Set(); // Set for O(1) lookup (was array, caused O(n) lag per neighbor)
     
     const key = (loc) => `${loc.x},${loc.y},${loc.z}`;
     const startKey = key(start);
     costSoFar[startKey] = 0;
     
     const targetKey = `${goal.x},${goal.y},${goal.z}`;
+    
+    // Store entity type to avoid 8× getEntities per chunk (performance)
+    const entityTypeId = entity?.typeId || "mb:mining_mb";
     
     // Create pathfinding state
     const state = {
@@ -1877,7 +1922,8 @@ function findPathToTargetAsync(entity, targetLoc, tunnelHeight) {
         costSoFar: costSoFar,
         expansions: 0,
         dimensionId: dimension.id,
-        tunnelHeight: tunnelHeight
+        tunnelHeight: tunnelHeight,
+        entityTypeId: entityTypeId
     };
     
     pathfindingState.set(entityId, state);
@@ -1900,18 +1946,31 @@ function processPathfindingChunk(entityId) {
         return;
     }
     
-    // Get entity to verify it still exists (mining bears + infected entities share pathfinding)
+    // Get entity to verify it still exists - use stored type to avoid 8× getEntities per chunk
     let entity = null;
     try {
-        for (const typeId of PATHFINDING_ENTITY_TYPES) {
-            const entities = dimension.getEntities({ type: typeId });
-            for (const e of entities) {
-                if (e.id === entityId) {
-                    entity = e;
-                    break;
-                }
+        const typeId = state.entityTypeId || "mb:mining_mb";
+        const entities = dimension.getEntities({ type: typeId });
+        for (const e of entities) {
+            if (e.id === entityId) {
+                entity = e;
+                break;
             }
-            if (entity) break;
+        }
+        // Fallback: entity type may have changed (e.g. transform), try other pathfinding types
+        if (!entity) {
+            for (const fallbackId of PATHFINDING_ENTITY_TYPES) {
+                if (fallbackId === typeId) continue;
+                const entities = dimension.getEntities({ type: fallbackId });
+                for (const e of entities) {
+                    if (e.id === entityId) {
+                        entity = e;
+                        state.entityTypeId = fallbackId;
+                        break;
+                    }
+                }
+                if (entity) break;
+            }
         }
     } catch { }
     
@@ -1980,7 +2039,7 @@ function processPathfindingChunk(entityId) {
             return;
         }
         
-        closed.push(currentKey);
+        closed.add(currentKey);
         expansions++;
         nodesProcessed++;
         
@@ -1989,7 +2048,7 @@ function processPathfindingChunk(entityId) {
         
         for (const neighbor of neighbors) {
             const neighborKey = key(neighbor);
-            if (closed.includes(neighborKey)) continue;
+            if (closed.has(neighborKey)) continue;
             
             // Cost to reach neighbor (1 for horizontal, 1.5 for diagonal, 2 for vertical)
             const moveCost = (neighbor.x !== current.x && neighbor.z !== current.z) ? 1.414 : 
@@ -7802,7 +7861,7 @@ function processContext(ctx, config, tick, leaderSummaryById) {
                 ? MAX_BLOCKS_PER_ENTITY
                 : 0));
     // Throttle only block breaking by mining interval; movement/climbing run every tick
-    const miningInterval = getMiningInterval();
+    const miningInterval = getMiningInterval(config.id);
     const lastBreak = lastBlockBreakTick.get(entity.id) ?? 0;
     const allowMiningThisTick = (tick - lastBreak) >= miningInterval;
     const effectiveBudget = allowMiningThisTick ? digBudget : 0;
@@ -10244,7 +10303,7 @@ function initializeMiningAI() {
             const ticksSinceStart = tick - aiLoopStartTick;
             const isStartupPhase = ticksSinceStart <= STARTUP_DEBUG_TICKS;
             
-            // Count total bears across all dimensions to determine processing interval
+            // Count total bears across all dimensions and get player count for load calculation
             let totalBearsThisTick = 0;
             for (const dimId of DIMENSION_IDS) {
                 try {
@@ -10258,20 +10317,28 @@ function initializeMiningAI() {
                     }
                 } catch { }
             }
+            const playerCount = (getCachedPlayers() || []).length;
+            // Factor in player count: more players = more areas to check, more entities in range
+            const effectiveLoad = totalBearsThisTick + Math.max(0, (playerCount - 1) * PLAYER_LOAD_FACTOR);
             
-            // Calculate dynamic interval based on bear count
+            // Calculate dynamic interval based on effective load (bears + player scaling)
             let dynamicInterval = AI_TICK_INTERVAL_BASE;
-            if (totalBearsThisTick < BEAR_COUNT_THRESHOLD_FEW) {
-                dynamicInterval = AI_TICK_INTERVAL_FEW;
-            } else if (totalBearsThisTick < BEAR_COUNT_THRESHOLD_MEDIUM) {
-                dynamicInterval = AI_TICK_INTERVAL_MEDIUM;
+            const devDynamicOverride = Number(getWorldProperty("mb_ai_mining_dynamic_interval"));
+            if (Number.isFinite(devDynamicOverride) && devDynamicOverride >= 1 && devDynamicOverride <= 5) {
+                dynamicInterval = Math.round(devDynamicOverride);
             } else {
-                dynamicInterval = AI_TICK_INTERVAL_BASE;
+                if (effectiveLoad < BEAR_COUNT_THRESHOLD_FEW) {
+                    dynamicInterval = AI_TICK_INTERVAL_FEW;
+                } else if (effectiveLoad < BEAR_COUNT_THRESHOLD_MEDIUM) {
+                    dynamicInterval = AI_TICK_INTERVAL_MEDIUM;
+                } else {
+                    dynamicInterval = AI_TICK_INTERVAL_BASE;
+                }
             }
             
             // Log interval changes
             if (totalBearsThisTick !== lastBearCount && getDebugGeneral()) {
-                console.warn(`[MINING AI] Bear count: ${totalBearsThisTick}, using interval: ${dynamicInterval} ticks`);
+                console.warn(`[MINING AI] Bears: ${totalBearsThisTick}, players: ${playerCount}, effectiveLoad: ${effectiveLoad.toFixed(1)}, interval: ${dynamicInterval}`);
                 lastBearCount = totalBearsThisTick;
             }
             
@@ -10296,6 +10363,15 @@ function initializeMiningAI() {
             // Store the dynamic interval and processing flag for use in processing
             const currentDynamicInterval = dynamicInterval;
             const processIdleBears = shouldProcessIdleBears;
+            // Update state for dev tools
+            lastMiningAIState = {
+                bearCount: totalBearsThisTick,
+                playerCount,
+                effectiveLoad,
+                dynamicInterval,
+                miningIntervalDay15: getMiningInterval("mb:mining_mb"),
+                miningIntervalDay20: getMiningInterval("mb:mining_mb_day20")
+            };
             
             // Update last processed tick if we're processing idle bears
             if (processIdleBears) {
@@ -10665,8 +10741,8 @@ function initializeMiningAI() {
                         }
                     }
                     
-                    // Get dynamic mining interval based on current day
-                    const miningInterval = getMiningInterval();
+                    // Get dynamic mining interval based on current day and variant (day 15 is 50% slower)
+                    const miningInterval = getMiningInterval(config.id);
                     
                     if (getDebugPitfall() && leaderQueue.length > 0 && tick % 20 === 0) {
                         console.warn(`[PITFALL DEBUG] ${leaderQueue.length} leaders in queue, miningInterval=${miningInterval}`);
@@ -10674,13 +10750,18 @@ function initializeMiningAI() {
                     
                     // Leaders and followers: run every tick so movement and climbing are responsive.
                     // Block breaking is throttled inside processContext by miningInterval.
+                    // Stagger: when 3+ bears have targets, spread processing across ticks to avoid frame spikes
+                    const activeCount = leaderQueue.length + followerQueue.length;
+                    const shouldStagger = activeCount >= 3;
                     for (const ctx of leaderQueue) {
+                        if (shouldStagger && ((tick + (ctx.entity.id.charCodeAt(0) || 0)) % 2 !== 0)) continue;
                         if (DEBUG_PITFALL && tick % 20 === 0) {
                             console.warn(`[PITFALL DEBUG] Processing leader ${ctx.entity.id.substring(0, 8)}, hasTarget=${!!ctx.targetInfo}, role=${ctx.role}`);
                         }
                         processContext(ctx, config, tick, leaderSummaryById);
                     }
                     for (const ctx of followerQueue) {
+                        if (shouldStagger && ((tick + (ctx.entity.id.charCodeAt(0) || 0)) % 2 !== 0)) continue;
                         processContext(ctx, config, tick, leaderSummaryById);
                     }
                     for (const ctx of idleQueue) {
