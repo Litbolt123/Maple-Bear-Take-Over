@@ -401,10 +401,38 @@
 			"min_distance": 0,
 			"max_distance": 24,
 			"sounds": [
-				{
-					"name": "sounds/infected_mb/infected_mb_hurt",
-					"volume": 0.8
-				}
+				"sounds/infected_mb/infected_mb_hurt",
+				"sounds/infected_mb/infected_mb_hurt2",
+				"sounds/infected_mb/infected_mb_hurt3",
+				"sounds/infected_mb/infected_mb_hurt4",
+				"sounds/infected_mb/infected_mb_hurt5",
+				"sounds/infected_mb/infected_mb_hurt6",
+				"sounds/infected_mb/infected_mb_hurt7",
+				"sounds/infected_mb/infected_mb_hurt8",
+				"sounds/infected_mb/infected_mb_hurt9",
+				"sounds/infected_mb/infected_mb_hurt10",
+				"sounds/infected_mb/infected_mb_hurt11",
+				"sounds/infected_mb/infected_mb_hurt12",
+				"sounds/infected_mb/infected_mb_hurt13",
+				"sounds/infected_mb/infected_mb_hurt14",
+				"sounds/infected_mb/infected_mb_hurt15",
+				"sounds/infected_mb/infected_mb_hurt16",
+				"sounds/infected_mb/infected_mb_hurt17",
+				"sounds/infected_mb/infected_mb_hurt18",
+				"sounds/infected_mb/infected_mb_hurt19",
+				"sounds/infected_mb/infected_mb_hurt20",
+				"sounds/infected_mb/infected_mb_hurt21",
+				"sounds/infected_mb/infected_mb_hurt22",
+				"sounds/infected_mb/infected_mb_hurt23",
+				"sounds/infected_mb/infected_mb_hurt24",
+				"sounds/infected_mb/infected_mb_hurt25",
+				"sounds/infected_mb/infected_mb_hurt26",
+				"sounds/infected_mb/infected_mb_hurt27",
+				"sounds/infected_mb/infected_mb_hurt28",
+				"sounds/infected_mb/infected_mb_hurt29",
+				"sounds/infected_mb/infected_mb_hurt30",
+				"sounds/infected_mb/infected_mb_hurt31",
+				"sounds/infected_mb/infected_mb_hurt32"
 			]
 		},
 		"generic_bear_hurt": {
