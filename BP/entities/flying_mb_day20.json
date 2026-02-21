@@ -180,9 +180,9 @@
 				"width": 0.55,
 				"height": 2.05
 			},
-		"minecraft:attack": {
-			"damage": 4
-		},
+			"minecraft:attack": {
+				"damage": 4
+			},
 			"minecraft:movement": {
 				"value": 0.58
 			},
@@ -291,13 +291,6 @@
 			},
 			"minecraft:scale": {
 				"value": 1.05
-			},
-			"minecraft:break_blocks": {
-				"breakable_blocks": [
-					"minecraft:glass_pane",
-					"minecraft:brown_stained_glass_pane",
-					"minecraft:gray_stained_glass_pane"
-				]
 			},
 			"minecraft:conditional_bandwidth_optimization": {},
 			"minecraft:loot": {
@@ -614,4 +607,3 @@
 		}
 	}
 }
-

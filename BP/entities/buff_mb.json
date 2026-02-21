@@ -173,7 +173,7 @@
 				"set_persistent": true,
 				"target_dist": 40,
 				"must_be_on_ground": true,
-				"yd": 3.0
+				"yd": 3
 			},
 			"minecraft:environment_sensor": {
 				"triggers": [
@@ -253,7 +253,12 @@
 					"minecraft:spruce_fence",
 					"minecraft:spruce_fence_gate",
 					"minecraft:warped_fence",
-					"minecraft:warped_fence_gate"
+					"minecraft:warped_fence_gate",
+					"minecraft:carved_pumpkin",
+					"minecraft:lit_pumpkin",
+					"minecraft:pumpkin",
+					"minecraft:melon_block",
+					"minecraft:bamboo"
 				]
 			},
 			"minecraft:behavior.move_to_land": {
