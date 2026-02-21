@@ -298,7 +298,7 @@
 				"pitch": 1,
 				"events": {
 					"hurt": {
-						"sound": "generic_bear_hurt",
+						"sound": "buff_mb_hurt",
 						"volume": 0.8,
 						"pitch": 0.4
 					},
@@ -328,7 +328,7 @@
 				"pitch": 1,
 				"events": {
 					"hurt": {
-						"sound": "generic_bear_hurt",
+						"sound": "buff_mb_hurt",
 						"volume": 0.8,
 						"pitch": 0.35
 					},
@@ -358,7 +358,7 @@
 				"pitch": 1,
 				"events": {
 					"hurt": {
-						"sound": "generic_bear_hurt",
+						"sound": "buff_mb_hurt",
 						"volume": 0.8,
 						"pitch": 0.3
 					},
@@ -473,7 +473,7 @@
 				"pitch": 1,
 				"events": {
 					"hurt": {
-						"sound": "generic_bear_hurt",
+						"sound": "infected_mb.hurt",
 						"volume": 0.7,
 						"pitch": 0.85
 					},
@@ -489,7 +489,7 @@
 				"pitch": 1,
 				"events": {
 					"hurt": {
-						"sound": "generic_bear_hurt",
+						"sound": "infected_mb.hurt",
 						"volume": 0.7,
 						"pitch": 0.85
 					},
