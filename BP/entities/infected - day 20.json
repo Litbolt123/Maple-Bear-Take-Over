@@ -181,8 +181,8 @@
 				"max": 45
 			},
 			"minecraft:collision_box": {
-				"width": 0.55,
-				"height": 2.1
+				"width": 0.5,
+				"height": 1.9
 			},
 			"minecraft:attack": {
 				"damage": 3.5
@@ -487,4 +487,3 @@
 		}
 	}
 }
-
