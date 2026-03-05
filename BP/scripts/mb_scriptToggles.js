@@ -74,11 +74,11 @@ export function setBetaInfectedAIEnabled(enabled) {
     setWorldProperty(BETA_INFECTED_AI, enabled ? 1 : 0);
 }
 
-/** Beta: Dust storms (snow storms) enabled. Default OFF on world load - must be turned on in book. */
+/** Beta: Dust storms (snow storms) enabled. Default ON on world load - can be turned off in Beta Features. */
 export function isBetaDustStormsEnabled() {
     const val = getWorldProperty(BETA_DUST_STORMS);
-    if (val === true || val === 1 || val === "1") return true;
-    return false;
+    if (val === false || val === 0 || val === "0") return false;
+    return true;
 }
 
 export function setBetaDustStormsEnabled(enabled) {

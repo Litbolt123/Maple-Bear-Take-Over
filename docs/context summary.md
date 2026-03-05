@@ -1,5 +1,17 @@
 # Context Summary
 
+**Date:** 2026-03-04
+
+## Dust storms: ON by default (still in Beta Features)
+
+User wanted storms to be automatically on when joining a world, without having to enable them in settings first. The toggle stays in Beta Features so users can still turn storms off.
+
+### Changes made (mb_scriptToggles.js)
+- **isBetaDustStormsEnabled()** – Inverted logic: returns true by default (when property unset) and false only when explicitly disabled (0/false/"0"). Previously required opt-in (property must be 1/true to enable).
+- Dev tools (summonStorm, override, etc.) unchanged; storms run by default; users can disable via Settings > Beta Features > Dust Storms.
+
+---
+
 **Date:** 2026-02-15
 
 ## Achievements: persisted Powdery Journal unlock – IMPLEMENTED
