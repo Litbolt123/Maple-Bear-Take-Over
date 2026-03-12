@@ -4,7 +4,7 @@
 		"description": {
 			"identifier": "mb:infected_day20",
 			"materials": {
-				"default": "enderman"
+				"default": "entity_emissive_alpha"
 			},
 			"textures": {
 				"default": "textures/entity/infected_day20"
@@ -28,10 +28,13 @@
 						"look_at_target": true
 					},
 					{
-						"infected_controller": true
+						"infected_controller": "query.is_alive"
 					},
 					{
-						"attack_controller": true
+						"attack_controller": "query.is_alive"
+					},
+					{
+						"death_controller": "!query.is_alive"
 					},
 					{
 						"death_particles": "!query.is_alive"
@@ -58,9 +61,16 @@
 				"attack": "animation.infected.attack",
 				"attack2": "animation.infected.attack2",
 				"attack3": "animation.infected.attack3",
+				"death": "animation.infected.death1",
+				"death2": "animation.infected.death2",
+				"death3": "animation.infected.death3",
+				"death4": "animation.infected.death4",
+				"death5": "animation.infected.death5",
+				"cancel_death_rotation": "animation.infected.cancel_death_rotation",
+				"death_particles": "animation.mb.death_particles",
 				"infected_controller": "controller.animation.infected_mb_variant_0",
 				"attack_controller": "controller.animation.infected_mb_attack",
-				"death_particles": "animation.mb.death_particles"
+				"death_controller": "controller.animation.infected_mb_death"
 			}
 		}
 	}

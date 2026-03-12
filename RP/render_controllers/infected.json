@@ -10,7 +10,8 @@
 			],
 			"textures": [
 				"texture.default"
-			]
+			],
+			"is_hurt_color": {}
 		}
 	}
 }

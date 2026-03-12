@@ -187,10 +187,12 @@
 				"jump_power": 0.4
 			},
 			"minecraft:damage_sensor": {
-				"triggers": {
-					"cause": "fall",
-					"deals_damage": "no"
-				}
+				"triggers": [
+					{
+						"cause": "fall",
+						"deals_damage": "no"
+					}
+				]
 			},
 			"minecraft:can_climb": {},
 			"minecraft:health": {

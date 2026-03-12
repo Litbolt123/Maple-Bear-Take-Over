@@ -10232,6 +10232,15 @@
 					}
 				}
 			}
+		},
+		"animation.infected.cancel_death_rotation": {
+			"loop": false,
+			"animation_length": 2,
+			"bones": {
+				"infected_human_mb1": {
+					"rotation": [0, 0, "math.min(math.sqrt(math.max(0, query.anim_time * 20 - 0.5) / 20 * 1.6), 1) * -90"]
+				}
+			}
 		}
 	}
 }
