@@ -6,11 +6,12 @@
 // ============================================================================
 
 import { system, world } from "@minecraft/server";
-import { getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
+import { getWorldProperty, setWorldProperty, getWorldPropertyChunked, setWorldPropertyChunked, getAddonDifficultyState, saveAllProperties } from "./mb_dynamicPropertyHandler.js";
 import { getCurrentDay, isMilestoneDay } from "./mb_dayTracker.js";
-import { isDebugEnabled, getPlayerSoundVolume } from "./mb_codex.js";
+import { isDebugEnabled, getPlayerSoundVolume, getStormParticleDensity } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getStormSpawnTiles } from "./mb_snowStorm.js";
+import { STORM_PARTICLE_PASS_THROUGH } from "./mb_blockLists.js";
 
 // ============================================================================
 // SECTION 1: DEBUG AND ERROR LOGGING
@@ -152,6 +153,624 @@ export const SPAWN_OVERRIDE_PROPERTIES = {
     tileIntensity: "mb_spawn_tile_intensity",
     blocksPerTickMult: "mb_spawn_blocks_per_tick_mult"
 };
+
+/** Dev tools scan-scheduler override property keys */
+export const SPAWN_SCAN_OVERRIDE_PROPERTIES = {
+    discoveryRadius: "mb_scan_discovery_radius",
+    minDiscoveryRadius: "mb_scan_min_discovery_radius",
+    perPlayerRadiusDrop: "mb_scan_radius_drop_per_player",
+    tightGroupRadiusPenalty: "mb_scan_tight_group_penalty",
+    barrenCooldownMult: "mb_scan_barren_cooldown_mult",
+    staggerTicks: "mb_scan_stagger_ticks",
+    chunkLoadDelay: "mb_scan_chunk_load_delay"
+};
+
+/** Emulsifier world property keys */
+const EMULSIFIER_ZONES_PROPERTY = "mb_emulsifier_zones";
+const EMULSIFIER_ZONES_BACKUP_PROPERTY = "mb_emulsifier_zones_bak";
+const EMULSIFIER_NO_SPAWN_RADIUS_PROPERTY = "mb_emulsifier_no_spawn_radius";
+const EMULSIFIER_BASE_RADIUS_PROPERTY = "mb_emulsifier_base_radius";
+const EMULSIFIER_MACHINE_BLOCK_ID = "mb:emulsifier_machine";
+
+const DEFAULT_SCAN_SETTINGS = {
+    discoveryRadius: 75,
+    minDiscoveryRadius: 28,
+    perPlayerRadiusDrop: 0.12,
+    tightGroupRadiusPenalty: 0.2,
+    barrenCooldownMult: 1,
+    staggerTicks: 20,
+    chunkLoadDelay: 5
+};
+
+export const SPAWN_SCAN_PRESETS = {
+    lowLag: {
+        label: "Low Lag",
+        discoveryRadius: 52,
+        minDiscoveryRadius: 24,
+        perPlayerRadiusDrop: 0.18,
+        tightGroupRadiusPenalty: 0.32,
+        barrenCooldownMult: 1.8,
+        staggerTicks: 32,
+        chunkLoadDelay: 10
+    },
+    balanced: {
+        label: "Balanced",
+        ...DEFAULT_SCAN_SETTINGS
+    },
+    highActivity: {
+        label: "High Activity",
+        discoveryRadius: 90,
+        minDiscoveryRadius: 32,
+        perPlayerRadiusDrop: 0.07,
+        tightGroupRadiusPenalty: 0.12,
+        barrenCooldownMult: 0.8,
+        staggerTicks: 12,
+        chunkLoadDelay: 3
+    }
+};
+
+const EMULSIFIER_FUEL_STATS = {
+    redstone: { label: "Redstone", durationTicks: 3600, radius: 6, performance: 1.0, permanent: false },
+    iron: { label: "Snow + Iron", durationTicks: 6300, radius: 8, performance: 1.15, permanent: false },
+    copper: { label: "Snow + Copper", durationTicks: 8400, radius: 10, performance: 1.3, permanent: false },
+    gold: { label: "Snow + Gold", durationTicks: 11400, radius: 15, performance: 1.5, permanent: false },
+    netherite: { label: "Netherite Core", durationTicks: 2147483647, radius: 30, performance: 2.5, permanent: true }
+};
+
+const EMULSIFIER_DEFAULTS = {
+    noSpawnRadius: 40,
+    detoxBaseRadius: 8
+};
+
+let emulsifierZoneCache = null;
+let lastEmulsifierEmptyCacheReloadTick = -999999;
+/** When first load returns empty, retry this many times before giving up (world props may not be ready yet). */
+const EMULSIFIER_INITIAL_LOAD_RETRIES = 8;
+let emulsifierInitialLoadAttempts = 0;
+
+function clampNumber(value, min, max, fallback) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return fallback;
+    return Math.max(min, Math.min(max, num));
+}
+
+function readEmulsifierZonesRaw() {
+    // Prefer direct world read so we see persisted data after rejoin (handler cache may be stale/empty).
+    try {
+        const raw = world.getDynamicProperty(EMULSIFIER_ZONES_PROPERTY);
+        if (typeof raw === "string" && raw.length > 0) return { raw, source: "direct-main" };
+    } catch { }
+    try {
+        const raw = world.getDynamicProperty(EMULSIFIER_ZONES_BACKUP_PROPERTY);
+        if (typeof raw === "string" && raw.length > 0) return { raw, source: "direct-backup" };
+    } catch { }
+    let raw = getWorldProperty(EMULSIFIER_ZONES_PROPERTY);
+    if (typeof raw === "string" && raw.length > 0) return { raw, source: "handler-main" };
+    raw = getWorldPropertyChunked(EMULSIFIER_ZONES_PROPERTY);
+    if (typeof raw === "string" && raw.length > 0) return { raw, source: "handler-chunked" };
+    return { raw: undefined, source: "none" };
+}
+
+function getScanSetting(key) {
+    const prop = SPAWN_SCAN_OVERRIDE_PROPERTIES[key];
+    const fallback = DEFAULT_SCAN_SETTINGS[key];
+    if (!prop) return fallback;
+    const raw = getWorldProperty(prop);
+    if (raw === undefined || raw === null || raw === "") return fallback;
+    switch (key) {
+        case "discoveryRadius":
+            return clampNumber(raw, 30, 128, fallback);
+        case "minDiscoveryRadius":
+            return clampNumber(raw, 16, 80, fallback);
+        case "perPlayerRadiusDrop":
+            return clampNumber(raw, 0.02, 0.4, fallback);
+        case "tightGroupRadiusPenalty":
+            return clampNumber(raw, 0, 0.6, fallback);
+        case "barrenCooldownMult":
+            return clampNumber(raw, 0.25, 3, fallback);
+        case "staggerTicks":
+            return Math.floor(clampNumber(raw, 4, 80, fallback));
+        case "chunkLoadDelay":
+            return Math.floor(clampNumber(raw, 1, 40, fallback));
+        default:
+            return fallback;
+    }
+}
+
+function getScanSettings() {
+    return {
+        discoveryRadius: getScanSetting("discoveryRadius"),
+        minDiscoveryRadius: getScanSetting("minDiscoveryRadius"),
+        perPlayerRadiusDrop: getScanSetting("perPlayerRadiusDrop"),
+        tightGroupRadiusPenalty: getScanSetting("tightGroupRadiusPenalty"),
+        barrenCooldownMult: getScanSetting("barrenCooldownMult"),
+        staggerTicks: getScanSetting("staggerTicks"),
+        chunkLoadDelay: getScanSetting("chunkLoadDelay")
+    };
+}
+
+export function getSpawnScanSettingsForDevTools() {
+    return getScanSettings();
+}
+
+export function applySpawnScanPreset(presetKey) {
+    const preset = SPAWN_SCAN_PRESETS[presetKey];
+    if (!preset) return false;
+    setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.discoveryRadius, preset.discoveryRadius);
+    setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.minDiscoveryRadius, preset.minDiscoveryRadius);
+    setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.perPlayerRadiusDrop, preset.perPlayerRadiusDrop);
+    setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.tightGroupRadiusPenalty, preset.tightGroupRadiusPenalty);
+    setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.barrenCooldownMult, preset.barrenCooldownMult);
+    setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.staggerTicks, preset.staggerTicks);
+    setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.chunkLoadDelay, preset.chunkLoadDelay);
+    return true;
+}
+
+function getAdaptiveDiscoveryRadius(totalPlayerCount, isTightGroup, isIsolated, isNewChunk = false) {
+    const settings = getScanSettings();
+    let radius = settings.discoveryRadius;
+    if (totalPlayerCount > 1) {
+        const extraPlayers = totalPlayerCount - 1;
+        radius = radius * (1 - (extraPlayers * settings.perPlayerRadiusDrop));
+    }
+    if (isTightGroup) {
+        radius = radius * (1 - settings.tightGroupRadiusPenalty);
+    }
+    if (isIsolated) {
+        radius *= 0.8;
+    }
+    if (isNewChunk) {
+        radius = Math.min(radius, 30);
+    }
+    const minRadius = Math.min(settings.minDiscoveryRadius, settings.discoveryRadius);
+    return Math.floor(Math.max(minRadius, Math.min(128, radius)));
+}
+
+function getBarrenCooldownTicks(totalPlayerCount, chunkKey = "") {
+    const base = SCAN_INTERVAL * 3;
+    const settings = getScanSettings();
+    const playerMult = totalPlayerCount <= 1 ? 1 : totalPlayerCount === 2 ? 1.25 : totalPlayerCount === 3 ? 1.5 : 1.8;
+    let hash = 0;
+    for (let i = 0; i < chunkKey.length; i++) {
+        hash = ((hash << 5) - hash) + chunkKey.charCodeAt(i);
+        hash |= 0;
+    }
+    const jitter = Math.abs(hash) % Math.max(1, Math.floor(base * 0.5));
+    return Math.floor(base * playerMult * settings.barrenCooldownMult) + jitter;
+}
+
+function getScanStaggerTicks() {
+    return getScanSetting("staggerTicks");
+}
+
+function getChunkLoadDelayTicks(isTightGroup = false) {
+    const base = getScanSetting("chunkLoadDelay");
+    return isTightGroup ? Math.max(base, base + 3) : base;
+}
+
+/** Clear in-memory zone cache so next load reads from world (for debug). */
+export function clearEmulsifierZoneCache() {
+    emulsifierZoneCache = null;
+    emulsifierInitialLoadAttempts = 0;
+}
+
+function loadEmulsifierZones() {
+    if (Array.isArray(emulsifierZoneCache)) {
+        // Important: empty cache right after reload can be stale during startup.
+        // Retry reading world props periodically so persisted zones can rehydrate.
+        if (emulsifierZoneCache.length === 0) {
+            const now = system.currentTick;
+            if (now - lastEmulsifierEmptyCacheReloadTick >= 20) {
+                lastEmulsifierEmptyCacheReloadTick = now;
+                const probe = readEmulsifierZonesRaw();
+                if (typeof probe.raw === "string" && probe.raw.length > 0) {
+                    try {
+                        const parsed = JSON.parse(probe.raw);
+                        if (Array.isArray(parsed)) {
+                            emulsifierZoneCache = parsed;
+                            for (const z of emulsifierZoneCache) {
+                                if (z && z.active === true && (z.fuelType === "netherite" || (z.fuelTicksRemaining ?? 0) > 0)) {
+                                    z.lastDetoxTick = undefined;
+                                    z.firstScanDone = false;
+                                }
+                            }
+                            if (typeof isDebugEnabled === "function" && isDebugEnabled("emulsifier", "persistence")) {
+                                console.warn("[EMULSIFIER DEBUG] persistence cache rehydrate hit source=", probe.source, "rawLen=", probe.raw.length, "zones=", parsed.length);
+                            }
+                        }
+                    } catch { }
+                }
+            }
+        }
+        return emulsifierZoneCache;
+    }
+    try {
+        const load = readEmulsifierZonesRaw();
+        const raw = load.raw;
+        if (typeof raw !== "string" || raw.length === 0) {
+            emulsifierInitialLoadAttempts++;
+            if (emulsifierInitialLoadAttempts < EMULSIFIER_INITIAL_LOAD_RETRIES) {
+                // World props may not be ready yet on first ticks after load; leave cache null so we retry next call.
+                return [];
+            }
+            if (typeof isDebugEnabled === "function" && isDebugEnabled("emulsifier", "persistence")) {
+                console.warn("[EMULSIFIER DEBUG] persistence load: no data from world after", emulsifierInitialLoadAttempts, "attempts.");
+            }
+            emulsifierZoneCache = [];
+            return emulsifierZoneCache;
+        }
+        emulsifierInitialLoadAttempts = 0;
+        const parsed = JSON.parse(raw);
+        emulsifierZoneCache = Array.isArray(parsed) ? parsed : [];
+        for (const z of emulsifierZoneCache) {
+            if (z && z.active === true && (z.fuelType === "netherite" || (z.fuelTicksRemaining ?? 0) > 0)) {
+                z.lastDetoxTick = undefined;
+                z.firstScanDone = false;
+            }
+        }
+        if (typeof isDebugEnabled === "function" && isDebugEnabled("emulsifier", "persistence")) {
+            console.warn("[EMULSIFIER DEBUG] persistence load: source=", load.source, "rawLen=", raw.length, "zones=", emulsifierZoneCache.length);
+        }
+    } catch (e) {
+        if (typeof isDebugEnabled === "function" && isDebugEnabled("emulsifier", "persistence")) {
+            console.warn("[EMULSIFIER DEBUG] persistence load ERROR:", e?.message ?? e);
+        }
+        emulsifierZoneCache = [];
+    }
+    return emulsifierZoneCache;
+}
+
+function saveEmulsifierZones() {
+    const zones = loadEmulsifierZones();
+    const json = zones.length ? JSON.stringify(zones) : undefined;
+    setWorldProperty(EMULSIFIER_ZONES_PROPERTY, json);
+    try { saveAllProperties(); } catch { }
+    try {
+        if (typeof world.setDynamicProperty === "function") {
+            if (json && json.length > 0) {
+                world.setDynamicProperty(EMULSIFIER_ZONES_PROPERTY, json);
+                world.setDynamicProperty(EMULSIFIER_ZONES_BACKUP_PROPERTY, json);
+            } else if (zones.length === 0) {
+                const probe = readEmulsifierZonesRaw();
+                if (typeof probe.raw === "string" && probe.raw.length > 0) {
+                    return;
+                }
+                world.setDynamicProperty(EMULSIFIER_ZONES_PROPERTY, undefined);
+                world.setDynamicProperty(EMULSIFIER_ZONES_BACKUP_PROPERTY, undefined);
+            } else {
+                world.setDynamicProperty(EMULSIFIER_ZONES_PROPERTY, undefined);
+                world.setDynamicProperty(EMULSIFIER_ZONES_BACKUP_PROPERTY, undefined);
+            }
+        }
+    } catch { }
+    if (typeof isDebugEnabled === "function" && isDebugEnabled("emulsifier", "persistence")) {
+        console.warn("[EMULSIFIER DEBUG] persistence save: zones=", zones.length, "jsonLen=", json?.length ?? 0);
+    }
+}
+
+function getEmulsifierNoSpawnRadius() {
+    return Math.floor(clampNumber(getWorldProperty(EMULSIFIER_NO_SPAWN_RADIUS_PROPERTY), 8, 96, EMULSIFIER_DEFAULTS.noSpawnRadius));
+}
+
+function getEmulsifierDetoxBaseRadius() {
+    return Math.floor(clampNumber(getWorldProperty(EMULSIFIER_BASE_RADIUS_PROPERTY), 3, 24, EMULSIFIER_DEFAULTS.detoxBaseRadius));
+}
+
+function getFuelStats(fuelType) {
+    return EMULSIFIER_FUEL_STATS[fuelType] || EMULSIFIER_FUEL_STATS.redstone;
+}
+
+function isZoneMachinePresent(zone, dimension = null) {
+    if (!zone?.dimension) return false;
+    try {
+        const dim = dimension || world.getDimension(zone.dimension);
+        if (!dim) return false;
+        const block = dim.getBlock({ x: Math.floor(zone.x), y: Math.floor(zone.y), z: Math.floor(zone.z) });
+        return !!block && block.typeId === EMULSIFIER_MACHINE_BLOCK_ID;
+    } catch {
+        // Chunk unloaded or dimension unavailable: assume machine still present so we don't remove zone and save empty.
+        return true;
+    }
+}
+
+function getActiveEmulsifierZonesForDimension(dimensionId) {
+    const now = system.currentTick;
+    const zones = loadEmulsifierZones();
+    let changed = false;
+    // Remove zones whose machine block is gone (block broken → stop output)
+    for (let i = zones.length - 1; i >= 0; i--) {
+        const z = zones[i];
+        if (!z || z.dimension !== dimensionId) continue;
+        if (!isZoneMachinePresent(z)) {
+            zones.splice(i, 1);
+            changed = true;
+        }
+    }
+    const activeZones = zones.filter((z) => {
+        if (!z || z.dimension !== dimensionId) return false;
+        if (z.active === false) return false;
+        if (z.fuelType === "netherite") return true;
+        return (z.fuelTicksRemaining ?? 0) > 0 && (z.lastUpdatedTick ?? now) <= now;
+    });
+    if (changed) saveEmulsifierZones();
+    return activeZones;
+}
+
+function isInsideEmulsifierNoSpawnZone(dimensionId, location) {
+    if (!dimensionId || !location) return false;
+    const globalRadius = getEmulsifierNoSpawnRadius();
+    for (const zone of getActiveEmulsifierZonesForDimension(dimensionId)) {
+        const fuelStats = getFuelStats(zone.fuelType);
+        const zoneRadius = Math.max(globalRadius, fuelStats.radius ?? globalRadius);
+        const radiusSq = zoneRadius * zoneRadius;
+        const dx = (zone.x ?? 0) - location.x;
+        const dz = (zone.z ?? 0) - location.z;
+        if ((dx * dx + dz * dz) <= radiusSq) return true;
+    }
+    return false;
+}
+
+/** Run extensive emulsifier diagnostics for the debug menu. Returns a plain object for display. */
+export function getEmulsifierDebugInfo() {
+    const now = system.currentTick;
+    let rawFromWorld = null;
+    let rawLength = 0;
+    try {
+        rawFromWorld = world.getDynamicProperty(EMULSIFIER_ZONES_PROPERTY);
+        rawLength = typeof rawFromWorld === "string" ? rawFromWorld.length : 0;
+    } catch (e) {
+        rawFromWorld = `[Error: ${e?.message ?? e}]`;
+    }
+    const zones = loadEmulsifierZones();
+    const cacheIsArray = Array.isArray(emulsifierZoneCache);
+    const zonesFromCache = cacheIsArray ? emulsifierZoneCache.length : 0;
+    const activeCount = zones.filter(z => z && z.active === true).length;
+    const withFuel = zones.filter(z => z && (z.fuelType === "netherite" || (z.fuelTicksRemaining ?? 0) > 0)).length;
+    let persistenceMatch = false;
+    let parsedFromRaw = 0;
+    const probe = readEmulsifierZonesRaw();
+    let backupRawLength = 0;
+    try {
+        const bak = world.getDynamicProperty(EMULSIFIER_ZONES_BACKUP_PROPERTY);
+        backupRawLength = typeof bak === "string" ? bak.length : 0;
+    } catch { }
+    try {
+        if (typeof rawFromWorld === "string" && rawFromWorld.length > 0) {
+            const parsed = JSON.parse(rawFromWorld);
+            parsedFromRaw = Array.isArray(parsed) ? parsed.length : 0;
+            persistenceMatch = parsedFromRaw === zones.length;
+        }
+    } catch {
+        parsedFromRaw = -1;
+    }
+    return {
+        tick: now,
+        worldPropertyRawLength: rawLength,
+        backupPropertyRawLength: backupRawLength,
+        worldPropertyIsString: typeof rawFromWorld === "string",
+        loadProbeSource: probe.source,
+        loadProbeRawLength: typeof probe.raw === "string" ? probe.raw.length : 0,
+        zonesFromCache,
+        zonesLength: zones.length,
+        activeCount,
+        withFuelCount: withFuel,
+        pendingConversionsCount: pendingEmulsifierConversions.size,
+        persistenceMatch,
+        parsedFromRaw,
+        zoneSummaries: zones.slice(0, 10).map(z => ({
+            dim: z.dimension,
+            x: z.x,
+            y: z.y,
+            z: z.z,
+            active: z.active,
+            fuelType: z.fuelType,
+            fuelTicks: z.fuelTicksRemaining,
+            firstScanDone: z.firstScanDone,
+            lastDetoxTick: z.lastDetoxTick
+        })),
+        cacheWasArray: cacheIsArray
+    };
+}
+
+export function getEmulsifierStateForDevTools(player = null) {
+    const zones = loadEmulsifierZones();
+    const now = system.currentTick;
+    let nearest = null;
+    if (player?.location && player?.dimension?.id) {
+        const dimId = player.dimension.id;
+        let bestDistSq = Number.POSITIVE_INFINITY;
+        for (const zone of zones) {
+            if (zone.dimension !== dimId) continue;
+            const dx = (zone.x ?? 0) - player.location.x;
+            const dz = (zone.z ?? 0) - player.location.z;
+            const distSq = dx * dx + dz * dz;
+            if (distSq < bestDistSq) {
+                bestDistSq = distSq;
+                nearest = { ...zone, distance: Math.sqrt(distSq) };
+            }
+        }
+    }
+    const active = zones.filter(z => z.active !== false && (z.fuelType === "netherite" || (z.fuelTicksRemaining ?? 0) > 0)).length;
+    return {
+        total: zones.length,
+        active,
+        noSpawnRadius: getEmulsifierNoSpawnRadius(),
+        detoxBaseRadius: getEmulsifierDetoxBaseRadius(),
+        nearest,
+        fuelStats: EMULSIFIER_FUEL_STATS,
+        now
+    };
+}
+
+export function addEmulsifierZoneAtPlayer(player, fuelType = "redstone") {
+    if (!player?.location || !player?.dimension?.id) return { ok: false, reason: "invalid_player" };
+    const zones = loadEmulsifierZones();
+    const pos = player.location;
+    const dimId = player.dimension.id;
+    const nearest = zones.find(z => z.dimension === dimId && Math.abs((z.x ?? 0) - pos.x) <= 2 && Math.abs((z.z ?? 0) - pos.z) <= 2);
+    if (nearest) return { ok: false, reason: "duplicate" };
+    const stats = getFuelStats(fuelType);
+    zones.push({
+        id: `${Date.now()}_${Math.floor(Math.random() * 100000)}`,
+        ownerName: player.name,
+        dimension: dimId,
+        x: Math.floor(pos.x),
+        y: Math.floor(pos.y),
+        z: Math.floor(pos.z),
+        fuelType: Object.prototype.hasOwnProperty.call(EMULSIFIER_FUEL_STATS, fuelType) ? fuelType : "redstone",
+        fuelTicksRemaining: stats.permanent ? 2147483647 : stats.durationTicks,
+        active: true,
+        createdTick: system.currentTick,
+        lastUpdatedTick: system.currentTick
+    });
+    saveEmulsifierZones();
+    return { ok: true };
+}
+
+export function upsertEmulsifierZoneAtBlock(dimensionId, x, y, z, ownerName = "") {
+    if (!dimensionId) return { ok: false, reason: "invalid_dimension" };
+    const fx = Math.floor(x);
+    const fy = Math.floor(y);
+    const fz = Math.floor(z);
+    let zones = loadEmulsifierZones();
+    let existing = zones.find(zn => zn.dimension === dimensionId && zn.x === fx && zn.y === fy && zn.z === fz);
+    if (!existing && (zones.length === 0 || emulsifierZoneCache === null)) {
+        // Cache may have been empty on first load (world not ready); force a fresh read so we don't overwrite saved data.
+        emulsifierZoneCache = null;
+        zones = loadEmulsifierZones();
+        existing = zones.find(zn => zn.dimension === dimensionId && zn.x === fx && zn.y === fy && zn.z === fz);
+    }
+    if (existing) {
+        if (!existing.ownerName && ownerName) existing.ownerName = ownerName;
+        saveEmulsifierZones();
+        return { ok: true, created: false };
+    }
+    zones = loadEmulsifierZones();
+    zones.push({
+        id: `${Date.now()}_${Math.floor(Math.random() * 100000)}`,
+        ownerName: ownerName || "unknown",
+        dimension: dimensionId,
+        x: fx,
+        y: fy,
+        z: fz,
+        fuelType: undefined,
+        fuelTicksRemaining: 0,
+        active: false,
+        createdTick: system.currentTick,
+        lastUpdatedTick: system.currentTick
+    });
+    saveEmulsifierZones();
+    return { ok: true, created: true };
+}
+
+export function removeEmulsifierZoneAtBlock(dimensionId, x, y, z) {
+    if (!dimensionId) return { ok: false, reason: "invalid_dimension" };
+    const zones = loadEmulsifierZones();
+    const fx = Math.floor(x);
+    const fy = Math.floor(y);
+    const fz = Math.floor(z);
+    const index = zones.findIndex(zn => zn.dimension === dimensionId && zn.x === fx && zn.y === fy && zn.z === fz);
+    if (index === -1) return { ok: false, reason: "not_found" };
+    zones.splice(index, 1);
+    saveEmulsifierZones();
+    return { ok: true };
+}
+
+export function getEmulsifierZoneAtBlock(dimensionId, x, y, z) {
+    if (!dimensionId) return null;
+    const fx = Math.floor(x);
+    const fy = Math.floor(y);
+    const fz = Math.floor(z);
+    return loadEmulsifierZones().find(zn => zn.dimension === dimensionId && zn.x === fx && zn.y === fy && zn.z === fz) || null;
+}
+
+function findNearestEmulsifier(player, maxDistance = 16) {
+    if (!player?.location || !player?.dimension?.id) return null;
+    const dimId = player.dimension.id;
+    const maxSq = maxDistance * maxDistance;
+    let nearest = null;
+    let bestDistSq = Number.POSITIVE_INFINITY;
+    for (const zone of loadEmulsifierZones()) {
+        if (zone.dimension !== dimId) continue;
+        const dx = (zone.x ?? 0) - player.location.x;
+        const dz = (zone.z ?? 0) - player.location.z;
+        const distSq = dx * dx + dz * dz;
+        if (distSq <= maxSq && distSq < bestDistSq) {
+            bestDistSq = distSq;
+            nearest = zone;
+        }
+    }
+    return nearest;
+}
+
+export function removeNearestEmulsifierZone(player, maxDistance = 16) {
+    const nearest = findNearestEmulsifier(player, maxDistance);
+    if (!nearest) return { ok: false, reason: "not_found" };
+    const zones = loadEmulsifierZones();
+    const index = zones.findIndex(z => z.id === nearest.id);
+    if (index === -1) return { ok: false, reason: "not_found" };
+    zones.splice(index, 1);
+    saveEmulsifierZones();
+    return { ok: true };
+}
+
+export function setNearestEmulsifierFuel(player, fuelType, maxDistance = 16) {
+    if (!Object.prototype.hasOwnProperty.call(EMULSIFIER_FUEL_STATS, fuelType)) {
+        return { ok: false, reason: "bad_fuel" };
+    }
+    const zone = findNearestEmulsifier(player, maxDistance);
+    if (!zone) return { ok: false, reason: "not_found" };
+    const stats = getFuelStats(fuelType);
+    zone.fuelType = fuelType;
+    zone.fuelTicksRemaining = stats.permanent ? 2147483647 : stats.durationTicks;
+    zone.active = true;
+    zone.lastUpdatedTick = system.currentTick;
+    zone.lastDetoxTick = undefined;
+    zone.firstScanDone = false;
+    saveEmulsifierZones();
+    system.runTimeout(() => { try { processEmulsifierZones(); } catch { } }, 1);
+    return { ok: true };
+}
+
+export function setEmulsifierFuelAtBlock(dimensionId, x, y, z, fuelType) {
+    if (!Object.prototype.hasOwnProperty.call(EMULSIFIER_FUEL_STATS, fuelType)) {
+        return { ok: false, reason: "bad_fuel" };
+    }
+    const zone = getEmulsifierZoneAtBlock(dimensionId, x, y, z);
+    if (!zone) return { ok: false, reason: "not_found" };
+    const stats = getFuelStats(fuelType);
+    zone.fuelType = fuelType;
+    zone.fuelTicksRemaining = stats.permanent ? 2147483647 : stats.durationTicks;
+    zone.active = true;
+    zone.lastUpdatedTick = system.currentTick;
+    // So adaptive interval doesn't throttle: next run uses interval=1 and full first-scan budget.
+    zone.lastDetoxTick = undefined;
+    zone.firstScanDone = false;
+    saveEmulsifierZones();
+    system.runTimeout(() => { try { processEmulsifierZones(); } catch { } }, 1);
+    return { ok: true };
+}
+
+export function setEmulsifierActiveAtBlock(dimensionId, x, y, z, active) {
+    const zones = loadEmulsifierZones();
+    const fx = Math.floor(x);
+    const fy = Math.floor(y);
+    const fz = Math.floor(z);
+    const zone = zones.find(z => z.dimension === dimensionId && z.x === fx && z.y === fy && z.z === fz);
+    if (!zone) return { ok: false, reason: "not_found" };
+    zone.active = active === true;
+    zone.lastUpdatedTick = system.currentTick;
+    if (zone.active) {
+        // So adaptive interval doesn't throttle; next run uses interval=1 and can use first-scan budget.
+        zone.lastDetoxTick = undefined;
+        zone.firstScanDone = false;
+        saveEmulsifierZones();
+        system.runTimeout(() => { try { processEmulsifierZones(); } catch { } }, 1);
+        return { ok: true };
+    }
+    saveEmulsifierZones();
+    return { ok: true };
+}
 
 /** Get spawn speed multiplier from dev tools override. 1 = normal, 0.5 = half speed, 2 = double speed. */
 export function getSpawnSpeedMultiplier() {
@@ -1369,7 +1988,6 @@ let globalSpawnCount = 0;
 // key: "chunkX,chunkZ" -> { lastScanTick, foundBlocks, playerPositions: Set<"x,z"> }
 // Store player positions that were in this chunk when marked barren, so we can clear if player moves
 const barrenAreaCache = new Map();
-const BARREN_AREA_COOLDOWN = SCAN_INTERVAL * 3; // 9 seconds before retrying barren area (reduced from 15)
 
 // Cache spawn attempt results per tile to prevent repeated failed attempts
 // key: "x,y,z" -> { lastAttemptTick, success }
@@ -1779,7 +2397,6 @@ const chunkLastVisit = new Map();
 // Track chunk age (when chunk was first loaded/visited)
 // key: "chunkX,chunkZ" -> firstVisitTick
 const chunkFirstVisit = new Map();
-const CHUNK_LOAD_DELAY = 5; // Wait 5 ticks (0.25 seconds) before doing full scan in new chunk
 let lastChunkTrimTick = 0;
 
 // Progressive spawn rate: Track when area was first entered to gradually increase spawn rate
@@ -1792,9 +2409,6 @@ const PROGRESSIVE_SPAWN_INITIAL_RATE = 0.5; // Start at 50% spawn rate
 // Chunk scan queue: Stagger scans across multiple ticks to prevent simultaneous scans
 // key: "chunkX,chunkZ" -> { scheduledTick, playerIds: Set, scanInProgress, priority, playerPositions: Map<playerId, {x, z, chunkKey}> }
 const chunkScanQueue = new Map();
-const CHUNK_SCAN_STAGGER_INTERVAL = 20; // Spread scans 20 ticks apart (1 second)
-
-const DISCOVERY_RADIUS = 75; // Scan radius for discovering all dusted_dirt/snow_layer blocks (beyond spawn range)
 const CACHE_CHECK_RADIUS = 100; // Only check cached blocks within 100 blocks of player (performance optimization)
 const DUSTED_DIRT_CACHE_TTL = SCAN_INTERVAL * 30; // Cache entries expire after 30 scan intervals (90 seconds)
 const CACHE_VALIDATION_INTERVAL = SCAN_INTERVAL * 3; // Validate cache every 3 scan intervals (~15 seconds)
@@ -1962,6 +2576,363 @@ export function countNearbyDustedDirtBlocks(center, dimension, radius, limit = 1
     }
     
     return count;
+}
+
+// Blocks currently being "worked on" by Emulsifier (delay before conversion)
+const pendingEmulsifierConversions = new Map(); // key -> { dimId, x, y, z, blockType, lastSpawnTick }
+const EMULSIFIER_CONVERSION_DELAY_TICKS = 400; // ~20 sec of particles before transform
+// White dust particle lifetime ~6 sec = 120 ticks; spawn new batch before first fades
+const EMULSIFIER_PARTICLE_INTERVAL_BY_DENSITY = [120, 80, 50]; // Less=120, Medium=80, More=50 ticks
+
+function playSoundAtLocation(dimId, x, y, z, soundId, volume = 0.5, maxDist = 24) {
+    try {
+        const cx = x + 0.5;
+        const cy = y + 0.5;
+        const cz = z + 0.5;
+        const maxSq = maxDist * maxDist;
+        for (const p of world.getPlayers()) {
+            if (!p?.isValid || p.dimension?.id !== dimId) continue;
+            const loc = p.location;
+            const dx = loc.x - cx;
+            const dy = loc.y - cy;
+            const dz = loc.z - cz;
+            if ((dx * dx + dy * dy + dz * dz) > maxSq) continue;
+            const mult = getPlayerSoundVolume ? getPlayerSoundVolume(p) : 1;
+            p.playSound(soundId, { volume: volume * mult, pitch: 1 });
+        }
+    } catch { }
+}
+
+function neutralizeCorruptedBlock(dimension, x, y, z) {
+    try {
+        const block = dimension.getBlock({ x, y, z });
+        if (!block) return false;
+        if (block.typeId === "mb:dusted_dirt") {
+            block.setType("minecraft:dirt");
+            unregisterDustedDirtBlock(x, y, z);
+            return true;
+        }
+        if (block.typeId === "mb:snow_layer") {
+            // Convert dangerous corrupted layer into harmless vanilla snow.
+            block.setType("minecraft:snow_layer");
+            return true;
+        }
+    } catch {
+        // Ignore unloaded chunks / block errors
+    }
+    return false;
+}
+
+function spawnEmulsifierParticlesAt(dimension, x, y, z, blockType, count = 3) {
+    if (count < 1) return;
+    const cx = x + 0.5;
+    const cz = z + 0.5;
+    const isSnow = blockType === "mb:snow_layer";
+    const cy = isSnow ? y + 0.5 : y + 1.5; // Snow: at block level; dusted_dirt: one block above
+    const positions = [
+        { x: cx, y: cy, z: cz },
+        { x: cx + 0.3, y: cy, z: cz },
+        { x: cx, y: cy, z: cz + 0.3 }
+    ];
+    try {
+        for (let i = 0; i < Math.min(count, positions.length); i++) {
+            dimension.spawnParticle("mb:white_dust_particle", positions[i]);
+        }
+    } catch { }
+}
+
+/** Queue a block for delayed conversion: spawn dust particles (persistent until transform), play working sound, convert after delay. Uses same targets as spawn (TARGET_BLOCK, TARGET_BLOCK_2). */
+function queueEmulsifierConversion(dimension, dimId, x, y, z) {
+    const key = `${dimId},${x},${y},${z}`;
+    if (pendingEmulsifierConversions.has(key)) return false;
+    let blockType;
+    try {
+        const block = dimension.getBlock({ x, y, z });
+        if (!block || (block.typeId !== TARGET_BLOCK && block.typeId !== TARGET_BLOCK_2)) return false;
+        blockType = block.typeId;
+    } catch {
+        return false;
+    }
+    const now = system.currentTick;
+    pendingEmulsifierConversions.set(key, { dimId, x, y, z, blockType, lastSpawnTick: now });
+    const density = typeof getStormParticleDensity === "function" ? (getStormParticleDensity(dimension) ?? 0) : 1;
+    const particleCount = Math.max(1, Math.min(3, density + 1));
+    spawnEmulsifierParticlesAt(dimension, x, y, z, blockType, particleCount);
+    playSoundAtLocation(dimId, x, y, z, "block.enchantment_table.use", 0.35, 20);
+
+    system.runTimeout(() => {
+        pendingEmulsifierConversions.delete(key);
+        try {
+            const dim = world.getDimension(dimId);
+            if (neutralizeCorruptedBlock(dim, x, y, z)) {
+                const density = typeof getStormParticleDensity === "function" ? (getStormParticleDensity(dim) ?? 0) : 1;
+                const particleCount = Math.max(1, Math.min(3, density + 1));
+                spawnEmulsifierParticlesAt(dim, x, y, z, blockType, particleCount);
+                playSoundAtLocation(dimId, x, y, z, "block.composter.fill_success", 0.25, 20);
+            }
+        } catch { }
+    }, EMULSIFIER_CONVERSION_DELAY_TICKS);
+    return true;
+}
+
+/** True if detox can flow through this block (air, water, foliage - like dust storm). */
+function canDetoxFlowThrough(block) {
+    if (!block) return true;
+    const typeId = block.typeId;
+    if (typeId === "minecraft:air" || typeId === "minecraft:cave_air" || typeId === "minecraft:void_air") return true;
+    if (typeId === "minecraft:water" || typeId === "minecraft:flowing_water") return true;
+    if (typeof STORM_PARTICLE_PASS_THROUGH !== "undefined" && STORM_PARTICLE_PASS_THROUGH?.has?.(typeId)) return true;
+    return false;
+}
+
+/** Get dusted_dirt/snow_layer blocks reachable by air path from machine (detox flows through air/foliage like dust storm; walls block). */
+function getReachableCorruptedBlocks(dimension, cx, cy, cz, maxRadius, maxAirVisits = 8000) {
+    const result = [];
+    const airVisited = new Set();
+    const corruptedSeen = new Set();
+    const radiusSq = maxRadius * maxRadius;
+    const dirs = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+    const queue = [];
+    for (const [dx, dy, dz] of dirs) {
+        queue.push({ x: cx + dx, y: cy + dy, z: cz + dz });
+    }
+    let visited = 0;
+    while (queue.length > 0 && visited < maxAirVisits) {
+        const pos = queue.shift();
+        const key = `${pos.x},${pos.y},${pos.z}`;
+        if (airVisited.has(key)) continue;
+        const ddx = pos.x - cx;
+        const ddy = pos.y - cy;
+        const ddz = pos.z - cz;
+        if ((ddx * ddx + ddy * ddy + ddz * ddz) > radiusSq) continue;
+        airVisited.add(key);
+        visited++;
+        try {
+            const block = dimension.getBlock(pos);
+            if (!block) continue;
+            const typeId = block.typeId;
+            if (typeId === "mb:dusted_dirt" || typeId === "mb:snow_layer") {
+                const ckey = `${pos.x},${pos.y},${pos.z}`;
+                if (!corruptedSeen.has(ckey)) {
+                    corruptedSeen.add(ckey);
+                    result.push({ x: pos.x, y: pos.y, z: pos.z });
+                }
+                continue;
+            }
+            if (!canDetoxFlowThrough(block)) continue;
+            for (const [dx, dy, dz] of dirs) {
+                const nx = pos.x + dx;
+                const ny = pos.y + dy;
+                const nz = pos.z + dz;
+                const ndx = nx - cx;
+                const ndy = ny - cy;
+                const ndz = nz - cz;
+                if ((ndx * ndx + ndy * ndy + ndz * ndz) <= radiusSq) {
+                    queue.push({ x: nx, y: ny, z: nz });
+                }
+            }
+        } catch { }
+    }
+    return result;
+}
+
+function processEmulsifierZones() {
+    const zones = loadEmulsifierZones();
+    const dbg = (cat, ...args) => { if (typeof isDebugEnabled === "function" && isDebugEnabled("emulsifier", cat)) console.warn("[EMULSIFIER DEBUG]", cat, ...args); };
+    if (!Array.isArray(zones) || zones.length === 0) {
+        dbg("general", "processEmulsifierZones: no zones, exit. zones=", zones?.length, "cache=", emulsifierZoneCache?.length);
+        return;
+    }
+    let changed = false;
+    const now = system.currentTick;
+    const baseRadius = getEmulsifierDetoxBaseRadius();
+    dbg("general", "processEmulsifierZones start tick=", now, "zones=", zones.length, "baseRadius=", baseRadius);
+
+    // Remove zones whose machine block is gone (explosion, etc.) — data persists; block break stops output
+    for (let i = zones.length - 1; i >= 0; i--) {
+        const zone = zones[i];
+        if (!zone?.dimension) continue;
+        try {
+            const dim = world.getDimension(zone.dimension);
+            if (!isZoneMachinePresent(zone, dim)) {
+                zones.splice(i, 1);
+                changed = true;
+            }
+        } catch {
+            continue;
+        }
+    }
+
+    for (const zone of zones) {
+        if (!zone || zone.active !== true) {
+            dbg("zones", "skip zone (inactive):", zone?.x, zone?.y, zone?.z, "active=", zone?.active);
+            continue;
+        }
+        const dimId = zone.dimension;
+        if (!dimId) {
+            dbg("zones", "skip zone (no dim):", zone?.x, zone?.y, zone?.z);
+            continue;
+        }
+        let dimension;
+        try {
+            dimension = world.getDimension(dimId);
+        } catch (e) {
+            dbg("general", "getDimension failed", dimId, e?.message);
+            continue;
+        }
+        if (!dimension) continue;
+        // Already cleaned above; machine present here
+
+        const fuelStats = getFuelStats(zone.fuelType);
+        if (!fuelStats.permanent) {
+            const lastTick = Number(zone.lastUpdatedTick ?? now);
+            const elapsed = Math.max(1, now - lastTick);
+            zone.fuelTicksRemaining = Math.max(0, Math.floor((zone.fuelTicksRemaining ?? 0) - elapsed));
+            zone.lastUpdatedTick = now;
+            changed = true;
+            if (zone.fuelTicksRemaining <= 0) {
+                zone.active = false;
+                continue;
+            }
+        } else {
+            zone.fuelTicksRemaining = 2147483647;
+            zone.lastUpdatedTick = now;
+        }
+
+        const powerRadius = Math.max(3, fuelStats.radius ?? Math.floor(baseRadius * fuelStats.performance));
+        const zoneX = Math.floor(zone.x);
+        const zoneY = Math.floor(zone.y);
+        const zoneZ = Math.floor(zone.z);
+
+        // Adaptive: only throttle when we have a recent lastDetoxTick and it's been quiet a while
+        const lastDetox = zone.lastDetoxTick;
+        const quietTicks = typeof lastDetox === "number" ? Math.max(0, now - lastDetox) : 0;
+        let interval = 1;
+        if (quietTicks > 600) interval = 20;
+        else if (quietTicks > 200) interval = 5;
+        const phase = (zoneX + zoneZ + now) % interval;
+        if (phase !== 0) {
+            dbg("purification", "skip zone (phase):", zoneX, zoneZ, "interval=", interval, "phase=", phase);
+            continue;
+        }
+
+        // Dome: full radius horizontally, 3–5 blocks below machine, full radius above.
+        // Scan order and chunk checks aligned with spawn block scanning (collectDustedTiles, isChunkLoadedCached).
+        const maxDown = Math.min(5, powerRadius);
+        const minY = zoneY - maxDown;
+        const maxY = zoneY + powerRadius;
+        const totalLayers = maxY - minY + 1;
+        const rSq = powerRadius * powerRadius;
+        const layerOffsetFromMachine = zoneY - minY;
+        const PRIORITY_BAND_DY = 3;
+
+        const isFirstScan = zone.firstScanDone !== true;
+        if (isFirstScan) {
+            zone.firstScanDone = true;
+            changed = true;
+        }
+        const searching = isFirstScan || typeof lastDetox !== "number" || quietTicks > 150;
+        const baseBudget = 700 + Math.floor(300 * fuelStats.performance);
+        let opsBudget = Math.floor(baseBudget * (searching ? 2 : 1) * (isFirstScan ? 1.8 : 1));
+        dbg("purification", "zone scan", zoneX, zoneY, zoneZ, "powerRadius=", powerRadius, "interval=", interval, "firstScan=", isFirstScan, "searching=", searching, "budget=", opsBudget);
+
+        const layerOrder = [];
+        if (isFirstScan) {
+            // First scan: bottom-up so ground (dusted_dirt) is checked before budget is spent on machine Y.
+            for (let li = 0; li < totalLayers; li++) layerOrder.push(li);
+        } else {
+            for (let dy = 0; dy <= PRIORITY_BAND_DY; dy++) {
+                if (dy === 0) {
+                    layerOrder.push(layerOffsetFromMachine);
+                } else {
+                    if (layerOffsetFromMachine + dy < totalLayers) layerOrder.push(layerOffsetFromMachine + dy);
+                    if (layerOffsetFromMachine - dy >= 0) layerOrder.push(layerOffsetFromMachine - dy);
+                }
+            }
+            for (let li = 0; li <= layerOffsetFromMachine - (PRIORITY_BAND_DY + 1); li++) layerOrder.push(li);
+            for (let li = layerOffsetFromMachine + (PRIORITY_BAND_DY + 1); li < totalLayers; li++) layerOrder.push(li);
+        }
+
+        const logPurification = typeof isDebugEnabled === "function" && isDebugEnabled("emulsifier", "purification");
+        let queuedThisZone = 0;
+        let positionsChecked = 0;
+        let chunksSkipped = 0;
+        let checkedBelow = 0;
+        let checkedAt = 0;
+        let checkedAbove = 0;
+        let maxHorizontalRadiusSeen = 0;
+        const sampleTypeCounts = new Map();
+        let sampleRemaining = logPurification ? 60 : 0;
+        for (let i = 0; i < layerOrder.length && opsBudget > 0; i++) {
+            const layerIndex = layerOrder[i];
+            if (layerIndex < 0 || layerIndex >= totalLayers) continue;
+            const yLayer = minY + layerIndex;
+            const dy = yLayer - zoneY;
+            const horizontalRadius = Math.floor(Math.sqrt(Math.max(0, rSq - dy * dy)));
+            if (horizontalRadius <= 0) continue;
+            if (horizontalRadius > maxHorizontalRadiusSeen) maxHorizontalRadiusSeen = horizontalRadius;
+            for (let r = 0; r <= horizontalRadius && opsBudget > 0; r++) {
+                const rSqLo = r * r;
+                const rSqHi = (r + 1) * (r + 1);
+                for (let dx = -r; dx <= r && opsBudget > 0; dx++) {
+                    for (let dz = -r; dz <= r && opsBudget > 0; dz++) {
+                        const distSq = dx * dx + dz * dz;
+                        if (distSq < rSqLo || distSq >= rSqHi) continue;
+                        const wx = zoneX + dx;
+                        const wy = yLayer;
+                        const wz = zoneZ + dz;
+                        if (!isChunkLoadedCached(dimension, wx, wz)) {
+                            chunksSkipped++;
+                            opsBudget--;
+                            continue;
+                        }
+                        if (dy < 0) checkedBelow++;
+                        else if (dy > 0) checkedAbove++;
+                        else checkedAt++;
+                        if (sampleRemaining > 0) {
+                            try {
+                                const sampled = dimension.getBlock({ x: wx, y: wy, z: wz });
+                                const tid = sampled?.typeId ?? "null";
+                                sampleTypeCounts.set(tid, (sampleTypeCounts.get(tid) ?? 0) + 1);
+                                sampleRemaining--;
+                            } catch { }
+                        }
+                        if (queueEmulsifierConversion(dimension, dimId, wx, wy, wz)) {
+                            zone.lastDetoxTick = now;
+                            changed = true;
+                            queuedThisZone++;
+                            dbg("purification", "queued conversion", wx, wy, wz);
+                        }
+                        positionsChecked++;
+                        opsBudget--;
+                    }
+                }
+            }
+        }
+        let sampleSummary = "";
+        if (logPurification && sampleTypeCounts.size > 0) {
+            const top = Array.from(sampleTypeCounts.entries())
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 6)
+                .map(([k, v]) => `${k}:${v}`)
+                .join(", ");
+            sampleSummary = top;
+        }
+        dbg("purification",
+            "zone", zoneX, zoneY, zoneZ,
+            "checked", positionsChecked,
+            "chunksSkipped", chunksSkipped,
+            "queued", queuedThisZone,
+            "below/at/above", `${checkedBelow}/${checkedAt}/${checkedAbove}`,
+            "maxHorizR", maxHorizontalRadiusSeen,
+            sampleSummary ? `sampleTypes ${sampleSummary}` : ""
+        );
+    }
+
+    if (changed) {
+        dbg("persistence", "saveEmulsifierZones (changed=true)");
+        saveEmulsifierZones();
+    }
 }
 
 // Export function to manually test a block position (for debugging)
@@ -2194,10 +3165,11 @@ function collectMiningSpawnTiles(dimension, center, minDistance, maxDistance, li
         } else if (dimensionId === "minecraft:the_end") {
             targetBlocks = `"${END_TARGET_BLOCK}"`;
         }
-        console.warn(`[SPAWN DEBUG] Starting tile collection: Center (${cx}, ${cy}, ${cz}), Discovery: 0-${DISCOVERY_RADIUS}, Spawn: ${minDistance}-${maxDistance}, Limit: ${limit}${isSinglePlayer ? ' [SINGLE PLAYER MODE - Enhanced Scanning]' : ''}${isNetherOrEnd ? ' [NETHER/END - Reduced Scanning]' : ''}`);
+        const adaptiveDiscovery = getAdaptiveDiscoveryRadius(totalPlayerCount, isTightGroup, isIsolated, false);
+        console.warn(`[SPAWN DEBUG] Starting tile collection: Center (${cx}, ${cy}, ${cz}), Discovery: 0-${adaptiveDiscovery}, Spawn: ${minDistance}-${maxDistance}, Limit: ${limit}${isSinglePlayer ? ' [SINGLE PLAYER MODE - Enhanced Scanning]' : ''}${isNetherOrEnd ? ' [NETHER/END - Reduced Scanning]' : ''}`);
         console.warn(`[SPAWN DEBUG] Player position: (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)}), Dimension: ${dimensionId}`);
         console.warn(`[SPAWN DEBUG] TARGET_BLOCK constants: ${targetBlocks}`);
-        console.warn(`[SPAWN DEBUG] Two-phase system: Discovery finds all blocks in 0-${DISCOVERY_RADIUS} range, validation filters to ${minDistance}-${maxDistance} spawn range`);
+        console.warn(`[SPAWN DEBUG] Two-phase system: Discovery finds all blocks in adaptive radius, validation filters to ${minDistance}-${maxDistance} spawn range`);
         // Note: queryLimit is calculated in collectDustedTiles, so we can't show it here
         if (isSinglePlayer && !isNetherOrEnd) {
             console.warn(`[SPAWN DEBUG] Single player detected: Using 2x normal query limit and adaptive Y range for more thorough scanning`);
@@ -2336,6 +3308,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     
     const dimensionId = dimension.id;
     const isNetherOrEnd = dimensionId === "minecraft:nether" || dimensionId === "minecraft:the_end";
+    const adaptiveDiscoveryRadiusBase = getAdaptiveDiscoveryRadius(totalPlayerCount, isTightGroup, isIsolated, false);
     
     // Use scaled query limit based on player count (reduces lag with multiple players)
     // Nether/End: Use REDUCED limits since blocks are abundant (netherrack/end_stone everywhere)
@@ -2374,7 +3347,7 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     const cacheMaxDistance = maxDistance; // Use maxDistance (45 blocks) for spawn range filtering
     const cacheMaxSq = cacheMaxDistance * cacheMaxDistance;
     // Use DISCOVERY_RADIUS for cache check radius (larger area to find cached blocks)
-    const cacheCheckRadius = Math.max(CACHE_CHECK_RADIUS, DISCOVERY_RADIUS); // Use larger of the two
+    const cacheCheckRadius = Math.max(CACHE_CHECK_RADIUS, adaptiveDiscoveryRadiusBase); // Use larger of the two
     const cacheCheckRadiusSq = cacheCheckRadius * cacheCheckRadius;
     
     // Debug: Log cache size
@@ -2637,7 +3610,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
         const barrenInfo = barrenAreaCache.get(chunkKey);
         const now = system.currentTick;
         
-        if (barrenInfo && (now - barrenInfo.lastScanTick) < BARREN_AREA_COOLDOWN) {
+        const barrenCooldownTicks = getBarrenCooldownTicks(totalPlayerCount, chunkKey);
+        if (barrenInfo && (now - barrenInfo.lastScanTick) < barrenCooldownTicks) {
             // Check if player position has changed significantly (moved to different area)
             // If player moved, clear barren cache - they might be near dusted_dirt now
             const currentPosKey = `${cx},${cz}`;
@@ -2660,8 +3634,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     // Optimize new chunk handling: Check if chunk is newly loaded
     const centerChunkKey = getChunkKey(cx, cz);
     const chunkFirstVisitTick = chunkFirstVisit.get(centerChunkKey);
-    // Enhanced delay for tight groups: 10 ticks instead of 5
-    const chunkLoadDelay = isTightGroup ? 10 : CHUNK_LOAD_DELAY;
+    // Adaptive chunk load delay from dev tuning.
+    const chunkLoadDelay = getChunkLoadDelayTicks(isTightGroup);
     const isNewChunk = chunkFirstVisitTick && (now - chunkFirstVisitTick) < chunkLoadDelay;
     
     // Progressive spawn rate: Track when area was first entered
@@ -2717,7 +3691,8 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     } else if (isNewChunk && totalPlayerCount > 1) {
         // Schedule scan for this chunk (stagger based on how many players already queued)
         const staggerOffset = Array.from(chunkScanQueue.values()).filter(q => q.scheduledTick > now).length;
-        const scheduledTick = now + (staggerOffset * CHUNK_SCAN_STAGGER_INTERVAL);
+        const staggerTicks = getScanStaggerTicks();
+        const scheduledTick = now + (staggerOffset * staggerTicks);
         
         // Track player position for adaptive stagger
         const playerPositions = new Map();
@@ -2737,14 +3712,15 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     }
     
     // Cleanup old completed scans from queue
-    // Use CHUNK_SCAN_STAGGER_INTERVAL * 4 to ensure we don't remove scans before they execute
+    const staggerTicks = getScanStaggerTicks();
+    // Use staggerTicks * 4 to ensure we don't remove scans before they execute
     // Also cleanup cancelled scans (where all players moved away)
     for (const [chunkKey, scanInfo] of chunkScanQueue.entries()) {
-        if (scanInfo.scanInProgress && (now - scanInfo.scheduledTick) > (CHUNK_SCAN_STAGGER_INTERVAL * 4)) {
+        if (scanInfo.scanInProgress && (now - scanInfo.scheduledTick) > (staggerTicks * 4)) {
             chunkScanQueue.delete(chunkKey);
         }
         // Cleanup scans that are way past their scheduled time (cancelled or failed)
-        if (!scanInfo.scanInProgress && (now - scanInfo.scheduledTick) > (CHUNK_SCAN_STAGGER_INTERVAL * 8)) {
+        if (!scanInfo.scanInProgress && (now - scanInfo.scheduledTick) > (staggerTicks * 8)) {
             chunkScanQueue.delete(chunkKey);
         }
     }
@@ -2901,9 +3877,9 @@ function collectDustedTiles(dimension, center, minDistance, maxDistance, limit =
     // Discovery phase: Use DISCOVERY_RADIUS for scanning (find all blocks in larger area)
     // For new chunks, still use reduced radius to prevent lag
     // Isolated = multiplayer only (far from other players). Single player is never isolated.
-    let discoveryRadius = isNewChunk ? effectiveMaxDistance : DISCOVERY_RADIUS;
-    if (isIsolated) {
-        discoveryRadius = 40; // Reduced from 75 for isolated players (multiplayer, far from others)
+    let discoveryRadius = getAdaptiveDiscoveryRadius(totalPlayerCount, isTightGroup, isIsolated, isNewChunk);
+    if (isNewChunk) {
+        discoveryRadius = Math.min(discoveryRadius, effectiveMaxDistance);
     }
     
     if (isDebugEnabled('spawn', 'discovery') || isDebugEnabled('spawn', 'tileScanning') || isDebugEnabled('spawn', 'all')) {
@@ -5224,6 +6200,11 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
             spawnAttemptCache.set(tileKey, { lastAttemptTick: now, success: false });
             continue;
         }
+        // Emulsifier no-spawn field: natural Maple Bear spawns are blocked in active detox zones.
+        if (isInsideEmulsifierNoSpawnZone(dimension.id, spawnLocation)) {
+            spawnAttemptCache.set(tileKey, { lastAttemptTick: now, success: false });
+            continue;
+        }
         try {
             // Ensure entity ID is a valid string
             if (!config.id || typeof config.id !== 'string') {
@@ -5444,6 +6425,50 @@ if (ERROR_LOGGING) {
     console.warn("[SPAWN] Maple Bear spawn controller initialized.");
 }
 // Don't call debugLog at top-level: codex may not be ready yet (debugStateCache not initialized)
+
+// Emulsifier processing loop: detox nearby corruption and burn fuel over time.
+system.runInterval(() => {
+    try {
+        processEmulsifierZones();
+    } catch (error) {
+        errorLog("Error in emulsifier interval", error);
+    }
+}, 10);
+
+system.runInterval(() => {
+    try {
+        const zones = loadEmulsifierZones();
+        if (Array.isArray(zones) && zones.length > 0) saveEmulsifierZones();
+    } catch { }
+}, 50);
+
+if (world.beforeEvents?.playerLeave) {
+    world.beforeEvents.playerLeave.subscribe(() => {
+        try {
+            const zones = loadEmulsifierZones();
+            if (Array.isArray(zones) && zones.length > 0) saveEmulsifierZones();
+        } catch { }
+    });
+}
+
+system.runInterval(() => {
+    try {
+        if (pendingEmulsifierConversions.size === 0) return;
+        const now = system.currentTick;
+        for (const [key, data] of pendingEmulsifierConversions) {
+            try {
+                const dim = world.getDimension(data.dimId);
+                const density = typeof getStormParticleDensity === "function" ? (getStormParticleDensity(dim) ?? 0) : 1;
+                const interval = EMULSIFIER_PARTICLE_INTERVAL_BY_DENSITY[Math.min(2, Math.max(0, density))] ?? 80;
+                const lastSpawn = data.lastSpawnTick ?? 0;
+                if (now - lastSpawn < interval) continue;
+                data.lastSpawnTick = now;
+                const particleCount = Math.max(1, Math.min(3, density + 1));
+                spawnEmulsifierParticlesAt(dim, data.x, data.y, data.z, data.blockType, particleCount);
+            } catch { }
+        }
+    } catch { }
+}, 30);
 
 system.runInterval(() => {
     try {

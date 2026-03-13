@@ -1,14 +1,172 @@
 # Context Summary
 
-**Date:** 2026-03-04
+**Date:** 2026-03-13
 
-## Dust storms: ON by default (still in Beta Features)
+## Emulsifier: no blocks purified after netherite refuel (log 16:39:52–16:40:49)
 
-User wanted storms to be automatically on when joining a world, without having to enable them in settings first. The toggle stays in Beta Features so users can still turn storms off.
+User refueled with netherite; no new blocks were purified.
 
-### Changes made (mb_scriptToggles.js)
-- **isBetaDustStormsEnabled()** – Inverted logic: returns true by default (when property unset) and false only when explicitly disabled (0/false/"0"). Previously required opt-in (property must be 1/true to enable).
-- Dev tools (summonStorm, override, etc.) unchanged; storms run by default; users can disable via Settings > Beta Features > Dust Storms.
+**Log findings:**
+- **16:39:52** – Pack load; then `no zones, exit` until **16:40:10** when `persistence save: zones= 0 jsonLen= 0` (empty cache saved, wiping world); then `no data from world after 8 attempts`; then user opened UI → zone created (inactive), then refueled → `persistence save: zones= 1 jsonLen= 247`.
+- **16:40:14** – Purification scan ran: firstScan=true, budget=5220, **checked 5220, queued 0**, below/at/above **0/2997/2223**, sampleTypes air, grass_block, dirt, short_grass, emulsifier_machine (no dusted_dirt). So the whole budget was spent on machine Y and above; **no positions below machine Y** were checked, so ground-level dusted_dirt were never scanned.
+
+**Fixes (`mb_spawnController.js`):**
+- **First-scan layer order:** When `isFirstScan`, build `layerOrder` as **bottom-up** (layer 0 to totalLayers-1) so ground layers (where dusted_dirt usually are) are checked before the budget is exhausted on machine Y. Later scans keep the priority-band order.
+- **Don’t remove zone when block check fails:** `isZoneMachinePresent` now returns **true** on catch (chunk unloaded / dimension error) so we don’t remove the zone and then save empty, which was wiping persisted data.
+- **Don’t overwrite world with empty when world has data:** In `saveEmulsifierZones()`, when `zones.length === 0`, call `readEmulsifierZonesRaw()`; if world has data, **skip** writing undefined so we don’t wipe persisted zones when our cache is empty.
+
+---
+
+**Date:** 2026-03-13
+
+## Emulsifier: fuel reset on rejoin + zone overwrite (log 16:31:22–16:32:27)
+
+User reported: after leave/rejoin, fuel reset (UI showed it), weird behavior, no new detox.
+
+**Relevant log window only: 16:31:22 – 16:32:27** (ContentLog; stop there).
+
+- **16:31:22** – Pack load (Plugin Discovered, spawn controller, PropertyHandler). Player join over next ~8s.
+- **16:31:30 – 16:31:40** – Repeated `processEmulsifierZones: no zones, exit. zones= 0 cache= 0` (rehydrate never filled cache).
+- **16:31:41** – `persistence save: zones= 1 jsonLen= 194` then every 10 ticks `zones skip zone (inactive): -88 67 -31 active= false`. Opening the block UI created a new default zone (no fuel, inactive) and saved it, overwriting previous saved data.
+- **16:31:41 – 16:31:46** – Only skip zone (inactive) and periodic persistence save; no purification scans.
+- **16:32:00 – 16:32:16** – Log shows `purification skip zone (phase): -88 -31 interval= 5 phase= 1` and `persistence save: zones= 1 jsonLen= 268`. So in this window the zone was later updated (refuel/enable in UI → 268 bytes) and then phase-skipped, not inactive; still no purification scan runs in this segment.
+- **16:32:21** – Plugin Discovered again (pack reload / new session); after that `no zones, exit` again.
+
+**Script fixes from this window:**
+- **Refuel / enable reset throttle** (`setEmulsifierFuelAtBlock`, `setEmulsifierActiveAtBlock`, `setNearestEmulsifierFuel`): When the user refuels or enables the zone, set `lastDetoxTick = undefined` and `firstScanDone = false` so the next run uses interval=1 (no phase-skip) and gets the higher first-scan budget.
+- **Loaded zones get a run** (`loadEmulsifierZones`): When we load zones from persistence (initial load or rehydrate), for each zone that is active and has fuel (netherite or fuelTicksRemaining > 0), set `lastDetoxTick = undefined` and `firstScanDone = false` so rehydrated zones are not phase-skipped and get at least one full scan.
+
+**Root cause:** On first load, `readEmulsifierZonesRaw()` returned empty (world/handler not ready or order of reads), so cache was set to `[]`. When the player opened the block UI, `upsertEmulsifierZoneAtBlock` didn’t find a zone (cache was empty) and **created a new default zone** (no fuel, `active: false`) and saved it, **overwriting** the previously persisted zone data.
+
+**Fixes (`mb_spawnController.js`):**
+- **Persistence read order:** `readEmulsifierZonesRaw()` now tries **direct** `world.getDynamicProperty(main)` and `world.getDynamicProperty(backup)` first, then handler main/chunked. This avoids the handler cache (which can be empty or stale on first read) and prefers the world’s persisted value after rejoin.
+- **Initial load retries:** When cache is null and raw is empty, we no longer set cache to `[]` immediately. We retry up to `EMULSIFIER_INITIAL_LOAD_RETRIES` (8) times, leaving cache null so the next call to `loadEmulsifierZones()` tries again (world may not be ready on the first few ticks).
+- **No overwrite on UI open:** In `upsertEmulsifierZoneAtBlock`, if no zone is found at the block and cache was empty (or null), we **force a fresh load** (`emulsifierZoneCache = null` then `loadEmulsifierZones()`), then look up again. Only if still not found do we create a new zone. So opening the UI after rejoin no longer overwrites saved fuel/active with a default zone.
+- **clearEmulsifierZoneCache** resets `emulsifierInitialLoadAttempts` so debug clear doesn’t block retries.
+
+---
+
+## Emulsifier scan: chunk-loaded check and spawn alignment
+
+- **Chunk-loaded check in purification dome** (`mb_spawnController.js`): Before sampling or queuing a block at `(wx, wz)`, we now skip when `!isChunkLoadedCached(dimension, wx, wz)` (same pattern as spawn block scanning). Skipped positions still consume `opsBudget`; we count `chunksSkipped` and log it in purification debug.
+- **Spawn reference**: Comment added that dome scan order and chunk checks are aligned with spawn scanning (`collectDustedTiles`, `isChunkLoadedCached`). `queueEmulsifierConversion` now uses `TARGET_BLOCK` / `TARGET_BLOCK_2` so emulsifier targets stay in sync with spawn.
+
+---
+
+**Date:** 2026-03-13
+
+## Emulsifier deep debug + persistence rehydrate + stronger scan coverage
+
+User reported after world reload (`16:22:50` and later) that netherite fuel still did not persist and detox coverage seemed biased near/above machine Y with weaker post-first-scan behavior.
+
+### Log findings
+- Repeated lines immediately after reload: `processEmulsifierZones: no zones, exit. zones=0 cache=0`, meaning the in-memory cache remained empty right after startup.
+- Later, interacting with machine recreated/loaded a zone as inactive (`skip zone (inactive)`), matching user symptom that fuel/state looked reset.
+- Quiet zones were throttled by adaptive interval (`interval=20` and phase skips), making activity sparse after no recent detox.
+
+### Changes made
+- **Persistence rehydrate / stronger saves (`mb_spawnController.js`)**
+  - Added `readEmulsifierZonesRaw()` loader probe with explicit source priority:
+    1) handler main prop, 2) handler chunked, 3) direct main dynamic prop, 4) direct backup prop.
+  - Added periodic rehydrate for empty cache every 20 ticks so startup-empty cache can recover persisted zones.
+  - Save now logs persistence debug metrics (`zones`, `jsonLen`) and continues writing both main + backup dynamic keys.
+  - Added save on `world.beforeEvents.playerLeave` plus faster periodic save (`50` ticks) when zones exist.
+- **Detox scan behavior / diagnostics (`mb_spawnController.js`)**
+  - Increased non-first-scan concurrency budget (`baseBudget = 700 + 300 * performance`).
+  - Increased first-scan multiplier to `1.8x` and keeps `2x` searching multiplier.
+  - Enforced explicit priority scan order:
+    - First process Y band `machineY ± 3` (full horizontal circles per layer),
+    - then remaining lower/upper layers.
+  - Added richer purification telemetry:
+    - checked vs queued
+    - below/at/above checked counts
+    - max horizontal radius reached
+    - sampled nearby block type frequencies (top entries) while debug is enabled.
+- **Debug UI diagnostics (`mb_codex.js`)**
+  - Emulsifier diagnostics now also show backup raw length and load-probe source/raw length.
+
+---
+
+**Date:** 2026-03-12
+
+## Emulsifier: purification not running + data not persisting across save/rejoin
+
+User reported: (1) Emulsifier no longer purifies blocks; (2) machine state (fuel, enabled, etc.) resets when leaving and rejoining the world.
+
+### Cause
+- **Purification**: Adaptive scan interval used `lastDetoxTick ?? createdTick ?? now`, so zones loaded from save (with no `lastDetoxTick`) used old `createdTick` and got a large `quietTicks`, so `interval` became 5 or 20 and the zone was rarely scanned. Also only one Y-layer was processed per run with a 20-tick interval, so progress was very slow.
+- **Persistence**: Zones were saved via the handler’s `setWorldProperty` + `saveAllProperties()`; reliance on the handler’s cache/flush or Bedrock world property persistence could leave data unwritten before exit.
+
+### Changes made (mb_spawnController.js)
+- **Purification**
+  - Adaptive interval now only throttles when `zone.lastDetoxTick` is defined. If it’s undefined (new or loaded zone), `quietTicks` is 0 so `interval = 1` and the zone is scanned every run.
+  - Dome scan now processes up to 4 Y-layers per run (instead of 1) with a shared ops budget so more of the dome is covered each run.
+  - Emulsifier loop interval reduced from 20 to 10 ticks so `processEmulsifierZones` runs twice as often.
+- **Persistence**
+  - Load: try `getWorldProperty(EMULSIFIER_ZONES_PROPERTY)` first, then fallback to `getWorldPropertyChunked` for older chunked saves.
+  - Save: still use `setWorldProperty` and `saveAllProperties()`, and additionally call `world.setDynamicProperty(EMULSIFIER_ZONES_PROPERTY, json)` so the world is written immediately and survives save/rejoin.
+
+---
+
+**Date:** 2026-03-12
+
+## Emulsifier block UI: exit and no re-open when looking at block
+
+User could not exit the Emulsifier machine UI when looking at the block; closing or backing out sent them back to the main menu instead of fully closing.
+
+### Cause
+- Block interaction (`playerInteractWithBlock`) can fire again when the form closes while the player is still looking at the block, so the UI was being reopened immediately.
+- Any response that wasn’t explicitly “Refuel” or “Enable/Disable” (e.g. odd cancel behavior) needed to be treated as “exit” and never reopen.
+
+### Changes made
+- **main.js** – Cooldown for opening the Emulsifier UI: `emulsifierUiLastOpenTick` map and `EMULSIFIER_UI_COOLDOWN_TICKS` (40 ticks / 2 s). We only open the UI if the last open for that player was more than 2 seconds ago, so closing the form no longer re-triggers an immediate reopen from the same interaction/look.
+- **mb_codex.js** – Main Emulsifier form: exit on Close, cancel, or any invalid/unknown selection (`res.selection !== 0 && res.selection !== 1`). Catch handler stays empty (no reopen on error).
+
+Result: Close and cancel (ESC / look away) fully exit the UI; the 2 s cooldown prevents the block from reopening the UI until the player interacts again after moving away or waiting.
+
+---
+
+**Date:** 2026-03-12
+
+## Emulsifier: dust particles, delay, and sounds
+
+User wanted: dust particles during conversion, a short "working" delay before blocks transform, and sounds in the UI and when the machine is working.
+
+### Changes made
+- **mb_spawnController.js**
+  - Pending conversion queue: blocks are queued instead of converted instantly. `pendingEmulsifierConversions` set prevents double-queueing.
+  - Dust particles: `mb:white_dust_particle` spawned at block when conversion starts and when it completes.
+  - Delay: 15 ticks (~0.75 s) between "start working" and actual block conversion.
+  - Sounds: `block.enchantment_table.use` (subtle hum) when work starts; `block.composter.fill_success` when block is converted. Played to players within 20 blocks.
+- **mb_codex.js**
+  - UI sounds: `mb.codex_open` when opening the machine UI; `mb.codex_turn_page` when Refuel/Enable/Disable/Back/fuel selection; `mb.codex_close` when closing the UI.
+
+---
+
+**Date:** 2026-03-12
+
+## Emulsifier: persistence and block-break behavior
+
+User wanted: Emulsifier data to persist across sessions (like other addon data), and when the machine block is broken, it stops outputting.
+
+### Already in place
+- **Persistence**: Zones are stored via `setWorldProperty("mb_emulsifier_zones", JSON.stringify(zones))`. World dynamic properties are saved every 30 ticks and persist across sessions.
+- **Player break**: `playerBreakBlock` calls `removeEmulsifierZoneAtBlock`, removing the zone and saving.
+
+### Changes made (mb_spawnController.js)
+- **Non-player break**: When the machine block is gone (explosion, piston, etc.), zones are now **removed** instead of only deactivated. Cleanup runs in `processEmulsifierZones` and `getActiveEmulsifierZonesForDimension`. Prevents orphaned zone entries and keeps saved data correct.
+
+---
+
+**Date:** 2026-03-11
+
+## Dev tools: restricted to Litbolt123 or mb_cheats
+
+User wanted the first player who joins a world to **not** automatically get debug/dev tools in the Basic or Powdery Journal, unless they are `Litbolt123` or have the `mb_cheats` tag. First-player settings access (beta features, addon difficulty, etc.) should stay as-is.
+
+### Changes made (mb_codex.js)
+- **Powdery Journal main menu** – `hasDebugOptions` now checks only `player.hasTag("mb_cheats")` or `player.name === "Litbolt123"`; it no longer unlocks Debug/Developer Tools just because world cheats are enabled.
+- **Basic Journal main menu** – Same `hasDebugOptions` condition applied so Debug/Developer Tools buttons only show for `Litbolt123` or players with `mb_cheats`. First-player “owner” behavior for beta/settings is unchanged; only dev/debug menus are affected.
 
 ---
 
@@ -563,3 +721,135 @@ Cached targets could hide the dev override from `getWorldProperty("mb_force_targ
 - `origin`, `maxDistSq`, and `dimensionId` are computed once at the start so both the force-target and cache paths can use them; the inner redundant `const origin` in the cache block was removed.
 
 Result: The force-target check always runs first; targetCache cannot return a stale target while `mb_force_target_player` is set.
+
+---
+
+**Date:** 2026-03-12
+
+## Emulsifier system + spawn scan scheduler tuning
+
+Added a first-pass Emulsifier gameplay system and expanded Spawn Controller dev tools with scan scheduler controls/presets to reduce multiplayer lag spikes from heavy scans.
+
+### Changes made
+
+1. **mb_spawnController.js**
+   - **Emulsifier zones (new world-state system)**:
+     - New zone storage via world property `mb_emulsifier_zones`.
+     - New fuel tiers:
+       - `redstone` (baseline)
+       - `iron` (`snow + iron`, low tier)
+       - `copper` (`snow + copper`, mid tier)
+       - `gold` (`snow + gold`, high tier)
+       - `netherite` (permanent fuel)
+     - New exported Dev Tools helpers:
+       - `getEmulsifierStateForDevTools(player)`
+       - `addEmulsifierZoneAtPlayer(player, fuelType)`
+       - `removeNearestEmulsifierZone(player, maxDistance)`
+       - `setNearestEmulsifierFuel(player, fuelType, maxDistance)`
+   - **Detox processing loop**:
+     - New interval runs every 20 ticks to process active Emulsifier zones.
+     - Neutralization behavior:
+       - `mb:dusted_dirt -> minecraft:dirt`
+       - `mb:snow_layer`/`minecraft:snow_layer -> minecraft:air`
+     - Fuel drains over time for finite fuels; `netherite` is permanent.
+   - **No-spawn field around active Emulsifiers**:
+     - Natural Maple Bear spawns are blocked if spawn location is within active Emulsifier exclusion radius.
+   - **Scan scheduler tuning system (new)**:
+     - New override properties:
+       - `mb_scan_discovery_radius`
+       - `mb_scan_min_discovery_radius`
+       - `mb_scan_radius_drop_per_player`
+       - `mb_scan_tight_group_penalty`
+       - `mb_scan_barren_cooldown_mult`
+       - `mb_scan_stagger_ticks`
+       - `mb_scan_chunk_load_delay`
+     - New exported helpers:
+       - `getSpawnScanSettingsForDevTools()`
+       - `applySpawnScanPreset(presetKey)`
+       - `SPAWN_SCAN_PRESETS`
+       - `SPAWN_SCAN_OVERRIDE_PROPERTIES`
+   - **Lag-spike reduction updates in scanning flow**:
+     - Discovery radius is now adaptive by player count and grouping.
+     - Barren-area cooldown now uses dynamic multiplier + chunk-based jitter to desync expensive rescans.
+     - Chunk scan queue staggering and new-chunk scan delay now read adaptive settings from dev tools.
+
+2. **mb_codex.js**
+   - **Spawn Controller menu additions**:
+     - Added `Scan Scheduler` button.
+     - Added `Emulsifier` button.
+     - Spawn menu body now shows scan and Emulsifier status snapshots.
+   - **New Scan Scheduler dev UI**:
+     - Preset application.
+     - Manual controls for:
+       - discovery radius
+       - min discovery radius
+       - per-player radius drop
+       - tight-group penalty
+       - barren cooldown multiplier
+       - stagger ticks
+       - chunk load delay
+     - Reset to defaults button.
+   - **New Emulsifier dev UI**:
+     - Create zone at player position.
+     - Refuel nearest zone (fuel tier selection).
+     - Remove nearest zone.
+     - Status display for active/total zones, nearest zone, and fuel state.
+
+Result: You can now tune scan behavior with presets and direct controls in Dev Tools, and prototype the Emulsifier loop (detox + anti-natural-spawn field + fuel tiers) without needing new block/item assets yet.
+
+---
+
+**Date:** 2026-03-12
+
+## Emulsifier machine block + machine UI
+
+Converted the Emulsifier from a dev-only abstract zone concept into a placeable machine block with direct interaction UI, and corrected snow detox behavior so corrupted snow becomes safe vanilla snow.
+
+### Changes made
+
+1. **Physical Emulsifier assets**
+   - Added block: `BP/blocks/emulsifier_machine.json` (`mb:emulsifier_machine`)
+   - Added item: `BP/items/emulsifier_machine.json` (`minecraft:block_placer` -> `mb:emulsifier_machine`)
+   - Added crafting recipe: `BP/recipes/emulsifier_machine.json`
+   - Added loot table: `BP/loot_tables/blocks/emulsifier_machine.json` (drops machine item)
+   - Added RP mappings:
+     - `RP/blocks.json` sound entry for `mb:emulsifier_machine`
+     - `RP/textures/terrain_texture.json` texture key `emulsifier_machine`
+     - `RP/textures/item_texture.json` icon key `mb_emulsifier_machine`
+     - `RP/texts/en_US.lang` item/tile names
+
+2. **Machine block interaction flow**
+   - `main.js` now:
+     - Registers an Emulsifier zone when `mb:emulsifier_machine` is placed.
+     - Removes the zone when the block is broken.
+     - Opens machine UI when player interacts with the machine block.
+
+3. **Machine UI**
+   - Added exported UI entrypoint in `mb_codex.js`: `showEmulsifierMachineUI(player, block)`.
+   - UI supports:
+     - View fuel type + remaining time.
+     - Enable/disable machine.
+     - Refuel/change fuel via in-inventory material costs.
+   - Implemented fuel-cost inventory consumption:
+     - Redstone
+     - Snow + Iron
+     - Snow + Copper
+     - Snow + Gold
+     - Netherite (permanent core)
+   - Fuel UI now shows live inventory counts per tier (have/need for each ingredient) and re-checks them each time you open the fuel menu; costs are script-consumed when you select a fuel tier.
+
+4. **Spawn controller Emulsifier block integration**
+   - Added block-anchored zone helpers in `mb_spawnController.js`:
+     - `upsertEmulsifierZoneAtBlock`
+     - `removeEmulsifierZoneAtBlock`
+     - `getEmulsifierZoneAtBlock`
+     - `setEmulsifierFuelAtBlock`
+     - `setEmulsifierActiveAtBlock`
+   - Active zones now verify machine block existence; missing machines deactivate their zones.
+
+5. **Detox conversion fix (requested)**
+   - Updated detox behavior:
+     - `mb:snow_layer` now converts to `minecraft:snow_layer` (safe)
+   - No longer converts snow layers to air in Emulsifier detox pass.
+
+Result: Emulsifier is now a true placeable machine with fuel UI workflow, and corrupted snow neutralizes to harmless vanilla snow as requested.

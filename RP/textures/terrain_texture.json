@@ -9,6 +9,9 @@
 		},
 		"'snow'_layer": {
 			"textures": "textures/blocks/'snow'_layer"
+		},
+		"emulsifier_machine": {
+			"textures": "textures/blocks/emulsifier_machine"
 		}
 	}
 }

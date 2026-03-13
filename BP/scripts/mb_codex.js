@@ -1,4 +1,4 @@
-import { system, world } from "@minecraft/server";
+import { system, world, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData, FormCancelationReason } from "@minecraft/server-ui";
 import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getPlayerPropertyChunked, setPlayerPropertyChunked, getWorldPropertyChunked, setWorldPropertyChunked, saveAllProperties, ADDON_DIFFICULTY_PROPERTY, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { getAllScriptToggles, setScriptEnabled, SCRIPT_IDS, isBetaInfectedAIEnabled, setBetaInfectedAIEnabled, isBetaDustStormsEnabled, setBetaDustStormsEnabled, isBetaVisibleToAll, setBetaVisibleToAll, getBetaOwnerId, setBetaOwnerId } from "./mb_scriptToggles.js";
@@ -6,7 +6,7 @@ import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTrac
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 import { getBuffBearCountdowns } from "./mb_buffAI.js";
-import { getSpawnConfigsForDevTools, getDisabledSpawnTypes, setDisabledSpawnTypes, getSpawnSpeedMultiplier, SPAWN_SPEED_PROPERTY, getBlockQueryMultiplier, getMaxGlobalSpawnsPerTick, getSpawnDistanceRange, getTileIntensityMultiplier, getBlocksPerTickMultiplier, SPAWN_OVERRIDE_PROPERTIES } from "./mb_spawnController.js";
+import { getSpawnConfigsForDevTools, getDisabledSpawnTypes, setDisabledSpawnTypes, getSpawnSpeedMultiplier, SPAWN_SPEED_PROPERTY, getBlockQueryMultiplier, getMaxGlobalSpawnsPerTick, getSpawnDistanceRange, getTileIntensityMultiplier, getBlocksPerTickMultiplier, SPAWN_OVERRIDE_PROPERTIES, getSpawnScanSettingsForDevTools, applySpawnScanPreset, SPAWN_SCAN_OVERRIDE_PROPERTIES, SPAWN_SCAN_PRESETS, getEmulsifierStateForDevTools, getEmulsifierDebugInfo, clearEmulsifierZoneCache, addEmulsifierZoneAtPlayer, removeNearestEmulsifierZone, setNearestEmulsifierFuel, getEmulsifierZoneAtBlock, upsertEmulsifierZoneAtBlock, setEmulsifierFuelAtBlock, setEmulsifierActiveAtBlock } from "./mb_spawnController.js";
 import { summonStorm, endStorm, getStormState, getStormDebugInfo, setStormOverride, resetStormOverride, getStormControlParams, isMultiStormEnabled, setMultiStormEnabled, getStorms, endStormById, setStormEnabled } from "./mb_snowStorm.js";
 import { getMiningAIState } from "./mb_miningAI.js";
 
@@ -14,6 +14,180 @@ const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
 function hasCheats(p) {
     return (p?.hasTag && p.hasTag("mb_cheats")) || Boolean(typeof system !== "undefined" && system?.isEnableCheats?.());
+}
+
+function countItemInInventory(player, itemId) {
+    const inv = player?.getComponent?.("inventory")?.container;
+    if (!inv) return 0;
+    let total = 0;
+    for (let i = 0; i < inv.size; i++) {
+        const it = inv.getItem(i);
+        if (it?.typeId === itemId) total += (it.amount ?? 0);
+    }
+    return total;
+}
+
+function hasRequiredItems(player, requirements) {
+    for (const req of requirements) {
+        if (countItemInInventory(player, req.item) < req.count) return false;
+    }
+    return true;
+}
+
+function consumeItemsFromInventory(player, requirements) {
+    const inv = player?.getComponent?.("inventory")?.container;
+    if (!inv) return false;
+    if (!hasRequiredItems(player, requirements)) return false;
+    for (const req of requirements) {
+        let remaining = req.count;
+        for (let i = 0; i < inv.size && remaining > 0; i++) {
+            const slot = inv.getItem(i);
+            if (!slot || slot.typeId !== req.item) continue;
+            const slotAmount = slot.amount ?? 0;
+            if (slotAmount <= remaining) {
+                inv.setItem(i, undefined);
+                remaining -= slotAmount;
+            } else {
+                const replacement = new ItemStack(slot.typeId, slotAmount - remaining);
+                inv.setItem(i, replacement);
+                remaining = 0;
+            }
+        }
+    }
+    return true;
+}
+
+const EMULSIFIER_FUEL_COSTS = {
+    redstone: [{ item: "minecraft:redstone", count: 4 }],
+    iron: [{ item: "mb:snow", count: 8 }, { item: "minecraft:iron_ingot", count: 4 }],
+    copper: [{ item: "mb:snow", count: 8 }, { item: "minecraft:copper_ingot", count: 4 }],
+    gold: [{ item: "mb:snow", count: 8 }, { item: "minecraft:gold_ingot", count: 4 }],
+    netherite: [{ item: "minecraft:netherite_ingot", count: 1 }]
+};
+
+function getFuelCostText(fuelType) {
+    const costs = EMULSIFIER_FUEL_COSTS[fuelType] || [];
+    return costs.map(c => `${c.count}x ${c.item.replace("minecraft:", "").replace("mb:", "")}`).join(", ");
+}
+
+function getFuelCostAvailabilityLine(player, fuelType) {
+    const costs = EMULSIFIER_FUEL_COSTS[fuelType] || [];
+    if (costs.length === 0) return "§8No cost.";
+    const parts = [];
+    for (const c of costs) {
+        const have = countItemInInventory(player, c.item);
+        const haveColor = have >= c.count ? "§a" : "§c";
+        const name = c.item.replace("minecraft:", "").replace("mb:", "");
+        parts.push(`${haveColor}${have}/${c.count}§7 × ${name}`);
+    }
+    return "§7You have: " + parts.join("  ");
+}
+
+export function showEmulsifierMachineUI(player, block) {
+    if (!player?.isValid || !block) return;
+    const dimId = player.dimension?.id;
+    if (!dimId) return;
+
+    const x = Math.floor(block.x);
+    const y = Math.floor(block.y);
+    const z = Math.floor(block.z);
+    upsertEmulsifierZoneAtBlock(dimId, x, y, z, player.name);
+    try {
+        const vol = getPlayerSoundVolume(player);
+        player.playSound("mb.codex_open", { pitch: 1, volume: 0.8 * vol });
+    } catch { }
+
+    const openMain = () => {
+        const zone = getEmulsifierZoneAtBlock(dimId, x, y, z);
+        if (!zone) return;
+        const hasFuel = zone.fuelType && (zone.fuelType === "netherite" || (zone.fuelTicksRemaining ?? 0) > 0);
+        const fuelLabel = hasFuel ? String(zone.fuelType) : "none";
+        const fuelTimeText = !hasFuel
+            ? "No fuel"
+            : zone.fuelType === "netherite"
+                ? "Permanent"
+                : `${Math.max(0, Math.floor((zone.fuelTicksRemaining ?? 0) / 20))}s`;
+        const statusText = zone.active === true ? "§aON" : "§cOFF";
+        const form = new ActionFormData()
+            .title("§dEmulsifier")
+            .body(`§7Detoxifier machine\n§8Converts corrupted blocks and suppresses natural Maple Bear spawns nearby.\n\n§fStatus: ${statusText}\n§fFuel: §7${fuelLabel}\n§fFuel Remaining: §7${fuelTimeText}\n§fLocation: §7${x}, ${y}, ${z}`);
+        form.button("§fRefuel / Change Fuel");
+        form.button(zone.active === true ? "§cDisable Machine" : "§aEnable Machine");
+        form.button("§8Close");
+
+        form.show(player).then((res) => {
+            // Close, cancel (ESC / look away), or invalid response: exit only; never reopen.
+            if (!res || res.canceled || res.selection === 2 || (res.selection !== 0 && res.selection !== 1)) {
+                try {
+                    const vol = getPlayerSoundVolume(player);
+                    player.playSound("mb.codex_close", { pitch: 1, volume: 0.8 * vol });
+                } catch { }
+                return;
+            }
+            try {
+                const vol = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1, volume: 0.8 * vol });
+            } catch { }
+            if (res.selection === 0) return openFuelMenu();
+            if (res.selection === 1) {
+                const fresh = getEmulsifierZoneAtBlock(dimId, x, y, z);
+                if (!fresh) return;
+                const nextActive = fresh.active !== true; // Enable if currently disabled
+                const ok = setEmulsifierActiveAtBlock(dimId, x, y, z, nextActive);
+                if (!ok) return;
+                player.sendMessage(CHAT_INFO + `Emulsifier: ${nextActive ? CHAT_SUCCESS + "ON" : CHAT_DANGER + "OFF"}`);
+                system.run(() => openMain()); // Defer so zone state is committed before UI refresh
+            }
+        }).catch(() => { /* do not reopen on error */ });
+    };
+
+    const openFuelMenu = () => {
+        const options = [
+            { key: "redstone", label: "Redstone", desc: "Starter power", color: "§c" },
+            { key: "iron", label: "Snow + Iron", desc: "Low-tier alloy fuel", color: "§7" },
+            { key: "copper", label: "Snow + Copper", desc: "Mid-tier alloy fuel", color: "§6" },
+            { key: "gold", label: "Snow + Gold", desc: "High-tier alloy fuel", color: "§e" },
+            { key: "netherite", label: "Netherite", desc: "Permanent core", color: "§5" }
+        ];
+        const form = new ActionFormData().title("§dFuel Matrix");
+        form.body("§fSelect fuel for this machine.\n§7Costs are consumed from your inventory.");
+        for (const opt of options) {
+            const costText = getFuelCostText(opt.key);
+            form.button(
+                `${opt.color}${opt.label} §8- §f${opt.desc}\n` +
+                `§fCost: §b${costText}`
+            );
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === options.length) {
+                try {
+                    const vol = getPlayerSoundVolume(player);
+                    player.playSound("mb.codex_turn_page", { pitch: 1, volume: 0.8 * vol });
+                } catch { }
+                return openMain();
+            }
+            try {
+                const vol = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1, volume: 0.8 * vol });
+            } catch { }
+            const selected = options[res.selection];
+            const req = EMULSIFIER_FUEL_COSTS[selected.key] || [];
+            if (!consumeItemsFromInventory(player, req)) {
+                player.sendMessage(CHAT_WARNING + `Missing materials: ${getFuelCostText(selected.key)}.`);
+                return openFuelMenu();
+            }
+            const result = setEmulsifierFuelAtBlock(dimId, x, y, z, selected.key);
+            if (!result.ok) {
+                player.sendMessage(CHAT_DANGER + "Failed to fuel this Emulsifier.");
+            } else {
+                player.sendMessage(CHAT_SUCCESS + `Emulsifier fueled with ${selected.label}.`);
+            }
+            openMain();
+        }).catch(() => openMain());
+    };
+
+    openMain();
 }
 
 /** Returns true if the player has the Powdery Journal (snow_book) in their inventory. Achievements are hidden until obtained. */
@@ -1281,7 +1455,7 @@ export function showCodexBook(player, context) {
 
         addSectionButton("§fAchievements", "achievements", () => openAchievements());
 
-        const hasDebugOptions = (player.hasTag && player.hasTag("mb_cheats")) || Boolean(system?.isEnableCheats?.());
+        const hasDebugOptions = (player.hasTag && player.hasTag("mb_cheats")) || player?.name === "Litbolt123";
         if (hasDebugOptions) {
             // Pinned dev tools (quick access from main menu)
             const pinned = getPinnedDevItems(player);
@@ -3896,10 +4070,14 @@ export function showCodexBook(player, context) {
         const tileLabel = tileInt === 1 ? "Normal" : `${(tileInt * 100).toFixed(0)}%`;
         const blocksTick = getBlocksPerTickMultiplier();
         const blocksLabel = blocksTick === 1 ? "Normal" : `${(blocksTick * 100).toFixed(0)}%`;
+        const scan = getSpawnScanSettingsForDevTools();
+        const emulsifier = getEmulsifierStateForDevTools(player);
+        const scanLabel = `R${scan.discoveryRadius}/Min${scan.minDiscoveryRadius} | Stagger ${scan.staggerTicks}t`;
+        const emulsifierLabel = `${emulsifier.active}/${emulsifier.total} active`;
 
         const form = new ActionFormData()
             .title("§cSpawn Controller")
-            .body(`§7All spawn-related settings.\n\n§fScript: §7${spawnEnabled ? "§aON" : "§cOFF"}\n§fDifficulty: §7${diffLabel}\n§fSpeed: §7${speedLabel}\n§fTypes: §7${typeLabel}\n§8Advanced: §7BlockQ ${blockQLabel} | Max ${maxGlobal}/tick | Range ${rangeLabel} | Tiles ${tileLabel} | BlocksTick ${blocksLabel}`);
+            .body(`§7All spawn-related settings.\n\n§fScript: §7${spawnEnabled ? "§aON" : "§cOFF"}\n§fDifficulty: §7${diffLabel}\n§fSpeed: §7${speedLabel}\n§fTypes: §7${typeLabel}\n§8Advanced: §7BlockQ ${blockQLabel} | Max ${maxGlobal}/tick | Range ${rangeLabel} | Tiles ${tileLabel} | BlocksTick ${blocksLabel}\n§8Scan: §7${scanLabel}\n§8Emulsifier: §7${emulsifierLabel}`);
 
         form.button(spawnEnabled ? "§cSpawn Controller OFF" : "§aSpawn Controller ON");
         form.button("§fSpawn Difficulty");
@@ -3908,10 +4086,12 @@ export function showCodexBook(player, context) {
         form.button("§eForce Spawn");
         form.button("§f§lPresets §8(Low → High)");
         form.button("§6Advanced Options");
+        form.button("§bScan Scheduler");
+        form.button("§dEmulsifier");
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 7) {
+            if (!res || res.canceled || res.selection === 9) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
                 return openDeveloperTools();
             }
@@ -3927,6 +4107,8 @@ export function showCodexBook(player, context) {
                 case 4: return openForceSpawnMenu();
                 case 5: return openSpawnPresetsMenu(false);
                 case 6: return openSpawnAdvancedMenu();
+                case 7: return openScanSchedulerMenu();
+                case 8: return openEmulsifierMenu();
                 default: return openDeveloperTools();
             }
         }).catch(() => openDeveloperTools());
@@ -4095,6 +4277,222 @@ export function showCodexBook(player, context) {
             }
             openSpawnBlocksPerTickMenu();
         }).catch(() => openSpawnAdvancedMenu());
+    }
+
+    function openScanSchedulerMenu() {
+        const s = getSpawnScanSettingsForDevTools();
+        const presetBody = Object.entries(SPAWN_SCAN_PRESETS).map(([_, v]) => `§7• ${v.label}: R${v.discoveryRadius}, Min ${v.minDiscoveryRadius}`).join("\n");
+        const form = new ActionFormData()
+            .title("§bScan Scheduler")
+            .body(`§7Tune how spawn scans are spread and scaled.\n\n§fDiscovery Radius: §7${s.discoveryRadius}\n§fMin Radius: §7${s.minDiscoveryRadius}\n§fPer-Player Radius Drop: §7${(s.perPlayerRadiusDrop * 100).toFixed(0)}%\n§fTight Group Penalty: §7${(s.tightGroupRadiusPenalty * 100).toFixed(0)}%\n§fBarren Cooldown Mult: §7${s.barrenCooldownMult.toFixed(2)}x\n§fStagger: §7${s.staggerTicks} ticks\n§fChunk Load Delay: §7${s.chunkLoadDelay} ticks\n\n§8Presets:\n${presetBody}`);
+
+        form.button("§fApply Preset");
+        form.button("§fSet Discovery Radius");
+        form.button("§fSet Minimum Radius");
+        form.button("§fSet Per-Player Drop");
+        form.button("§fSet Tight Group Penalty");
+        form.button("§fSet Barren Cooldown Mult");
+        form.button("§fSet Stagger Ticks");
+        form.button("§fSet Chunk Load Delay");
+        form.button("§cReset Scan Settings");
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 9) return openSpawnControllerMenu();
+            switch (res.selection) {
+                case 0: return openScanPresetMenu();
+                case 1: return openScanDiscoveryRadiusMenu();
+                case 2: return openScanMinRadiusMenu();
+                case 3: return openScanPerPlayerDropMenu();
+                case 4: return openScanTightPenaltyMenu();
+                case 5: return openScanBarrenMultMenu();
+                case 6: return openScanStaggerMenu();
+                case 7: return openScanChunkDelayMenu();
+                case 8:
+                    for (const key of Object.values(SPAWN_SCAN_OVERRIDE_PROPERTIES)) setWorldProperty(key, undefined);
+                    player.sendMessage(CHAT_SUCCESS + "Scan scheduler settings reset.");
+                    return openScanSchedulerMenu();
+                default:
+                    return openSpawnControllerMenu();
+            }
+        }).catch(() => openSpawnControllerMenu());
+    }
+
+    function openScanPresetMenu() {
+        const keys = Object.keys(SPAWN_SCAN_PRESETS);
+        const form = new ActionFormData().title("§bScan Presets").body("§7Apply a coordinated scan profile.");
+        keys.forEach((k) => {
+            const p = SPAWN_SCAN_PRESETS[k];
+            form.button(`§f${p.label} §8(R${p.discoveryRadius}/Min${p.minDiscoveryRadius})`);
+        });
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === keys.length) return openScanSchedulerMenu();
+            const key = keys[res.selection];
+            if (applySpawnScanPreset(key)) {
+                player.sendMessage(CHAT_SUCCESS + `Scan preset applied: ${SPAWN_SCAN_PRESETS[key].label}.`);
+            }
+            openScanSchedulerMenu();
+        }).catch(() => openScanSchedulerMenu());
+    }
+
+    function openScanDiscoveryRadiusMenu() {
+        const vals = [48, 60, 75, 90, 110];
+        const cur = getSpawnScanSettingsForDevTools().discoveryRadius;
+        const form = new ActionFormData().title("§bDiscovery Radius").body(`§7How wide discovery scans search for dusted blocks.\n§8Current: §f${cur}`);
+        vals.forEach(v => form.button(`§f${v}`));
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === vals.length) return openScanSchedulerMenu();
+            setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.discoveryRadius, vals[res.selection]);
+            openScanSchedulerMenu();
+        }).catch(() => openScanSchedulerMenu());
+    }
+
+    function openScanMinRadiusMenu() {
+        const vals = [20, 24, 28, 32, 40];
+        const cur = getSpawnScanSettingsForDevTools().minDiscoveryRadius;
+        const form = new ActionFormData().title("§bMinimum Radius").body(`§7Lower bound for adaptive scan shrinking.\n§8Current: §f${cur}`);
+        vals.forEach(v => form.button(`§f${v}`));
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === vals.length) return openScanSchedulerMenu();
+            setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.minDiscoveryRadius, vals[res.selection]);
+            openScanSchedulerMenu();
+        }).catch(() => openScanSchedulerMenu());
+    }
+
+    function openScanPerPlayerDropMenu() {
+        const vals = [0.05, 0.08, 0.12, 0.16, 0.2, 0.25];
+        const cur = getSpawnScanSettingsForDevTools().perPlayerRadiusDrop;
+        const form = new ActionFormData().title("§bPer-Player Radius Drop").body(`§7Radius reduction per extra player.\n§8Current: §f${(cur * 100).toFixed(0)}%`);
+        vals.forEach(v => form.button(`§f${(v * 100).toFixed(0)}%`));
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === vals.length) return openScanSchedulerMenu();
+            setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.perPlayerRadiusDrop, vals[res.selection]);
+            openScanSchedulerMenu();
+        }).catch(() => openScanSchedulerMenu());
+    }
+
+    function openScanTightPenaltyMenu() {
+        const vals = [0, 0.1, 0.2, 0.3, 0.4];
+        const cur = getSpawnScanSettingsForDevTools().tightGroupRadiusPenalty;
+        const form = new ActionFormData().title("§bTight Group Penalty").body(`§7Extra radius reduction for tightly grouped players.\n§8Current: §f${(cur * 100).toFixed(0)}%`);
+        vals.forEach(v => form.button(`§f${(v * 100).toFixed(0)}%`));
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === vals.length) return openScanSchedulerMenu();
+            setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.tightGroupRadiusPenalty, vals[res.selection]);
+            openScanSchedulerMenu();
+        }).catch(() => openScanSchedulerMenu());
+    }
+
+    function openScanBarrenMultMenu() {
+        const vals = [0.5, 0.8, 1, 1.25, 1.5, 2];
+        const cur = getSpawnScanSettingsForDevTools().barrenCooldownMult;
+        const form = new ActionFormData().title("§bBarren Cooldown Mult").body(`§7Delay before rescanning chunks that found 0 target blocks.\n§8Current: §f${cur.toFixed(2)}x`);
+        vals.forEach(v => form.button(`§f${v.toFixed(2)}x`));
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === vals.length) return openScanSchedulerMenu();
+            setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.barrenCooldownMult, vals[res.selection]);
+            openScanSchedulerMenu();
+        }).catch(() => openScanSchedulerMenu());
+    }
+
+    function openScanStaggerMenu() {
+        const vals = [8, 12, 16, 20, 28, 36];
+        const cur = getSpawnScanSettingsForDevTools().staggerTicks;
+        const form = new ActionFormData().title("§bScan Stagger Ticks").body(`§7Ticks between queued chunk scans.\n§8Current: §f${cur}`);
+        vals.forEach(v => form.button(`§f${v} ticks`));
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === vals.length) return openScanSchedulerMenu();
+            setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.staggerTicks, vals[res.selection]);
+            openScanSchedulerMenu();
+        }).catch(() => openScanSchedulerMenu());
+    }
+
+    function openScanChunkDelayMenu() {
+        const vals = [2, 4, 5, 8, 10, 14];
+        const cur = getSpawnScanSettingsForDevTools().chunkLoadDelay;
+        const form = new ActionFormData().title("§bChunk Load Delay").body(`§7Delay before scanning newly entered chunks.\n§8Current: §f${cur} ticks`);
+        vals.forEach(v => form.button(`§f${v} ticks`));
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === vals.length) return openScanSchedulerMenu();
+            setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.chunkLoadDelay, vals[res.selection]);
+            openScanSchedulerMenu();
+        }).catch(() => openScanSchedulerMenu());
+    }
+
+    function openEmulsifierMenu() {
+        const state = getEmulsifierStateForDevTools(player);
+        const nearest = state.nearest;
+        const nearestText = nearest
+            ? `§fNearest: §7${nearest.fuelType} @ ${nearest.distance.toFixed(1)}m (${nearest.active ? "§aactive" : "§cinactive"})`
+            : "§fNearest: §7None in range";
+        const fuelRemain = nearest ? (nearest.fuelType === "netherite" ? "Permanent" : `${Math.max(0, Math.floor((nearest.fuelTicksRemaining ?? 0) / 20))}s`) : "-";
+        const form = new ActionFormData()
+            .title("§dEmulsifier")
+            .body(`§7Detox field that neutralizes nearby corruption and blocks natural Maple Bear spawns in its radius.\n\n§fZones: §7${state.active}/${state.total} active\n§fNo-spawn radius: §7${state.noSpawnRadius}\n§fDetox base radius: §7${state.detoxBaseRadius}\n${nearestText}\n§fNearest fuel: §7${fuelRemain}`);
+        form.button("§aCreate Zone Here", "textures/blocks/emulsifier_machine");
+        form.button("§fRefuel Nearest", "textures/items/emulsifier_machine");
+        form.button("§cRemove Nearest", "textures/ui/cancel");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 3) return openSpawnControllerMenu();
+            if (res.selection === 0) {
+                const created = addEmulsifierZoneAtPlayer(player, "redstone");
+                if (!created.ok) {
+                    player.sendMessage(CHAT_INFO + (created.reason === "duplicate" ? "There is already an Emulsifier zone at this spot." : "Couldn't create Emulsifier zone."));
+                } else {
+                    player.sendMessage(CHAT_SUCCESS + "Emulsifier zone created at your position.");
+                }
+                return openEmulsifierMenu();
+            }
+            if (res.selection === 1) return openEmulsifierFuelMenu();
+            if (res.selection === 2) {
+                const removed = removeNearestEmulsifierZone(player, 24);
+                if (!removed.ok) player.sendMessage(CHAT_INFO + "No nearby Emulsifier zone to remove.");
+                else player.sendMessage(CHAT_SUCCESS + "Nearest Emulsifier zone removed.");
+                return openEmulsifierMenu();
+            }
+            openSpawnControllerMenu();
+        }).catch(() => openSpawnControllerMenu());
+    }
+
+    function openEmulsifierFuelMenu() {
+        const options = [
+            { key: "redstone", label: "Redstone (baseline)" },
+            { key: "iron", label: "Snow + Iron (low tier)" },
+            { key: "copper", label: "Snow + Copper (mid tier)" },
+            { key: "gold", label: "Snow + Gold (high tier)" },
+            { key: "netherite", label: "Netherite (permanent core)" }
+        ];
+        const form = new ActionFormData().title("§dEmulsifier Fuel").body("§7Set nearest Emulsifier fuel tier.\n§8Performance + longevity increase from Iron → Copper → Gold.\n§8Netherite is permanent.\n\n§7Counts below update each time you open this menu.");
+        options.forEach((o) => {
+            const availability = getFuelCostAvailabilityLine(player, o.key);
+            form.button(`§f${o.label}\n${availability}`, o.key === "netherite" ? "textures/items/netherite_ingot" : "textures/items/emulsifier_machine");
+        });
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === options.length) return openEmulsifierMenu();
+            const selected = options[res.selection];
+            const req = EMULSIFIER_FUEL_COSTS[selected.key] || [];
+            if (!consumeItemsFromInventory(player, req)) {
+                player.sendMessage(CHAT_WARNING + `Missing materials: ${getFuelCostText(selected.key)}.`);
+                return openEmulsifierFuelMenu();
+            }
+            const result = setNearestEmulsifierFuel(player, selected.key, 24);
+            if (!result.ok) {
+                player.sendMessage(CHAT_INFO + "No nearby Emulsifier zone to refuel.");
+            } else {
+                player.sendMessage(CHAT_SUCCESS + `Nearest Emulsifier fuel set to ${selected.label}.`);
+            }
+            openEmulsifierMenu();
+        }).catch(() => openEmulsifierMenu());
     }
 
     function getSpawnDifficultyLabel(value) {
@@ -5127,6 +5525,7 @@ export function showCodexBook(player, context) {
         form.button("§fCodex/Knowledge");
         form.button("§fGround Infection Timer");
         form.button("§fSnow Storm");
+        form.button("§fEmulsifier");
         form.button("§8Back");
 
         form.show(player).then((res) => {
@@ -5136,7 +5535,7 @@ export function showCodexBook(player, context) {
                 return onBack();
             }
 
-            if (res.selection === 12) {
+            if (res.selection === 13) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                 return onBack();
@@ -5157,6 +5556,7 @@ export function showCodexBook(player, context) {
                 case 9: return openCodexDebugMenu(settings, fromDevTools);
                 case 10: return openGroundInfectionDebugMenu(settings, fromDevTools);
                 case 11: return openSnowStormDebugMenu(settings, false, fromDevTools);
+                case 12: return openEmulsifierDebugMenu(settings, fromDevTools);
                 default: return openDebugMenu(fromDevTools);
             }
         }).catch(() => onBack());
@@ -5680,6 +6080,77 @@ export function showCodexBook(player, context) {
         }
     }
 
+    function openEmulsifierDebugMenu(settings, fromDevTools = false) {
+        const emulsifier = settings.emulsifier || {};
+        const onBack = () => fromDevTools ? openDeveloperTools() : openDebugMenu(fromDevTools);
+        const form = new ActionFormData().title("§bEmulsifier Debug");
+        form.body(`§7Debug the Emulsifier (purification + persistence).\n\n§8Current:\n§7• General: ${emulsifier.general ? "§aON" : "§cOFF"}\n§7• Persistence: ${emulsifier.persistence ? "§aON" : "§cOFF"}\n§7• Purification: ${emulsifier.purification ? "§aON" : "§cOFF"}\n§7• Zones: ${emulsifier.zones ? "§aON" : "§cOFF"}\n\n§eRun diagnostics to see live state and locate save/purify issues.`);
+
+        form.button(`§${emulsifier.general ? "a" : "c"}General`);
+        form.button(`§${emulsifier.persistence ? "a" : "c"}Persistence`);
+        form.button(`§${emulsifier.purification ? "a" : "c"}Purification`);
+        form.button(`§${emulsifier.zones ? "a" : "c"}Zones`);
+        form.button(`§${emulsifier.all ? "a" : "c"}Toggle All`);
+        form.button("§eRun diagnostics (chat)");
+        form.button("§6Force reload from world");
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 7) {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return onBack();
+            }
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
+            if (res.selection === 6) {
+                try {
+                    clearEmulsifierZoneCache();
+                    player.sendMessage(CHAT_DEV + "[EMULSIFIER] " + CHAT_INFO + "Cache cleared. Next read will use world property.");
+                } catch (e) {
+                    player.sendMessage(CHAT_DEV + "[EMULSIFIER] " + CHAT_INFO + "Error: " + (e?.message ?? e));
+                }
+                return openEmulsifierDebugMenu(getDebugSettings(player), fromDevTools);
+            }
+            if (res.selection === 5) {
+                try {
+                    const info = getEmulsifierDebugInfo();
+                    const lines = [
+                        "§8=== Emulsifier diagnostics ===",
+                        `§7Tick: ${info.tick}`,
+                        `§7World property raw length: ${info.worldPropertyRawLength} (isString: ${info.worldPropertyIsString})`,
+                        `§7Backup property raw length: ${info.backupPropertyRawLength}`,
+                        `§7Load probe source: ${info.loadProbeSource} (rawLen: ${info.loadProbeRawLength})`,
+                        `§7Zones from cache: ${info.zonesFromCache} | length: ${info.zonesLength}`,
+                        `§7Active: ${info.activeCount} | With fuel: ${info.withFuelCount}`,
+                        `§7Pending conversions: ${info.pendingConversionsCount}`,
+                        `§7Persistence match (world vs cache): ${info.persistenceMatch} | parsedFromRaw: ${info.parsedFromRaw}`,
+                        `§7Cache was array: ${info.cacheWasArray}`
+                    ];
+                    for (let i = 0; i < (info.zoneSummaries || []).length; i++) {
+                        const z = info.zoneSummaries[i];
+                        lines.push(`§8Zone ${i}: dim=${z.dim} (${z.x},${z.y},${z.z}) active=${z.active} fuel=${z.fuelType} ticks=${z.fuelTicks} firstScan=${z.firstScanDone} lastDetox=${z.lastDetoxTick}`);
+                    }
+                    const msg = lines.join("\n");
+                    player.sendMessage(CHAT_DEV + msg);
+                } catch (e) {
+                    player.sendMessage(CHAT_DEV + "[EMULSIFIER] " + CHAT_INFO + "Error: " + (e?.message ?? e));
+                }
+                return openEmulsifierDebugMenu(getDebugSettings(player), fromDevTools);
+            }
+            const flags = ["general", "persistence", "purification", "zones", "all"];
+            if (res.selection < flags.length) {
+                const flagName = flags[res.selection];
+                const newState = toggleDebugFlag("emulsifier", flagName);
+                const stateText = newState ? "§aON" : "§cOFF";
+                player.sendMessage(CHAT_DEV + "[DEBUG] " + CHAT_INFO + `Emulsifier ${flagName}: ${stateText}`);
+                console.warn(`[DEBUG MENU] Emulsifier ${flagName} debug ${newState ? "ENABLED" : "DISABLED"} by ${player.name}`);
+                invalidateDebugCache();
+            }
+            return openEmulsifierDebugMenu(getDebugSettings(player), fromDevTools);
+        }).catch(() => onBack());
+    }
+
     function openSettings() {
         // Show settings chooser: General vs Beta Features
         const canSee = canSeeBeta(player);
@@ -6095,6 +6566,13 @@ function getDefaultDebugSettings() {
             placement: false,
             particles: false,
             all: false
+        },
+        emulsifier: {
+            general: false,
+            persistence: false,
+            purification: false,
+            zones: false,
+            all: false
         }
     };
 }
@@ -6243,8 +6721,8 @@ export function showBasicJournalUI(player) {
     buttonIcons.push("textures/items/book_writable");
     buttonActions.push(() => showTipsScreen(player));
     
-    // Add debug/dev tools if player has cheats
-    const hasDebugOptions = (player.hasTag && player.hasTag("mb_cheats")) || Boolean(system?.isEnableCheats?.());
+    // Add debug/dev tools if player is Litbolt123 or has mb_cheats
+    const hasDebugOptions = (player.hasTag && player.hasTag("mb_cheats")) || player?.name === "Litbolt123";
     if (hasDebugOptions) {
         buttons.push("§bDebug Menu");
         buttonIcons.push(undefined); // No icon for debug menu

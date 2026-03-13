@@ -1,8 +1,8 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
-import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, getPlayerSettings, checkKnowledgeProgression } from "./mb_codex.js";
+import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, getPlayerSettings, checkKnowledgeProgression, showEmulsifierMachineUI } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
-import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks } from "./mb_spawnController.js";
+import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { isBetaDustStormsEnabled } from "./mb_scriptToggles.js";
 import { findItem, hasItem } from "./mb_itemFinder.js";
@@ -7314,6 +7314,14 @@ world.beforeEvents.itemUse.subscribe((event) => {
 // Handle snow layer placement and block conversion underneath
 world.afterEvents.playerPlaceBlock.subscribe((event) => {
     const block = event.block;
+    if (!block) return;
+
+    if (block.typeId === "mb:emulsifier_machine") {
+        try {
+            upsertEmulsifierZoneAtBlock(event.player.dimension.id, block.x, block.y, block.z, event.player.name);
+        } catch { }
+        return;
+    }
     
     // Only handle snow layer blocks
     if (block?.typeId === "mb:snow_layer") {
@@ -7388,6 +7396,37 @@ world.afterEvents.playerPlaceBlock.subscribe((event) => {
         */
     }
 });
+
+world.afterEvents.playerBreakBlock.subscribe((event) => {
+    try {
+        const brokenId = event?.brokenBlockPermutation?.type?.id;
+        if (brokenId !== "mb:emulsifier_machine") return;
+        const loc = event.block;
+        if (!loc || !event.player?.dimension?.id) return;
+        removeEmulsifierZoneAtBlock(event.player.dimension.id, loc.x, loc.y, loc.z);
+    } catch { }
+});
+
+// Cooldown so closing the Emulsifier UI doesn't immediately reopen (e.g. when still looking at block).
+const emulsifierUiLastOpenTick = new Map(); // playerId -> tick
+const EMULSIFIER_UI_COOLDOWN_TICKS = 20; // 1 second
+
+if (world.beforeEvents?.playerInteractWithBlock) {
+    world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
+        try {
+            const block = event.block;
+            const player = event.player;
+            if (!block || !player || block.typeId !== "mb:emulsifier_machine") return;
+            const now = system.currentTick;
+            const last = emulsifierUiLastOpenTick.get(player.id) ?? 0;
+            if (now - last < EMULSIFIER_UI_COOLDOWN_TICKS) return; // Ignore repeat interaction
+            emulsifierUiLastOpenTick.set(player.id, now);
+            system.run(() => {
+                try { showEmulsifierMachineUI(player, block); } catch { }
+            });
+        } catch { }
+    });
+}
 
 // [ARCHIVED] Track falling block entities to detect when they land
 /*

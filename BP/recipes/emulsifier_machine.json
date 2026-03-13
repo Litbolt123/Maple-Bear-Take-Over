@@ -1,0 +1,42 @@
+{
+  "format_version": "1.21.80",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "mb:emulsifier_machine_recipe"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "unlock": [
+      {
+        "item": "mb:snow"
+      }
+    ],
+    "pattern": [
+      "IRI",
+      "SCS",
+      "IGI"
+    ],
+    "key": {
+      "I": {
+        "item": "minecraft:iron_ingot"
+      },
+      "R": {
+        "item": "minecraft:redstone"
+      },
+      "S": {
+        "item": "mb:snow"
+      },
+      "C": {
+        "item": "minecraft:copper_ingot"
+      },
+      "G": {
+        "item": "minecraft:gold_ingot"
+      }
+    },
+    "result": {
+      "item": "mb:emulsifier_machine",
+      "count": 1
+    }
+  }
+}

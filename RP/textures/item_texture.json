@@ -93,6 +93,9 @@
 			"textures": [
 				"textures/items/buff_mb_day8_egg"
 			]
+		},
+		"mb_emulsifier_machine": {
+			"textures": "textures/items/emulsifier_machine"
 		}
 	}
 }

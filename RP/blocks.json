@@ -5,5 +5,8 @@
 	},
 	"mb:snow_layer": {
 		"sound": "mb:snow_layer"
+	},
+	"mb:emulsifier_machine": {
+		"sound": "metal"
 	}
 }
