@@ -1,0 +1,2085 @@
+17:54:35[Scripting][verbose]-Plugin Discovered [MapleBear TakeOver] PackId [064b6f9c-349b-4ab1-80d3-c95f732db577_1.0.0] ModuleId [68f5a9b0-5aac-47cc-961d-3b87ba331a0b]
+
+17:54:35[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server] from [2.3.0] to [2.5.0] requested by [MapleBear TakeOver - 1.0.0].
+
+17:54:35[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server] from [2.0.0] to [2.5.0] requested by [@minecraft/server-ui-bindings - 2.0.0].
+
+17:54:35[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server-bindings] from [2.3.0] to [2.5.0] requested by [@minecraft/server - 2.3.0].
+
+17:54:35[Scripting][verbose]-Plugin [MapleBear TakeOver] - promoted [@minecraft/server-bindings] from [2.0.0] to [2.5.0] requested by [@minecraft/server - 2.0.0].
+
+17:54:35[Scripting][inform]-📜 Maple Bear Day Tracker script loaded
+
+17:54:35[Scripting][warning]-[BUFF AI] ====== SCRIPT LOADED ======
+
+17:54:35[Scripting][warning]-[BUFF AI] Script file loaded at tick 22895
+
+17:54:35[Scripting][warning]-[BUFF AI] Starting delayed initialization in 20 ticks...
+
+17:54:35[Scripting][warning]-[SPAWN] Maple Bear spawn controller initialized.
+
+17:54:35[Scripting][warning]-[MINING AI] Script loaded, starting delayed initialization...
+
+17:54:35[Scripting][inform]-World initialized, setting up event listeners...
+
+17:54:35[Scripting][inform]-[PropertyHandler] Initialized (lazy loading enabled)
+
+17:54:35[Blocks][error]-block_definitions | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_behavior_packs/MapleBear TakeOver BP | blocks/snow_layer.json | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_behavior_packs/MapleBear TakeOver BP | blocks/snow_layer.json | mb:snow_layer | components | Block name is missing in block descriptor
+
+17:54:35[Blocks][error]-block_definitions | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_behavior_packs/MapleBear TakeOver BP | blocks/snow_layer.json | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_behavior_packs/MapleBear TakeOver BP | blocks/snow_layer.json | mb:snow_layer | components | Block name is missing in block descriptor
+
+17:54:35[Blocks][error]-block_definitions | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_behavior_packs/MapleBear TakeOver BP | blocks/snow_layer.json | C:/Users/Augus/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_behavior_packs/MapleBear TakeOver BP | blocks/snow_layer.json | mb:snow_layer | components | Block name is missing in block descriptor
+
+17:54:38[Scripting][inform]-Day tracking already initialized
+
+17:54:38[Scripting][inform]-🌍 First player joined, initializing day tracker
+
+17:54:38[Scripting][inform]-Day cycle loop not running, starting it now
+
+17:54:38[Scripting][inform]-Starting day cycle loop
+
+17:54:38[Scripting][inform]-Day cycle loop started successfully
+
+17:54:38[Scripting][warning]-[BUFF AI] Player joined, attempting initialization as fallback...
+
+17:54:38[Scripting][inform]-[JOIN MAIN] Player join event received, playerId: -8589934591
+
+17:54:38[Scripting][inform]-[JOIN MAIN] Retry 1: player found = false, valid = undefined
+
+17:54:39[Scripting][warning]-[BUFF AI] ====== INITIALIZATION ATTEMPT 1/10 ======
+
+17:54:39[Scripting][warning]-[BUFF AI] Current tick: 22914
+
+17:54:39[Scripting][warning]-[BUFF AI] ====== INITIALIZATION SUCCESSFUL ======
+
+17:54:39[Scripting][warning]-[BUFF AI] Attempt: 1/10
+
+17:54:39[Scripting][warning]-[BUFF AI] AI loop starting at tick 22914
+
+17:54:39[Scripting][warning]-[BUFF AI] Processing 4 buff bear types: mb:buff_mb, mb:buff_mb_day8, mb:buff_mb_day13, mb:buff_mb_day20
+
+17:54:39[Scripting][warning]-[BUFF AI] Dimensions to check: overworld, nether, the_end
+
+17:54:39[Scripting][warning]-[BUFF AI] Max processing distance: 64 blocks
+
+17:54:39[Scripting][warning]-[BUFF AI] ====== INITIALIZATION ATTEMPT 2/10 ======
+
+17:54:39[Scripting][warning]-[BUFF AI] Current tick: 22915
+
+17:54:39[Scripting][warning]-[BUFF AI] WARNING: AI loop already initialized, skipping duplicate initialization
+
+17:54:40[Scripting][warning]-[INFECTED AI] Script loaded - nox7-style pathfinding with gap jumping
+
+17:54:40[Scripting][inform]-[JOIN MAIN] Retry 2: player found = false, valid = undefined
+
+17:54:42[Scripting][inform]-[SPAWN] Player litbolt123 spawned
+
+17:54:42[Scripting][inform]-[SPAWN] Intro seen: true, intro active: false
+
+17:54:42[Scripting][inform]-[SPAWN] Intro already seen, skipping
+
+17:54:42[Scripting][inform]-[MINOR INFECTION] Day 0: Scaled timer to 10 days (240000 ticks)
+
+17:54:42[Scripting][inform]-[LOAD] Preserved minor infection timer for litbolt123: 10 days remaining (day 0, max 10 days)
+
+17:54:42[Scripting][inform]-[LOAD] Loaded active infection for litbolt123 (type: minor): {"ticksLeft":219160,"snowCount":0,"hitCount":0,"cured":false,"source":"spawn","infectionType":"minor","minorInfectionCured":false,"maxSeverity":0,"lastTierMessage":0,"lastDecayTick":409,"warningSent":false,"lastActiveTick":22877}
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 22975 zones= 1 baseRadius= 8
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= true budget= 2900
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -145 68 -74
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -145 67 -73
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -145 66 -72
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 280 chunksSkipped 0 queued 3 below/at/above 40/8/232 maxHorizR 1 sampleTypes minecraft:air:37, minecraft:dirt:7, minecraft:stone:6, minecraft:grass_block:5, mb:dusted_dirt:2, minecraft:coal_ore:2
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 301
+
+17:54:42[Scripting][inform]-[JOIN] Player litbolt123 joined, infection data will be loaded by main.js
+
+17:54:42[Scripting][inform]-[JOIN MAIN] Retry 3: player found = true, valid = true
+
+17:54:42[Scripting][inform]-[JOIN MAIN] ✓ Player litbolt123 found! Loading infection data and checking intro...
+
+17:54:42[Scripting][inform]-[MINOR INFECTION] Day 0: Scaled timer to 10 days (240000 ticks)
+
+17:54:42[Scripting][inform]-[LOAD] Preserved minor infection timer for litbolt123: 10 days remaining (day 0, max 10 days)
+
+17:54:42[Scripting][inform]-[LOAD] Loaded active infection for litbolt123 (type: minor): {"ticksLeft":219120,"snowCount":0,"hitCount":0,"cured":false,"source":"spawn","infectionType":"minor","minorInfectionCured":false,"maxSeverity":0,"lastTierMessage":0,"lastDecayTick":409,"warningSent":false,"lastActiveTick":22975}
+
+17:54:42[Scripting][inform]-[JOIN MAIN] Intro seen for this player: true (raw=true, type=boolean)
+
+17:54:42[Scripting][inform]-[JOIN MAIN] Intro already shown, giving journal if needed
+
+17:54:42[Scripting][inform]-[BASIC JOURNAL] Journal already given by intro for litbolt123, skipping
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 22985 zones= 1 baseRadius= 8
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -145 69 -75
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -145 65 -71
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 560 chunksSkipped 0 queued 2 below/at/above 80/16/464 maxHorizR 2 sampleTypes minecraft:air:39, minecraft:grass_block:14, minecraft:short_grass:6, mb:dusted_dirt:1
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:42[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 301
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 22995 zones= 1 baseRadius= 8
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -145 70 -76
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 700 chunksSkipped 0 queued 1 below/at/above 100/20/580 maxHorizR 3 sampleTypes minecraft:air:34, minecraft:grass_block:18, minecraft:short_grass:6, mb:dusted_dirt:1, minecraft:dirt:1
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 301
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 301
+
+17:54:43[Scripting][inform]-[BASIC JOURNAL] Journal already given by intro for litbolt123, skipping
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23005 zones= 1 baseRadius= 8
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -141 70 -76
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -140 70 -75
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -145 71 -77
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 840 chunksSkipped 0 queued 3 below/at/above 120/24/696 maxHorizR 4 sampleTypes minecraft:air:41, minecraft:grass_block:11, minecraft:short_grass:5, mb:dusted_dirt:3
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:43[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 301
+
+17:54:44[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23015 zones= 1 baseRadius= 8
+
+17:54:44[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:44[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -148 70 -69
+
+17:54:44[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -145 72 -78
+
+17:54:44[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1400 chunksSkipped 0 queued 2 below/at/above 200/40/1160 maxHorizR 5 sampleTypes minecraft:air:46, minecraft:short_grass:13, mb:dusted_dirt:1
+
+17:54:44[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:44[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 301
+
+17:54:44[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23025 zones= 1 baseRadius= 8
+
+17:54:44[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:44[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -138 70 -75
+
+17:54:44[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -145 73 -79
+
+17:54:44[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1260 chunksSkipped 0 queued 2 below/at/above 180/36/1044 maxHorizR 6 sampleTypes minecraft:air:55, minecraft:short_grass:4, mb:dusted_dirt:1
+
+17:54:44[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:44[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 301
+
+17:54:45[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23035 zones= 1 baseRadius= 8
+
+17:54:45[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:45[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -145 74 -80
+
+17:54:45[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 1 below/at/above 240/48/1162 maxHorizR 7 sampleTypes minecraft:air:53, minecraft:short_grass:7
+
+17:54:45[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:45[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:45[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23045 zones= 1 baseRadius= 8
+
+17:54:45[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:45[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 240/48/1162 maxHorizR 7 sampleTypes minecraft:air:60
+
+17:54:45[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:45[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:54:45[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:54:46[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23055 zones= 1 baseRadius= 8
+
+17:54:46[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:46[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 240/48/1162 maxHorizR 7 sampleTypes minecraft:air:60
+
+17:54:46[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:46[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:46[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23065 zones= 1 baseRadius= 8
+
+17:54:46[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:46[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 240/48/1162 maxHorizR 7 sampleTypes minecraft:air:60
+
+17:54:46[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:46[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 324
+
+17:54:47[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23075 zones= 1 baseRadius= 8
+
+17:54:47[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:47[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 240/48/1162 maxHorizR 7 sampleTypes minecraft:air:60
+
+17:54:47[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:47[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:54:47[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23085 zones= 1 baseRadius= 8
+
+17:54:47[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:47[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 108/48/1294 maxHorizR 7 sampleTypes minecraft:air:60
+
+17:54:47[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:47[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:48[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23095 zones= 1 baseRadius= 8
+
+17:54:48[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:48[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 132/48/1270 maxHorizR 7 sampleTypes minecraft:stone:33, minecraft:dirt:27
+
+17:54:48[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:48[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:48[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:48[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23105 zones= 1 baseRadius= 8
+
+17:54:48[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:48[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 240/0/1210 maxHorizR 7 sampleTypes minecraft:air:31, minecraft:grass_block:24, minecraft:dirt:4, minecraft:short_grass:1
+
+17:54:48[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:48[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:49[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23115 zones= 1 baseRadius= 8
+
+17:54:49[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:49[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 240/48/1162 maxHorizR 7 sampleTypes minecraft:air:60
+
+17:54:49[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:49[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:49[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23125 zones= 1 baseRadius= 8
+
+17:54:49[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:49[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 240/48/1162 maxHorizR 7 sampleTypes minecraft:air:60
+
+17:54:49[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:49[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:50[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23135 zones= 1 baseRadius= 8
+
+17:54:50[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:50[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 240/48/1162 maxHorizR 7 sampleTypes minecraft:air:60
+
+17:54:50[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:50[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:50[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23145 zones= 1 baseRadius= 8
+
+17:54:50[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:50[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 240/48/1162 maxHorizR 7 sampleTypes minecraft:air:60
+
+17:54:50[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:50[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:50[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:51[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23155 zones= 1 baseRadius= 8
+
+17:54:51[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:51[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 178/48/1224 maxHorizR 7 sampleTypes minecraft:air:60
+
+17:54:51[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:51[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 324
+
+17:54:51[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23165 zones= 1 baseRadius= 8
+
+17:54:51[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:51[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 106/48/1296 maxHorizR 7 sampleTypes minecraft:stone:50, minecraft:dirt:8, minecraft:coal_ore:2
+
+17:54:51[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:51[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 324
+
+17:54:52[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23175 zones= 1 baseRadius= 8
+
+17:54:52[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:52[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 196/0/1254 maxHorizR 7 sampleTypes minecraft:air:48, minecraft:dirt:10, minecraft:grass_block:2
+
+17:54:52[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:52[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:52[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23185 zones= 1 baseRadius= 8
+
+17:54:52[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:52[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 240/48/1162 maxHorizR 7 sampleTypes minecraft:air:60
+
+17:54:52[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:52[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:54:53[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23195 zones= 1 baseRadius= 8
+
+17:54:53[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= true budget= 2900
+
+17:54:53[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1664 chunksSkipped 0 queued 0 below/at/above 240/48/1376 maxHorizR 7 sampleTypes minecraft:air:60
+
+17:54:53[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:53[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 301
+
+17:54:53[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 301
+
+17:54:53[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23205 zones= 1 baseRadius= 8
+
+17:54:53[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= true budget= 2900
+
+17:54:53[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -152 70 -69
+
+17:54:53[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -151 70 -69
+
+17:54:53[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1904 chunksSkipped 0 queued 2 below/at/above 280/56/1568 maxHorizR 8 sampleTypes minecraft:air:51, minecraft:short_grass:7, mb:dusted_dirt:2
+
+17:54:53[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:53[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 301
+
+17:54:54[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23215 zones= 1 baseRadius= 8
+
+17:54:54[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:54[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 280/56/1114 maxHorizR 9 sampleTypes minecraft:air:54, minecraft:short_grass:6
+
+17:54:54[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:54[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:54[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23225 zones= 1 baseRadius= 8
+
+17:54:54[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:54[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 280/56/1114 maxHorizR 9 sampleTypes minecraft:air:60
+
+17:54:54[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:54[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 324
+
+17:54:55[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23235 zones= 1 baseRadius= 8
+
+17:54:55[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:55[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 280/56/1114 maxHorizR 9 sampleTypes minecraft:air:60
+
+17:54:55[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:55[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 324
+
+17:54:55[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23245 zones= 1 baseRadius= 8
+
+17:54:55[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:55[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 0/56/1394 maxHorizR 9 sampleTypes minecraft:air:60
+
+17:54:55[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:55[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 324
+
+17:54:55[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 324
+
+17:54:56[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23255 zones= 1 baseRadius= 8
+
+17:54:56[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:56[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 280/0/1170 maxHorizR 9 sampleTypes minecraft:air:38, minecraft:grass_block:17, minecraft:dirt:5
+
+17:54:56[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:56[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:54:56[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23265 zones= 1 baseRadius= 8
+
+17:54:56[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:56[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 280/56/1114 maxHorizR 9 sampleTypes minecraft:air:60
+
+17:54:56[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:56[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:54:57[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23275 zones= 1 baseRadius= 8
+
+17:54:57[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:57[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 280/56/1114 maxHorizR 9 sampleTypes minecraft:air:60
+
+17:54:57[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:57[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:57[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23285 zones= 1 baseRadius= 8
+
+17:54:57[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:57[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 56/56/1338 maxHorizR 9 sampleTypes minecraft:air:60
+
+17:54:57[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:57[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 324
+
+17:54:58[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23295 zones= 1 baseRadius= 8
+
+17:54:58[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:58[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 224/0/1226 maxHorizR 9 sampleTypes minecraft:air:48, minecraft:dirt:10, minecraft:grass_block:2
+
+17:54:58[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:58[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:54:58[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:54:58[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23305 zones= 1 baseRadius= 8
+
+17:54:58[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:58[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 280/56/1114 maxHorizR 9 sampleTypes minecraft:air:60
+
+17:54:58[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:58[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 324
+
+17:54:59[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23315 zones= 1 baseRadius= 8
+
+17:54:59[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:59[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 280/56/1114 maxHorizR 9 sampleTypes minecraft:air:60
+
+17:54:59[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:59[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:54:59[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23325 zones= 1 baseRadius= 8
+
+17:54:59[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:54:59[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 96/56/1298 maxHorizR 9 sampleTypes minecraft:air:60
+
+17:54:59[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:54:59[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 324
+
+17:55:00[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23335 zones= 1 baseRadius= 8
+
+17:55:00[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:00[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 184/0/1266 maxHorizR 9 sampleTypes minecraft:air:44, minecraft:dirt:13, minecraft:grass_block:3
+
+17:55:00[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:00[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:55:00[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23345 zones= 1 baseRadius= 8
+
+17:55:00[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:00[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 280/56/1114 maxHorizR 9 sampleTypes minecraft:air:60
+
+17:55:00[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:00[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:55:00[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:55:01[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23355 zones= 1 baseRadius= 8
+
+17:55:01[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:01[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 280/56/1114 maxHorizR 9 sampleTypes minecraft:air:60
+
+17:55:01[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:01[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:55:01[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23365 zones= 1 baseRadius= 8
+
+17:55:01[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= true budget= 2900
+
+17:55:01[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1882 chunksSkipped 0 queued 0 below/at/above 280/56/1546 maxHorizR 9 sampleTypes minecraft:air:60
+
+17:55:01[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:01[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 302
+
+17:55:02[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23375 zones= 1 baseRadius= 8
+
+17:55:02[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= true budget= 2900
+
+17:55:02[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -154 70 -69
+
+17:55:02[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -134 70 -75
+
+17:55:02[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 2312 chunksSkipped 0 queued 2 below/at/above 340/68/1904 maxHorizR 10 sampleTypes minecraft:air:55, minecraft:short_grass:4, mb:dusted_dirt:1
+
+17:55:02[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:02[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 302
+
+17:55:02[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23385 zones= 1 baseRadius= 8
+
+17:55:02[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:02[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -155 70 -73
+
+17:55:02[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -133 70 -75
+
+17:55:02[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 2 below/at/above 320/64/1066 maxHorizR 11 sampleTypes minecraft:air:52, minecraft:short_grass:6, mb:dusted_dirt:2
+
+17:55:02[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:02[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:03[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23395 zones= 1 baseRadius= 8
+
+17:55:03[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:03[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 320/64/1066 maxHorizR 11 sampleTypes minecraft:air:60
+
+17:55:03[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:03[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 328
+
+17:55:03[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 328
+
+17:55:03[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23405 zones= 1 baseRadius= 8
+
+17:55:03[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:03[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 0/64/1386 maxHorizR 11 sampleTypes minecraft:air:60
+
+17:55:03[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:03[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:55:04[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23415 zones= 1 baseRadius= 8
+
+17:55:04[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:04[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 320/0/1130 maxHorizR 11 sampleTypes minecraft:grass_block:31, minecraft:air:24, minecraft:dirt:4, minecraft:short_grass:1
+
+17:55:04[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:04[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:04[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23425 zones= 1 baseRadius= 8
+
+17:55:04[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:04[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 320/64/1066 maxHorizR 11 sampleTypes minecraft:air:60
+
+17:55:04[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:04[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:05[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23435 zones= 1 baseRadius= 8
+
+17:55:05[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:05[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 64/64/1322 maxHorizR 11 sampleTypes minecraft:air:60
+
+17:55:05[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:05[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:55:05[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23445 zones= 1 baseRadius= 8
+
+17:55:05[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:05[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 256/0/1194 maxHorizR 11 sampleTypes minecraft:dirt:37, minecraft:grass_block:17, minecraft:air:5, minecraft:short_grass:1
+
+17:55:05[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:05[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:05[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:06[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23455 zones= 1 baseRadius= 8
+
+17:55:06[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:06[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 320/64/1066 maxHorizR 11 sampleTypes minecraft:air:60
+
+17:55:06[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:06[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:06[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23465 zones= 1 baseRadius= 8
+
+17:55:06[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:06[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 128/64/1258 maxHorizR 11 sampleTypes minecraft:air:60
+
+17:55:06[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:06[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:55:07[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23475 zones= 1 baseRadius= 8
+
+17:55:07[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:07[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 192/0/1258 maxHorizR 11 sampleTypes minecraft:dirt:39, minecraft:stone:13, minecraft:air:6, minecraft:grass_block:2
+
+17:55:07[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:07[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:07[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23485 zones= 1 baseRadius= 8
+
+17:55:07[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:07[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 320/64/1066 maxHorizR 11 sampleTypes minecraft:air:60
+
+17:55:07[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:07[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:08[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23495 zones= 1 baseRadius= 8
+
+17:55:08[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:08[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 248/64/1138 maxHorizR 11 sampleTypes minecraft:air:60
+
+17:55:08[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:08[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:55:08[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:55:08[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23505 zones= 1 baseRadius= 8
+
+17:55:08[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:08[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 72/0/1378 maxHorizR 11 sampleTypes minecraft:stone:40, minecraft:dirt:20
+
+17:55:08[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:08[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:09[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23515 zones= 1 baseRadius= 8
+
+17:55:09[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:09[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 320/64/1066 maxHorizR 11 sampleTypes minecraft:air:60
+
+17:55:09[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:09[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:09[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23525 zones= 1 baseRadius= 8
+
+17:55:09[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:09[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 320/64/1066 maxHorizR 11 sampleTypes minecraft:air:60
+
+17:55:09[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:09[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 325
+
+17:55:10[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23535 zones= 1 baseRadius= 8
+
+17:55:10[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:10[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 0/0/1450 maxHorizR 11 sampleTypes minecraft:air:60
+
+17:55:10[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:10[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:10[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23545 zones= 1 baseRadius= 8
+
+17:55:10[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= true budget= 2900
+
+17:55:10[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 2080 chunksSkipped 0 queued 0 below/at/above 320/64/1696 maxHorizR 11 sampleTypes minecraft:air:56, minecraft:short_grass:3, mb:dusted_dirt:1
+
+17:55:10[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:10[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 302
+
+17:55:10[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 302
+
+17:55:11[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23555 zones= 1 baseRadius= 8
+
+17:55:11[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= true budget= 2900
+
+17:55:11[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -156 70 -73
+
+17:55:11[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -132 70 -75
+
+17:55:11[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 2640 chunksSkipped 0 queued 2 below/at/above 400/80/2160 maxHorizR 12 sampleTypes minecraft:air:48, minecraft:short_grass:10, mb:dusted_dirt:1, minecraft:tall_grass:1
+
+17:55:11[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:11[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 302
+
+17:55:11[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23565 zones= 1 baseRadius= 8
+
+17:55:11[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:11[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -157 70 -73
+
+17:55:11[Scripting][warning]-[EMULSIFIER DEBUG] purification queued conversion -131 70 -75
+
+17:55:11[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 2 below/at/above 460/92/898 maxHorizR 13 sampleTypes minecraft:air:50, minecraft:short_grass:8, mb:dusted_dirt:1, minecraft:tall_grass:1
+
+17:55:11[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:11[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:12[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23575 zones= 1 baseRadius= 8
+
+17:55:12[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:12[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 0/0/1450 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:12[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:12[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:12[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23585 zones= 1 baseRadius= 8
+
+17:55:12[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:12[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 460/92/898 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:12[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:12[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 328
+
+17:55:13[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23595 zones= 1 baseRadius= 8
+
+17:55:13[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:13[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 0/0/1450 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:13[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:13[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 328
+
+17:55:13[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 328
+
+17:55:13[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23605 zones= 1 baseRadius= 8
+
+17:55:13[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:13[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 460/92/898 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:13[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:13[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:55:14[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23615 zones= 1 baseRadius= 8
+
+17:55:14[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:14[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 0/0/1450 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:14[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:14[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:14[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23625 zones= 1 baseRadius= 8
+
+17:55:14[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:14[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 460/92/898 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:14[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:14[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:15[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23635 zones= 1 baseRadius= 8
+
+17:55:15[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:15[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 0/0/1450 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:15[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:15[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:15[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23645 zones= 1 baseRadius= 8
+
+17:55:15[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:15[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 460/92/898 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:15[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:15[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:55:15[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:55:16[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23655 zones= 1 baseRadius= 8
+
+17:55:16[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:16[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 0/0/1450 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:16[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:16[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:16[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23665 zones= 1 baseRadius= 8
+
+17:55:16[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:16[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 402/92/956 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:16[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:16[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:17[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23675 zones= 1 baseRadius= 8
+
+17:55:17[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:17[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 58/0/1392 maxHorizR 13 sampleTypes minecraft:stone:37, minecraft:dirt:19, minecraft:copper_ore:2, minecraft:air:2
+
+17:55:17[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:17[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 328
+
+17:55:17[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23685 zones= 1 baseRadius= 8
+
+17:55:17[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:17[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 266/92/1092 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:17[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:17[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:55:18[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23695 zones= 1 baseRadius= 8
+
+17:55:18[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:18[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 194/0/1256 maxHorizR 13 sampleTypes minecraft:stone:31, minecraft:dirt:29
+
+17:55:18[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:18[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:18[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:18[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23705 zones= 1 baseRadius= 8
+
+17:55:18[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:18[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 184/92/1174 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:18[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:18[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:19[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23715 zones= 1 baseRadius= 8
+
+17:55:19[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= false budget= 1450
+
+17:55:19[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 1450 chunksSkipped 0 queued 0 below/at/above 276/0/1174 maxHorizR 13 sampleTypes minecraft:air:54, minecraft:dirt:6
+
+17:55:19[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:19[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:19[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23725 zones= 1 baseRadius= 8
+
+17:55:19[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= true budget= 2900
+
+17:55:19[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 2900 chunksSkipped 0 queued 0 below/at/above 460/92/2348 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:19[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:19[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 326
+
+17:55:20[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23735 zones= 1 baseRadius= 8
+
+17:55:20[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= true budget= 2900
+
+17:55:20[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 2900 chunksSkipped 0 queued 0 below/at/above 460/92/2348 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:20[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:20[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:20[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23745 zones= 1 baseRadius= 8
+
+17:55:20[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= true budget= 2900
+
+17:55:20[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 2900 chunksSkipped 0 queued 0 below/at/above 460/92/2348 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:20[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:20[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:20[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:21[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23755 zones= 1 baseRadius= 8
+
+17:55:21[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= true budget= 2900
+
+17:55:21[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 2900 chunksSkipped 0 queued 0 below/at/above 460/92/2348 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:21[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:21[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 328
+
+17:55:21[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23765 zones= 1 baseRadius= 8
+
+17:55:21[Scripting][warning]-[EMULSIFIER DEBUG] purification zone scan -144 70 -73 powerRadius= 30 interval= 1 firstScan= false searching= true budget= 2900
+
+17:55:21[Scripting][warning]-[EMULSIFIER DEBUG] purification zone -144 70 -73 checked 2900 chunksSkipped 0 queued 0 below/at/above 460/92/2348 maxHorizR 13 sampleTypes minecraft:air:60
+
+17:55:21[Scripting][warning]-[EMULSIFIER DEBUG] persistence saveEmulsifierZones (changed=true)
+
+17:55:21[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:22[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23775 zones= 1 baseRadius= 8
+
+17:55:22[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:22[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23785 zones= 1 baseRadius= 8
+
+17:55:22[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:23[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23795 zones= 1 baseRadius= 8
+
+17:55:23[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:23[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:23[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23805 zones= 1 baseRadius= 8
+
+17:55:23[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:24[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23815 zones= 1 baseRadius= 8
+
+17:55:24[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:24[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23825 zones= 1 baseRadius= 8
+
+17:55:24[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:25[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23835 zones= 1 baseRadius= 8
+
+17:55:25[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:25[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23845 zones= 1 baseRadius= 8
+
+17:55:25[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:25[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:26[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23855 zones= 1 baseRadius= 8
+
+17:55:26[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:26[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23865 zones= 1 baseRadius= 8
+
+17:55:26[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:27[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23875 zones= 1 baseRadius= 8
+
+17:55:27[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:27[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23885 zones= 1 baseRadius= 8
+
+17:55:27[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:28[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23895 zones= 1 baseRadius= 8
+
+17:55:28[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:28[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:28[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23905 zones= 1 baseRadius= 8
+
+17:55:28[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:29[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23915 zones= 1 baseRadius= 8
+
+17:55:29[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:29[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23925 zones= 1 baseRadius= 8
+
+17:55:29[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:30[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23935 zones= 1 baseRadius= 8
+
+17:55:30[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:30[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23945 zones= 1 baseRadius= 8
+
+17:55:30[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:30[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:31[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23955 zones= 1 baseRadius= 8
+
+17:55:31[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:31[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23965 zones= 1 baseRadius= 8
+
+17:55:31[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:32[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23975 zones= 1 baseRadius= 8
+
+17:55:32[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:32[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23985 zones= 1 baseRadius= 8
+
+17:55:32[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:33[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 23995 zones= 1 baseRadius= 8
+
+17:55:33[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:33[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:33[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24005 zones= 1 baseRadius= 8
+
+17:55:33[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:34[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24015 zones= 1 baseRadius= 8
+
+17:55:34[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:34[Scripting][inform]-🌅 New day detected: Day 1
+
+17:55:34[Scripting][inform]-[DAILY EVENTS] Current Day: 1, Recording events for Day: 0
+
+17:55:34[Scripting][inform]-🌅 Day 1 - World age: 24026 ticks
+
+17:55:34[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24025 zones= 1 baseRadius= 8
+
+17:55:34[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:35[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24035 zones= 1 baseRadius= 8
+
+17:55:35[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:35[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24045 zones= 1 baseRadius= 8
+
+17:55:35[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:35[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:36[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24055 zones= 1 baseRadius= 8
+
+17:55:36[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:36[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24065 zones= 1 baseRadius= 8
+
+17:55:36[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:37[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24075 zones= 1 baseRadius= 8
+
+17:55:37[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:37[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24085 zones= 1 baseRadius= 8
+
+17:55:37[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:38[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24095 zones= 1 baseRadius= 8
+
+17:55:38[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:38[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:38[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24105 zones= 1 baseRadius= 8
+
+17:55:38[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:39[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24115 zones= 1 baseRadius= 8
+
+17:55:39[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:39[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24125 zones= 1 baseRadius= 8
+
+17:55:39[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:40[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24135 zones= 1 baseRadius= 8
+
+17:55:40[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:40[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24145 zones= 1 baseRadius= 8
+
+17:55:40[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:40[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:41[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24155 zones= 1 baseRadius= 8
+
+17:55:41[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:41[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24165 zones= 1 baseRadius= 8
+
+17:55:41[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 5 phase= 3
+
+17:55:42[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24175 zones= 1 baseRadius= 8
+
+17:55:42[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:42[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24185 zones= 1 baseRadius= 8
+
+17:55:42[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:43[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24195 zones= 1 baseRadius= 8
+
+17:55:43[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:43[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:43[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24205 zones= 1 baseRadius= 8
+
+17:55:43[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:44[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24215 zones= 1 baseRadius= 8
+
+17:55:44[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:44[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24225 zones= 1 baseRadius= 8
+
+17:55:44[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:45[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24235 zones= 1 baseRadius= 8
+
+17:55:45[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:45[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24245 zones= 1 baseRadius= 8
+
+17:55:45[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:45[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:46[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24255 zones= 1 baseRadius= 8
+
+17:55:46[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:46[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24265 zones= 1 baseRadius= 8
+
+17:55:46[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:47[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24275 zones= 1 baseRadius= 8
+
+17:55:47[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:47[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24285 zones= 1 baseRadius= 8
+
+17:55:47[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:48[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24295 zones= 1 baseRadius= 8
+
+17:55:48[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:48[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:48[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24305 zones= 1 baseRadius= 8
+
+17:55:48[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:49[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24315 zones= 1 baseRadius= 8
+
+17:55:49[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:49[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24325 zones= 1 baseRadius= 8
+
+17:55:49[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:50[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24335 zones= 1 baseRadius= 8
+
+17:55:50[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:50[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24345 zones= 1 baseRadius= 8
+
+17:55:50[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:50[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:51[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24355 zones= 1 baseRadius= 8
+
+17:55:51[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:51[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24365 zones= 1 baseRadius= 8
+
+17:55:51[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:52[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24375 zones= 1 baseRadius= 8
+
+17:55:52[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:52[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24385 zones= 1 baseRadius= 8
+
+17:55:52[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:53[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24395 zones= 1 baseRadius= 8
+
+17:55:53[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:53[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:53[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24405 zones= 1 baseRadius= 8
+
+17:55:53[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:54[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24415 zones= 1 baseRadius= 8
+
+17:55:54[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:54[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24425 zones= 1 baseRadius= 8
+
+17:55:54[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:55[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24435 zones= 1 baseRadius= 8
+
+17:55:55[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:55[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24445 zones= 1 baseRadius= 8
+
+17:55:55[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:55[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:56[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24455 zones= 1 baseRadius= 8
+
+17:55:56[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:56[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24465 zones= 1 baseRadius= 8
+
+17:55:56[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:57[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24475 zones= 1 baseRadius= 8
+
+17:55:57[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:57[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24485 zones= 1 baseRadius= 8
+
+17:55:57[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:58[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24495 zones= 1 baseRadius= 8
+
+17:55:58[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:58[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:55:58[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24505 zones= 1 baseRadius= 8
+
+17:55:58[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:55:59[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24515 zones= 1 baseRadius= 8
+
+17:55:59[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:55:59[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24525 zones= 1 baseRadius= 8
+
+17:55:59[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:00[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24535 zones= 1 baseRadius= 8
+
+17:56:00[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:00[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24545 zones= 1 baseRadius= 8
+
+17:56:00[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:00[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:01[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24555 zones= 1 baseRadius= 8
+
+17:56:01[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:01[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24565 zones= 1 baseRadius= 8
+
+17:56:01[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:02[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24575 zones= 1 baseRadius= 8
+
+17:56:02[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:02[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24585 zones= 1 baseRadius= 8
+
+17:56:02[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:03[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24595 zones= 1 baseRadius= 8
+
+17:56:03[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:03[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:03[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24605 zones= 1 baseRadius= 8
+
+17:56:03[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:04[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24615 zones= 1 baseRadius= 8
+
+17:56:04[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:04[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24625 zones= 1 baseRadius= 8
+
+17:56:04[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:05[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24635 zones= 1 baseRadius= 8
+
+17:56:05[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:05[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24645 zones= 1 baseRadius= 8
+
+17:56:05[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:05[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:06[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24655 zones= 1 baseRadius= 8
+
+17:56:06[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:06[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24665 zones= 1 baseRadius= 8
+
+17:56:06[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:07[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24675 zones= 1 baseRadius= 8
+
+17:56:07[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:07[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24685 zones= 1 baseRadius= 8
+
+17:56:07[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:08[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24695 zones= 1 baseRadius= 8
+
+17:56:08[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:08[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:08[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24705 zones= 1 baseRadius= 8
+
+17:56:08[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:09[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24715 zones= 1 baseRadius= 8
+
+17:56:09[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:09[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24725 zones= 1 baseRadius= 8
+
+17:56:09[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:10[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24735 zones= 1 baseRadius= 8
+
+17:56:10[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:10[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24745 zones= 1 baseRadius= 8
+
+17:56:10[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:10[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:11[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24755 zones= 1 baseRadius= 8
+
+17:56:11[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:11[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24765 zones= 1 baseRadius= 8
+
+17:56:11[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:12[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24775 zones= 1 baseRadius= 8
+
+17:56:12[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:12[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24785 zones= 1 baseRadius= 8
+
+17:56:12[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:13[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24795 zones= 1 baseRadius= 8
+
+17:56:13[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:13[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:13[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24805 zones= 1 baseRadius= 8
+
+17:56:13[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:14[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24815 zones= 1 baseRadius= 8
+
+17:56:14[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:14[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24825 zones= 1 baseRadius= 8
+
+17:56:14[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:15[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24835 zones= 1 baseRadius= 8
+
+17:56:15[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:15[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24845 zones= 1 baseRadius= 8
+
+17:56:15[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:15[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:16[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24855 zones= 1 baseRadius= 8
+
+17:56:16[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:16[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24865 zones= 1 baseRadius= 8
+
+17:56:16[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:17[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24875 zones= 1 baseRadius= 8
+
+17:56:17[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:17[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24885 zones= 1 baseRadius= 8
+
+17:56:17[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:18[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24895 zones= 1 baseRadius= 8
+
+17:56:18[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:18[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:18[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24905 zones= 1 baseRadius= 8
+
+17:56:18[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:19[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24915 zones= 1 baseRadius= 8
+
+17:56:19[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:19[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24925 zones= 1 baseRadius= 8
+
+17:56:19[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:20[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24935 zones= 1 baseRadius= 8
+
+17:56:20[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:20[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24945 zones= 1 baseRadius= 8
+
+17:56:20[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:20[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:21[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24955 zones= 1 baseRadius= 8
+
+17:56:21[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:21[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24965 zones= 1 baseRadius= 8
+
+17:56:21[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:22[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24975 zones= 1 baseRadius= 8
+
+17:56:22[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:22[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24985 zones= 1 baseRadius= 8
+
+17:56:22[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:23[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 24995 zones= 1 baseRadius= 8
+
+17:56:23[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:23[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:23[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25005 zones= 1 baseRadius= 8
+
+17:56:23[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:24[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25015 zones= 1 baseRadius= 8
+
+17:56:24[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:24[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25025 zones= 1 baseRadius= 8
+
+17:56:24[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:25[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25035 zones= 1 baseRadius= 8
+
+17:56:25[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:25[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25045 zones= 1 baseRadius= 8
+
+17:56:25[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:25[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:26[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25055 zones= 1 baseRadius= 8
+
+17:56:26[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:26[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25065 zones= 1 baseRadius= 8
+
+17:56:26[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:27[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25075 zones= 1 baseRadius= 8
+
+17:56:27[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:27[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25085 zones= 1 baseRadius= 8
+
+17:56:27[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:28[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25095 zones= 1 baseRadius= 8
+
+17:56:28[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:28[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:28[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25105 zones= 1 baseRadius= 8
+
+17:56:28[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:29[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25115 zones= 1 baseRadius= 8
+
+17:56:29[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:29[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25125 zones= 1 baseRadius= 8
+
+17:56:29[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:30[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25135 zones= 1 baseRadius= 8
+
+17:56:30[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:30[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25145 zones= 1 baseRadius= 8
+
+17:56:30[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:30[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:31[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25155 zones= 1 baseRadius= 8
+
+17:56:31[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:31[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25165 zones= 1 baseRadius= 8
+
+17:56:31[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:32[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25175 zones= 1 baseRadius= 8
+
+17:56:32[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:32[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25185 zones= 1 baseRadius= 8
+
+17:56:32[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:33[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25195 zones= 1 baseRadius= 8
+
+17:56:33[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:33[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:33[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25205 zones= 1 baseRadius= 8
+
+17:56:33[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:34[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25215 zones= 1 baseRadius= 8
+
+17:56:34[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:34[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25225 zones= 1 baseRadius= 8
+
+17:56:34[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:35[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25235 zones= 1 baseRadius= 8
+
+17:56:35[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:35[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25245 zones= 1 baseRadius= 8
+
+17:56:35[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:35[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:36[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25255 zones= 1 baseRadius= 8
+
+17:56:36[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:36[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25265 zones= 1 baseRadius= 8
+
+17:56:36[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:37[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25275 zones= 1 baseRadius= 8
+
+17:56:37[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:37[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25285 zones= 1 baseRadius= 8
+
+17:56:37[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:38[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25295 zones= 1 baseRadius= 8
+
+17:56:38[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:38[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:38[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25305 zones= 1 baseRadius= 8
+
+17:56:38[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:39[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25315 zones= 1 baseRadius= 8
+
+17:56:39[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:39[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25325 zones= 1 baseRadius= 8
+
+17:56:39[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:40[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25335 zones= 1 baseRadius= 8
+
+17:56:40[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:40[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25345 zones= 1 baseRadius= 8
+
+17:56:40[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:40[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:41[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25355 zones= 1 baseRadius= 8
+
+17:56:41[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:41[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25365 zones= 1 baseRadius= 8
+
+17:56:41[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:42[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25375 zones= 1 baseRadius= 8
+
+17:56:42[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:42[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25385 zones= 1 baseRadius= 8
+
+17:56:42[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:43[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25395 zones= 1 baseRadius= 8
+
+17:56:43[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:43[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:43[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25405 zones= 1 baseRadius= 8
+
+17:56:43[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:44[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25415 zones= 1 baseRadius= 8
+
+17:56:44[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:44[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25425 zones= 1 baseRadius= 8
+
+17:56:44[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:45[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25435 zones= 1 baseRadius= 8
+
+17:56:45[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:45[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25445 zones= 1 baseRadius= 8
+
+17:56:45[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:45[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:46[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25455 zones= 1 baseRadius= 8
+
+17:56:46[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:46[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25465 zones= 1 baseRadius= 8
+
+17:56:46[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:47[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25475 zones= 1 baseRadius= 8
+
+17:56:47[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:47[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25485 zones= 1 baseRadius= 8
+
+17:56:47[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:48[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25495 zones= 1 baseRadius= 8
+
+17:56:48[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:48[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:48[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25505 zones= 1 baseRadius= 8
+
+17:56:48[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:49[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25515 zones= 1 baseRadius= 8
+
+17:56:49[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:49[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25525 zones= 1 baseRadius= 8
+
+17:56:49[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:50[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25535 zones= 1 baseRadius= 8
+
+17:56:50[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:50[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25545 zones= 1 baseRadius= 8
+
+17:56:50[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:50[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:51[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25555 zones= 1 baseRadius= 8
+
+17:56:51[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:51[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25565 zones= 1 baseRadius= 8
+
+17:56:51[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:52[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25575 zones= 1 baseRadius= 8
+
+17:56:52[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:52[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25585 zones= 1 baseRadius= 8
+
+17:56:52[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:53[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25595 zones= 1 baseRadius= 8
+
+17:56:53[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:53[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:53[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25605 zones= 1 baseRadius= 8
+
+17:56:53[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:54[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25615 zones= 1 baseRadius= 8
+
+17:56:54[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:54[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25625 zones= 1 baseRadius= 8
+
+17:56:54[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:55[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25635 zones= 1 baseRadius= 8
+
+17:56:55[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:55[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25645 zones= 1 baseRadius= 8
+
+17:56:55[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:55[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:56[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25655 zones= 1 baseRadius= 8
+
+17:56:56[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:56[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25665 zones= 1 baseRadius= 8
+
+17:56:56[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:57[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25675 zones= 1 baseRadius= 8
+
+17:56:57[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:57[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25685 zones= 1 baseRadius= 8
+
+17:56:57[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:58[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25695 zones= 1 baseRadius= 8
+
+17:56:58[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:58[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:56:58[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25705 zones= 1 baseRadius= 8
+
+17:56:58[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:56:59[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25715 zones= 1 baseRadius= 8
+
+17:56:59[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:56:59[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25725 zones= 1 baseRadius= 8
+
+17:56:59[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:00[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25735 zones= 1 baseRadius= 8
+
+17:57:00[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:00[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25745 zones= 1 baseRadius= 8
+
+17:57:00[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:00[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:57:01[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25755 zones= 1 baseRadius= 8
+
+17:57:01[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:01[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25765 zones= 1 baseRadius= 8
+
+17:57:01[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:02[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25775 zones= 1 baseRadius= 8
+
+17:57:02[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:02[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25785 zones= 1 baseRadius= 8
+
+17:57:02[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:03[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25795 zones= 1 baseRadius= 8
+
+17:57:03[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:03[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:57:03[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25805 zones= 1 baseRadius= 8
+
+17:57:03[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:04[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25815 zones= 1 baseRadius= 8
+
+17:57:04[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:04[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25825 zones= 1 baseRadius= 8
+
+17:57:04[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:05[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25835 zones= 1 baseRadius= 8
+
+17:57:05[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:05[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25845 zones= 1 baseRadius= 8
+
+17:57:05[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:05[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:57:06[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25855 zones= 1 baseRadius= 8
+
+17:57:06[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:06[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25865 zones= 1 baseRadius= 8
+
+17:57:06[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:07[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25875 zones= 1 baseRadius= 8
+
+17:57:07[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:07[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25885 zones= 1 baseRadius= 8
+
+17:57:07[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:08[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25895 zones= 1 baseRadius= 8
+
+17:57:08[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:08[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:57:08[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25905 zones= 1 baseRadius= 8
+
+17:57:08[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:09[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25915 zones= 1 baseRadius= 8
+
+17:57:09[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:09[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25925 zones= 1 baseRadius= 8
+
+17:57:09[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:10[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25935 zones= 1 baseRadius= 8
+
+17:57:10[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:10[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25945 zones= 1 baseRadius= 8
+
+17:57:10[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:10[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:57:11[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25955 zones= 1 baseRadius= 8
+
+17:57:11[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:11[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25965 zones= 1 baseRadius= 8
+
+17:57:11[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:12[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25975 zones= 1 baseRadius= 8
+
+17:57:12[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:12[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25985 zones= 1 baseRadius= 8
+
+17:57:12[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:13[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 25995 zones= 1 baseRadius= 8
+
+17:57:13[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:13[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:57:13[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26005 zones= 1 baseRadius= 8
+
+17:57:13[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:14[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26015 zones= 1 baseRadius= 8
+
+17:57:14[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:14[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26025 zones= 1 baseRadius= 8
+
+17:57:14[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:15[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26035 zones= 1 baseRadius= 8
+
+17:57:15[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:15[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26045 zones= 1 baseRadius= 8
+
+17:57:15[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:15[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:57:16[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26055 zones= 1 baseRadius= 8
+
+17:57:16[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:16[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26065 zones= 1 baseRadius= 8
+
+17:57:16[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:17[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26075 zones= 1 baseRadius= 8
+
+17:57:17[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:17[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26085 zones= 1 baseRadius= 8
+
+17:57:17[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:18[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26095 zones= 1 baseRadius= 8
+
+17:57:18[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:18[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:57:18[Scripting][inform]-[MINOR INFECTION] litbolt123 has 9 days left until bear transformation
+
+17:57:18[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26105 zones= 1 baseRadius= 8
+
+17:57:18[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:19[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26115 zones= 1 baseRadius= 8
+
+17:57:19[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:19[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26125 zones= 1 baseRadius= 8
+
+17:57:19[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:20[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26135 zones= 1 baseRadius= 8
+
+17:57:20[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:20[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26145 zones= 1 baseRadius= 8
+
+17:57:20[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:20[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:57:21[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26155 zones= 1 baseRadius= 8
+
+17:57:21[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:21[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26165 zones= 1 baseRadius= 8
+
+17:57:21[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:22[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26175 zones= 1 baseRadius= 8
+
+17:57:22[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:22[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26185 zones= 1 baseRadius= 8
+
+17:57:22[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:23[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26195 zones= 1 baseRadius= 8
+
+17:57:23[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:23[Scripting][warning]-[EMULSIFIER DEBUG] persistence save: zones= 1 jsonLen= 327
+
+17:57:23[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26205 zones= 1 baseRadius= 8
+
+17:57:23[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:24[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26215 zones= 1 baseRadius= 8
+
+17:57:24[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:24[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26225 zones= 1 baseRadius= 8
+
+17:57:24[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:25[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26235 zones= 1 baseRadius= 8
+
+17:57:25[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 18
+
+17:57:25[Scripting][warning]-[EMULSIFIER DEBUG] general processEmulsifierZones start tick= 26245 zones= 1 baseRadius= 8
+
+17:57:25[Scripting][warning]-[EMULSIFIER DEBUG] purification skip zone (phase): -144 -73 interval= 20 phase= 8
+
+17:57:25[Scripti

@@ -6,7 +6,7 @@ import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTrac
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 import { getBuffBearCountdowns } from "./mb_buffAI.js";
-import { getSpawnConfigsForDevTools, getDisabledSpawnTypes, setDisabledSpawnTypes, getSpawnSpeedMultiplier, SPAWN_SPEED_PROPERTY, getBlockQueryMultiplier, getMaxGlobalSpawnsPerTick, getSpawnDistanceRange, getTileIntensityMultiplier, getBlocksPerTickMultiplier, SPAWN_OVERRIDE_PROPERTIES, getSpawnScanSettingsForDevTools, applySpawnScanPreset, SPAWN_SCAN_OVERRIDE_PROPERTIES, SPAWN_SCAN_PRESETS, getEmulsifierStateForDevTools, getEmulsifierDebugInfo, clearEmulsifierZoneCache, addEmulsifierZoneAtPlayer, removeNearestEmulsifierZone, setNearestEmulsifierFuel, getEmulsifierZoneAtBlock, upsertEmulsifierZoneAtBlock, setEmulsifierFuelAtBlock, setEmulsifierActiveAtBlock } from "./mb_spawnController.js";
+import { getSpawnConfigsForDevTools, getDisabledSpawnTypes, setDisabledSpawnTypes, getSpawnSpeedMultiplier, SPAWN_SPEED_PROPERTY, getBlockQueryMultiplier, getMaxGlobalSpawnsPerTick, getSpawnDistanceRange, getTileIntensityMultiplier, getBlocksPerTickMultiplier, SPAWN_OVERRIDE_PROPERTIES, getSpawnScanSettingsForDevTools, applySpawnScanPreset, SPAWN_SCAN_OVERRIDE_PROPERTIES, SPAWN_SCAN_PRESETS, getEmulsifierStateForDevTools, getEmulsifierDebugInfo, clearEmulsifierZoneCache, addEmulsifierZoneAtPlayer, removeNearestEmulsifierZone, setNearestEmulsifierFuel, getEmulsifierZoneAtBlock, upsertEmulsifierZoneAtBlock, setEmulsifierFuelAtBlock, addEmulsifierFuelAtBlock, getMaxFuelTicks, setEmulsifierActiveAtBlock, getZoneFuelQueueForUI, getZoneCurrentFuelType, zoneHasFuel, setEmulsifierFuelOrderAtBlock } from "./mb_spawnController.js";
 import { summonStorm, endStorm, getStormState, getStormDebugInfo, setStormOverride, resetStormOverride, getStormControlParams, isMultiStormEnabled, setMultiStormEnabled, getStorms, endStormById, setStormEnabled } from "./mb_snowStorm.js";
 import { getMiningAIState } from "./mb_miningAI.js";
 
@@ -57,6 +57,22 @@ function consumeItemsFromInventory(player, requirements) {
     return true;
 }
 
+/** Give items to player (e.g. refund). Drops remainder on ground if inventory full. requirements = [{ item, count }, ...]. */
+function giveItemsToPlayer(player, requirements) {
+    const inv = player?.getComponent?.("inventory")?.container;
+    if (!inv) return;
+    const dim = player?.dimension;
+    const loc = player?.location;
+    for (const req of requirements) {
+        if (!req?.item || (req.count ?? 0) <= 0) continue;
+        const stack = new ItemStack(req.item, req.count);
+        const remainder = inv.addItem(stack);
+        if (remainder && remainder.amount > 0 && dim && loc) {
+            dim.spawnItem(new ItemStack(remainder.typeId, remainder.amount), loc);
+        }
+    }
+}
+
 const EMULSIFIER_FUEL_COSTS = {
     redstone: [{ item: "minecraft:redstone", count: 4 }],
     iron: [{ item: "mb:snow", count: 8 }, { item: "minecraft:iron_ingot", count: 4 }],
@@ -97,48 +113,135 @@ export function showEmulsifierMachineUI(player, block) {
         player.playSound("mb.codex_open", { pitch: 1, volume: 0.8 * vol });
     } catch { }
 
+    const orderLabel = (order) => {
+        if (order === "efficient_first") return "Most efficient first";
+        if (order === "efficient_last") return "Least efficient first";
+        return "Order added (queue)";
+    };
+
     const openMain = () => {
         const zone = getEmulsifierZoneAtBlock(dimId, x, y, z);
         if (!zone) return;
-        const hasFuel = zone.fuelType && (zone.fuelType === "netherite" || (zone.fuelTicksRemaining ?? 0) > 0);
-        const fuelLabel = hasFuel ? String(zone.fuelType) : "none";
-        const fuelTimeText = !hasFuel
-            ? "No fuel"
-            : zone.fuelType === "netherite"
-                ? "Permanent"
-                : `${Math.max(0, Math.floor((zone.fuelTicksRemaining ?? 0) / 20))}s`;
+        const queue = getZoneFuelQueueForUI(zone);
+        const hasFuel = queue.length > 0 && queue.some(e => (e.ticksRemaining ?? 0) > 0);
+        const currentType = getZoneCurrentFuelType(zone);
         const statusText = zone.active === true ? "§aON" : "§cOFF";
+        const order = zone.fuelQueueOrder || "queue";
+        let fuelBody = "§fFuel queue: §7";
+        if (!hasFuel) {
+            fuelBody += "Empty";
+        } else {
+            const parts = queue.map((e, i) => {
+                const t = e.ticksRemaining ?? 0;
+                const label = e.fuelType === "netherite" ? "Netherite (perm)" : (() => {
+                    const sec = Math.floor(t / 20);
+                    const min = Math.floor(sec / 60);
+                    return min > 0 ? `${e.fuelType} ${min}m` : `${e.fuelType} ${sec}s`;
+                })();
+                return `${i + 1}. ${label}`;
+            });
+            fuelBody += parts.join(" §8→ ");
+        }
+        fuelBody += `\n§fBurn order: §7${orderLabel(order)}`;
+        const hasNetheriteInQueue = queue.some(e => e.fuelType === "netherite");
+        const canAddFuel = queue.length < 12 && !hasNetheriteInQueue;
         const form = new ActionFormData()
             .title("§dEmulsifier")
-            .body(`§7Detoxifier machine\n§8Converts corrupted blocks and suppresses natural Maple Bear spawns nearby.\n\n§fStatus: ${statusText}\n§fFuel: §7${fuelLabel}\n§fFuel Remaining: §7${fuelTimeText}\n§fLocation: §7${x}, ${y}, ${z}`);
-        form.button("§fRefuel / Change Fuel");
+            .body(`§7Detoxifier machine\n§8Converts corrupted blocks and suppresses natural Maple Bear spawns nearby.\n\n§fStatus: ${statusText}\n${fuelBody}\n§fLocation: §7${x}, ${y}, ${z}`);
+        if (canAddFuel) form.button("§aAdd Fuel §8(1 unit, any type)");
+        form.button("§fChange / Set Fuel §8(replace queue)");
+        form.button(`§eBurn order: §7${orderLabel(order)}`);
         form.button(zone.active === true ? "§cDisable Machine" : "§aEnable Machine");
         form.button("§8Close");
 
         form.show(player).then((res) => {
-            // Close, cancel (ESC / look away), or invalid response: exit only; never reopen.
-            if (!res || res.canceled || res.selection === 2 || (res.selection !== 0 && res.selection !== 1)) {
-                try {
-                    const vol = getPlayerSoundVolume(player);
-                    player.playSound("mb.codex_close", { pitch: 1, volume: 0.8 * vol });
-                } catch { }
+            if (!res || res.canceled) {
+                try { player.playSound("mb.codex_close", { pitch: 1, volume: 0.8 * getPlayerSoundVolume(player) }); } catch { }
                 return;
             }
-            try {
-                const vol = getPlayerSoundVolume(player);
-                player.playSound("mb.codex_turn_page", { pitch: 1, volume: 0.8 * vol });
-            } catch { }
-            if (res.selection === 0) return openFuelMenu();
-            if (res.selection === 1) {
+            const sel = res.selection;
+            const closeIdx = canAddFuel ? 4 : 3;
+            const enableIdx = canAddFuel ? 3 : 2;
+            const orderIdx = canAddFuel ? 2 : 1;
+            const fuelMenuIdx = canAddFuel ? 1 : 0;
+            const addFuelIdx = 0;
+            if (sel === closeIdx || (sel !== addFuelIdx && sel !== fuelMenuIdx && sel !== orderIdx && sel !== enableIdx)) {
+                try { player.playSound("mb.codex_close", { pitch: 1, volume: 0.8 * getPlayerSoundVolume(player) }); } catch { }
+                return;
+            }
+            try { player.playSound("mb.codex_turn_page", { pitch: 1, volume: 0.8 * getPlayerSoundVolume(player) }); } catch { }
+            if (sel === addFuelIdx && canAddFuel) return openAddFuelMenu();
+            if (sel === fuelMenuIdx) return openFuelMenu();
+            if (sel === orderIdx) {
+                const r = setEmulsifierFuelOrderAtBlock(dimId, x, y, z);
+                if (r.ok) player.sendMessage(CHAT_SUCCESS + `Burn order: ${orderLabel(r.order)}`);
+                return system.run(() => openMain());
+            }
+            if (sel === enableIdx) {
                 const fresh = getEmulsifierZoneAtBlock(dimId, x, y, z);
                 if (!fresh) return;
-                const nextActive = fresh.active !== true; // Enable if currently disabled
+                const nextActive = fresh.active !== true;
                 const ok = setEmulsifierActiveAtBlock(dimId, x, y, z, nextActive);
                 if (!ok) return;
                 player.sendMessage(CHAT_INFO + `Emulsifier: ${nextActive ? CHAT_SUCCESS + "ON" : CHAT_DANGER + "OFF"}`);
-                system.run(() => openMain()); // Defer so zone state is committed before UI refresh
+                return system.run(() => openMain());
             }
-        }).catch(() => { /* do not reopen on error */ });
+        }).catch(() => {});
+    };
+
+    const openAddFuelMenu = () => {
+        const options = [
+            { key: "redstone", label: "Redstone", desc: "Starter power", color: "§c" },
+            { key: "iron", label: "Snow + Iron", desc: "Low-tier alloy fuel", color: "§7" },
+            { key: "copper", label: "Snow + Copper", desc: "Mid-tier alloy fuel", color: "§6" },
+            { key: "gold", label: "Snow + Gold", desc: "High-tier alloy fuel", color: "§e" },
+            { key: "netherite", label: "Netherite", desc: "Permanent core", color: "§5" }
+        ];
+        const form = new ActionFormData().title("§dAdd Fuel");
+        form.body("§fAdd one unit to the queue.\n§7Costs are consumed from your inventory.");
+        for (const opt of options) {
+            const costText = getFuelCostText(opt.key);
+            form.button(`${opt.color}${opt.label} §8- §f${opt.desc}\n§fCost: §b${costText}`);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === options.length) return openMain();
+            try { player.playSound("mb.codex_turn_page", { pitch: 1, volume: 0.8 * getPlayerSoundVolume(player) }); } catch { }
+            const selected = options[res.selection];
+            const req = EMULSIFIER_FUEL_COSTS[selected.key] || [];
+            if (!consumeItemsFromInventory(player, req)) {
+                player.sendMessage(CHAT_WARNING + `Missing materials: ${getFuelCostText(selected.key)}.`);
+                return openAddFuelMenu();
+            }
+            const result = addEmulsifierFuelAtBlock(dimId, x, y, z, selected.key);
+            if (!result.ok) {
+                if (result.reason === "has_netherite") {
+                    player.sendMessage(CHAT_WARNING + "Cannot add more fuel; this machine already has netherite.");
+                } else {
+                    player.sendMessage(CHAT_DANGER + "Failed to add fuel.");
+                }
+                giveItemsToPlayer(player, req);
+            } else if (result.capped) {
+                player.sendMessage(CHAT_SUCCESS + `Added ${selected.label}. Queue full (12 max).`);
+            } else {
+                if (result.refund && result.refund.length > 0) {
+                    const refundByType = {};
+                    for (const r of result.refund) {
+                        refundByType[r.fuelType] = (refundByType[r.fuelType] || 0) + 1;
+                    }
+                    const toGive = [];
+                    for (const [ft, count] of Object.entries(refundByType)) {
+                        const cost = EMULSIFIER_FUEL_COSTS[ft] || [];
+                        for (const c of cost) toGive.push({ item: c.item, count: (c.count || 1) * count });
+                    }
+                    giveItemsToPlayer(player, toGive);
+                    player.sendMessage(CHAT_SUCCESS + `Added Netherite. Unused fuel refunded (${result.refund.length} unit(s)).`);
+                } else {
+                    player.sendMessage(CHAT_SUCCESS + `Added ${selected.label} to queue.`);
+                }
+            }
+            system.run(() => openMain());
+        }).catch(() => openMain());
     };
 
     const openFuelMenu = () => {
@@ -4431,9 +4534,10 @@ export function showCodexBook(player, context) {
         const state = getEmulsifierStateForDevTools(player);
         const nearest = state.nearest;
         const nearestText = nearest
-            ? `§fNearest: §7${nearest.fuelType} @ ${nearest.distance.toFixed(1)}m (${nearest.active ? "§aactive" : "§cinactive"})`
+            ? `§fNearest: §7${getZoneCurrentFuelType(nearest) ?? "none"} @ ${nearest.distance.toFixed(1)}m (${nearest.active ? "§aactive" : "§cinactive"})`
             : "§fNearest: §7None in range";
-        const fuelRemain = nearest ? (nearest.fuelType === "netherite" ? "Permanent" : `${Math.max(0, Math.floor((nearest.fuelTicksRemaining ?? 0) / 20))}s`) : "-";
+        const queue = nearest ? getZoneFuelQueueForUI(nearest) : [];
+        const fuelRemain = queue.length === 0 ? "-" : queue.some(e => e.fuelType === "netherite") ? "Permanent + queue" : `${queue.length} unit(s)`;
         const form = new ActionFormData()
             .title("§dEmulsifier")
             .body(`§7Detox field that neutralizes nearby corruption and blocks natural Maple Bear spawns in its radius.\n\n§fZones: §7${state.active}/${state.total} active\n§fNo-spawn radius: §7${state.noSpawnRadius}\n§fDetox base radius: §7${state.detoxBaseRadius}\n${nearestText}\n§fNearest fuel: §7${fuelRemain}`);

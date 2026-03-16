@@ -209,12 +209,70 @@ export const SPAWN_SCAN_PRESETS = {
     }
 };
 
+// Per-fuel: durationTicks = one "unit" of fuel. maxFuelUnits = cap (stack) per machine.
+// Scan pacing: first run is faster (interval 1, higher budget); then steady then slowly slower (interval ramps).
+// Intervals in ticks between scan runs. So fuel runs out roughly as scan completes when paced per tier.
 const EMULSIFIER_FUEL_STATS = {
-    redstone: { label: "Redstone", durationTicks: 3600, radius: 6, performance: 1.0, permanent: false },
-    iron: { label: "Snow + Iron", durationTicks: 6300, radius: 8, performance: 1.15, permanent: false },
-    copper: { label: "Snow + Copper", durationTicks: 8400, radius: 10, performance: 1.3, permanent: false },
-    gold: { label: "Snow + Gold", durationTicks: 11400, radius: 15, performance: 1.5, permanent: false },
-    netherite: { label: "Netherite Core", durationTicks: 2147483647, radius: 30, performance: 2.5, permanent: true }
+    redstone: {
+        label: "Redstone",
+        durationTicks: 3600,
+        radius: 6,
+        performance: 1.0,
+        permanent: false,
+        maxFuelUnits: 4,
+        scanIntervalNormal: 3,
+        scanIntervalQuiet: 10,
+        scanIntervalMax: 40,
+        firstScanBudgetMult: 2.2
+    },
+    iron: {
+        label: "Snow + Iron",
+        durationTicks: 6300,
+        radius: 8,
+        performance: 1.15,
+        permanent: false,
+        maxFuelUnits: 4,
+        scanIntervalNormal: 2,
+        scanIntervalQuiet: 8,
+        scanIntervalMax: 35,
+        firstScanBudgetMult: 2.2
+    },
+    copper: {
+        label: "Snow + Copper",
+        durationTicks: 8400,
+        radius: 10,
+        performance: 1.3,
+        permanent: false,
+        maxFuelUnits: 4,
+        scanIntervalNormal: 2,
+        scanIntervalQuiet: 6,
+        scanIntervalMax: 30,
+        firstScanBudgetMult: 2.2
+    },
+    gold: {
+        label: "Snow + Gold",
+        durationTicks: 11400,
+        radius: 15,
+        performance: 1.5,
+        permanent: false,
+        maxFuelUnits: 4,
+        scanIntervalNormal: 2,
+        scanIntervalQuiet: 5,
+        scanIntervalMax: 25,
+        firstScanBudgetMult: 2.2
+    },
+    netherite: {
+        label: "Netherite Core",
+        durationTicks: 2147483647,
+        radius: 30,
+        performance: 2.5,
+        permanent: true,
+        maxFuelUnits: 1,
+        scanIntervalNormal: 1,
+        scanIntervalQuiet: 5,
+        scanIntervalMax: 20,
+        firstScanBudgetMult: 2.2
+    }
 };
 
 const EMULSIFIER_DEFAULTS = {
@@ -369,9 +427,8 @@ function loadEmulsifierZones() {
                         if (Array.isArray(parsed)) {
                             emulsifierZoneCache = parsed;
                             for (const z of emulsifierZoneCache) {
-                                if (z && z.active === true && (z.fuelType === "netherite" || (z.fuelTicksRemaining ?? 0) > 0)) {
+                                if (z && z.active === true && zoneHasFuel(z)) {
                                     z.lastDetoxTick = undefined;
-                                    z.firstScanDone = false;
                                 }
                             }
                             if (typeof isDebugEnabled === "function" && isDebugEnabled("emulsifier", "persistence")) {
@@ -403,9 +460,8 @@ function loadEmulsifierZones() {
         const parsed = JSON.parse(raw);
         emulsifierZoneCache = Array.isArray(parsed) ? parsed : [];
         for (const z of emulsifierZoneCache) {
-            if (z && z.active === true && (z.fuelType === "netherite" || (z.fuelTicksRemaining ?? 0) > 0)) {
+            if (z && z.active === true && zoneHasFuel(z)) {
                 z.lastDetoxTick = undefined;
-                z.firstScanDone = false;
             }
         }
         if (typeof isDebugEnabled === "function" && isDebugEnabled("emulsifier", "persistence")) {
@@ -460,6 +516,107 @@ function getFuelStats(fuelType) {
     return EMULSIFIER_FUEL_STATS[fuelType] || EMULSIFIER_FUEL_STATS.redstone;
 }
 
+/** Max fuel ticks this machine can hold for the given fuel type (one unit = durationTicks; cap = durationTicks * maxFuelUnits). */
+export function getMaxFuelTicks(fuelType) {
+    const stats = getFuelStats(fuelType);
+    if (stats.permanent) return Number.MAX_SAFE_INTEGER;
+    const units = Math.max(1, stats.maxFuelUnits ?? 4);
+    return (stats.durationTicks ?? 3600) * units;
+}
+
+const EMULSIFIER_MAX_QUEUE_LENGTH = 12;
+const FUEL_ORDER_QUEUE = "queue";
+const FUEL_ORDER_EFFICIENT_FIRST = "efficient_first";
+const FUEL_ORDER_EFFICIENT_LAST = "efficient_last";
+
+/** Ensure zone has fuelQueue array; migrate legacy fuelType/fuelTicksRemaining into queue. Mutates zone. */
+function normalizeZoneFuelQueue(zone) {
+    if (!zone) return;
+    if (Array.isArray(zone.fuelQueue)) {
+        zone.fuelQueue = zone.fuelQueue.filter(e => e && e.fuelType && (e.ticksRemaining ?? 0) > 0);
+        if (!zone.fuelQueueOrder) zone.fuelQueueOrder = FUEL_ORDER_QUEUE;
+        return;
+    }
+    zone.fuelQueue = [];
+    if (zone.fuelType && (zone.fuelType === "netherite" || (zone.fuelTicksRemaining ?? 0) > 0)) {
+        zone.fuelQueue.push({
+            fuelType: zone.fuelType,
+            ticksRemaining: zone.fuelTicksRemaining ?? (getFuelStats(zone.fuelType).permanent ? 2147483647 : 0)
+        });
+    }
+    zone.fuelQueueOrder = zone.fuelQueueOrder || FUEL_ORDER_QUEUE;
+    delete zone.fuelType;
+    delete zone.fuelTicksRemaining;
+}
+
+/** Get the current fuel entry (from zone.fuelQueue) to burn based on zone.fuelQueueOrder. Returns the actual queue entry object. */
+function getCurrentFuelFromQueue(zone) {
+    normalizeZoneFuelQueue(zone);
+    const queue = zone.fuelQueue;
+    if (!queue || queue.length === 0) return null;
+    const withTicks = queue.filter(e => (e.ticksRemaining ?? 0) > 0);
+    if (withTicks.length === 0) return null;
+    const order = zone.fuelQueueOrder || FUEL_ORDER_QUEUE;
+    if (order === FUEL_ORDER_QUEUE) return withTicks[0];
+    if (order === FUEL_ORDER_EFFICIENT_FIRST) {
+        return withTicks.reduce((best, e) =>
+            (getFuelStats(e.fuelType).performance ?? 0) > (getFuelStats(best.fuelType).performance ?? 0) ? e : best);
+    }
+    if (order === FUEL_ORDER_EFFICIENT_LAST) {
+        return withTicks.reduce((worst, e) =>
+            (getFuelStats(e.fuelType).performance ?? 0) < (getFuelStats(worst.fuelType).performance ?? 0) ? e : worst);
+    }
+    return withTicks[0];
+}
+
+/** Consume elapsed ticks from current fuel; remove empty entries. Mutates zone.fuelQueue and zone.lastUpdatedTick. Returns fuel stats for current fuel after advance or null. */
+function advanceZoneFuelQueue(zone, elapsed) {
+    normalizeZoneFuelQueue(zone);
+    const queue = zone.fuelQueue;
+    if (!queue || queue.length === 0) return null;
+    let entry = getCurrentFuelFromQueue(zone);
+    if (!entry) return null;
+    entry.ticksRemaining = Math.max(0, Math.floor((entry.ticksRemaining ?? 0) - elapsed));
+    zone.lastUpdatedTick = system.currentTick;
+    while (entry.ticksRemaining <= 0) {
+        const idx = queue.indexOf(entry);
+        if (idx !== -1) queue.splice(idx, 1);
+        if (queue.length === 0) return null;
+        entry = getCurrentFuelFromQueue(zone);
+        if (!entry) return null;
+    }
+    return getFuelStats(entry.fuelType);
+}
+
+/** True if zone has at least one fuel entry with ticks remaining. Normalizes zone. */
+export function zoneHasFuel(zone) {
+    return getCurrentFuelFromQueue(zone) !== null;
+}
+
+/** Current fuel type for this zone (for radius/display), or null. Normalizes zone. */
+export function getZoneCurrentFuelType(zone) {
+    const entry = getCurrentFuelFromQueue(zone);
+    return entry ? entry.fuelType : null;
+}
+
+/** Get fuel queue for UI (normalized). Returns array of { fuelType, ticksRemaining }. */
+export function getZoneFuelQueueForUI(zone) {
+    normalizeZoneFuelQueue(zone);
+    return Array.isArray(zone.fuelQueue) ? zone.fuelQueue.map(e => ({ fuelType: e.fuelType, ticksRemaining: e.ticksRemaining ?? 0 })) : [];
+}
+
+/** Cycle order: queue → efficient_first → efficient_last → queue. Returns new order. */
+export function setEmulsifierFuelOrderAtBlock(dimensionId, x, y, z) {
+    const zone = getEmulsifierZoneAtBlock(dimensionId, x, y, z);
+    if (!zone) return { ok: false, reason: "not_found" };
+    normalizeZoneFuelQueue(zone);
+    const orders = [FUEL_ORDER_QUEUE, FUEL_ORDER_EFFICIENT_FIRST, FUEL_ORDER_EFFICIENT_LAST];
+    const idx = orders.indexOf(zone.fuelQueueOrder || FUEL_ORDER_QUEUE);
+    zone.fuelQueueOrder = orders[(idx + 1) % orders.length];
+    saveEmulsifierZones();
+    return { ok: true, order: zone.fuelQueueOrder };
+}
+
 function isZoneMachinePresent(zone, dimension = null) {
     if (!zone?.dimension) return false;
     try {
@@ -489,8 +646,7 @@ function getActiveEmulsifierZonesForDimension(dimensionId) {
     const activeZones = zones.filter((z) => {
         if (!z || z.dimension !== dimensionId) return false;
         if (z.active === false) return false;
-        if (z.fuelType === "netherite") return true;
-        return (z.fuelTicksRemaining ?? 0) > 0 && (z.lastUpdatedTick ?? now) <= now;
+        return zoneHasFuel(z);
     });
     if (changed) saveEmulsifierZones();
     return activeZones;
@@ -500,7 +656,9 @@ function isInsideEmulsifierNoSpawnZone(dimensionId, location) {
     if (!dimensionId || !location) return false;
     const globalRadius = getEmulsifierNoSpawnRadius();
     for (const zone of getActiveEmulsifierZonesForDimension(dimensionId)) {
-        const fuelStats = getFuelStats(zone.fuelType);
+        const fuelType = getZoneCurrentFuelType(zone);
+        const fuelStats = fuelType ? getFuelStats(fuelType) : null;
+        if (!fuelStats) continue;
         const zoneRadius = Math.max(globalRadius, fuelStats.radius ?? globalRadius);
         const radiusSq = zoneRadius * zoneRadius;
         const dx = (zone.x ?? 0) - location.x;
@@ -525,7 +683,7 @@ export function getEmulsifierDebugInfo() {
     const cacheIsArray = Array.isArray(emulsifierZoneCache);
     const zonesFromCache = cacheIsArray ? emulsifierZoneCache.length : 0;
     const activeCount = zones.filter(z => z && z.active === true).length;
-    const withFuel = zones.filter(z => z && (z.fuelType === "netherite" || (z.fuelTicksRemaining ?? 0) > 0)).length;
+    const withFuel = zones.filter(z => z && zoneHasFuel(z)).length;
     let persistenceMatch = false;
     let parsedFromRaw = 0;
     const probe = readEmulsifierZonesRaw();
@@ -563,8 +721,8 @@ export function getEmulsifierDebugInfo() {
             y: z.y,
             z: z.z,
             active: z.active,
-            fuelType: z.fuelType,
-            fuelTicks: z.fuelTicksRemaining,
+            fuelType: getZoneCurrentFuelType(z),
+            fuelQueue: getZoneFuelQueueForUI(z),
             firstScanDone: z.firstScanDone,
             lastDetoxTick: z.lastDetoxTick
         })),
@@ -590,7 +748,7 @@ export function getEmulsifierStateForDevTools(player = null) {
             }
         }
     }
-    const active = zones.filter(z => z.active !== false && (z.fuelType === "netherite" || (z.fuelTicksRemaining ?? 0) > 0)).length;
+    const active = zones.filter(z => z.active !== false && zoneHasFuel(z)).length;
     return {
         total: zones.length,
         active,
@@ -610,6 +768,7 @@ export function addEmulsifierZoneAtPlayer(player, fuelType = "redstone") {
     const nearest = zones.find(z => z.dimension === dimId && Math.abs((z.x ?? 0) - pos.x) <= 2 && Math.abs((z.z ?? 0) - pos.z) <= 2);
     if (nearest) return { ok: false, reason: "duplicate" };
     const stats = getFuelStats(fuelType);
+    const fType = Object.prototype.hasOwnProperty.call(EMULSIFIER_FUEL_STATS, fuelType) ? fuelType : "redstone";
     zones.push({
         id: `${Date.now()}_${Math.floor(Math.random() * 100000)}`,
         ownerName: player.name,
@@ -617,8 +776,8 @@ export function addEmulsifierZoneAtPlayer(player, fuelType = "redstone") {
         x: Math.floor(pos.x),
         y: Math.floor(pos.y),
         z: Math.floor(pos.z),
-        fuelType: Object.prototype.hasOwnProperty.call(EMULSIFIER_FUEL_STATS, fuelType) ? fuelType : "redstone",
-        fuelTicksRemaining: stats.permanent ? 2147483647 : stats.durationTicks,
+        fuelQueue: [{ fuelType: fType, ticksRemaining: stats.permanent ? 2147483647 : stats.durationTicks }],
+        fuelQueueOrder: FUEL_ORDER_QUEUE,
         active: true,
         createdTick: system.currentTick,
         lastUpdatedTick: system.currentTick
@@ -653,8 +812,8 @@ export function upsertEmulsifierZoneAtBlock(dimensionId, x, y, z, ownerName = ""
         x: fx,
         y: fy,
         z: fz,
-        fuelType: undefined,
-        fuelTicksRemaining: 0,
+        fuelQueue: [],
+        fuelQueueOrder: FUEL_ORDER_QUEUE,
         active: false,
         createdTick: system.currentTick,
         lastUpdatedTick: system.currentTick
@@ -721,12 +880,18 @@ export function setNearestEmulsifierFuel(player, fuelType, maxDistance = 16) {
     const zone = findNearestEmulsifier(player, maxDistance);
     if (!zone) return { ok: false, reason: "not_found" };
     const stats = getFuelStats(fuelType);
-    zone.fuelType = fuelType;
-    zone.fuelTicksRemaining = stats.permanent ? 2147483647 : stats.durationTicks;
+    zone.fuelQueue = [{ fuelType, ticksRemaining: stats.permanent ? 2147483647 : stats.durationTicks }];
+    zone.fuelQueueOrder = FUEL_ORDER_QUEUE;
+    delete zone.fuelType;
+    delete zone.fuelTicksRemaining;
     zone.active = true;
     zone.lastUpdatedTick = system.currentTick;
     zone.lastDetoxTick = undefined;
     zone.firstScanDone = false;
+    zone.scanRing = 0;
+    zone.scanLayerIndex = 0;
+    zone.scanDx = null;
+    zone.scanDz = null;
     saveEmulsifierZones();
     system.runTimeout(() => { try { processEmulsifierZones(); } catch { } }, 1);
     return { ok: true };
@@ -739,16 +904,81 @@ export function setEmulsifierFuelAtBlock(dimensionId, x, y, z, fuelType) {
     const zone = getEmulsifierZoneAtBlock(dimensionId, x, y, z);
     if (!zone) return { ok: false, reason: "not_found" };
     const stats = getFuelStats(fuelType);
-    zone.fuelType = fuelType;
-    zone.fuelTicksRemaining = stats.permanent ? 2147483647 : stats.durationTicks;
+    const ticks = stats.permanent ? 2147483647 : Math.min(stats.durationTicks, getMaxFuelTicks(fuelType));
+    zone.fuelQueue = [{ fuelType, ticksRemaining: ticks }];
+    zone.fuelQueueOrder = FUEL_ORDER_QUEUE;
+    delete zone.fuelType;
+    delete zone.fuelTicksRemaining;
     zone.active = true;
     zone.lastUpdatedTick = system.currentTick;
-    // So adaptive interval doesn't throttle: next run uses interval=1 and full first-scan budget.
     zone.lastDetoxTick = undefined;
     zone.firstScanDone = false;
+    zone.scanRing = 0;
+    zone.scanLayerIndex = 0;
+    zone.scanDx = null;
+    zone.scanDz = null;
     saveEmulsifierZones();
     system.runTimeout(() => { try { processEmulsifierZones(); } catch { } }, 1);
     return { ok: true };
+}
+
+/** Add one unit of fuel to the machine (queued; can mix types). Caller must consume items. Cap: EMULSIFIER_MAX_QUEUE_LENGTH entries. If queue has netherite, only netherite can be added. Adding netherite refunds all unused (not-yet-started) fuel; returns refund list for caller to give items. */
+export function addEmulsifierFuelAtBlock(dimensionId, x, y, z, fuelType) {
+    if (!Object.prototype.hasOwnProperty.call(EMULSIFIER_FUEL_STATS, fuelType)) {
+        return { ok: false, reason: "bad_fuel" };
+    }
+    const zone = getEmulsifierZoneAtBlock(dimensionId, x, y, z);
+    if (!zone) return { ok: false, reason: "not_found" };
+    normalizeZoneFuelQueue(zone);
+    const queue = zone.fuelQueue;
+    const hasNetherite = queue.some(e => e.fuelType === "netherite");
+
+    if (fuelType === "netherite") {
+        const current = getCurrentFuelFromQueue(zone);
+        const unused = queue.filter(e => e !== current);
+        const refund = unused.map(e => ({ fuelType: e.fuelType }));
+        zone.fuelQueue = current ? [current, { fuelType: "netherite", ticksRemaining: 2147483647 }] : [{ fuelType: "netherite", ticksRemaining: 2147483647 }];
+        const wasEmpty = !current;
+        if (wasEmpty) {
+            zone.active = true;
+            zone.lastDetoxTick = undefined;
+            zone.firstScanDone = false;
+            zone.scanRing = 0;
+            zone.scanLayerIndex = 0;
+            zone.scanDx = null;
+            zone.scanDz = null;
+        }
+        zone.lastUpdatedTick = system.currentTick;
+        saveEmulsifierZones();
+        system.runTimeout(() => { try { processEmulsifierZones(); } catch { } }, 1);
+        return { ok: true, addedTicks: 2147483647, newTotalTicks: 2147483647, refund };
+    }
+
+    if (hasNetherite) {
+        return { ok: false, reason: "has_netherite" };
+    }
+    if (!Array.isArray(queue) || queue.length >= EMULSIFIER_MAX_QUEUE_LENGTH) {
+        saveEmulsifierZones();
+        return { ok: true, addedTicks: 0, newTotalTicks: 0, capped: true };
+    }
+    const stats = getFuelStats(fuelType);
+    const oneUnit = stats.permanent ? 2147483647 : (stats.durationTicks ?? 3600);
+    queue.push({ fuelType, ticksRemaining: oneUnit });
+    const wasEmpty = queue.length === 1;
+    if (wasEmpty) {
+        zone.active = true;
+        zone.lastDetoxTick = undefined;
+        zone.firstScanDone = false;
+        zone.scanRing = 0;
+        zone.scanLayerIndex = 0;
+        zone.scanDx = null;
+        zone.scanDz = null;
+    }
+    zone.lastUpdatedTick = system.currentTick;
+    saveEmulsifierZones();
+    system.runTimeout(() => { try { processEmulsifierZones(); } catch { } }, 1);
+    const totalTicks = queue.reduce((sum, e) => sum + (e.ticksRemaining ?? 0), 0);
+    return { ok: true, addedTicks: oneUnit, newTotalTicks: totalTicks, capped: queue.length >= EMULSIFIER_MAX_QUEUE_LENGTH };
 }
 
 export function setEmulsifierActiveAtBlock(dimensionId, x, y, z, active) {
@@ -761,9 +991,12 @@ export function setEmulsifierActiveAtBlock(dimensionId, x, y, z, active) {
     zone.active = active === true;
     zone.lastUpdatedTick = system.currentTick;
     if (zone.active) {
-        // So adaptive interval doesn't throttle; next run uses interval=1 and can use first-scan budget.
         zone.lastDetoxTick = undefined;
         zone.firstScanDone = false;
+        zone.scanRing = 0;
+        zone.scanLayerIndex = 0;
+        zone.scanDx = null;
+        zone.scanDz = null;
         saveEmulsifierZones();
         system.runTimeout(() => { try { processEmulsifierZones(); } catch { } }, 1);
         return { ok: true };
@@ -2783,75 +3016,70 @@ function processEmulsifierZones() {
         if (!dimension) continue;
         // Already cleaned above; machine present here
 
-        const fuelStats = getFuelStats(zone.fuelType);
-        if (!fuelStats.permanent) {
-            const lastTick = Number(zone.lastUpdatedTick ?? now);
-            const elapsed = Math.max(1, now - lastTick);
-            zone.fuelTicksRemaining = Math.max(0, Math.floor((zone.fuelTicksRemaining ?? 0) - elapsed));
-            zone.lastUpdatedTick = now;
+        normalizeZoneFuelQueue(zone);
+        const lastTick = Number(zone.lastUpdatedTick ?? now);
+        const elapsed = Math.max(1, now - lastTick);
+        const fuelStats = advanceZoneFuelQueue(zone, elapsed);
+        if (!fuelStats) {
+            zone.active = false;
             changed = true;
-            if (zone.fuelTicksRemaining <= 0) {
-                zone.active = false;
-                continue;
-            }
-        } else {
-            zone.fuelTicksRemaining = 2147483647;
-            zone.lastUpdatedTick = now;
+            continue;
         }
+        changed = true;
 
         const powerRadius = Math.max(3, fuelStats.radius ?? Math.floor(baseRadius * fuelStats.performance));
         const zoneX = Math.floor(zone.x);
         const zoneY = Math.floor(zone.y);
         const zoneZ = Math.floor(zone.z);
 
-        // Adaptive: only throttle when we have a recent lastDetoxTick and it's been quiet a while
+        // Per-fuel scan pacing: first scan = fast (interval 1); then steady then slowly slower; never stop until fuel runs out.
+        // If we have pending scan work (mid-ring resume), use interval=1 so we don't get stuck on phase skip.
         const lastDetox = zone.lastDetoxTick;
         const quietTicks = typeof lastDetox === "number" ? Math.max(0, now - lastDetox) : 0;
+        const isFirstScan = zone.firstScanDone !== true;
         let interval = 1;
-        if (quietTicks > 600) interval = 20;
-        else if (quietTicks > 200) interval = 5;
+        if (!isFirstScan) {
+            const normal = Math.max(1, fuelStats.scanIntervalNormal ?? 3);
+            const quiet = Math.max(normal, fuelStats.scanIntervalQuiet ?? 10);
+            const maxI = Math.max(quiet, fuelStats.scanIntervalMax ?? 40);
+            if (quietTicks > 400) interval = maxI;
+            else if (quietTicks > 150) interval = quiet;
+            else interval = normal;
+        }
+        // Use interval=1 whenever the dome isn't fully done: rings 0..powerRadius (including the last ring), so we don't get stuck at phase 6/16 only running every 20 ticks when on ring 30.
+        const hasPendingScan = (zone.scanRing ?? 0) <= powerRadius;
+        if (hasPendingScan) interval = 1;
         const phase = (zoneX + zoneZ + now) % interval;
         if (phase !== 0) {
             dbg("purification", "skip zone (phase):", zoneX, zoneZ, "interval=", interval, "phase=", phase);
             continue;
         }
 
-        // Dome: full radius horizontally, 3–5 blocks below machine, full radius above.
+        // Dome: full radius horizontally, 10 blocks below machine, full radius above.
         // Scan order and chunk checks aligned with spawn block scanning (collectDustedTiles, isChunkLoadedCached).
-        const maxDown = Math.min(5, powerRadius);
+        const maxDown = Math.min(10, powerRadius);
         const minY = zoneY - maxDown;
         const maxY = zoneY + powerRadius;
         const totalLayers = maxY - minY + 1;
         const rSq = powerRadius * powerRadius;
-        const layerOffsetFromMachine = zoneY - minY;
-        const PRIORITY_BAND_DY = 3;
 
-        const isFirstScan = zone.firstScanDone !== true;
         if (isFirstScan) {
             zone.firstScanDone = true;
+            zone.scanRing = 0;
+            zone.scanLayerIndex = 0;
+            zone.scanDx = null;
+            zone.scanDz = null;
             changed = true;
         }
         const searching = isFirstScan || typeof lastDetox !== "number" || quietTicks > 150;
         const baseBudget = 700 + Math.floor(300 * fuelStats.performance);
-        let opsBudget = Math.floor(baseBudget * (searching ? 2 : 1) * (isFirstScan ? 1.8 : 1));
+        const firstMult = Math.max(1, fuelStats.firstScanBudgetMult ?? 1.8);
+        let opsBudget = Math.floor(baseBudget * (searching ? 2 : 1) * (isFirstScan ? firstMult : 1));
         dbg("purification", "zone scan", zoneX, zoneY, zoneZ, "powerRadius=", powerRadius, "interval=", interval, "firstScan=", isFirstScan, "searching=", searching, "budget=", opsBudget);
 
+        // Same layer order for first and later scans: bottom to top (0..totalLayers-1) so we don't over-prioritize the machine's y and under-scan below/above.
         const layerOrder = [];
-        if (isFirstScan) {
-            // First scan: bottom-up so ground (dusted_dirt) is checked before budget is spent on machine Y.
-            for (let li = 0; li < totalLayers; li++) layerOrder.push(li);
-        } else {
-            for (let dy = 0; dy <= PRIORITY_BAND_DY; dy++) {
-                if (dy === 0) {
-                    layerOrder.push(layerOffsetFromMachine);
-                } else {
-                    if (layerOffsetFromMachine + dy < totalLayers) layerOrder.push(layerOffsetFromMachine + dy);
-                    if (layerOffsetFromMachine - dy >= 0) layerOrder.push(layerOffsetFromMachine - dy);
-                }
-            }
-            for (let li = 0; li <= layerOffsetFromMachine - (PRIORITY_BAND_DY + 1); li++) layerOrder.push(li);
-            for (let li = layerOffsetFromMachine + (PRIORITY_BAND_DY + 1); li < totalLayers; li++) layerOrder.push(li);
-        }
+        for (let li = 0; li < totalLayers; li++) layerOrder.push(li);
 
         const logPurification = typeof isDebugEnabled === "function" && isDebugEnabled("emulsifier", "purification");
         let queuedThisZone = 0;
@@ -2863,51 +3091,72 @@ function processEmulsifierZones() {
         let maxHorizontalRadiusSeen = 0;
         const sampleTypeCounts = new Map();
         let sampleRemaining = logPurification ? 60 : 0;
-        for (let i = 0; i < layerOrder.length && opsBudget > 0; i++) {
-            const layerIndex = layerOrder[i];
+
+        // Ring-based scan: one ring at a time, layers in forward order only (layerStart to end). No second pass — a second pass re-scanned layers 0..layerStart-1 every run and caused ring 13 to never advance.
+        const currentRing = Math.min(zone.scanRing ?? 0, powerRadius);
+        let layerStart = Math.min(zone.scanLayerIndex ?? 0, layerOrder.length);
+        let completedRing = true;
+        for (let ii = layerStart; ii < layerOrder.length && opsBudget > 0; ii++) {
+            const layerIndex = layerOrder[ii];
             if (layerIndex < 0 || layerIndex >= totalLayers) continue;
             const yLayer = minY + layerIndex;
             const dy = yLayer - zoneY;
             const horizontalRadius = Math.floor(Math.sqrt(Math.max(0, rSq - dy * dy)));
-            if (horizontalRadius <= 0) continue;
-            if (horizontalRadius > maxHorizontalRadiusSeen) maxHorizontalRadiusSeen = horizontalRadius;
-            for (let r = 0; r <= horizontalRadius && opsBudget > 0; r++) {
-                const rSqLo = r * r;
-                const rSqHi = (r + 1) * (r + 1);
-                for (let dx = -r; dx <= r && opsBudget > 0; dx++) {
-                    for (let dz = -r; dz <= r && opsBudget > 0; dz++) {
-                        const distSq = dx * dx + dz * dz;
-                        if (distSq < rSqLo || distSq >= rSqHi) continue;
-                        const wx = zoneX + dx;
-                        const wy = yLayer;
-                        const wz = zoneZ + dz;
-                        if (!isChunkLoadedCached(dimension, wx, wz)) {
-                            chunksSkipped++;
-                            opsBudget--;
-                            continue;
-                        }
-                        if (dy < 0) checkedBelow++;
-                        else if (dy > 0) checkedAbove++;
-                        else checkedAt++;
-                        if (sampleRemaining > 0) {
-                            try {
-                                const sampled = dimension.getBlock({ x: wx, y: wy, z: wz });
-                                const tid = sampled?.typeId ?? "null";
-                                sampleTypeCounts.set(tid, (sampleTypeCounts.get(tid) ?? 0) + 1);
-                                sampleRemaining--;
-                            } catch { }
-                        }
-                        if (queueEmulsifierConversion(dimension, dimId, wx, wy, wz)) {
-                            zone.lastDetoxTick = now;
-                            changed = true;
-                            queuedThisZone++;
-                            dbg("purification", "queued conversion", wx, wy, wz);
-                        }
-                        positionsChecked++;
+            if (currentRing > horizontalRadius) continue;
+            if (currentRing > maxHorizontalRadiusSeen) maxHorizontalRadiusSeen = currentRing;
+            const rSqLo = currentRing * currentRing;
+            const rSqHi = (currentRing + 1) * (currentRing + 1);
+            const resumeDx = ii === layerStart ? (zone.scanDx != null ? zone.scanDx : null) : null;
+            const resumeDz = ii === layerStart ? (zone.scanDz != null ? zone.scanDz : null) : null;
+            for (let dx = -currentRing; dx <= currentRing && opsBudget > 0; dx++) {
+                for (let dz = -currentRing; dz <= currentRing && opsBudget > 0; dz++) {
+                    const distSq = dx * dx + dz * dz;
+                    if (distSq < rSqLo || distSq >= rSqHi) continue;
+                    if (resumeDx != null && resumeDz != null && (dx < resumeDx || (dx === resumeDx && dz <= resumeDz))) continue;
+                    const wx = zoneX + dx;
+                    const wy = yLayer;
+                    const wz = zoneZ + dz;
+                    if (!isChunkLoadedCached(dimension, wx, wz)) {
+                        chunksSkipped++;
                         opsBudget--;
+                        continue;
+                    }
+                    if (dy < 0) checkedBelow++;
+                    else if (dy > 0) checkedAbove++;
+                    else checkedAt++;
+                    if (sampleRemaining > 0) {
+                        try {
+                            const sampled = dimension.getBlock({ x: wx, y: wy, z: wz });
+                            const tid = sampled?.typeId ?? "null";
+                            sampleTypeCounts.set(tid, (sampleTypeCounts.get(tid) ?? 0) + 1);
+                            sampleRemaining--;
+                        } catch { }
+                    }
+                    if (queueEmulsifierConversion(dimension, dimId, wx, wy, wz)) {
+                        zone.lastDetoxTick = now;
+                        changed = true;
+                        queuedThisZone++;
+                        dbg("purification", "queued conversion", wx, wy, wz);
+                    }
+                    positionsChecked++;
+                    opsBudget--;
+                    if (opsBudget <= 0) {
+                        zone.scanRing = currentRing;
+                        zone.scanLayerIndex = ii;
+                        zone.scanDx = dx;
+                        zone.scanDz = dz;
+                        completedRing = false;
+                        changed = true;
                     }
                 }
             }
+        }
+        if (completedRing) {
+            zone.scanRing = (currentRing + 1) % (powerRadius + 1);
+            zone.scanLayerIndex = 0;
+            zone.scanDx = null;
+            zone.scanDz = null;
+            changed = true;
         }
         let sampleSummary = "";
         if (logPurification && sampleTypeCounts.size > 0) {

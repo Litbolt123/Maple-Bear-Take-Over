@@ -2,7 +2,7 @@ import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraf
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, getPlayerSettings, checkKnowledgeProgression, showEmulsifierMachineUI } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
-import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock } from "./mb_spawnController.js";
+import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock, getEmulsifierZoneAtBlock, getZoneFuelQueueForUI } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { isBetaDustStormsEnabled } from "./mb_scriptToggles.js";
 import { findItem, hasItem } from "./mb_itemFinder.js";
@@ -7403,7 +7403,18 @@ world.afterEvents.playerBreakBlock.subscribe((event) => {
         if (brokenId !== "mb:emulsifier_machine") return;
         const loc = event.block;
         if (!loc || !event.player?.dimension?.id) return;
-        removeEmulsifierZoneAtBlock(event.player.dimension.id, loc.x, loc.y, loc.z);
+        const dimId = event.player.dimension.id;
+        const x = Math.floor(loc.x);
+        const y = Math.floor(loc.y);
+        const z = Math.floor(loc.z);
+        const zone = getEmulsifierZoneAtBlock(dimId, x, y, z);
+        const queue = zone ? getZoneFuelQueueForUI(zone) : [];
+        if (queue.some(e => e.fuelType === "netherite")) {
+            const dimension = event.player.dimension;
+            const dropLoc = { x: x + 0.5, y: y + 0.5, z: z + 0.5 };
+            dimension.spawnItem(new ItemStack("minecraft:netherite_ingot", 1), dropLoc);
+        }
+        removeEmulsifierZoneAtBlock(dimId, x, y, z);
     } catch { }
 });
 

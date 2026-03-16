@@ -62,18 +62,6 @@
 								"subject": "other",
 								"operator": "!=",
 								"value": "mb:snow_layer"
-							},
-							{
-								"test": "is_block_name",
-								"subject": "other",
-								"operator": "!=",
-								"value": "minecraft:grass"
-							},
-							{
-								"test": "is_block_name",
-								"subject": "other",
-								"operator": "!=",
-								"value": "minecraft:tallgrass"
 							}
 						]
 					},
