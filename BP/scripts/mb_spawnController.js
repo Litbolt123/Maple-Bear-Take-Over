@@ -652,7 +652,7 @@ function getActiveEmulsifierZonesForDimension(dimensionId) {
     return activeZones;
 }
 
-function isInsideEmulsifierNoSpawnZone(dimensionId, location) {
+export function isInsideEmulsifierNoSpawnZone(dimensionId, location) {
     if (!dimensionId || !location) return false;
     const globalRadius = getEmulsifierNoSpawnRadius();
     for (const zone of getActiveEmulsifierZonesForDimension(dimensionId)) {

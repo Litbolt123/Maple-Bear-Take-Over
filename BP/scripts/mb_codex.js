@@ -142,7 +142,7 @@ export function showEmulsifierMachineUI(player, block) {
             });
             fuelBody += parts.join(" §8→ ");
         }
-        fuelBody += `\n§fBurn order: §7${orderLabel(order)}`;
+        fuelBody += `\n§fBurn order: §8${orderLabel(order)}`;
         const hasNetheriteInQueue = queue.some(e => e.fuelType === "netherite");
         const canAddFuel = queue.length < 12 && !hasNetheriteInQueue;
         const form = new ActionFormData()
@@ -150,7 +150,7 @@ export function showEmulsifierMachineUI(player, block) {
             .body(`§7Detoxifier machine\n§8Converts corrupted blocks and suppresses natural Maple Bear spawns nearby.\n\n§fStatus: ${statusText}\n${fuelBody}\n§fLocation: §7${x}, ${y}, ${z}`);
         if (canAddFuel) form.button("§aAdd Fuel §8(1 unit, any type)");
         form.button("§fChange / Set Fuel §8(replace queue)");
-        form.button(`§eBurn order: §7${orderLabel(order)}`);
+        form.button(`§eBurn order: §8${orderLabel(order)}`);
         form.button(zone.active === true ? "§cDisable Machine" : "§aEnable Machine");
         form.button("§8Close");
 

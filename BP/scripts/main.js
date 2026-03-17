@@ -2,7 +2,7 @@ import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraf
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, getPlayerSettings, checkKnowledgeProgression, showEmulsifierMachineUI } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
-import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock, getEmulsifierZoneAtBlock, getZoneFuelQueueForUI } from "./mb_spawnController.js";
+import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock, getEmulsifierZoneAtBlock, getZoneFuelQueueForUI, isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { isBetaDustStormsEnabled } from "./mb_scriptToggles.js";
 import { findItem, hasItem } from "./mb_itemFinder.js";
@@ -5322,6 +5322,54 @@ system.runInterval(() => {
             const BIOME_PRESSURE_INTERVAL_SECONDS = 300; // 5 minutes in biome to trigger infection
             
             if (!isMajorInfected && !hasTemporaryImmunity) {
+                // If the player is in an infected biome but inside an active emulsifier zone, treat them as protected:
+                // decay infection pressure instead of building it up and skip further ground/ambient accumulation.
+                const inEmulsifierSafeZone = inInfectedBiome && isInsideEmulsifierNoSpawnZone(player.dimension.id, player.location);
+                if (inEmulsifierSafeZone) {
+                    const oldAmbient = state.ambientSeconds;
+                    state.ambientSeconds = Math.max(0, state.ambientSeconds - AMBIENT_DECAY_SECONDS_PER_TICK);
+                    if ((isDebugEnabled("ground_infection", "ambient") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.ambientSeconds - oldAmbient) > 0.01) {
+                        console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Ambient timer decayed (emulsifier safe zone) ${oldAmbient.toFixed(1)}s -> ${state.ambientSeconds.toFixed(1)}s`);
+                    }
+
+                    const oldBiome = state.biomeSeconds || 0;
+                    if (state.biomeSeconds) {
+                        state.biomeSeconds = Math.max(0, state.biomeSeconds - AMBIENT_DECAY_SECONDS_PER_TICK);
+                        if ((isDebugEnabled("ground_infection", "biome") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.biomeSeconds - oldBiome) > 0.01) {
+                            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Biome timer decayed (emulsifier safe zone) ${oldBiome.toFixed(1)}s -> ${state.biomeSeconds.toFixed(1)}s`);
+                        }
+                        if (state.biomeSeconds === 0) {
+                            state.biomeWarningSent = false;
+                        }
+                    }
+
+                    if (state.groundSeconds) {
+                        const oldGround = state.groundSeconds;
+                        state.groundSeconds = Math.max(0, state.groundSeconds - GROUND_EXPOSURE_SECONDS_PER_TICK);
+                        if ((isDebugEnabled("ground_infection", "decay") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.groundSeconds - oldGround) > 0.01) {
+                            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Ground timer decayed (emulsifier safe zone) ${oldGround.toFixed(1)}s -> ${state.groundSeconds.toFixed(1)}s`);
+                        }
+                        if (state.groundSeconds === 0) {
+                            state.groundWarningSent = false;
+                            state.minorGroundWarningSent = false;
+                        }
+                    }
+
+                    if (state.stormSeconds) {
+                        const oldStorm = state.stormSeconds;
+                        state.stormSeconds = Math.max(0, state.stormSeconds - STORM_EXPOSURE_DECAY_SECONDS_PER_TICK);
+                        if ((isDebugEnabled("ground_infection", "decay") || isDebugEnabled("ground_infection", "all")) && Math.abs(state.stormSeconds - oldStorm) > 0.01) {
+                            console.warn(`[GROUND INFECTION DEBUG] ${player.name}: Storm decayed (emulsifier safe zone) ${oldStorm.toFixed(1)}s -> ${state.stormSeconds.toFixed(1)}s`);
+                        }
+                        if (state.stormSeconds === 0) {
+                            state.stormWarningSent = false;
+                            state.minorStormWarningSent = false;
+                        }
+                    }
+
+                    // Skip infection accumulation for this tick while protected
+                    continue;
+                }
                 // Ambient pressure from nearby blocks
                 const oldAmbient = state.ambientSeconds;
                 if (ambientActive) {

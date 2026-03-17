@@ -10,6 +10,7 @@ import { system, world } from "@minecraft/server";
 import { getCurrentDay } from "./mb_dayTracker.js";
 import { getPlayerSoundVolume, isDebugEnabled } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
+import { isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
 
 // Track active biome ambience per player
 // Map: playerId -> { soundId: string, biomeId: string, lastCheckTick: number, biomeSize: string }
@@ -168,8 +169,11 @@ function checkBiomeAmbienceForPlayer(player, currentDay) {
             console.warn(`[BIOME AMBIENCE DEBUG] ${player.name} (day ${currentDay}): biome=${biomeId}, inInfected=${!!biomeInfo}, activeAmbience=${!!currentAmbience}, tick=${system.currentTick}`);
         }
         
-        if (biomeInfo) {
-            // Player is in infected biome
+        // If player is inside an active emulsifier zone, suppress infected ambience entirely
+        const inSafeEmulsifierZone = biomeInfo && isInsideEmulsifierNoSpawnZone(player.dimension.id, player.location);
+        
+        if (biomeInfo && !inSafeEmulsifierZone) {
+            // Player is in infected biome and NOT protected by an emulsifier zone
             const soundId = getBiomeAmbienceSound(currentDay);
             const biomeSize = biomeInfo.size;
             const volumeMultiplier = getBiomeVolumeMultiplier(biomeInfo.id);
@@ -217,7 +221,7 @@ function checkBiomeAmbienceForPlayer(player, currentDay) {
                 }
             }
         } else {
-            // Player left infected biome - stop ambience
+            // Player left infected biome OR is in an emulsifier safe zone - stop ambience
             if (currentAmbience) {
                 activeBiomeAmbience.delete(playerId);
                 if (isDebugEnabled("biome_ambience", "sound_playback")) {
