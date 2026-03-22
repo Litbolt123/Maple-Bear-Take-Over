@@ -23,6 +23,14 @@ Runtime logic lives in **`BP/scripts/`** (ES modules, `@minecraft/server` + `@mi
 
 Central orchestration: world/player events, **bear-hit and snow infection progression**, **minor/major infection timers** and symptoms, **cures** (golden apple + carrot, weakness + enchanted golden apple), **immunity**, **player death → infected bear form**, **item use** (snow, journals, potions, cure items), **milestone/day messaging**, **intro sequence**, **ground exposure** on `mb:dusted_dirt` / `mb:snow_layer`, **corruption** on infected deaths, integration with codex marking, storms, and spawn registration (e.g. dusted dirt blocks). **Narrative + flowcharts:** [`systems/INFECTION_SYSTEM.md`](systems/INFECTION_SYSTEM.md).
 
+### `mb_infectionAudio.js`
+
+**Spatial infection cues**: cough loops (minor vs major), **powder hiccup** on `mb:snow` use, rare **dust breath** particle, **cure sigh** sounds; respects journal **emitter** vs **hear others** sliders and per-player master volume.
+
+### `mb_devSoundCatalog.js`
+
+**Developer Tools** — categorized list of custom `sound_definitions.json` event IDs for the “Play sound (catalog)” journal menu.
+
 ### `mb_codex.js`
 
 **Powdery Journal** (`mb:snow_book`) and **Basic Journal** UIs: discovery-based **codex** (mobs, items, infections, cures, symptoms), **search**, **settings** (sound volume, spawn difficulty, search toggle), **achievements** (gated until journal obtained or unlock state), **knowledge sharing** near players with the book, **Developer Tools** (debug flags, day simulation, infection inspect/adjust, spawn controller hub, storm hub, emulsifier dev actions), and **Emulsifier machine UI** when interacting with the block.

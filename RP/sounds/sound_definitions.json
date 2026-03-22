@@ -673,6 +673,59 @@
 					"volume": 0.5
 				}
 			]
+		},
+		"mb.infection_cough_minor": {
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				{ "name": "sounds/infection_cough/Infected Player Coughing 1", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing 2", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing 3", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing 4", "volume": 0.68 }
+			]
+		},
+		"mb.infection_cough_major": {
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 24,
+			"sounds": [
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 1", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 2", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 3", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 4", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 5", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 6", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 7", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 8", "volume": 0.68 }
+			]
+		},
+		"mb.dust_eat_hiccup": {
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 16,
+			"sounds": [
+				{ "name": "sounds/dust_eat_hiccup/Dust Hiccup 1", "volume": 0.68 },
+				{ "name": "sounds/dust_eat_hiccup/Dust Hiccup 2", "volume": 0.68 },
+				{ "name": "sounds/dust_eat_hiccup/Dust Hiccup 3", "volume": 0.68 },
+				{ "name": "sounds/dust_eat_hiccup/Dust Hiccup 4", "volume": 0.68 }
+			]
+		},
+		"mb.cure_sigh_relief_minor": {
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 18,
+			"sounds": [
+				{ "name": "sounds/cure_sigh_relief/Infection Cure Sigh Of Relief Minor", "volume": 0.34 }
+			]
+		},
+		"mb.cure_sigh_relief_major": {
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				{ "name": "sounds/cure_sigh_relief/Infection Cure Sigh Of Relief Major", "volume": 0.34 }
+			]
 		}
 	}
 }

@@ -1,6 +1,6 @@
 import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
-import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, getPlayerSettings, checkKnowledgeProgression, showEmulsifierMachineUI } from "./mb_codex.js";
+import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, getPlayerSettings, checkKnowledgeProgression, showEmulsifierMachineUI, getInfectionCueEmitterTier, getInfectionCueHearOthersTier } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock, getEmulsifierZoneAtBlock, getZoneFuelQueueForUI, isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
@@ -18,6 +18,7 @@ import "./mb_dimensionAdaptation.js";
 import "./mb_biomeAmbience.js";
 import "./mb_snowStorm.js";
 import { isPlayerInStorm, getStormExposureRates, summonStorm, setStormOverride, resetStormOverride, getStormState, wasKilledByStorm } from "./mb_snowStorm.js";
+import { tickInfectionCoughAndBreath, playPowderHiccup, playCureSighRelief, resetInfectionAudioCooldowns } from "./mb_infectionAudio.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_DANGER_STRONG, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 
@@ -2391,6 +2392,8 @@ function cureMinorInfection(player) {
         player.playSound("random.orb", { pitch: 1.8, volume: 0.85 * volumeMultiplier });
         player.playSound("mob.villager.celebrate", { pitch: 1.5, volume: 0.75 * volumeMultiplier });
         player.playSound("random.levelup", { pitch: 1.2, volume: 0.75 * volumeMultiplier });
+        resetInfectionAudioCooldowns(player.id);
+        triggerCureSighReliefSound(player, false);
         
         // Send message about permanent immunity
         player.sendMessage(CHAT_SUCCESS + "§lYou have cured your minor infection!");
@@ -2518,6 +2521,8 @@ function handleEnchantedGoldenApple(player, item) {
                 // IMMEDIATELY save the cure data to dynamic properties
                 saveInfectionData(player);
                 console.log(`[CURE] Immediately saved cure data for ${player.name}`);
+                resetInfectionAudioCooldowns(player.id);
+                triggerCureSighReliefSound(player, true);
 
                 // Note: We do NOT remove the weakness effect - let it run its course naturally
                 player.sendMessage(CHAT_SUCCESS + "§lYou have cured your major infection!");
@@ -2561,6 +2566,20 @@ function trackCureAttempt(player) {
     const codex = getCodex(player);
     codex.items.cureAttempted = true;
     saveCodex(player, codex);
+}
+
+function triggerPowderConsumptionHiccup(player) {
+    try {
+        const played = playPowderHiccup(player, getInfectionCueEmitterTier, getInfectionCueHearOthersTier, getPlayerSoundVolume);
+        if (played) safeMarkCodex(player, "symptomsUnlocks.infectionBodySoundsUnlocked");
+    } catch { /* ignore */ }
+}
+
+function triggerCureSighReliefSound(player, isMajorCure) {
+    try {
+        const played = playCureSighRelief(player, isMajorCure, getInfectionCueEmitterTier, getInfectionCueHearOthersTier, getPlayerSoundVolume);
+        if (played) safeMarkCodex(player, "symptomsUnlocks.infectionBodySoundsUnlocked");
+    } catch { /* ignore */ }
 }
 
 // Handle snow consumption
@@ -2721,6 +2740,7 @@ function handleSnowConsumption(player, item) {
         } catch { }
         
         saveInfectionData(player);
+        triggerPowderConsumptionHiccup(player);
         return;
     }
     
@@ -2790,6 +2810,7 @@ function handleSnowConsumption(player, item) {
         
         // Track infection history
         trackInfectionHistory(player, "infected");
+        triggerPowderConsumptionHiccup(player);
     } else {
         // Player is infected - apply progressive snow mechanics based on tier
         const snowCount = (infectionState.snowCount || 0) + 1;
@@ -2849,6 +2870,7 @@ function handleSnowConsumption(player, item) {
         
         // Apply random effects based on snow tier for infected players
         applySnowTierEffects(player, snowCount);
+        triggerPowderConsumptionHiccup(player);
         
         console.log(`[SNOW] ${player.name} consumed snow (count: ${snowCount}, time effect: ${timeEffect}, new ticks: ${infectionState.ticksLeft})`);
     }
@@ -4612,6 +4634,28 @@ system.runInterval(() => {
     for (const [id, state] of playerInfection.entries()) {
         const player = world.getAllPlayers().find(p => p.id === id);
         if (!player || state.cured) continue;
+
+        // Ambient infection cough / rare dust breath (audible to nearby players; settings in journal)
+        try {
+            const gm = player.getGameMode?.();
+            if (gm !== "creative" && gm !== "spectator" && !introInProgress.has(id)) {
+                let environmentSynergy = false;
+                try {
+                    const gc = isStandingOnInfectedGround(player);
+                    environmentSynergy = Boolean(gc.onGround) || isPlayerInStorm(player.id);
+                } catch { /* ignore */ }
+                const audioOut = tickInfectionCoughAndBreath(player, state, {
+                    introActive: false,
+                    environmentSynergy,
+                    getEmitterTier: getInfectionCueEmitterTier,
+                    getHearOthersTier: getInfectionCueHearOthersTier,
+                    getMasterVolume: getPlayerSoundVolume
+                });
+                if (audioOut.playedCough || audioOut.playedBreath) {
+                    safeMarkCodex(player, "symptomsUnlocks.infectionBodySoundsUnlocked");
+                }
+            }
+        } catch { /* ignore */ }
 
         // Check infection type (default to "major" for backward compatibility)
         const infectionType = state.infectionType || MAJOR_INFECTION_TYPE;

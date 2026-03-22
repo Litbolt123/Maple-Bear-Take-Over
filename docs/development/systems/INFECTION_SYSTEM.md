@@ -288,11 +288,25 @@ flowchart TD
 
 ---
 
-## 11. Quick reference — key files and symbols
+## 11. Body sounds, hiccups, dust breath, cure sighs
+
+- **Module**: `mb_infectionAudio.js` — spatial playback by iterating nearby players (each listener applies **master** `getPlayerSoundVolume` × **emitter** tier × **hear others** tier).
+- **Settings** (Powdery Journal → Settings): `infectionCueEmitterVolume` and `infectionCueHearOthersVolume` (Off / Low / High). Emitter **Off** suppresses cough, hiccup, and cure sigh for everyone; **Hear others** only affects other players’ infection noises.
+- **Coughs**: Random interval during minor/major infection (major more frequent and louder). **Storm** or **corrupted ground** increases chance (synergy).
+- **Powder hiccup**: Plays when consuming `mb:snow` (pitch ~1.25).
+- **Dust breath**: Very rare `mb:white_dust_particle` at the player’s head (no extra sound).
+- **Cure sigh**: Minor and major cure paths play `mb.cure_sigh_relief_minor` / `mb.cure_sigh_relief_major`.
+- **Sounds** (definitions in `RP/sounds/sound_definitions.json`, assets under `sounds/infection_cough/`, `dust_eat_hiccup/`, `cure_sigh_relief/`): per-file volumes **0.68** (cough/hiccup) and **0.34** (cure sighs), with script-side tier multipliers.
+- **Codex**: `symptomsUnlocks.infectionBodySoundsUnlocked` unlocks **Symptoms → Body sounds (infection)** and an **Infection** book line under mechanics.
+
+---
+
+## 12. Quick reference — key files and symbols
 
 | Area | Location |
 |------|-----------|
 | State maps, bear hit handler, ground loops, cures, transformation | `main.js` — `playerInfection`, `groundExposureState`, `entityHurt`, `entityDie`, `itemCompleteUse`, `system.runInterval` infection blocks |
+| Infection cough / hiccup / cure sigh spatial audio | `mb_infectionAudio.js` + calls from `main.js` |
 | Storm exposure constants and storm logic | `mb_snowStorm.js` |
 | Difficulty `hitsBase`, decay multipliers | `mb_dynamicPropertyHandler.js` |
 | Infected mob movement / anger | `mb_infectedAI.js` |
@@ -300,7 +314,7 @@ flowchart TD
 
 ---
 
-## 12. Related docs
+## 13. Related docs
 
 - **[MECHANICS_SUMMARY.md](../tracking/MECHANICS_SUMMARY.md)** — Shorter checklist of implemented mechanics (points here for infection depth).
 - **[SNOW_STORM_DESIGN.md](../SNOW_STORM_DESIGN.md)** — Storm design notes (implementation may differ slightly; trust code for numbers).

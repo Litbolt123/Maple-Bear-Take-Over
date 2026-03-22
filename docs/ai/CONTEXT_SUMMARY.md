@@ -2,6 +2,32 @@
 
 ## Recent Changes (Latest Session)
 
+### Powdery Journal: experience-gated lore (2026-03-22)
+- **`BP/scripts/mb_codex.js`**
+  - **Infection → Infection Mechanics:** bullets unlock only after relevant play (bear hits/discovery, minor/major seen, infection effects, snow/powder affecting major timer, day ≥3 + infection footprint, day ≥20 for full-kill conversion line). If none apply: placeholder `???` text.
+  - **Symptoms → Infection level analysis:** no longer opens from “infected with zero snow” alone; needs snow discovery, max snow level, `snow` infection discovery, or current snow count > 0 (or dev unlock flag).
+  - **Infection level analysis page:** short note when max snow &lt; 5 that higher tiers fill in after actually reaching those levels.
+  - **Timeline → Days & Milestones:** milestone *titles* stay `???` until the matching encounter (e.g. Day 2 needs Tiny Maple Bear seen; Day 4 needs an infected mob seen; Days 8/13/15/17 need that mob type seen; Days 11/20/25 use calendar survival). Hint line when a day is passed but the note is still locked. **Day 20 “Knowledge”** paragraphs require major infection, storm, or Day-20-variant exposure—not day count alone.
+
+### Infection body sound volumes (2026-03-22)
+- **`RP/sounds/sound_definitions.json`**: Cough minor/major and powder hiccup per-file **volume 0.68** (two decimals; ~−9% vs 0.75). Cure sigh minor/major **0.34** (~−10% then ~−50% vs original 0.75). Script `BASE_DEFINITION_ATTENUATION` unchanged; gain still applied in `mb_infectionAudio.js`.
+
+### Infection cough timing (2026-03-22)
+- **`BP/scripts/mb_infectionAudio.js`**: Replaced fixed cooldown + roll with **per-player `nextCoughDueTick`** — randomized gaps after each cough (major ~520–1280 ticks base, minor ~1300–3400; shortened by storm/ground synergy), jittered retries on failed rolls, staggered first window. Slightly **lower** per-attempt thresholds (major 0.32, minor 0.2). Goal: **less frequent**, **less periodic** coughs.
+
+### Dev Tools: play sound catalog (2026-03-22)
+- **`BP/scripts/mb_devSoundCatalog.js`**: categorized addon sound event IDs (matches `RP/sounds/sound_definitions.json`).
+- **`mb_codex.js`**: Developer Tools → **Play sound (catalog)** — category → sound → target (**me** or another online player); uses `target.playSound` and target’s `getPlayerSoundVolume`. Pinnable as **Play sound (catalog)**.
+
+### Infection body sounds implementation (2026-03-22)
+- **Shipped**: `BP/scripts/mb_infectionAudio.js` — nearby-player `playSound` loop; cough tier minor/major (major louder + more frequent), storm **or** corrupted-ground synergy; rare `mb:white_dust_particle` breath; `mb.dust_eat_hiccup` at pitch **1.25** on powder eat; cure sigh minor/major.
+- **RP**: `sound_definitions.json` entries `mb.infection_cough_minor`, `mb.infection_cough_major`, `mb.dust_eat_hiccup`, `mb.cure_sigh_relief_minor` / `_major` — per-file volumes **0.68** (cough/hiccup) and **0.34** (cure sighs); see “Infection body sound volumes” above.
+- **Settings (option C)**: `infectionCueEmitterVolume` + `infectionCueHearOthersVolume` (Off/Low/High) in Powdery settings modal; exports `getInfectionCueEmitterTier` / `getInfectionCueHearOthersTier` in `mb_codex.js`.
+- **Codex**: `symptomsUnlocks.infectionBodySoundsUnlocked`; Symptoms menu **Body sounds (infection)**; Infection section mechanics line when unlocked. Docs: `INFECTION_SYSTEM.md` §11, `ADDON_SYSTEMS_AND_FEATURES.md` (`mb_infectionAudio.js`).
+
+### Infection audio brainstorm (2026-03-22)
+- **User idea**: Random **cough** (and similar) sounds while infected—**audible to nearby players**, more frequent/intense for **major** than **minor**; new **Powdery Journal** volume control (pattern like `bearSoundVolume`). Implementation notes: prefer **positional `playsound`** or **per-nearby-player `playSound`** over `player.playSound` alone for multiplayer; hook in `main.js` infection interval with per-player cooldown; register custom sounds in RP. Design fork: emitter-only “off” vs per-listener volume vs both. Additional ideas discussed: wheeze, storm synergy, cure exhale, optional particles, codex unlock.
+
 ### Infection system documentation (2026-03-22)
 - **User request**: Explain infection mechanics; later requested as **markdown** (update existing where applicable).
 - **Added** [`docs/development/systems/INFECTION_SYSTEM.md`](../development/systems/INFECTION_SYSTEM.md): full reference (minor/major, `snowCount`, environmental timers, cures, transformation paths, mob conversion, mermaid flowcharts, file index).

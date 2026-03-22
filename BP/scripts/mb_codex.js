@@ -9,6 +9,7 @@ import { getBuffBearCountdowns } from "./mb_buffAI.js";
 import { getSpawnConfigsForDevTools, getDisabledSpawnTypes, setDisabledSpawnTypes, getSpawnSpeedMultiplier, SPAWN_SPEED_PROPERTY, getBlockQueryMultiplier, getMaxGlobalSpawnsPerTick, getSpawnDistanceRange, getTileIntensityMultiplier, getBlocksPerTickMultiplier, SPAWN_OVERRIDE_PROPERTIES, getSpawnScanSettingsForDevTools, applySpawnScanPreset, SPAWN_SCAN_OVERRIDE_PROPERTIES, SPAWN_SCAN_PRESETS, getEmulsifierStateForDevTools, getEmulsifierDebugInfo, clearEmulsifierZoneCache, addEmulsifierZoneAtPlayer, removeNearestEmulsifierZone, setNearestEmulsifierFuel, getEmulsifierZoneAtBlock, upsertEmulsifierZoneAtBlock, setEmulsifierFuelAtBlock, addEmulsifierFuelAtBlock, getMaxFuelTicks, setEmulsifierActiveAtBlock, getZoneFuelQueueForUI, getZoneCurrentFuelType, zoneHasFuel, setEmulsifierFuelOrderAtBlock } from "./mb_spawnController.js";
 import { summonStorm, endStorm, getStormState, getStormDebugInfo, setStormOverride, resetStormOverride, getStormControlParams, isMultiStormEnabled, setMultiStormEnabled, getStorms, endStormById, setStormEnabled } from "./mb_snowStorm.js";
 import { getMiningAIState } from "./mb_miningAI.js";
+import { DEV_SOUND_CATEGORIES } from "./mb_devSoundCatalog.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
@@ -372,7 +373,8 @@ export function getDefaultCodex() {
             infectionSymptomsUnlocked: false,
             snowEffectsUnlocked: false,
             snowTierAnalysisUnlocked: false,
-            minorInfectionAnalysisUnlocked: false
+            minorInfectionAnalysisUnlocked: false,
+            infectionBodySoundsUnlocked: false
         },
         // Aggregated metadata by effect id
         symptomsMeta: {},
@@ -541,6 +543,36 @@ export function getPlayerSoundVolume(player) {
     } catch (error) {
         console.warn(`[SOUND VOLUME] Error getting sound volume for ${player.name}:`, error);
         return 1.0;
+    }
+}
+
+/**
+ * Infection body sounds the player produces (cough, hiccup, cure sigh). 0=off, 1=low, 2=high
+ * @param {import("@minecraft/server").Player} player
+ * @returns {number} 0–2
+ */
+export function getInfectionCueEmitterTier(player) {
+    try {
+        const codex = getCodex(player);
+        const v = codex.settings?.infectionCueEmitterVolume;
+        return Math.max(0, Math.min(2, typeof v === "number" ? v : 2));
+    } catch {
+        return 2;
+    }
+}
+
+/**
+ * How loudly this player hears *other* players' infection coughs/hiccups/sighs. 0=off, 1=low, 2=high
+ * @param {import("@minecraft/server").Player} player
+ * @returns {number} 0–2
+ */
+export function getInfectionCueHearOthersTier(player) {
+    try {
+        const codex = getCodex(player);
+        const v = codex.settings?.infectionCueHearOthersVolume;
+        return Math.max(0, Math.min(2, typeof v === "number" ? v : 2));
+    } catch {
+        return 2;
     }
 }
 
@@ -1239,6 +1271,8 @@ export function showCodexBook(player, context) {
                     showSearchButton: true,
                     bearSoundVolume: 2, // 0=off, 1=low, 2=high
                     blockBreakVolume: 2, // 0=off, 1=low, 2=high
+                    infectionCueEmitterVolume: 2,
+                    infectionCueHearOthersVolume: 2,
                     soundVolume: 1.0,
                     showTips: true,
                     audioMessages: true,
@@ -1266,6 +1300,12 @@ export function showCodexBook(player, context) {
                 }
                 if (codex.settings.stormParticles === undefined) {
                     codex.settings.stormParticles = 0;
+                }
+                if (codex.settings.infectionCueEmitterVolume === undefined) {
+                    codex.settings.infectionCueEmitterVolume = 2;
+                }
+                if (codex.settings.infectionCueHearOthersVolume === undefined) {
+                    codex.settings.infectionCueHearOthersVolume = 2;
                 }
             }
             
@@ -1838,14 +1878,37 @@ export function showCodexBook(player, context) {
                 lines.push("");
             }
             
-            // Infection Mechanics
+            // Infection Mechanics — one line at a time as the player lives the mechanic
             lines.push("§6Infection Mechanics:");
-            lines.push("§7• Maple Bears can infect you through attacks");
-            lines.push("§7• Infection progresses through multiple stages");
-            lines.push("§7• Symptoms worsen as infection advances");
-            lines.push("§7• Snow consumption affects the timer (major infection only)");
-            lines.push("§7• Conversion rate increases with each day");
-            lines.push("§7• By Day 20, all mob kills convert to infected variants");
+            const currentDayMech = typeof getCurrentDay === "function" ? getCurrentDay() : 0;
+            const bearHits = (bearHitCount && bearHitCount.get) ? (bearHitCount.get(player.id) || 0) : 0;
+            const bearSpreadKnown = !!(codex.infections?.bear?.discovered || bearHits > 0 || minorDiscovered || majorDiscovered);
+            const stagesKnown = !!(minorDiscovered || majorDiscovered || hasInfection);
+            const symptomsEscalateKnown = !!(majorDiscovered || Object.values(codex.effects || {}).some(Boolean));
+            const snowTimerKnown = !!(
+                codex.infections?.snow?.discovered ||
+                codex.items?.snowFound ||
+                (hasInfection && !isMinor && ((infectionState?.snowCount || 0) > 0))
+            );
+            const dayScalingKnown = currentDayMech >= 3 && (bearSpreadKnown || (codex.history?.totalInfections || 0) > 0);
+            const day20ConversionKnown = currentDayMech >= 20;
+
+            const mechLines = [];
+            if (bearSpreadKnown) mechLines.push("§7• Maple Bears can infect you through attacks");
+            if (stagesKnown) mechLines.push("§7• Infection progresses through multiple stages");
+            if (symptomsEscalateKnown) mechLines.push("§7• Symptoms worsen as infection advances");
+            if (snowTimerKnown) mechLines.push("§7• \"Snow\" consumption affects the timer (major infection only)");
+            if (dayScalingKnown) mechLines.push("§7• Conversion pressure from the outbreak tends to rise as days pass");
+            if (day20ConversionKnown) mechLines.push("§7• By Day 20, all mob kills convert to infected variants");
+            if (codex.symptomsUnlocks?.infectionBodySoundsUnlocked) {
+                mechLines.push("§7• Body sounds (cough, powder hiccup, rare dust breath): nearby players may hear you— adjust in §eSettings §7(infection sound sliders)");
+            }
+            if (mechLines.length > 0) {
+                lines.push(...mechLines);
+            } else {
+                lines.push("§7• §8???");
+                lines.push("§8The journal leaves blanks until you live through more of the infection.");
+            }
             
             // Add infection history if available
             if (codex.history.totalInfections > 0) {
@@ -1897,8 +1960,13 @@ export function showCodexBook(player, context) {
         const hasAnyInfection = hasInfection;
         
         // Progressive unlock conditions - only show if content is actually experienced
-        const showSnowTierAnalysis = codex.symptomsUnlocks.snowTierAnalysisUnlocked || 
-                                    ((hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0) || hasAnyInfection);
+        const snowCountNow = hasAnyInfection ? (infectionState?.snowCount || 0) : 0;
+        const showSnowTierAnalysis = Boolean(
+            codex.symptomsUnlocks.snowTierAnalysisUnlocked ||
+            (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0) ||
+            codex.infections?.snow?.discovered ||
+            snowCountNow > 0
+        );
         const showInfectionSymptoms = Object.values(codex.effects).some(seen => seen);
         const showSnowEffects = Object.values(codex.snowEffects).some(seen => seen);
         const infectionType = hasInfection ? (infectionState.infectionType || MAJOR_INFECTION_TYPE) : null;
@@ -1906,11 +1974,12 @@ export function showCodexBook(player, context) {
         const hasHadMinorInfection = codex.infections.minor.discovered;
         const showMinorInfectionAnalysis = codex.symptomsUnlocks.minorInfectionAnalysisUnlocked || 
                                           hasMinorInfection || hasHadMinorInfection;
+        const showInfectionBodySounds = Boolean(codex.symptomsUnlocks?.infectionBodySoundsUnlocked);
         
         const form = new ActionFormData().title("§6Symptoms");
         
         // Check if any content is available
-        if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects && !showMinorInfectionAnalysis) {
+        if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects && !showMinorInfectionAnalysis && !showInfectionBodySounds) {
             form.body("§7No symptoms have been experienced yet.\n§8You need to experience effects while infected to unlock symptom information.");
             form.button("§8Back");
         } else {
@@ -1941,6 +2010,11 @@ export function showCodexBook(player, context) {
                 form.button("§b\"Snow\" Effects");
                 buttonIndex++;
             }
+
+            if (showInfectionBodySounds) {
+                form.button("§fBody sounds (infection)");
+                buttonIndex++;
+            }
             
             form.button("§8Back");
         }
@@ -1952,7 +2026,7 @@ export function showCodexBook(player, context) {
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             
             // If no content available, just go back
-            if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects && !showMinorInfectionAnalysis) {
+            if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects && !showMinorInfectionAnalysis && !showInfectionBodySounds) {
                 openMain();
                 return;
             }
@@ -1981,9 +2055,45 @@ export function showCodexBook(player, context) {
                 openSnowEffects();
                 return;
             }
+            if (showSnowEffects) currentIndex++;
+
+            if (showInfectionBodySounds && res.selection === currentIndex) {
+                openInfectionBodySounds();
+                return;
+            }
             
             openMain();
         });
+    }
+
+    function openInfectionBodySounds() {
+        const codex = getCodex(player);
+        if (codex.symptomsUnlocks?.infectionBodySoundsUnlocked) {
+            markSubsectionViewed(player, "symptomsUnlocks.infectionBodySoundsUnlocked");
+        }
+        const body = [
+            "§7While infected, your body may give you away: §fcoughs§7, a sharp §fhiccup§7 after eating powder, or a rare puff of §fwhite dust§7 when you exhale.",
+            "",
+            "§6Major infection §7tends to cough §fmore often§7 and §flouder§7 than minor. Standing on corrupted ground or being in a §6dust storm §7makes fits more likely.",
+            "",
+            "§ePowdery Journal → Settings:",
+            "§7• §fInfection sounds you make §7— Off / Low / High (your coughs, hiccups, cure sigh). Off means others won't hear those cues from you either.",
+            "§7• §fHearing others' infection sounds §7— how loudly you hear nearby players' infection noises.",
+            "",
+            "§8Cures can come with a short sigh of relief— nearby players may hear that too."
+        ].join("\n");
+
+        new ActionFormData()
+            .title("§6Body sounds (infection)")
+            .body(body)
+            .button("§8Back")
+            .show(player)
+            .then(() => {
+                const volumeMultiplier = getPlayerSoundVolume(player);
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                openSymptoms();
+            })
+            .catch(() => openSymptoms());
     }
     
     function openInfectionSymptoms() {
@@ -2146,7 +2256,10 @@ export function showCodexBook(player, context) {
         // Check if maxSnow exists, otherwise use 0
         const maxLevel = maxSnow ? maxSnow.maxLevel : 0;
         let body = `§eMaximum Infection Level Achieved: §f${maxLevel.toFixed(1)}\n\n`;
-        
+        if (maxLevel < 5) {
+            body += `§7Higher tiers stay blank until your \"snow\" level actually reaches them. Eat powder while infected and revisit this page.\n\n`;
+        }
+
         // Detailed analysis based on experience
         if (maxLevel >= 5) {
             body += `§7Tier 1 (1-5): §fThe Awakening\n`;
@@ -3442,6 +3555,23 @@ export function showCodexBook(player, context) {
         }).catch(() => { openMain(); });
     }
 
+    /** Journal milestone flavor text only after the player has seen what that day introduces (or survived to that calendar day when no single mob applies). */
+    function milestoneJournalNoteUnlocked(codex, milestoneDay) {
+        const m = codex.mobs || {};
+        switch (milestoneDay) {
+            case 2: return !!m.mapleBearSeen;
+            case 4: return !!(m.infectedBearSeen || m.infectedPigSeen || m.infectedCowSeen);
+            case 8: return !!m.flyingBearSeen;
+            case 11: return (getCurrentDay ? getCurrentDay() : 0) >= 11;
+            case 13: return !!m.buffBearSeen;
+            case 15: return !!m.miningBearSeen;
+            case 17: return !!m.torpedoBearSeen;
+            case 20: return (getCurrentDay ? getCurrentDay() : 0) >= 20;
+            case 25: return (getCurrentDay ? getCurrentDay() : 0) >= 25;
+            default: return true;
+        }
+    }
+
     function openDaysMilestones() {
         const codex = getCodex(player);
         const currentDay = getCurrentDay ? getCurrentDay() : 0;
@@ -3486,22 +3616,39 @@ export function showCodexBook(player, context) {
         
         for (const milestone of milestones) {
             if (milestone.reached) {
-                // Show reached milestones
+                const noteOpen = milestoneJournalNoteUnlocked(codex, milestone.day);
+                const shownName = noteOpen ? milestone.name : "???";
                 if (milestone.isVictory) {
-                    body += `§aDay ${milestone.day}: §7${milestone.name}\n`;
+                    body += `§aDay ${milestone.day}: §7${shownName}\n`;
                 } else {
-                    body += `§eDay ${milestone.day}: §7${milestone.name} §a✓\n`;
+                    body += `§eDay ${milestone.day}: §7${shownName} §a✓\n`;
+                    if (!noteOpen) {
+                        body += `§8§oMeet what this day adds to the world to reveal the full note.\n`;
+                    }
                 }
-                
-                // Show Day 20 infection rate knowledge (higher level knowledge)
-                if (milestone.isEscalation && milestone.day === 20) {
-                    const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
-                    if (infectionKnowledge >= 3) {
-                        body += `\n§6Day 20 Knowledge:\n`;
-                        body += `§7At Day 20, the infection reaches maximum conversion rate (100%). Bear attacks and "snow" consumption become far more dangerous. The infection spreads faster and more efficiently at this stage.`;
-                    } else if (infectionKnowledge >= 2) {
-                        body += `\n§6Day 20 Knowledge:\n`;
-                        body += `§7At Day 20, the infection reaches its peak intensity. Conversion rates are maximized.`;
+
+                // Show Day 20 infection rate knowledge only after heavy exposure (not calendar alone)
+                if (milestone.isEscalation && milestone.day === 20 && noteOpen) {
+                    const infSt = playerInfection.get(player.id);
+                    const hasMajorNow = !!(infSt && !infSt.cured && (infSt.infectionType || MAJOR_INFECTION_TYPE) !== MINOR_INFECTION_TYPE);
+                    const witnessedDay20Pressure = !!(
+                        codex.infections?.major?.discovered ||
+                        hasMajorNow ||
+                        codex.biomes?.stormSeen ||
+                        codex.mobs?.day20VariantsUnlockedTiny ||
+                        codex.mobs?.day20VariantsUnlockedInfected ||
+                        codex.mobs?.day20VariantsUnlockedBuff ||
+                        codex.mobs?.day20VariantsUnlockedOther
+                    );
+                    if (witnessedDay20Pressure) {
+                        const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
+                        if (infectionKnowledge >= 3) {
+                            body += `\n§6Day 20 Knowledge:\n`;
+                            body += `§7At Day 20, the infection reaches maximum conversion rate (100%). Bear attacks and "snow" consumption become far more dangerous. The infection spreads faster and more efficiently at this stage.`;
+                        } else if (infectionKnowledge >= 2) {
+                            body += `\n§6Day 20 Knowledge:\n`;
+                            body += `§7At Day 20, the infection reaches its peak intensity. Conversion rates are maximized.`;
+                        }
                     }
                 }
             } else if (milestone.day === currentDay + 1) {
@@ -4000,7 +4147,8 @@ export function showCodexBook(player, context) {
         { id: "inspect_bear", label: "Inspect Nearest Bear", action: () => triggerDebugCommand("inspect_entity", [], () => openDeveloperTools()) },
         { id: "reset_section", label: "Reset Codex Section", action: () => openResetCodexSectionMenu() },
         { id: "dump_codex", label: "Dump Codex State", action: () => openDumpCodexTargetMenu() },
-        { id: "set_kill_counts", label: "Set Kill Counts", action: () => openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name)) }
+        { id: "set_kill_counts", label: "Set Kill Counts", action: () => openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name)) },
+        { id: "sound_catalog", label: "Play sound (catalog)", action: () => openSoundPreviewDevMenu() }
     ];
 
     function getPinnedDevItems(p) {
@@ -4060,6 +4208,90 @@ export function showCodexBook(player, context) {
         }).catch(() => openDeveloperTools());
     }
 
+    function openSoundPlayTargetMenu(categoryIndex, soundEntry) {
+        const allPlayers = world.getAllPlayers();
+        const others = allPlayers.filter(p => p && p.id !== player.id);
+        const form = new ActionFormData()
+            .title("§cPlay sound")
+            .body(`§7${soundEntry.label}\n§8${soundEntry.soundId}\n\n§7Who should hear it? §8(uses their journal volume)`);
+        form.button("§aMe §8(" + player.name + ")");
+        for (const p of others) {
+            form.button("§f" + p.name);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 1 + others.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openSoundPreviewCategoryMenu(categoryIndex);
+            }
+            const target = res.selection === 0 ? player : others[res.selection - 1];
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            if (!target?.isValid) {
+                player.sendMessage(CHAT_DANGER + "Target player is not valid.");
+                return openSoundPreviewCategoryMenu(categoryIndex);
+            }
+            try {
+                const vol = Math.max(0.05, Math.min(1, 0.92 * getPlayerSoundVolume(target)));
+                target.playSound(soundEntry.soundId, { pitch: 1, volume: vol });
+                player.sendMessage(CHAT_INFO + `Played §f${soundEntry.soundId} §7for §f${target.name}`);
+            } catch (e) {
+                player.sendMessage(CHAT_DANGER + "playSound failed: " + (e?.message || String(e)));
+            }
+            openSoundPreviewCategoryMenu(categoryIndex);
+        }).catch(() => openSoundPreviewCategoryMenu(categoryIndex));
+    }
+
+    function openSoundPreviewCategoryMenu(categoryIndex) {
+        const cat = DEV_SOUND_CATEGORIES[categoryIndex];
+        if (!cat) {
+            return openSoundPreviewDevMenu();
+        }
+        const form = new ActionFormData()
+            .title("§e" + cat.title)
+            .body("§7Choose a sound event §8(random variant if the definition has many files)§7.\n§8Back returns to categories.");
+        for (const s of cat.sounds) {
+            form.button(`§f${s.label} §8· ${s.soundId}`);
+        }
+        form.button("§8Back to categories");
+        form.show(player).then((res) => {
+            if (!res || res.canceled) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openSoundPreviewDevMenu();
+            }
+            if (res.selection === cat.sounds.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openSoundPreviewDevMenu();
+            }
+            const snd = cat.sounds[res.selection];
+            if (!snd) return openSoundPreviewCategoryMenu(categoryIndex);
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            openSoundPlayTargetMenu(categoryIndex, snd);
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openSoundPreviewDevMenu() {
+        const form = new ActionFormData()
+            .title("§ePlay sound §8(dev)")
+            .body("§7Addon sound events from §fsound_definitions.json§7, grouped for browsing.");
+        for (const c of DEV_SOUND_CATEGORIES) {
+            form.button(`§f${c.title} §8(${c.sounds.length})`);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === DEV_SOUND_CATEGORIES.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openDeveloperTools();
+            }
+            const cat = DEV_SOUND_CATEGORIES[res.selection];
+            if (cat) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+                openSoundPreviewCategoryMenu(res.selection);
+            } else {
+                openDeveloperTools();
+            }
+        }).catch(() => openDeveloperTools());
+    }
+
     function openDeveloperTools() {
         const options = [
             { label: "§8§l── Codex ──", action: () => openDeveloperTools(), group: true },
@@ -4089,7 +4321,8 @@ export function showCodexBook(player, context) {
             { label: "§fSet Kill Counts", action: () => openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name)) },
             { label: "§8§l── AI & Debug ──", action: () => openDeveloperTools(), group: true },
             { label: "§eAI Throttle & Speed", action: () => openAIThrottleMenu() },
-            { label: "§fDebug Menu", action: () => openDebugMenu(true) }
+            { label: "§fDebug Menu", action: () => openDebugMenu(true) },
+            { label: "§dPlay sound §8(catalog)", action: () => openSoundPreviewDevMenu() }
         ];
 
         const form = new ActionFormData().title("§cDeveloper Tools");
@@ -6347,6 +6580,8 @@ export function showCodexBook(player, context) {
         const difficultyOptions = ["Easy", "Normal", "Hard"];
         const bearVolIndex = Math.max(0, Math.min(2, settings.bearSoundVolume || 2));
         const breakVolIndex = Math.max(0, Math.min(2, settings.blockBreakVolume || 2));
+        const infectionEmitterIndex = Math.max(0, Math.min(2, settings.infectionCueEmitterVolume ?? 2));
+        const infectionHearOthersIndex = Math.max(0, Math.min(2, settings.infectionCueHearOthersVolume ?? 2));
         
         const showInfectionTimer = settings.showInfectionTimer === true;
         const criticalWarningsOnly = settings.criticalWarningsOnly === true;
@@ -6360,6 +6595,8 @@ export function showCodexBook(player, context) {
                 .toggle("Audio Messages", { defaultValue: settings.audioMessages !== false })
                 .dropdown("Bear Sound Volume", volumeOptions, { defaultValueIndex: bearVolIndex })
                 .dropdown("Block Break Volume", volumeOptions, { defaultValueIndex: breakVolIndex })
+                .dropdown("Infection sounds you make §8(cough, hiccup, cure sigh)", volumeOptions, { defaultValueIndex: infectionEmitterIndex })
+                .dropdown("Hearing others' infection sounds", volumeOptions, { defaultValueIndex: infectionHearOthersIndex })
                 .dropdown("Storm Particles §8(Less = better performance)", particleOptions, { defaultValueIndex: stormParticlesIndex })
                 .toggle("Show Search Button", { defaultValue: settings.showSearchButton !== false })
                 .toggle("Infection timer on screen (top, small)", { defaultValue: showInfectionTimer })
@@ -6369,7 +6606,7 @@ export function showCodexBook(player, context) {
             form.show(player).then((res) => {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 
-                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 10) {
+                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 12) {
                     const sliderValue = typeof res.formValues[0] === 'number' 
                         ? Math.max(0, Math.min(10, Math.round(Number(res.formValues[0]))))
                         : volumeSliderValue;
@@ -6380,13 +6617,15 @@ export function showCodexBook(player, context) {
                     settings.audioMessages = Boolean(res.formValues[2]);
                     settings.bearSoundVolume = typeof res.formValues[3] === 'number' ? Math.max(0, Math.min(2, res.formValues[3])) : bearVolIndex;
                     settings.blockBreakVolume = typeof res.formValues[4] === 'number' ? Math.max(0, Math.min(2, res.formValues[4])) : breakVolIndex;
-                    settings.stormParticles = typeof res.formValues[5] === 'number' ? Math.max(0, Math.min(2, Math.floor(res.formValues[5]))) : stormParticlesIndex;
-                    settings.showSearchButton = Boolean(res.formValues[6]);
-                    settings.showInfectionTimer = Boolean(res.formValues[7]);
-                    settings.criticalWarningsOnly = Boolean(res.formValues[8]);
+                    settings.infectionCueEmitterVolume = typeof res.formValues[5] === 'number' ? Math.max(0, Math.min(2, res.formValues[5])) : infectionEmitterIndex;
+                    settings.infectionCueHearOthersVolume = typeof res.formValues[6] === 'number' ? Math.max(0, Math.min(2, res.formValues[6])) : infectionHearOthersIndex;
+                    settings.stormParticles = typeof res.formValues[7] === 'number' ? Math.max(0, Math.min(2, Math.floor(res.formValues[7]))) : stormParticlesIndex;
+                    settings.showSearchButton = Boolean(res.formValues[8]);
+                    settings.showInfectionTimer = Boolean(res.formValues[9]);
+                    settings.criticalWarningsOnly = Boolean(res.formValues[10]);
                     
-                    if (canEditDifficulty && typeof res.formValues[9] === 'number') {
-                        const selectedIndex = Math.max(0, Math.min(2, Math.floor(res.formValues[9])));
+                    if (canEditDifficulty && typeof res.formValues[11] === 'number') {
+                        const selectedIndex = Math.max(0, Math.min(2, Math.floor(res.formValues[11])));
                         const newAddonValue = selectedIndex === 0 ? -1 : selectedIndex === 1 ? 0 : 1;
                         setWorldProperty(ADDON_DIFFICULTY_PROPERTY, newAddonValue);
                         setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, newAddonValue);
