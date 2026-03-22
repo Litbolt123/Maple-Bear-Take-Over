@@ -13,6 +13,7 @@ This file tracks all features added, removed, and changes made to the addon.
 ## [Unreleased]
 
 ### Added
+- **Documentation**: `docs/development/ADDON_SYSTEMS_AND_FEATURES.md` (script modules, systems, feature checklist); `docs/development/PROJECT_STATUS.md` (status snapshot and next steps). Root `README.md` and `TODO.md` refreshed; `docs/README.md` quick links fixed and updated.
 - **Dynamic Property Handler**: Implemented cached dynamic property system (`mb_dynamicPropertyHandler.js`) with lazy loading, batch saving, and chunking support for large properties. All scripts migrated to use new handler functions.
 - **Item Finder Utility**: Created `mb_itemFinder.js` with priority-based inventory search (hotbar → main inventory → offhand).
 - **Item Event Registry**: Created `mb_itemRegistry.js` with modular event registration system for cleaner item consumption handling.

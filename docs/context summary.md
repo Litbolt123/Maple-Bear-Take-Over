@@ -1,5 +1,14 @@
 # Context Summary
 
+**Date:** 2026-03-20
+
+## Documentation refresh
+- Updated root `README.md`, `TODO.md`, and `docs/README.md` (fixed mechanics summary path; added index entries).
+- Added `docs/development/ADDON_SYSTEMS_AND_FEATURES.md` (systems/features catalog) and `docs/development/PROJECT_STATUS.md` (status + next steps).
+- Cross-linked `docs/development/tracking/MECHANICS_SUMMARY.md` to the systems doc.
+
+---
+
 **Date:** 2026-03-15
 
 ## Emulsifier: break drop netherite, disable when no fuel, placed disabled, full-dome scan (log 16:01:48–16:04:55)

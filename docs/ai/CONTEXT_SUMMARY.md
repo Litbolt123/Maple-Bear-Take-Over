@@ -2,6 +2,23 @@
 
 ## Recent Changes (Latest Session)
 
+### Infection system documentation (2026-03-22)
+- **User request**: Explain infection mechanics; later requested as **markdown** (update existing where applicable).
+- **Added** [`docs/development/systems/INFECTION_SYSTEM.md`](../development/systems/INFECTION_SYSTEM.md): full reference (minor/major, `snowCount`, environmental timers, cures, transformation paths, mob conversion, mermaid flowcharts, file index).
+- **Updated** [`docs/development/tracking/MECHANICS_SUMMARY.md`](../development/tracking/MECHANICS_SUMMARY.md) (infection section slimmed + link; transformation note for timer vs bear-kill bear variant), [`docs/README.md`](../README.md) (systems index), [`docs/development/ADDON_SYSTEMS_AND_FEATURES.md`](../development/ADDON_SYSTEMS_AND_FEATURES.md) (links from overview + `main.js`).
+- **Implementation anchors**: `BP/scripts/main.js`, `mb_snowStorm.js`, `mb_infectedAI.js`, `mb_biomeAmbience.js`, `mb_dimensionAdaptation.js`.
+
+### Documentation pass (2026-03-20)
+- **Root `README.md`**: Expanded with project summary, repo layout, doc links, `npm run check`, install notes.
+- **`TODO.md`**: Rebuilt with next steps, consolidated “implemented” summary, backlog checkboxes, technical notes; removed outdated “Nether/End only future” framing in favor of **implemented** Nether/End spawn + adaptation + remaining endgame/content tasks.
+- **New `docs/development/ADDON_SYSTEMS_AND_FEATURES.md`**: Maps each `BP/scripts/*.js` module, major JSON/asset systems, and player-facing features; links to mechanics, spawn, dimension, storm, codex docs.
+- **New `docs/development/PROJECT_STATUS.md`**: Snapshot of recently solidified systems, gaps, suggested priorities.
+- **`docs/README.md`**: Fixed Quick Link to `MECHANICS_SUMMARY.md` (correct `tracking/` path); indexed new docs.
+
+---
+
+## Recent Changes (Earlier Sessions)
+
 ### Achievements Gating: Persisted Powdery Journal State (Feb 15)
 - **Problem**: `playerHasPowderyJournal(player)` only checks inventory; achievements stayed hidden if the journal was obtained earlier but not carried.
 - **Fix**: Replaced single-condition gate with combined check: `if (!playerHasPowderyJournal(player) && !isPowderyJournalUnlocked(player))`.

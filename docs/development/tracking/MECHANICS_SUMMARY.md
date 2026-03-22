@@ -1,5 +1,7 @@
 # Maple Bear Takeover - Current Mechanics Summary
 
+> **Broader map:** For script modules, storms, spawn controller, emulsifier, and dimension behavior at a glance, see [`../ADDON_SYSTEMS_AND_FEATURES.md`](../ADDON_SYSTEMS_AND_FEATURES.md). This file focuses on **mechanical detail** for designers and testers.
+
 ## ✅ Currently Implemented
 
 ### Player Transformation System
@@ -7,11 +9,9 @@
   - Spawns an infected bear at death location
   - NameTag: `§4! ${player.name}'s Infected Form`
   - Sets dynamic property `infected_by` with player ID
-  - Bear type chosen based on current day:
-    - Day 8+: `infected_day8`
-    - Day 13+: `infected_day13`
-    - Day 20+: `infected_day20`
-    - Default: `infected` (base)
+  - Bear type chosen based on current day (see **[INFECTION_SYSTEM.md](../systems/INFECTION_SYSTEM.md)** for exact branches—timer expiry vs bear-kill paths differ slightly)
+  - **Bear-kill path**: Day 8+ / 13+ / **20+** variants when applicable
+  - **Timer-expiry path**: Day 8+ / 13+ variants; base `infected` below day 8
 - **Multiple deaths** = Multiple infected forms (no limit)
 - **NOT currently buffed** - They spawn as normal infected bears, just with a name tag
 
@@ -33,31 +33,19 @@
 - **Issue**: Gets stuck easily, needs better pathfinding/AI
 
 ### Infection System
+**Full reference (player state, ground/storm pressure, mob conversion, flowcharts): [`../systems/INFECTION_SYSTEM.md`](../systems/INFECTION_SYSTEM.md)**
+
 - **Infection Types**: Two types tracked separately
-  - **Minor Infection**: 10-day timer (scales with world day), mild effects, persists through death until cured
-  - **Major Infection**: 5-day timer, severe effects, can be cured with Weakness + Enchanted Golden Apple
-- **Minor Infection Effects**: Random, severity-scaling effects (per-player, not global)
-  - Severity 0 (>75% time): No effects
-  - Severity 1 (>50% time): Slowness I or Weakness I (cooldown: 7200 ticks)
-  - Severity 2 (>20% time): Slowness I, Weakness I, or Mining Fatigue I (cooldown: 3600 ticks)
-  - Severity 3 (<20% time): Slowness II, Weakness II, Mining Fatigue II, or Nausea I (cooldown: 2400 ticks)
-  - Milder than major infection (no blindness until very late, lower amplifiers)
-- **Major Infection Effects**: Progressive symptoms based on time remaining and snow count
-  - Severity 0: No symptoms (above 75% time)
-  - Severity 1: Mild (slowness)
-  - Severity 2: Moderate (slowness + hunger)
-  - Severity 3: Severe (slowness + weakness + blindness + nausea)
-- **Infection Progression**: Minor can progress to major via:
-  - 2 hits from Maple Bears (any type)
-  - 1 snow consumption
-- **Cure System**:
-  - **Minor Cure**: Golden Apple + Golden Carrot (any order) → Permanent immunity
-  - **Major Cure**: Weakness effect + Enchanted Golden Apple → Temporary immunity (5 min) + Permanent immunity
-- **Permanent Immunity**: Prevents minor infection on respawn, requires 3 hits (instead of 2) to get infected
-- **Respawn Behavior**:
-  - First-time respawn with minor infection: Full message, on-screen title, sounds
-  - Subsequent respawns: Minimal message only
-  - No immediate effects on respawn (effects applied by timer loop only)
+  - **Minor Infection**: Starting duration scales with **world day** (design cap tied to 10 in-game days in constants). Mild effects, persists through death until cured.
+  - **Major Infection**: **5 in-game day** timer cap (`24000 * 5` ticks). Cured with **Weakness + Enchanted Golden Apple** only.
+- **Bear hits to major**: Depends on **addon difficulty** (`hitsBase`: Easy 4, Normal 3, Hard 2). With **minor** infection, requires **one fewer** hit than a healthy player. **Permanent immunity** uses full `hitsBase` hits.
+- **Minor Infection Effects**: Random, severity-scaling (per-player). Cooldowns by severity band: **7200 / 4800 / 3600 / 2400** ticks (see full doc).
+- **Major Infection Effects**: Symptoms scale with **time left** and **`snowCount`** (powder tiers); optional rare “clarity” positive effect.
+- **Minor → Major**: Enough Maple Bear hits, **one** `mb:snow` consume, or **environmental** thresholds (corrupted ground / dense dust / storm exposure).
+- **Cures**: **Golden apple + golden carrot** (any order) → minor cured + permanent immunity. **Enchanted golden apple** with **weakness** → major cured + permanent immunity + short temporary immunity.
+- **Normal golden apple** (major only): reduces **`snowCount`** by **0.5** (does not cure).
+- **Environment**: Standing on **`mb:dusted_dirt`** / **`mb:snow_layer`**, ambient dust density, infected biome, and **dust storms** feed separate exposure timers; **emulsifier safe zones** in infected biomes decay pressure.
+- **Respawn**: Major cleared on death → minor again unless permanently immune; minor persists through death.
 
 ---
 

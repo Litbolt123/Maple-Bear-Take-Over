@@ -1,175 +1,128 @@
-# Maple Bear Takeover - TODO List
+# Maple Bear TakeOver — TODO
 
-## 🔧 Current Status - Fully Implemented Features
+**Status snapshot:** [`docs/development/PROJECT_STATUS.md`](docs/development/PROJECT_STATUS.md)  
+**Systems reference:** [`docs/development/ADDON_SYSTEMS_AND_FEATURES.md`](docs/development/ADDON_SYSTEMS_AND_FEATURES.md)
 
-### Core Systems
-- ✅ Basic Maple Bear entities (tiny, infected, buff) with day-based variants
-- ✅ Item pickup behavior for all bear types
-- ✅ Bear infection system (20-day timer with progressive effects)
-- ✅ Snow infection system (separate mechanics with tier-based progression)
-- ✅ Cure system for bear infection (weakness + golden apple)
-- ✅ Day tracking system with milestone events and world progression
-- ✅ Item corruption on infected bear death
-- ✅ API 2.0.0 compatibility fixes
-- ✅ Safety checks for unavailable event handlers
-- ✅ Robust effects detection with multiple fallback methods
-- ✅ Fixed global object and command result handling
+---
 
-### Performance & Code Quality
-- ✅ Performance optimizations (biome check cooldowns, module-scoped functions)
-- ✅ Eliminated debug log spam with conditional DEBUG_SNOW_MECHANICS flag
-- ✅ Optimized block placement handlers (snow layer conversion only)
-- ✅ Centralized milestone messaging system
-- ✅ Removed redundant code and improved maintainability
-- ✅ Fixed unreachable code paths and redundant function calls
+## Next steps (suggested order)
 
-### User Interface & Experience
-- ✅ Infection Tracker Book (`mb:snow_book`) with comprehensive on-demand UI
-- ✅ Progressive codex system with discovery-based unlocks
-- ✅ Biome discovery system with visual feedback
-- ✅ Daily event logging with reflection-based storytelling
-- ✅ Complete display transforms for snow layer model
-- ✅ Alternative debug system using item interactions
-- ✅ Day-based welcome messages and world state awareness
-- ✅ Settings system - Sound volume controls, spawn difficulty adjustment, search button toggle
-- ✅ Search functionality - Search codex entries by name across mobs, items, and symptoms
-- ✅ Developer Tools menu - Reset codex, reset day, set day, spawn difficulty, debug menu (requires cheats)
+1. **Playtest**: Multiplayer + spawn presets + multi-storm + Emulsifier; watch TPS and edge cases.  
+2. **Pick a vertical**: e.g. direct player infection spread, infection HUD, or endgame milestones (days 50/75/100) per design vision.  
+3. **Docs**: Developer onboarding + troubleshooting (see Documentation section below).  
+4. **Content**: Structures, raptor flying bear, or “scarred cured animals” — see Future Features.
 
-### Progressive Knowledge System
-- ✅ Multi-level knowledge progression (Basic Awareness → Understanding → Expert)
-- ✅ Knowledge-based information gating (players must experience to learn)
-- ✅ Dynamic welcome messages based on player knowledge level
-- ✅ Progressive mob statistics (unlocked by kill count and knowledge level)
-- ✅ Conditional item descriptions based on infection status and discovery
-- ✅ Biome infection tracking with visit counts and infection level analysis
-- ✅ Knowledge gates where advanced info requires other discoveries first
-- ✅ Experience-driven information revelation (no spoilers for new players)
+---
 
-## 🚀 Future Features & Enhancements
+## Implemented (summary)
 
-### 📖 Enhanced Codex System
-- [ ] Advanced symptom analysis with statistical data
-- [ ] Infection progression charts and graphs
-- ✅ Player achievement tracking and milestones - Day 25 victory, max days survived, post-victory milestones (30, 35, 40, 45, 50)
-- ✅ Cross-player data sharing and comparisons - Knowledge sharing system when players are nearby with snow book
-- [ ] Export/import codex data functionality
-- [ ] Knowledge tree visualization showing unlock paths
-- [ ] Hidden discoveries and secret information
-- ✅ Knowledge-based achievement system - Achievements section in codex, milestone tracking
+### Core gameplay
+- Maple Bear entities with **day-tier variants** (tiny, infected, buff, flying, mining, torpedo).  
+- **Infection**: minor/major, snow/powder tiers, progressive symptoms, ground exposure on addon snow/dusted dirt (not vanilla snow layers).  
+- **Cures**: minor (golden apple + golden carrot), major (weakness + enchanted golden apple); immunity layers; golden apple snow reduction (codex-gated info).  
+- **Day tracking**, milestones, welcome/daily narrative hooks.  
+- **Player death → infected bear form** with naming / tracking.  
+- **Item corruption** on infected bear death; loot and world feedback tied to design.
 
-### 🎮 Gameplay Enhancements
-- ✅ Infection symptoms (visual effects, random events) - Random effects system with severity-based symptoms
-- [ ] Infection resistance items/armor
-- [ ] Quarantine zones or safe areas
-- [ ] Infection spread mechanics between players (always on in survival by default, with a toggle available in Developer Tools)
-- [ ] Advanced cure recipes and brewing system
-- [ ] Infection prevention items and strategies
+### World & dimensions
+- **Overworld** custom infected biome + **client** fog/sky/water (Custom Biomes experiment).  
+- **Nether & End**: **block-based spawning** on native surfaces; **Nether fire resistance** by bear tier (`mb_dimensionAdaptation.js`); **End** flying/torpedo spawn emphasis scaling with day.  
+- **Dusted dirt** registration and spread-related play; **Emulsifier** zones (fuel queue, dome purification scan, no-spawn bubble, machine UI, dev tools).
 
-### 🏗️ World Building & Environment
-- ✅ Custom "infected" biome for increased Maple Bear activity - `mb:infected_biome` with spawn rules
-- ✅ Client biome visuals (fog/sky) for infected biome - Fog settings, sky colors, water colors implemented
-- [ ] Maple Bear spawn structures and lairs
-- [ ] Infection research facilities and laboratories
-- [ ] Cure crafting stations and medical areas
-- [ ] Warning signs and information boards
-- [ ] Emergency shelters and safe zones
-- [ ] Environmental storytelling elements
+### Storms
+- **Multi-storm** system with drift, intensity, overlap boost, shelter raycasts, persistence, dev hub (summon/end/list/settings/debug).
 
-### 📊 UI/UX Improvements
-- [ ] Real-time infection status HUD element
-- [ ] Progress bars for infection timers
-- ✅ Warning notifications and alerts - Final warning before transformation, day-based notifications, actionbar messages
-- ✅ Enhanced cure attempt feedback - Cure success/failure messages, immunity notifications
-- ✅ Infection spread alerts and world events - Day progression messages, milestone events, daily event logging
-- [ ] Interactive tutorial system for new players
+### Spawn controller
+- Tile/block scanning, caps, weather modifiers, isolated-player optimizations, type toggles.  
+- **Dev hub**: difficulty, speed multiplier, force spawn, **advanced scan tunables**, **presets** (Low → High).
 
-### 🎯 Advanced Mechanics
-- ✅ Multiple infection stages with unique effects - Severity levels 0-4 with progressive effects based on time and snow count
-- [ ] Bear mutation and evolution system
-- [ ] Weather effects on infection rates
-- [ ] Seasonal infection patterns and cycles
-- [ ] Cure research progression tree
-- [ ] Dynamic difficulty scaling based on player count
+### Journal / codex
+- Powdery Journal (`mb:snow_book`): progressive unlocks, search, settings (sound, difficulty, search toggle), achievements (visible when journal held **or** persisted craft/unlock), knowledge sharing near players with book, daily log, biome discovery notes.  
+- Developer Tools: debug categories, day tools, **infection inspect/adjust**, spawn hub, storm hub, emulsifier helpers.
 
-### 🔧 Technical Improvements
-- ✅ Enhanced debug tools for testing and development - Comprehensive debug menu system in snow book with per-category flags (Mining AI, Torpedo AI, Flying AI, Spawn Controller, Main Script)
-- [ ] Performance monitoring and optimization metrics
-- ✅ Advanced error handling and logging systems - Conditional debug logging, error tracking, safe codex operations
-- ✅ Custom debug items with improved UI - Debug menu integrated into snow book codex with Developer Tools section
-- [ ] Automated testing framework
-- ✅ Configuration system for server administrators - Spawn difficulty adjustment (Easy/Normal/Hard/Custom -5 to +5), sound volume controls, search toggle
+### AI & performance
+- Mining / torpedo / flying / buff / infected AI with shared **player/mob caches**, throttled ticks where used, mining leader promotion, adaptive mining strategies.  
+- **Dynamic property handler**: cached, batched, chunked storage.
 
-### 🎨 Content & Polish
-- ✅ Additional bear variants and special types - Flying, Mining, Torpedo, Buff, Infected variants with day-based progression
-  - [ ] **Raptor Flying Bear Variant** - Super rare flying maple bear that can grab players out of the sky (velociraptor-style aerial attack)
-- ✅ Custom sounds and ambient audio - Infected bear sounds, infected cow/pig sounds, snow layer sounds, journal sounds
-- ✅ Enhanced particle effects for infections and cures - White dust particle effects, death particles for infected entities
-- ✅ Custom items, tools, and equipment - Snow item (`mb:snow`), Snow Book (`mb:snow_book`) with codex system
-- ✅ Achievement system with rewards - Day 25 victory achievement, max days survived tracking, post-victory milestones displayed in codex
-- [ ] Seasonal events and special encounters
+### Technical
+- Script API **2.0.0** patterns; defensive effect detection; reduced redundant logging (`DEBUG_SNOW_MECHANICS` legacy flag in `main.js`).  
+- Item registry + item finder utilities.
 
-### 🌌 Dimension & Endgame Expansion
-- [ ] Extend Maple Bear spawning into the Nether (mix of normal variants plus fire-/lava-proof variants; tied into world corruption progression over time)
-- [ ] Extend Maple Bear spawning into the End (increased flying/torpedo bear presence over the void, mixed with existing variants)
-- [ ] Add configuration hooks so certain peaceful or secluded overworld biomes remain low-pressure “safer” zones (no natural Maple Bear spawns or much lower rates)
-- [ ] Design and implement a 100-day endgame structure with milestone spikes (50, 75, 100) and at least one "canon" outcome plus branching outcomes based on player behavior (e.g., heavy dust use vs minimal, how much of the world is corrupted)
-  - [ ] Post-credits world state: World continues after Day 100 with altered rules
-- [ ] Implement wave-day logic on top of the existing linear ramp (short intense bursts AND mini-waves), respecting the global spawn difficulty slider
-- [ ] Implement role ratios over time: early game plague-agent heavy (≈60% spreaders / 40% killers), late game killer heavy (≈60% killers / 40% spreaders), integrated with spawn controller
-- [ ] Implement curing of infected animals into "scarred but special" variants with both mechanical buffs (more health, better drops) and cosmetic changes (corruption scars)
+---
 
-## 🐛 Known Issues & Resolved
-- ✅ Chat event handler not available in API 2.0.0 (replaced with item-based debug system)
-- ✅ Animation controller errors (non-critical, handled gracefully)
-- ✅ Command syntax differences in API 2.0.0 (fixed)
-- ✅ Global object not available in API 2.0.0 (fixed)
-- ✅ Debug log spam (resolved with conditional DEBUG_SNOW_MECHANICS flag)
-- ✅ Performance issues with biome checks (optimized with cooldown system)
-- ✅ Redundant code and unreachable paths (cleaned up)
+## Future features & enhancements
 
-## 📌 Technical Notes
+### Codex & meta
+- [ ] Advanced symptom analytics / charts  
+- [ ] Export/import codex data  
+- [ ] Knowledge tree visualization  
+- [ ] Hidden discoveries / secret lore entries  
 
-### Custom Biomes
-- Custom biomes require enabling the "Custom Biomes" experiment on the world
-- Partial biome replacement is experimental and may change
-- Mixing custom biome generation with existing saved chunks can create seams; test on a fresh world or backup first
+### Gameplay
+- [ ] Infection resistance gear  
+- [ ] Quarantine / safe zones (structured)  
+- [ ] Direct infection spread between players (design + optional world rule / dev toggle)  
+- [ ] Extended brewing / cure recipes  
+- [ ] Prevention items and clearer onboarding tutorial flow  
 
-### Performance Optimizations
-- Biome checks now use 10-second cooldown per player to reduce server load
-- Block placement handlers optimized to only process snow-related blocks
-- Module-scoped functions prevent recreation on every interval
-- Debug logging conditionally enabled to prevent console spam
+### World building
+- [ ] Maple Bear structures / lairs  
+- [ ] Labs, medical stations, warning props, shelters (environmental storytelling)  
 
-### API Compatibility
-- Using API version 2.0.0 with comprehensive safety checks
-- Robust effects detection with 3 fallback methods:
-  1. `getEffect("minecraft:weakness")` - Direct method
-  2. `getEffects()` - List all effects and find weakness  
-  3. Command method - Final fallback (with proper null checking)
+### UI
+- [ ] Dedicated infection HUD / timer bars  
+- [ ] Interactive first-time tutorial  
 
-### Debug System
-- ✅ Comprehensive debug menu system integrated into snow book codex
-- ✅ Per-category debug flags: Mining AI (pitfall, general, target, pathfinding, mining, movement, stairCreation), Torpedo AI (general, targeting, diving, blockBreaking), Flying AI (general, targeting, pathfinding), Spawn Controller (general, tileScanning), Main Script (death, conversion, infection)
-- ✅ Debug settings persistence - Saved per-player via dynamic properties
-- ✅ Developer Tools menu - Reset codex, reset world day, set day, spawn difficulty adjustment, debug menu access
-- ✅ Performance-optimized debug checking - Cached debug state to avoid iterating all players on every call
-- Debug flag: Set `DEBUG_SNOW_MECHANICS = true` in main.js to enable verbose logging (legacy)
+### Advanced mechanics
+- [ ] Bear mutation / evolution lines  
+- [ ] Weather-driven infection rates (beyond current spawn weather modifier)  
+- [ ] Seasonal cycles  
+- [ ] Cure research tree  
+- [ ] Dynamic difficulty from player count  
 
-### 📚 Documentation & Project Organization
-- ✅ Comprehensive documentation index created (`docs/reference/DOCUMENTATION_INDEX.md`)
-- ✅ URL indexing guides created (`docs/reference/INDEXING_URLS.md` and `docs/reference/INDEXING_URLS_VERIFIED.md`)
-- ✅ Updated `docs/reference/USEFUL_LINKS.md` with official documentation resources
-- ✅ Updated README.md with documentation references
-- ✅ Organized documentation resources for AI assistant indexing
-- ✅ Organized all markdown files into `docs/` folder structure (design/, development/, reference/, ai/)
-- [ ] Verify and test documentation URL indexing
-- [ ] Create developer onboarding guide
-- [ ] Document API usage patterns and best practices
-- [ ] Create troubleshooting guide for common issues
+### Technical
+- [ ] In-world performance metrics overlay  
+- [ ] Automated testing harness (limited by Bedrock; still could add more static checks)  
 
-## 🎯 Current Focus Areas
-1. **Stability**: All core systems are stable and performant
-2. **User Experience**: Comprehensive codex system provides rich discovery mechanics
-3. **Performance**: Optimized for server environments with multiple players
-4. **Maintainability**: Clean, well-documented code with centralized systems
-5. **Documentation**: Comprehensive documentation resources organized and indexed 
+### Content & polish
+- [ ] **Raptor flying bear** — rare aerial grab attack variant  
+- [ ] Seasonal / special events  
+- [ ] **Safe biome config** — hooks so selected overworld biomes stay low-pressure  
+- [ ] **Late endgame** — 100-day structure, milestone spikes (50/75/100), branching outcomes, post-credits rules  
+- [ ] Wave / mini-wave spawn layering on top of linear day ramp  
+- [ ] Role ratios over time (spreaders vs killers) in spawn controller  
+- [ ] Cured infected animals → “scarred” buffed variants (mechanical + cosmetic)  
+- [ ] Lava vs fire edge cases for Nether-adapted bears (if needed)  
+
+---
+
+## Known issues & notes
+
+- **Custom biomes**: Experimental; enable **Custom Biomes**; old chunks can **seam** against new generation — test on fresh worlds or backups.  
+- **Chat-based debug**: API 2.0.0 chat limitations led to **item/journal-based** debug flows.  
+- **Animation controller** log noise: handled where possible; often non-fatal.  
+- **Pre-existing**: `tools/updateMiningBlocks.js` needs `minecraft:break_blocks` on mining entities if you regenerate lists (see `AGENTS.md`).
+
+---
+
+## Technical notes
+
+### Performance (historical / ongoing)
+- Biome-related work uses **cooldowns** where applicable to limit scans.  
+- Snow block handlers focus on **addon-relevant** blocks.  
+- Spawn controller reduces **wide-area** entity queries when players are **spread out**.
+
+### Debug
+- **Snow book → Developer Tools → Debug**: per-system flags (mining, torpedo, flying, spawn, main).  
+- **World/script flags** persisted per player where noted in codex.  
+- Verbose legacy logging: `DEBUG_SNOW_MECHANICS` in `main.js`.
+
+### Documentation tasks
+- [ ] Verify external URL indexes against current Microsoft Learn structure  
+- [ ] Developer onboarding guide  
+- [ ] API usage patterns doc (Script API gotchas)  
+- [ ] Troubleshooting guide (pack load, experiments, storm recovery — partial: `docs/development/STORM_TROUBLESHOOTING.md`)  
+
+---
+
+*Last updated: 2026-03-20*

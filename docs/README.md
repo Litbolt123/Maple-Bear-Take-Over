@@ -27,6 +27,7 @@ Technical documentation, planning, and mechanics organized by category:
 
 #### Systems (`development/systems/`)
 - **[SPAWN_SYSTEM_EXPLANATION.md](development/systems/SPAWN_SYSTEM_EXPLANATION.md)** - Explanation of the spawn system
+- **[INFECTION_SYSTEM.md](development/systems/INFECTION_SYSTEM.md)** - Player infection (minor/major), powder tiers, environmental pressure, cures, transformation, mob conversion
 - **[BIOME_GENERATION_VARIABLE_SIZES.md](development/systems/BIOME_GENERATION_VARIABLE_SIZES.md)** - Biome generation with variable sizes
 - **[DIMENSION_ADAPTATIONS.md](development/systems/DIMENSION_ADAPTATIONS.md)** - Dimension-specific adaptations
 - **[LEADER_DEATH_HANDLER.md](development/systems/LEADER_DEATH_HANDLER.md)** - Leader death handling system
@@ -40,6 +41,10 @@ Technical documentation, planning, and mechanics organized by category:
 - **[MECHANICS_SUMMARY.md](development/tracking/MECHANICS_SUMMARY.md)** - Summary of currently implemented game mechanics
 - **[CHANGELOG.md](development/tracking/CHANGELOG.md)** - Project changelog
 - **[SESSION_SUMMARY.md](development/tracking/SESSION_SUMMARY.md)** - Development session summaries
+
+#### Overview (`development/` root)
+- **[ADDON_SYSTEMS_AND_FEATURES.md](development/ADDON_SYSTEMS_AND_FEATURES.md)** - Each script module, JSON systems, and player-facing features
+- **[PROJECT_STATUS.md](development/PROJECT_STATUS.md)** - Snapshot: recently done, gaps, suggested next steps
 
 #### Prompts (`development/prompts/`)
 - **[maple_bear_condensed_prompts.md](development/prompts/maple_bear_condensed_prompts.md)** - Condensed prompts for Maple Bear
@@ -78,7 +83,9 @@ Documentation for team members working on textures, lore, and design:
 ## 🎯 Quick Links
 
 - **New to the project?** Start with [DESIGN_VISION.md](design/DESIGN_VISION.md)
-- **Want to understand mechanics?** Read [MECHANICS_SUMMARY.md](development/MECHANICS_SUMMARY.md)
+- **Architecture & features?** Read [ADDON_SYSTEMS_AND_FEATURES.md](development/ADDON_SYSTEMS_AND_FEATURES.md)
+- **Current status & next steps?** See [PROJECT_STATUS.md](development/PROJECT_STATUS.md)
+- **Want mechanics detail?** Read [MECHANICS_SUMMARY.md](development/tracking/MECHANICS_SUMMARY.md)
 - **Looking for feature ideas?** Check [IDEA_BRAINSTORM.md](development/IDEA_BRAINSTORM.md)
 - **Need development resources?** See [DOCUMENTATION_INDEX.md](reference/DOCUMENTATION_INDEX.md)
 
