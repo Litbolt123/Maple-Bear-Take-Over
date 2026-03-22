@@ -936,6 +936,13 @@ export function checkKnowledgeProgression(player) {
     if (codex.biomes.infectedBiomeSeen) {
         updateKnowledgeLevel(player, 'biomeLevel', 1); // Basic awareness
     }
+    const infBiomeVisits = codex.biomeData?.mb_infected_biome?.visitCount || 0;
+    if (infBiomeVisits >= 3 || codex.biomes.dustedDirtGroundEffectSeen || codex.biomes.snowLayerGroundEffectSeen || codex.biomes.biomeAmbientPressureSeen) {
+        updateKnowledgeLevel(player, "biomeLevel", 2);
+    }
+    if (infBiomeVisits >= 8 || codex.biomes.minorToMajorFromGround || codex.biomes.majorSnowIncreaseFromGround) {
+        updateKnowledgeLevel(player, "biomeLevel", 3);
+    }
 }
 
 // Biome infection tracking system
@@ -1354,11 +1361,16 @@ export function showCodexBook(player, context) {
             return !!end && Date.now() < end;
         })();
         const summary = [];
-        
+        const infectionSectionEverViewed = !!codex.journal?.sectionLastViewed?.infection;
+        const timelineSectionEverViewed = !!codex.journal?.sectionLastViewed?.timeline;
+        const minorCuredFlag = getPlayerProperty(player, "mb_minor_infection_cured") === true;
+        const immunityStoryOnSummary = infectionSectionEverViewed || getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true || immune || (codex.history?.totalCures || 0) > 0 || minorCuredFlag;
+
         // Add current day
         const currentDay = getCurrentDay ? getCurrentDay() : 0;
         const display = typeof getDayDisplayInfo === 'function' ? getDayDisplayInfo(currentDay) : { color: '§f', symbols: '' };
-        summary.push(`${display.color}${display.symbols} Current Day: ${currentDay}`);
+        const dayFlair = (currentDay >= 2 || timelineSectionEverViewed) ? `${display.color}${display.symbols} ` : "";
+        summary.push(`${dayFlair}Current Day: ${currentDay}`);
         
         // Health status logic - progressive based on knowledge
         let infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
@@ -1458,33 +1470,33 @@ export function showCodexBook(player, context) {
                 summary.push(`§eStatus: §aHealthy (Permanently Immune)`);
                 summary.push(`§7You are permanently immune to minor infection.`);
                 summary.push(`§7You require ${addonHits.hitsBase} hits from Maple Bears to get infected.`);
-            } else if (hasBeenInfected && infectionKnowledge >= 1) {
+            } else if (hasBeenInfected && infectionKnowledge >= 1 && (infectionSectionEverViewed || (codex.history?.totalCures || 0) > 0 || minorCuredFlag)) {
                 summary.push(`§eStatus: §aHealthy (Previously Infected)`);
             } else {
                 summary.push(`§eStatus: §aHealthy`);
             }
         }
 
-        // Show immunity status - progressive: only show if have experienced immunity or have Powdery Journal with knowledge
+        // Show immunity status - hide on home until infection section read or a real immunity/cure beat
         const hasPermanentImmunity = getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY) === true;
         const hasExperiencedImmunity = hasPermanentImmunity || (immune && codex.status.immuneKnown);
-        if (hasPowderyJournal && (hasExperiencedImmunity || infectionKnowledge >= 1)) {
-            if (hasPermanentImmunity) {
-                summary.push("§bImmunity: §aPERMANENT");
-            } else if (immune && codex.status.immuneKnown) {
-                // Temporary immunity from major infection cure
-                const end = curedPlayers.get(player.id);
-                const remainingMs = Math.max(0, end - Date.now());
-                summary.push(`§bImmunity: §fACTIVE (§b${formatMillisDuration(remainingMs)} left§f)`);
-            } else if (hasPowderyJournal && infectionKnowledge >= 1) {
-                summary.push("§bImmunity: §7None");
-            }
-        } else if (!hasPowderyJournal && hasExperiencedImmunity) {
-            // Basic journal - only show if actually have immunity
-            if (hasPermanentImmunity) {
-                summary.push("§bImmunity: §aPERMANENT");
-            } else if (immune) {
-                summary.push("§bImmunity: §fACTIVE");
+        if (immunityStoryOnSummary) {
+            if (hasPowderyJournal && (hasExperiencedImmunity || infectionKnowledge >= 1)) {
+                if (hasPermanentImmunity) {
+                    summary.push("§bImmunity: §aPERMANENT");
+                } else if (immune && codex.status.immuneKnown) {
+                    const end = curedPlayers.get(player.id);
+                    const remainingMs = Math.max(0, end - Date.now());
+                    summary.push(`§bImmunity: §fACTIVE (§b${formatMillisDuration(remainingMs)} left§f)`);
+                } else if (hasPowderyJournal && infectionKnowledge >= 1 && infectionSectionEverViewed) {
+                    summary.push("§bImmunity: §7None");
+                }
+            } else if (!hasPowderyJournal && hasExperiencedImmunity) {
+                if (hasPermanentImmunity) {
+                    summary.push("§bImmunity: §aPERMANENT");
+                } else if (immune) {
+                    summary.push("§bImmunity: §fACTIVE");
+                }
             }
         }
 
@@ -1910,27 +1922,29 @@ export function showCodexBook(player, context) {
                 lines.push("§8The journal leaves blanks until you live through more of the infection.");
             }
             
-            // Add infection history if available
+            // Add infection history if available (metrics unlock as they become true)
             if (codex.history.totalInfections > 0) {
                 lines.push("");
                 lines.push("§6Infection History:");
                 lines.push(`§7Total Infections: §f${codex.history.totalInfections}`);
-                lines.push(`§7Total Cures: §f${codex.history.totalCures}`);
+                if ((codex.history.totalCures || 0) > 0) {
+                    lines.push(`§7Total Cures: §f${codex.history.totalCures}`);
+                }
                 if (minorInfectionCured) {
                     lines.push(`§7Minor Infection Cured: §aYes (Permanent Immunity)`);
                 }
-                
+
                 if (codex.history.firstInfectionAt > 0) {
                     const firstDate = new Date(codex.history.firstInfectionAt);
                     lines.push(`§7First Infection: §f${firstDate.toLocaleDateString()}`);
                 }
-                
+
                 if (codex.history.lastInfectionAt > 0) {
                     const lastDate = new Date(codex.history.lastInfectionAt);
                     lines.push(`§7Last Infection: §f${lastDate.toLocaleDateString()}`);
                 }
-                
-                if (codex.history.lastCureAt > 0) {
+
+                if ((codex.history.totalCures || 0) > 0 && codex.history.lastCureAt > 0) {
                     const lastCureDate = new Date(codex.history.lastCureAt);
                     lines.push(`§7Last Cure: §f${lastCureDate.toLocaleDateString()}`);
                 }
@@ -2077,7 +2091,7 @@ export function showCodexBook(player, context) {
             "§6Major infection §7tends to cough §fmore often§7 and §flouder§7 than minor. Standing on corrupted ground or being in a §6dust storm §7makes fits more likely.",
             "",
             "§ePowdery Journal → Settings:",
-            "§7• §fInfection sounds you make §7— Off / Low / High (your coughs, hiccups, cure sigh). Off means others won't hear those cues from you either.",
+            "§7• §fInfection sounds you make §7— Off / Low / High (your coughs, hiccups, cure sigh). §8Off §7= only §oyou §7hear them quietly; nearby players do not. Low/High = others can hear (scaled by their \"hear others\" setting).",
             "§7• §fHearing others' infection sounds §7— how loudly you hear nearby players' infection noises.",
             "",
             "§8Cures can come with a short sigh of relief— nearby players may hear that too."
@@ -2149,16 +2163,23 @@ export function showCodexBook(player, context) {
                 let body = "§e???";
                 if (known) {
                     const meta = (codex.symptomsMeta || {})[e.id] || {};
-                    const srcs = Object.keys(meta.sources || {}).length ? Object.keys(meta.sources).join(", ") : "unknown";
-                    const minDur = meta.minDuration != null ? Math.floor((meta.minDuration || 0) / 20) : "?";
-                    const maxDur = meta.maxDuration != null ? Math.floor((meta.maxDuration || 0) / 20) : "?";
-                    const minAmp = meta.minAmp != null ? meta.minAmp : "?";
-                    const maxAmp = meta.maxAmp != null ? meta.maxAmp : "?";
-                    const timing = meta.timing || {}; 
-                    const timingStr = [timing.early ? `early(${timing.early})` : null, timing.mid ? `mid(${timing.mid})` : null, timing.late ? `late(${timing.late})` : null].filter(Boolean).join(", ") || "unknown";
-                    const sc = meta.snowCounts || {};
-                    const snowStr = [sc.low ? `1-5(${sc.low})` : null, sc.mid ? `6-10(${sc.mid})` : null, sc.high ? `11+(${sc.high})` : null].filter(Boolean).join(", ") || "-";
-                    body = `§e${e.title}\n§7Sources: §f${srcs}\n§7Duration: §f${minDur}s - ${maxDur}s\n§7Amplifier: §f${minAmp} - ${maxAmp}\n§7Timing: §f${timingStr}\n§7"Snow" Count: §f${snowStr}`;
+                    const timing = meta.timing || {};
+                    const episodes = (timing.early || 0) + (timing.mid || 0) + (timing.late || 0);
+                    const deepSymptomLog = episodes >= 5;
+                    body = `§e${e.title}\n§7The journal marks this as a symptom of the infection.`;
+                    if (deepSymptomLog) {
+                        const srcs = Object.keys(meta.sources || {}).length ? Object.keys(meta.sources).join(", ") : "unknown";
+                        const minDur = meta.minDuration != null ? Math.floor((meta.minDuration || 0) / 20) : "?";
+                        const maxDur = meta.maxDuration != null ? Math.floor((meta.maxDuration || 0) / 20) : "?";
+                        const minAmp = meta.minAmp != null ? meta.minAmp : "?";
+                        const maxAmp = meta.maxAmp != null ? meta.maxAmp : "?";
+                        const timingStr = [timing.early ? `early(${timing.early})` : null, timing.mid ? `mid(${timing.mid})` : null, timing.late ? `late(${timing.late})` : null].filter(Boolean).join(", ") || "unknown";
+                        const sc = meta.snowCounts || {};
+                        const snowStr = [sc.low ? `1-5(${sc.low})` : null, sc.mid ? `6-10(${sc.mid})` : null, sc.high ? `11+(${sc.high})` : null].filter(Boolean).join(", ") || "-";
+                        body += `\n\n§6Detailed log:\n§7Sources: §f${srcs}\n§7Duration: §f${minDur}s - ${maxDur}s\n§7Amplifier: §f${minAmp} - ${maxAmp}\n§7Timing: §f${timingStr}\n§7"Snow" Count: §f${snowStr}`;
+                    } else {
+                        body += `\n\n§8After more separate episodes, the journal will fill in durations, sources, and patterns.`;
+                    }
                 }
                 new ActionFormData().title(`§6Infection Symptoms: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
                     const volumeMultiplier = getPlayerSoundVolume(player);
@@ -2231,8 +2252,15 @@ export function showCodexBook(player, context) {
                 let body = "§e???";
                 if (known) {
                     const effectType = e.type === "positive" ? "§aBeneficial" : "§cHarmful";
-                    const description = e.type === "positive" ? "This effect provides benefits when consumed with \"snow\"." : "This effect causes negative effects when consumed with \"snow\".";
-                    body = `§e${e.title}\n§7Type: ${effectType}\n§7Description: §f${description}\n\n§7This effect can be obtained by consuming \"snow\" while infected. The chance and intensity depend on your infection level.`;
+                    const snowFxSeen = Object.values(codex.snowEffects || {}).filter(Boolean).length;
+                    const snowDeep = getKnowledgeLevel(player, "snowLevel") >= 2 || snowFxSeen >= 3;
+                    body = `§e${e.title}\n§7Type: ${effectType}\n§7Recorded after eating powder during infection.`;
+                    if (snowDeep) {
+                        const description = e.type === "positive" ? "This effect provides benefits when consumed with \"snow\"." : "This effect causes negative effects when consumed with \"snow\".";
+                        body += `\n\n§7Description: §f${description}\n\n§6Mechanics:\n§7Chance and strength scale with your infection level and how deep the powder has sunk into you.`;
+                    } else {
+                        body += `\n\n§8More mechanics unlock as you map more powder effects or study powder longer.`;
+                    }
                 }
                 new ActionFormData().title(`§6"Snow" Effects: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
                     const volumeMultiplier = getPlayerSoundVolume(player);
@@ -2256,46 +2284,46 @@ export function showCodexBook(player, context) {
         // Check if maxSnow exists, otherwise use 0
         const maxLevel = maxSnow ? maxSnow.maxLevel : 0;
         let body = `§eMaximum Infection Level Achieved: §f${maxLevel.toFixed(1)}\n\n`;
-        if (maxLevel < 5) {
+        if (maxLevel < 1) {
             body += `§7Higher tiers stay blank until your \"snow\" level actually reaches them. Eat powder while infected and revisit this page.\n\n`;
         }
 
-        // Detailed analysis based on experience
-        if (maxLevel >= 5) {
+        // Tier names and notes only after entering that band (not merely from a higher peak elsewhere)
+        if (maxLevel >= 1) {
             body += `§7Tier 1 (1-5): §fThe Awakening\n`;
             body += `§7• Time effect: +5% infection time\n`;
             body += `§7• Effects: Mild random potions (weakness, nausea)\n`;
             body += `§7• Duration: 10 seconds\n`;
         }
-        
-        if (maxLevel >= 10) {
+
+        if (maxLevel >= 6) {
             body += `\n§7Tier 2 (6-10): §fThe Craving\n`;
             body += `§7• Time effect: No change\n`;
             body += `§7• Effects: Moderate random potions (weakness, nausea, slowness)\n`;
             body += `§7• Duration: 15 seconds\n`;
         }
-        
-        if (maxLevel >= 20) {
+
+        if (maxLevel >= 11) {
             body += `\n§7Tier 3 (11-20): §fThe Descent\n`;
             body += `§7• Time effect: -1% infection time\n`;
             body += `§7• Effects: Strong random potions (weakness, nausea, slowness, blindness)\n`;
             body += `§7• Duration: 20 seconds\n`;
         }
-        
-        if (maxLevel >= 50) {
+
+        if (maxLevel >= 21) {
             body += `\n§7Tier 4 (21-50): §fThe Void\n`;
             body += `§7• Time effect: -2.5% infection time\n`;
             body += `§7• Effects: Severe random potions (weakness, nausea, slowness, blindness, hunger)\n`;
             body += `§7• Duration: 25 seconds\n`;
         }
-        
-        if (maxLevel >= 100) {
+
+        if (maxLevel >= 51) {
             body += `\n§7Tier 5 (51-100): §fThe Abyss\n`;
             body += `§7• Time effect: -5% infection time\n`;
             body += `§7• Effects: Extreme random potions (all effects + mining fatigue)\n`;
             body += `§7• Duration: 30 seconds\n`;
         }
-        
+
         if (maxLevel > 100) {
             body += `\n§7Tier 6 (100+): §fThe Black Void\n`;
             body += `§7• Time effect: -15% infection time\n`;
@@ -2311,7 +2339,11 @@ export function showCodexBook(player, context) {
             if (currentSnow > 0) {
                 const tier = currentSnow <= 5 ? 1 : currentSnow <= 10 ? 2 : currentSnow <= 20 ? 3 : currentSnow <= 50 ? 4 : currentSnow <= 100 ? 5 : 6;
                 const tierName = currentSnow <= 5 ? "The Awakening" : currentSnow <= 10 ? "The Craving" : currentSnow <= 20 ? "The Descent" : currentSnow <= 50 ? "The Void" : currentSnow <= 100 ? "The Abyss" : "The Black Void";
-                body += `\n§7Current Tier: §f${tier} (${tierName})`;
+                const maxEver = maxLevel;
+                const nameKnown = (tier === 1 && maxEver >= 1) || (tier === 2 && maxEver >= 6) || (tier === 3 && maxEver >= 11) || (tier === 4 && maxEver >= 21) || (tier === 5 && maxEver >= 51) || (tier === 6 && maxEver > 100);
+                body += nameKnown
+                    ? `\n§7Current Tier: §f${tier} (${tierName})`
+                    : `\n§7Current Tier: §f${tier} §8(?) §7— chart this band in the table above to name it`;
             }
         }
         
@@ -2445,6 +2477,35 @@ export function showCodexBook(player, context) {
         });
     }
 
+    /** True if this mob type has actually triggered the given day-tier variant flag (not only the global day flag). */
+    function mobDayVariantUnlocked(codex, mobKey, day) {
+        const m = codex.mobs || {};
+        if (day === 4) {
+            if (mobKey === "mapleBearSeen") return !!m.day4VariantsUnlockedTiny;
+            if (mobKey === "infectedBearSeen" || mobKey === "infectedPigSeen" || mobKey === "infectedCowSeen") return !!m.day4VariantsUnlockedInfected;
+            if (mobKey === "buffBearSeen") return !!m.day4VariantsUnlockedBuff;
+            if (mobKey === "flyingBearSeen" || mobKey === "miningBearSeen" || mobKey === "torpedoBearSeen") return !!m.day4VariantsUnlockedOther;
+            return !!m.day4VariantsUnlocked;
+        }
+        if (day === 8) {
+            const g8 = !!m.day8VariantsUnlocked;
+            if (mobKey === "mapleBearSeen") return !!(m.day8VariantsUnlockedTiny || g8);
+            if (mobKey === "infectedBearSeen" || mobKey === "infectedPigSeen" || mobKey === "infectedCowSeen") return !!(m.day8VariantsUnlockedInfected || g8);
+            if (mobKey === "buffBearSeen") return !!(m.day8VariantsUnlockedBuff || g8);
+            if (mobKey === "flyingBearSeen" || mobKey === "miningBearSeen" || mobKey === "torpedoBearSeen") return !!(m.day8VariantsUnlockedOther || g8);
+            return g8;
+        }
+        if (day === 13) {
+            const g13 = !!m.day13VariantsUnlocked;
+            if (mobKey === "mapleBearSeen") return !!(m.day13VariantsUnlockedTiny || g13);
+            if (mobKey === "infectedBearSeen" || mobKey === "infectedPigSeen" || mobKey === "infectedCowSeen") return !!(m.day13VariantsUnlockedInfected || g13);
+            if (mobKey === "buffBearSeen") return !!(m.day13VariantsUnlockedBuff || g13);
+            if (mobKey === "flyingBearSeen" || mobKey === "miningBearSeen" || mobKey === "torpedoBearSeen") return !!(m.day13VariantsUnlockedOther || g13);
+            return g13;
+        }
+        return false;
+    }
+
     function openMobs() {
         markSectionViewed(player, "mobs");
         const codex = getCodex(player);
@@ -2555,8 +2616,8 @@ export function showCodexBook(player, context) {
                             body += `\n\n§6Field Notes:\n§7Airborne battering rams that streak toward sky bases and burst into powdery shrapnel.`;
                         }
 
-                        // Detailed stats (available at knowledge level 2)
-                        if (bearKnowledge >= 2 && killCount >= 25) {
+                        // Detailed stats (knowledge 2 + enough field time)
+                        if (bearKnowledge >= 2 && killCount >= 40) {
                             body += `\n\n§6Combat Analysis:`;
                             if (e.key === "mapleBearSeen") {
                                 body += `\n§7Drop Rate: 60% chance\n§7Loot: 1 "snow" item\n§7Health: 1 HP\n§7Damage: 1`;
@@ -2588,7 +2649,7 @@ export function showCodexBook(player, context) {
                             const day13Threshold = isBuffBear ? 5 : 100; // Max info at 5 kills for Buff Bears
                             const day20Threshold = isBuffBear ? 8 : 150;
 
-                            if (codex.mobs.day4VariantsUnlocked && killCount >= day4Threshold && !isBuffBear) {
+                            if (mobDayVariantUnlocked(codex, e.key, 4) && killCount >= day4Threshold && !isBuffBear) {
                                 variantInfo += `\n\n§eDay 4+ Variants:`;
                                 hasVariants = true;
                                 if (e.key === "mapleBearSeen") {
@@ -2602,7 +2663,7 @@ export function showCodexBook(player, context) {
                                 }
                             }
 
-                            if (codex.mobs.day8VariantsUnlocked && killCount >= day8Threshold && !isBuffBear) {
+                            if (mobDayVariantUnlocked(codex, e.key, 8) && killCount >= day8Threshold && !isBuffBear) {
                                 variantInfo += `\n\n§eDay 8+ Variants:`;
                                 hasVariants = true;
                                 if (e.key === "mapleBearSeen") {
@@ -2616,7 +2677,7 @@ export function showCodexBook(player, context) {
                                 }
                             }
 
-                            if (codex.mobs.day13VariantsUnlocked && killCount >= day13Threshold) {
+                            if (mobDayVariantUnlocked(codex, e.key, 13) && killCount >= day13Threshold) {
                                 variantInfo += `\n\n§eDay 13+ Variants:`;
                                 hasVariants = true;
                                 if (e.key === "mapleBearSeen") {
@@ -3396,19 +3457,26 @@ export function showCodexBook(player, context) {
             }
         }
 
-        // Storm Entry
+        // Storm Entry (subtype text only after you've been in that storm class)
         if (codex.biomes.stormSeen) {
             hasEntries = true;
-            const stormKnowledge = (codex.biomes.stormMinorSeen ? 1 : 0) + (codex.biomes.stormMajorSeen ? 1 : 0);
+            const minorS = !!codex.biomes.stormMinorSeen;
+            const majorS = !!codex.biomes.stormMajorSeen;
             body += "§fInfection Storm\n";
-            if (stormKnowledge >= 2) {
+            if (minorS && majorS) {
                 body += "§7A moving wall of white dust that sweeps across the land. Bears spawn inside it. Standing in it causes blindness and speeds infection—similar to standing on corrupted blocks, but worse. You can hear it from far away.\n\n";
                 body += "§6Storm Types:\n§7Minor storms are smaller and shorter. Major storms are larger, last longer, and place more dust. After day 20, only major storms occur.\n\n";
                 body += "§6Expert Notes:\n§7The storm carries the infection through the air. Maple Bears thrive in it.";
-            } else if (stormKnowledge >= 1) {
-                body += "§7A moving wall of white dust. It blinds you and speeds infection. You can hear it from a distance before it reaches you.";
+            } else if (minorS) {
+                body += "§7You've weathered a §fsmaller §7dust storm: it blinds you, speeds infection like bad ground, and you hear it before it hits.\n\n";
+                body += "§8??? §7(Larger storm class not logged yet.)\n\n";
+                body += "§6Expert Notes:\n§7The storm carries infection through the air—bears use it as cover.";
+            } else if (majorS) {
+                body += "§7You've been inside a §4major §7dust storm: huge, lasting, heavy placement, worse than corrupted soil underfoot. Sound carries for blocks.\n\n";
+                body += "§8??? §7(Smaller storm class not logged yet.)\n\n";
+                body += "§6Expert Notes:\n§7After day 20, only this class is said to roam.";
             } else {
-                body += "§7A wall of white dust that moves across the land. It blinds you and spreads the infection.";
+                body += "§7A wall of white dust that moves across the land. It blinds you and spreads the infection.\n\n§8Survive inside specific storm sizes to split minor vs major notes.";
             }
             body += "\n\n";
         }
@@ -3687,13 +3755,12 @@ export function showCodexBook(player, context) {
         
         for (const range of progressionRanges) {
             if (currentDay >= range.maxDay || (range.isVictory && currentDay >= 24)) {
-                // Show reached ranges
-                body += `§7${range.range}: ${range.color}${range.label}\n`;
+                const labelClear = range.isVictory ? currentDay >= 25 : currentDay >= range.maxDay;
+                const lbl = labelClear ? `${range.color}${range.label}` : `§8???`;
+                body += `§7${range.range}: ${lbl}\n`;
             } else if (currentDay >= range.maxDay - 2) {
-                // Show upcoming range within 2 days
                 body += `§8${range.range}: §8??? §7(Approaching)\n`;
             } else {
-                // Hide future ranges
                 body += `§8${range.range}: §8???\n`;
             }
         }
@@ -3701,24 +3768,22 @@ export function showCodexBook(player, context) {
         // Post-victory progression - only show if victory achieved
         if (currentDay > 25) {
             const postVictoryRanges = [
-                { range: "Days 26-33", label: "Escalating", color: "§c", maxDay: 33 },
-                { range: "Days 34-41", label: "Intensifying", color: "§4", maxDay: 41 },
-                { range: "Days 42-49", label: "Extreme", color: "§5", maxDay: 49 },
-                { range: "Day 50", label: "Milestone", color: "§5", maxDay: 50, isMilestone: true },
-                { range: "Days 51-62", label: "Deepening", color: "§5", maxDay: 62 },
-                { range: "Days 63-74", label: "Darkening", color: "§5", maxDay: 74 },
-                { range: "Day 75", label: "Milestone", color: "§5", maxDay: 75, isMilestone: true },
-                { range: "Days 76-87", label: "Void Approaching", color: "§0", maxDay: 87 },
-                { range: "Days 88-99", label: "The End Nears", color: "§0", maxDay: 99 },
-                { range: "Day 100", label: "Final Milestone", color: "§0", maxDay: 100, isMilestone: true },
-                { range: "Days 101+", label: "Beyond", color: "§0", maxDay: Infinity }
+                { range: "Days 26-33", label: "Escalating", color: "§c", minDay: 26 },
+                { range: "Days 34-41", label: "Intensifying", color: "§4", minDay: 34 },
+                { range: "Days 42-49", label: "Extreme", color: "§5", minDay: 42 },
+                { range: "Day 50", label: "Milestone", color: "§5", minDay: 50 },
+                { range: "Days 51-62", label: "Deepening", color: "§5", minDay: 51 },
+                { range: "Days 63-74", label: "Darkening", color: "§5", minDay: 63 },
+                { range: "Day 75", label: "Milestone", color: "§5", minDay: 75 },
+                { range: "Days 76-87", label: "Void Approaching", color: "§0", minDay: 76 },
+                { range: "Days 88-99", label: "The End Nears", color: "§0", minDay: 88 },
+                { range: "Day 100", label: "Final Milestone", color: "§0", minDay: 100 },
+                { range: "Days 101+", label: "Beyond", color: "§0", minDay: 101 }
             ];
-            
+
             for (const range of postVictoryRanges) {
-                if (currentDay >= range.maxDay) {
+                if (currentDay >= range.minDay) {
                     body += `§7${range.range}: ${range.color}${range.label}\n`;
-                } else if (range.maxDay === Infinity || currentDay >= range.maxDay - 2) {
-                    body += `§8${range.range}: §8??? §7(Approaching)\n`;
                 } else {
                     body += `§8${range.range}: §8???\n`;
                 }
@@ -7239,7 +7304,7 @@ function playJournalIntroAudio(player) {
 
 function showGoalScreen(player) {
     const form = new ActionFormData().title("§6Your Goal");
-    form.body(`§eThe Infection\n\n§7Your world has been infected by a mysterious white powder. Strange creatures called "Maple Bears" are spreading this infection.\n\n§eYour Objectives:\n§7• Survive the infection.\n§7• Discover how to cure yourself.\n§7• Learn about the bears and their behavior.\n§7• Upgrade this journal to track your progress and find the cure.\n§7• Find a way to cure your infection before you degrade and it worsens.\n\n§cIMPORTANT: §7Upgrading your journal is essential for discovering cures and tracking your infection status. Without the upgraded journal, you won't be able to learn crucial information about infections, cures, and treatments.\n\n§7The infection gets worse over time. Stay alert!`);
+    form.body(`§eThe Infection\n\n§7Your world has been infected by a mysterious white powder. Strange creatures called "Maple Bears" are spreading this infection.\n\n§eYour Objectives:\n§7• Survive the infection.\n§7• Discover how to cure yourself.\n§7• Learn about the bears and their behavior.\n§7• Upgrade this journal to track your progress and find the cure.\n§7• Find a way to cure your infection before you degrade and it worsens.\n\n§eInfection time: §7This book does not show time left while infected. §fPowdery Journal §7(§aRecipe §7on the main screen) does.\n\n§cIMPORTANT: §7Upgrading your journal is essential for discovering cures and tracking your infection status. Without the upgraded journal, you won't be able to learn crucial information about infections, cures, and treatments.\n\n§7The infection gets worse over time. Stay alert!`);
     form.button("§8Back");
     form.show(player).then((res) => {
         if (res.canceled) {

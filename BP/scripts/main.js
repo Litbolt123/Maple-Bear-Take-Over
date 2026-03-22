@@ -4638,7 +4638,8 @@ system.runInterval(() => {
         // Ambient infection cough / rare dust breath (audible to nearby players; settings in journal)
         try {
             const gm = player.getGameMode?.();
-            if (gm !== "creative" && gm !== "spectator" && !introInProgress.has(id)) {
+            // Spectator skips body cues; creative still runs so cough / rare breath work while testing infected
+            if (gm !== "spectator" && !introInProgress.has(id)) {
                 let environmentSynergy = false;
                 try {
                     const gc = isStandingOnInfectedGround(player);

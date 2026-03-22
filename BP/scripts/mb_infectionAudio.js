@@ -56,14 +56,14 @@ function distSq(ax, ay, az, bx, by, bz) {
 export function playInfectionSpatialSound(sourcePlayer, soundId, pitch, baseVolume, radius, getEmitterTier, getHearOthersTier, getMasterVolume) {
     if (!sourcePlayer?.isValid || !soundId) return false;
     const emitterTier = Math.max(0, Math.min(2, Math.floor(getEmitterTier(sourcePlayer) ?? 2)));
-    if (emitterTier === 0) return false;
+    /** Tier 0 = do not broadcast to others; you still hear yourself quietly (matches journal copy). */
+    const emitterMutedForOthers = emitterTier === 0;
 
     const dim = sourcePlayer.dimension;
     const loc = sourcePlayer.location;
     if (!dim || !loc) return false;
 
     const r2 = radius * radius;
-    const emitterMul = EMITTER_TIER_MUL[emitterTier] ?? 1;
     let any = false;
 
     for (const p of world.getPlayers()) {
@@ -73,6 +73,8 @@ export function playInfectionSpatialSound(sourcePlayer, soundId, pitch, baseVolu
         if (distSq(loc.x, loc.y, loc.z, pl.x, pl.y, pl.z) > r2) continue;
 
         const isSelf = p.id === sourcePlayer.id;
+        if (emitterMutedForOthers && !isSelf) continue;
+
         let hearMul = 1;
         if (!isSelf) {
             const ht = Math.max(0, Math.min(2, Math.floor(getHearOthersTier(p) ?? 2)));
@@ -81,6 +83,10 @@ export function playInfectionSpatialSound(sourcePlayer, soundId, pitch, baseVolu
         }
 
         const master = Math.max(0, Math.min(1, getMasterVolume(p) ?? 1));
+        let emitterMul = EMITTER_TIER_MUL[emitterTier] ?? 1;
+        if (emitterMutedForOthers && isSelf) {
+            emitterMul = 0.58;
+        }
         const vol = Math.max(0, Math.min(1, baseVolume * emitterMul * hearMul * master));
         if (vol <= 0) continue;
         try {
@@ -146,7 +152,7 @@ export function tickInfectionCoughAndBreath(sourcePlayer, infectionState, ctx) {
         }
     }
 
-    // --- Dust breath (very rare particle only) ---
+    // --- Dust breath: rare particle + `mb.infection_cough_major` (RP picks a random major cough file per play)
     const breathCooldown = 5600;
     const lastB = lastDustBreathTickByPlayer.get(pid) ?? -1e9;
     if (now - lastB >= breathCooldown && Math.random() < 0.095 * synergy) {
@@ -158,6 +164,18 @@ export function tickInfectionCoughAndBreath(sourcePlayer, infectionState, ctx) {
                 dim.spawnParticle("mb:white_dust_particle", { x: l.x, y: l.y + 1.2, z: l.z });
             }
         } catch { /* ignore */ }
+        const breathVol = BASE_DEFINITION_ATTENUATION * MAJOR_VOLUME_MULT * (0.36 + Math.random() * 0.12);
+        const breathPitch = 0.96 + Math.random() * 0.12;
+        playInfectionSpatialSound(
+            sourcePlayer,
+            COUGH_SOUND_MAJOR,
+            breathPitch,
+            breathVol,
+            COUGH_RADIUS,
+            ctx.getEmitterTier,
+            ctx.getHearOthersTier,
+            ctx.getMasterVolume
+        );
         out.playedBreath = true;
     }
 

@@ -2,12 +2,25 @@
 
 ## Recent Changes (Latest Session)
 
+### Infection cough audio vs settings / creative (2026-03-22)
+- **`mb_infectionAudio.js`**: Emitter tier **Off** — **you** still get quiet cough/hiccup/sigh; others hear nothing. **Dust breath**: particle + **`mb.infection_cough_major`** (random variant from definitions), softer gain than a normal major cough; no separate emitter gate on the breath roll. **`main.js`**: Cough/breath in **creative** too (not **spectator**). **`mb_codex.js`**: Symptoms copy for Off / Low / High; **Basic → Your Goal** infection-time line kept **short**.
+
 ### Powdery Journal: experience-gated lore (2026-03-22)
 - **`BP/scripts/mb_codex.js`**
   - **Infection → Infection Mechanics:** bullets unlock only after relevant play (bear hits/discovery, minor/major seen, infection effects, snow/powder affecting major timer, day ≥3 + infection footprint, day ≥20 for full-kill conversion line). If none apply: placeholder `???` text.
   - **Symptoms → Infection level analysis:** no longer opens from “infected with zero snow” alone; needs snow discovery, max snow level, `snow` infection discovery, or current snow count > 0 (or dev unlock flag).
   - **Infection level analysis page:** short note when max snow &lt; 5 that higher tiers fill in after actually reaching those levels.
   - **Timeline → Days & Milestones:** milestone *titles* stay `???` until the matching encounter (e.g. Day 2 needs Tiny Maple Bear seen; Day 4 needs an infected mob seen; Days 8/13/15/17 need that mob type seen; Days 11/20/25 use calendar survival). Hint line when a day is passed but the note is still locked. **Day 20 “Knowledge”** paragraphs require major infection, storm, or Day-20-variant exposure—not day count alone.
+
+### Powdery + Basic journal progressive pass (2026-03-22)
+- **Powdery home (`buildSummary`):** “Previously infected” and **immunity** lines wait until **Infection** section viewed once or a cure/immunity beat; **“Immunity: None”** only after opening Infection. **Day** color/symbols until day ≥2 or **Timeline** opened once.
+- **Infection → History:** “Total cures” / “Last cure” only after first cure.
+- **Basic Journal → Your Goal:** **Infection time** bullets — basic book has no countdown; **Powdery Journal** (recipe on main screen) shows time left + fuller log (not on Basic main menu).
+- **Snow tiers:** named blocks unlock at band **entry** (1, 6, 11, 21, 51, >100); live tier **name** gated on max-ever in that band.
+- **Symptom detail:** stub then **detailed log** after ≥5 `symptomsMeta` episodes. **Snow effect detail:** mechanics after snow level 2 or ≥3 effects seen.
+- **Timeline:** **Victory** label hidden until day 25; **post-victory** rows need `minDay` reached for labels.
+- **Mobs:** combat stats at **40+** kills; day-4 variant text uses per-type flags; day 8/13 fall back to **global** unlock if per-type unset (`main.js`).
+- **Biome knowledge:** level 2/3 from visits + ground/ambient discoveries (`checkKnowledgeProgression`). **Storms:** minor vs major copy split by `stormMinorSeen` / `stormMajorSeen`.
 
 ### Infection body sound volumes (2026-03-22)
 - **`RP/sounds/sound_definitions.json`**: Cough minor/major and powder hiccup per-file **volume 0.68** (two decimals; ~−9% vs 0.75). Cure sigh minor/major **0.34** (~−10% then ~−50% vs original 0.75). Script `BASE_DEFINITION_ATTENUATION` unchanged; gain still applied in `mb_infectionAudio.js`.
