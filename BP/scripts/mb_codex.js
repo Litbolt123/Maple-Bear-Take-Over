@@ -4196,7 +4196,7 @@ export function showCodexBook(player, context) {
         { id: "spawn_controller", label: "Spawn Controller", action: () => openSpawnControllerMenu() },
         { id: "clear_bears", label: "Clear Bears", action: () => openClearBearsMenu() },
         { id: "kill_bears", label: "Kill Bears %", action: () => openKillBearsMenu() },
-        { id: "storm", label: "Storm", action: () => openStormHubMenu() },
+        { id: "storm", label: "Storm hub", action: () => openStormHubMenu() },
         { id: "ai_throttle", label: "AI Throttle & Speed", action: () => openAIThrottleMenu() },
         { id: "debug_menu", label: "Debug Menu", action: () => openDebugMenu() },
         { id: "fully_unlock", label: "Fully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked."); openDeveloperTools(); } },
@@ -4370,28 +4370,29 @@ export function showCodexBook(player, context) {
             { label: "§fSet Day...", action: () => promptSetDay() },
             { label: "§fSimulate Next Day", action: () => { triggerDebugCommand("simulate_next_day", [], () => openDeveloperTools()); } },
             { label: "§fReset Intro", action: () => triggerDebugCommand("reset_intro", [], () => openDeveloperTools()) },
-            { label: "§8§l── Spawn & Bears ──", action: () => openDeveloperTools(), group: true },
-            { label: "§fScript Toggles", action: () => openScriptTogglesMenu() },
+            { label: "§8§l── Spawning & systems ──", action: () => openDeveloperTools(), group: true },
+            { label: "§fScript Toggles §8(AI, storms, infection audio…)", action: () => openScriptTogglesMenu() },
             { label: "§fSpawn Controller", action: () => openSpawnControllerMenu() },
+            { label: "§8§l── Bears ──", action: () => openDeveloperTools(), group: true },
             { label: "§fClear Bears (radius)", action: () => openClearBearsMenu() },
             { label: "§fKill Bears % §7(all/type/variant)", action: () => openKillBearsMenu() },
             { label: "§fBears Target Player", action: () => openBearsTargetPlayerMenu() },
             { label: "§fList Nearby Bears", action: () => openListBearsMenu() },
             { label: "§fInspect Nearest Bear", action: () => triggerDebugCommand("inspect_entity", [], () => openDeveloperTools()) },
             { label: "§8§l── Storm ──", action: () => openDeveloperTools(), group: true },
-            { label: "§bStorm", action: () => openStormHubMenu() },
-            { label: "§8§l── Infection & Players ──", action: () => openDeveloperTools(), group: true },
+            { label: "§bStorm hub", action: () => openStormHubMenu() },
+            { label: "§8§l── Infection & players ──", action: () => openDeveloperTools(), group: true },
             { label: "§fClear / Set Infection", action: () => openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name)) },
             { label: "§fGrant / Remove Immunity", action: () => openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name)) },
             { label: "§fSet Kill Counts", action: () => openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name)) },
-            { label: "§8§l── AI & Debug ──", action: () => openDeveloperTools(), group: true },
+            { label: "§8§l── Audio & debug ──", action: () => openDeveloperTools(), group: true },
+            { label: "§dPlay sound §8(catalog)", action: () => openSoundPreviewDevMenu() },
             { label: "§eAI Throttle & Speed", action: () => openAIThrottleMenu() },
-            { label: "§fDebug Menu", action: () => openDebugMenu(true) },
-            { label: "§dPlay sound §8(catalog)", action: () => openSoundPreviewDevMenu() }
+            { label: "§fDebug Menu", action: () => openDebugMenu(true) }
         ];
 
         const form = new ActionFormData().title("§cDeveloper Tools");
-        form.body("§7Debug utilities grouped by category. §8Group headers can be clicked to refresh.");
+        form.body("§7Grouped by job: codex, world, systems, bears, storm, infection, then audio/debug. §8Headers refresh the list.");
         for (const opt of options) {
             form.button(opt.label);
         }
@@ -4424,9 +4425,21 @@ export function showCodexBook(player, context) {
             [SCRIPT_IDS.torpedo]: "Torpedo AI",
             [SCRIPT_IDS.buff]: "Buff AI",
             [SCRIPT_IDS.biomeAmbience]: "Biome Ambience",
-            [SCRIPT_IDS.spawnController]: "Spawn Controller"
+            [SCRIPT_IDS.infectionAudio]: "Infection Audio",
+            [SCRIPT_IDS.spawnController]: "Spawn Controller",
+            [SCRIPT_IDS.snowStorm]: "Snow Storm"
         };
-        const ids = [SCRIPT_IDS.mining, SCRIPT_IDS.infected, SCRIPT_IDS.flying, SCRIPT_IDS.torpedo, SCRIPT_IDS.buff, SCRIPT_IDS.biomeAmbience, SCRIPT_IDS.spawnController];
+        const ids = [
+            SCRIPT_IDS.mining,
+            SCRIPT_IDS.infected,
+            SCRIPT_IDS.flying,
+            SCRIPT_IDS.torpedo,
+            SCRIPT_IDS.buff,
+            SCRIPT_IDS.biomeAmbience,
+            SCRIPT_IDS.infectionAudio,
+            SCRIPT_IDS.spawnController,
+            SCRIPT_IDS.snowStorm
+        ];
         const body = ids.map(id => `§7${labels[id]}: §${toggles[id] ? "aON" : "cOFF"}`).join("\n");
         const form = new ActionFormData()
             .title("§cScript Toggles")

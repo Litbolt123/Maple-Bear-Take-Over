@@ -4,7 +4,7 @@ import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSection
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock, getEmulsifierZoneAtBlock, getZoneFuelQueueForUI, isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
-import { isBetaDustStormsEnabled } from "./mb_scriptToggles.js";
+import { isBetaDustStormsEnabled, isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { findItem, hasItem } from "./mb_itemFinder.js";
 import { initializeItemRegistry, registerItemHandler } from "./mb_itemRegistry.js";
 import "./mb_spawnController.js";
@@ -2570,6 +2570,7 @@ function trackCureAttempt(player) {
 
 function triggerPowderConsumptionHiccup(player) {
     try {
+        if (!isScriptEnabled(SCRIPT_IDS.infectionAudio)) return;
         const played = playPowderHiccup(player, getInfectionCueEmitterTier, getInfectionCueHearOthersTier, getPlayerSoundVolume);
         if (played) safeMarkCodex(player, "symptomsUnlocks.infectionBodySoundsUnlocked");
     } catch { /* ignore */ }
@@ -2577,6 +2578,7 @@ function triggerPowderConsumptionHiccup(player) {
 
 function triggerCureSighReliefSound(player, isMajorCure) {
     try {
+        if (!isScriptEnabled(SCRIPT_IDS.infectionAudio)) return;
         const played = playCureSighRelief(player, isMajorCure, getInfectionCueEmitterTier, getInfectionCueHearOthersTier, getPlayerSoundVolume);
         if (played) safeMarkCodex(player, "symptomsUnlocks.infectionBodySoundsUnlocked");
     } catch { /* ignore */ }
@@ -4631,6 +4633,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
 // --- Infection Timers and Effects ---
 system.runInterval(() => {
     // Unified infection system
+    const infectionAudioEnabled = isScriptEnabled(SCRIPT_IDS.infectionAudio);
     for (const [id, state] of playerInfection.entries()) {
         const player = world.getAllPlayers().find(p => p.id === id);
         if (!player || state.cured) continue;
@@ -4640,20 +4643,22 @@ system.runInterval(() => {
             const gm = player.getGameMode?.();
             // Spectator skips body cues; creative still runs so cough / rare breath work while testing infected
             if (gm !== "spectator" && !introInProgress.has(id)) {
-                let environmentSynergy = false;
-                try {
-                    const gc = isStandingOnInfectedGround(player);
-                    environmentSynergy = Boolean(gc.onGround) || isPlayerInStorm(player.id);
-                } catch { /* ignore */ }
-                const audioOut = tickInfectionCoughAndBreath(player, state, {
-                    introActive: false,
-                    environmentSynergy,
-                    getEmitterTier: getInfectionCueEmitterTier,
-                    getHearOthersTier: getInfectionCueHearOthersTier,
-                    getMasterVolume: getPlayerSoundVolume
-                });
-                if (audioOut.playedCough || audioOut.playedBreath) {
-                    safeMarkCodex(player, "symptomsUnlocks.infectionBodySoundsUnlocked");
+                if (infectionAudioEnabled) {
+                    let environmentSynergy = false;
+                    try {
+                        const gc = isStandingOnInfectedGround(player);
+                        environmentSynergy = Boolean(gc.onGround) || isPlayerInStorm(player.id);
+                    } catch { /* ignore */ }
+                    const audioOut = tickInfectionCoughAndBreath(player, state, {
+                        introActive: false,
+                        environmentSynergy,
+                        getEmitterTier: getInfectionCueEmitterTier,
+                        getHearOthersTier: getInfectionCueHearOthersTier,
+                        getMasterVolume: getPlayerSoundVolume
+                    });
+                    if (audioOut.playedCough || audioOut.playedBreath) {
+                        safeMarkCodex(player, "symptomsUnlocks.infectionBodySoundsUnlocked");
+                    }
                 }
             }
         } catch { /* ignore */ }

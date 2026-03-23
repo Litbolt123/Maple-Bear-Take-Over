@@ -27,6 +27,7 @@ export const SCRIPT_IDS = {
     torpedo: "torpedo_ai",
     buff: "buff_ai",
     biomeAmbience: "biome_ambience",
+    infectionAudio: "infection_audio",
     spawnController: "spawn_controller",
     snowStorm: "snow_storm"
 };
@@ -52,6 +53,7 @@ export function getAllScriptToggles() {
         [SCRIPT_IDS.torpedo]: isScriptEnabled(SCRIPT_IDS.torpedo),
         [SCRIPT_IDS.buff]: isScriptEnabled(SCRIPT_IDS.buff),
         [SCRIPT_IDS.biomeAmbience]: isScriptEnabled(SCRIPT_IDS.biomeAmbience),
+        [SCRIPT_IDS.infectionAudio]: isScriptEnabled(SCRIPT_IDS.infectionAudio),
         [SCRIPT_IDS.spawnController]: isScriptEnabled(SCRIPT_IDS.spawnController),
         [SCRIPT_IDS.snowStorm]: isScriptEnabled(SCRIPT_IDS.snowStorm)
     };

@@ -32,6 +32,9 @@
 - **`BP/scripts/mb_devSoundCatalog.js`**: categorized addon sound event IDs (matches `RP/sounds/sound_definitions.json`).
 - **`mb_codex.js`**: Developer Tools → **Play sound (catalog)** — category → sound → target (**me** or another online player); uses `target.playSound` and target’s `getPlayerSoundVolume`. Pinnable as **Play sound (catalog)**.
 
+### Powdery Developer Tools menu layout (2026-03-22)
+- **`mb_codex.js` `openDeveloperTools()`**: Main list reorganized — **Spawning & systems** (Script Toggles with hint text, Spawn Controller), **Bears** (clear/kill/target/list/inspect), **Storm hub**, **Infection & players**, **Audio & debug** (Play sound catalog first, then AI Throttle, Debug Menu). Body text describes the flow. **Script Toggles** submenu already lists **Infection Audio** and **Snow Storm** with other scripts. Pinnable storm label aligned to **Storm hub**.
+
 ### Infection body sounds implementation (2026-03-22)
 - **Shipped**: `BP/scripts/mb_infectionAudio.js` — nearby-player `playSound` loop; cough tier minor/major (major louder + more frequent), storm **or** corrupted-ground synergy; rare `mb:white_dust_particle` breath; `mb.dust_eat_hiccup` at pitch **1.25** on powder eat; cure sigh minor/major.
 - **RP**: `sound_definitions.json` entries `mb.infection_cough_minor`, `mb.infection_cough_major`, `mb.dust_eat_hiccup`, `mb.cure_sigh_relief_minor` / `_major` — per-file volumes **0.68** (cough/hiccup) and **0.34** (cure sighs); see “Infection body sound volumes” above.
