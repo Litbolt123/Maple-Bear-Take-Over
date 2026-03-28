@@ -294,7 +294,7 @@ flowchart TD
 - **Settings** (Powdery Journal → Settings): `infectionCueEmitterVolume` and `infectionCueHearOthersVolume` (Off / Low / High). Emitter **Off** suppresses cough, hiccup, and cure sigh for everyone; **Hear others** only affects other players’ infection noises.
 - **Coughs**: Random interval during minor/major infection (major more frequent and louder). **Storm** or **corrupted ground** increases chance (synergy).
 - **Powder hiccup**: Plays when consuming `mb:snow` (pitch ~1.25).
-- **Dust breath**: Very rare `mb:white_dust_particle` at the player’s head (no extra sound).
+- **Dust breath**: Very rare `mb:white_dust_particle_short` at the player’s head (short-lived variant of white dust) plus a softer **`mb.infection_cough_major`** play (RP picks a random file).
 - **Cure sigh**: Minor and major cure paths play `mb.cure_sigh_relief_minor` / `mb.cure_sigh_relief_major`.
 - **Sounds** (definitions in `RP/sounds/sound_definitions.json`, assets under `sounds/infection_cough/`, `dust_eat_hiccup/`, `cure_sigh_relief/`): per-file volumes **0.68** (cough/hiccup) and **0.34** (cure sighs), with script-side tier multipliers.
 - **Codex**: `symptomsUnlocks.infectionBodySoundsUnlocked` unlocks **Symptoms → Body sounds (infection)** and an **Infection** book line under mechanics.
