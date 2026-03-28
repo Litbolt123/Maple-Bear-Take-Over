@@ -2,6 +2,11 @@
 
 ## Recent Changes (Latest Session)
 
+### Short white dust particle for infection breath (2026-03-28)
+- **`RP/particles/white_dust_particle_short.particle.json`**: New effect `mb:white_dust_particle_short` — same texture/material as `mb:white_dust_particle`, tuned for **brief** emission (`emitter_lifetime_once` ~0.38s, particle `max_lifetime` ~0.42s, smaller burst vs the 6s original).
+- **`BP/scripts/mb_infectionAudio.js`**: Rare **dust breath** (infection cough/breath path) spawns **`mb:white_dust_particle_short`** instead of the long vanilla-style puff. Other systems (death dust, storms, conversion VFX) still use **`mb:white_dust_particle`**.
+- **`docs/development/systems/INFECTION_SYSTEM.md`**: Dust breath line updated to the short identifier.
+
 ### Infection cough audio vs settings / creative (2026-03-22)
 - **`mb_infectionAudio.js`**: Emitter tier **Off** — **you** still get quiet cough/hiccup/sigh; others hear nothing. **Dust breath**: particle + **`mb.infection_cough_major`** (random variant from definitions), softer gain than a normal major cough; no separate emitter gate on the breath roll. **`main.js`**: Cough/breath in **creative** too (not **spectator**). **`mb_codex.js`**: Symptoms copy for Off / Low / High; **Basic → Your Goal** infection-time line kept **short**.
 

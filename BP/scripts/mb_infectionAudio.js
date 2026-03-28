@@ -5,6 +5,8 @@
 
 import { world, system } from "@minecraft/server";
 
+const COUGH_DUST_PARTICLE = "mb:white_dust_particle_short";
+
 const COUGH_SOUND_MINOR = "mb.infection_cough_minor";
 const COUGH_SOUND_MAJOR = "mb.infection_cough_major";
 const HICCUP_SOUND = "mb.dust_eat_hiccup";
@@ -161,7 +163,7 @@ export function tickInfectionCoughAndBreath(sourcePlayer, infectionState, ctx) {
             const dim = sourcePlayer.dimension;
             const l = sourcePlayer.location;
             if (dim && l) {
-                dim.spawnParticle("mb:white_dust_particle", { x: l.x, y: l.y + 1.2, z: l.z });
+                dim.spawnParticle(COUGH_DUST_PARTICLE, { x: l.x, y: l.y + 1.2, z: l.z });
             }
         } catch { /* ignore */ }
         const breathVol = BASE_DEFINITION_ATTENUATION * MAJOR_VOLUME_MULT * (0.36 + Math.random() * 0.12);
