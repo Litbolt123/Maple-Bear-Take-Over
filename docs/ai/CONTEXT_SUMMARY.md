@@ -7,6 +7,13 @@
 - **`BP/scripts/mb_infectionAudio.js`**: Rare **dust breath** (infection cough/breath path) spawns **`mb:white_dust_particle_short`** instead of the long vanilla-style puff. Other systems (death dust, storms, conversion VFX) still use **`mb:white_dust_particle`**.
 - **`docs/development/systems/INFECTION_SYSTEM.md`**: Dust breath line updated to the short identifier.
 
+### Bedrock block format_version vs game 26.x (2026-03-28)
+- **`BP/blocks/*.json`**: Use **`format_version": "1.21.130"`** for custom blocks. On at least some **1.26.x** clients, **`1.21.40`**, **`1.26.0`**, and **`1.26.10`** all log **Unexpected version for the loaded data** while blocks can still behave normally; **`1.21.130`** is a known-good block format line (newer than 1.21.40) per [block format history](https://wiki.bedrock.dev/blocks/block-format-history).
+- **Noisy content log (2026-03-28)**: If **`[Blocks][error] block_definitions … Unexpected version`** still appears but **blocks look and sound correct**, it may be a **strict validator / fallback parse** quirk or **unsynced `com.mojang\development_behavior_packs\`** copy vs repo. **Reasonable to ignore** for development if behavior is verified; watch for real breakage (missing registry, `?` blocks). No widely indexed “everyone has this” thread found; worth **Mojang feedback / Jira** if reproducible with minimal pack.
+- **`snow_layer.json`**: No BP root **`sound`** (sounds in **`RP/blocks.json`**). **`placement_filter`** uses **`tag:mb:maple_bear_snow_layer`** + **`block_filter`** **`tags`**: `!q.any_tag('mb:maple_bear_snow_layer')` for **up** face (no stacking on another maple snow layer).
+- **`emulsifier_machine.json`**: **`minecraft:geometry": "minecraft:geometry.full_block"`** alongside **`material_instances`** — 1.26+ requires both (fixes **Block needs both a geometry and material instances** / missing registry / block_placer errors).
+- **`BP/manifest.json` / `RP/manifest.json`**: **`min_engine_version`** **`[1, 26, 10]`**; **`@minecraft/server`** **`2.6.0`**.
+
 ### DDUI vs Preview / Powdery Journal (2026-03-28, Q&A)
 - **Retail Bedrock 1.26.10+**: DDUI is not limited to the Preview *app* once that version is installed; Mojang documents **`CustomForm`** / **`MessageBox`** on Learn under the stable docs tree but marks them **pre-release** (signatures may change).
 - **Changelog placement**: In [26.10 Bedrock changelog](https://www.minecraft.net/en-us/article/minecraft-26-10-bedrock-changelog), DDUI is under **Experimental Technical Updates** — expect **world/script experiments** (e.g. Beta JavaScript APIs), not “works everywhere with no toggles.”

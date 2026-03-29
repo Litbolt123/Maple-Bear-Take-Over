@@ -18,8 +18,8 @@
 		"description": "Don't do drugs kids...",
 		"min_engine_version": [
 			1,
-			21,
-			101
+			26,
+			10
 		],
 		"uuid": "2a4d2f59-f46d-47fc-a3c1-7a26d46d2157",
 		"version": [

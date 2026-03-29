@@ -1,5 +1,5 @@
 {
-	"format_version": "1.21.40",
+	"format_version": "1.21.130",
 	"minecraft:block": {
 		"description": {
 			"identifier": "mb:snow_layer",
@@ -8,8 +8,8 @@
 			},
 			"is_experimental": false
 		},
-		"sound": "mb:snow_layer",
 		"components": {
+			"tag:mb:maple_bear_snow_layer": {},
 			"minecraft:display_name": "Snow layer",
 			"minecraft:destructible_by_mining": {
 				"seconds_to_destroy": 0.1
@@ -58,10 +58,7 @@
 						],
 						"block_filter": [
 							{
-								"test": "is_block_name",
-								"subject": "other",
-								"operator": "!=",
-								"value": "mb:snow_layer"
+								"tags": "!q.any_tag('mb:maple_bear_snow_layer')"
 							}
 						]
 					},
