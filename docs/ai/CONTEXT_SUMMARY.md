@@ -7,6 +7,11 @@
 - **`BP/scripts/mb_infectionAudio.js`**: Rare **dust breath** (infection cough/breath path) spawns **`mb:white_dust_particle_short`** instead of the long vanilla-style puff. Other systems (death dust, storms, conversion VFX) still use **`mb:white_dust_particle`**.
 - **`docs/development/systems/INFECTION_SYSTEM.md`**: Dust breath line updated to the short identifier.
 
+### DDUI vs Preview / Powdery Journal (2026-03-28, Q&A)
+- **Retail Bedrock 1.26.10+**: DDUI is not limited to the Preview *app* once that version is installed; Mojang documents **`CustomForm`** / **`MessageBox`** on Learn under the stable docs tree but marks them **pre-release** (signatures may change).
+- **Changelog placement**: In [26.10 Bedrock changelog](https://www.minecraft.net/en-us/article/minecraft-26-10-bedrock-changelog), DDUI is under **Experimental Technical Updates** — expect **world/script experiments** (e.g. Beta JavaScript APIs), not “works everywhere with no toggles.”
+- **Powdery Journal direction (when targeting 26.10+)**: Pilot **one** screen (settings, Script Toggles, or Developer Tools hub) as **`CustomForm`** (`header`/`label`/`divider`/`toggle`/`slider`/`button` + **Observables**); keep **`ActionFormData`/`ModalFormData`** fallback for older `min_engine_version`; handle **1-tick delay** between close→open and **UI queueing** per Mojang known issues.
+
 ### Infection cough audio vs settings / creative (2026-03-22)
 - **`mb_infectionAudio.js`**: Emitter tier **Off** — **you** still get quiet cough/hiccup/sigh; others hear nothing. **Dust breath**: particle + **`mb.infection_cough_major`** (random variant from definitions), softer gain than a normal major cough; no separate emitter gate on the breath roll. **`main.js`**: Cough/breath in **creative** too (not **spectator**). **`mb_codex.js`**: Symptoms copy for Off / Low / High; **Basic → Your Goal** infection-time line kept **short**.
 
