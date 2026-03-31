@@ -4748,6 +4748,10 @@ function tryRefreshInfectionHudActionBar(player, id, state) {
             clearInfectionHudActionBar(player);
             return;
         }
+        if (introInProgress.has(id)) {
+            clearInfectionHudActionBar(player);
+            return;
+        }
 
         const opts = getPlayerSettings(player);
         const osd = player.onScreenDisplay;
@@ -4755,7 +4759,7 @@ function tryRefreshInfectionHudActionBar(player, id, state) {
 
         const infectionType = state.infectionType || MAJOR_INFECTION_TYPE;
         let cureHint = "";
-        if (infectionType === MAJOR_INFECTION_TYPE && !introInProgress.has(id)) {
+        if (infectionType === MAJOR_INFECTION_TYPE) {
             const hasWeakness = player.getEffect?.("minecraft:weakness");
             if (hasWeakness && hasItem(player, "minecraft:enchanted_golden_apple")) {
                 const last = cureReminderLastTick.get(id) ?? 0;

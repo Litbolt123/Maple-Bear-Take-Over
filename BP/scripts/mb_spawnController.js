@@ -2790,10 +2790,29 @@ export function unregisterDustedDirtBlock(x, y, z) {
 
 export function countNearbyDustedDirtBlocks(center, dimension, radius, limit = 100) {
     if (!center) return 0;
-    const dimensionId = typeof dimension === "string" ? dimension : dimension?.id;
-    if (!dimensionId) return 0;
-    const dim = typeof dimension === "string" ? world.getDimension(dimension) : dimension;
-    if (!dim?.getBlock) return 0;
+
+    let resolvedDimension = null;
+    if (typeof dimension === "string") {
+        try {
+            resolvedDimension = world.getDimension(dimension);
+        } catch {
+            resolvedDimension = null;
+        }
+    } else if (dimension != null && typeof dimension === "object") {
+        if (typeof dimension.id === "string") {
+            try {
+                resolvedDimension = world.getDimension(dimension.id);
+            } catch {
+                resolvedDimension = null;
+            }
+        }
+        if (!resolvedDimension && typeof dimension.getBlock === "function") {
+            resolvedDimension = dimension;
+        }
+    }
+
+    const dimensionId = resolvedDimension?.id ?? null;
+    if (!dimensionId || typeof resolvedDimension.getBlock !== "function") return 0;
 
     const radiusSq = radius * radius;
     let count = 0;
@@ -2809,7 +2828,7 @@ export function countNearbyDustedDirtBlocks(center, dimension, radius, limit = 1
         if ((dx * dx + dy * dy + dz * dz) > radiusSq) continue;
 
         const blockCenter = { x: value.x + 0.5, y: value.y + 0.5, z: value.z + 0.5 };
-        if (!hasInfectionExposureLineOfSight(dim, eye, blockCenter)) continue;
+        if (!hasInfectionExposureLineOfSight(resolvedDimension, eye, blockCenter)) continue;
 
         count++;
         if (count >= limit) break;

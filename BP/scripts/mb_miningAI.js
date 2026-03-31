@@ -1,6 +1,7 @@
 /**
  * Mining Maple Bears break blocks entirely via this script (clearBlock, LOS checks, etc.).
- * Vanilla `minecraft:break_blocks` on the entity is not required for scripted digging.
+ * Scripted digging is handled here (clearBlock/LOS path), while entity-side `minecraft:break_blocks`
+ * may still be kept for compatibility/fallback behavior defined outside this file.
  */
 import { system, world, ItemStack } from "@minecraft/server";
 import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";

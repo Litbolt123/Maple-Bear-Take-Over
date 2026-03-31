@@ -1,5 +1,21 @@
 # Context Summary
 
+**Date:** 2026-03-28
+
+## Infection action bar hidden during scripted intro (`main.js`)
+
+- **Issue:** `tryRefreshInfectionHudActionBar` only skipped the major-infection **cure hint** when `introInProgress.has(id)`; **timer line** (`showInfectionTimer`) still drew during the intro.
+- **Change:** After the `infectionActionBarSuppressedUntilSpawn` check, if `introInProgress.has(id)`, call **`clearInfectionHudActionBar(player)`** and **return**. Removed redundant `!introInProgress.has(id)` from the cure-hint branch (intro path exits earlier).
+
+---
+
+## `countNearbyDustedDirtBlocks` dimension handling (`mb_spawnController.js`)
+
+- **Issue:** `world.getDimension(dimension)` was called for string args without try/catch; cache compared `value.dimension` to a raw string while `dimensionId` could diverge from the resolved `Dimension.id`.
+- **Change:** Resolve `resolvedDimension` with `try/catch` around `world.getDimension` (string id or `dimension.id`); if lookup fails, fall back to the passed-in object when it already exposes `getBlock`. Normalize **`dimensionId`** from **`resolvedDimension.id`** for cache filtering (`value.dimension !== dimensionId`). Require **`typeof resolvedDimension.getBlock === "function"`** before LOS checks so failed lookups do not throw.
+
+---
+
 **Date:** 2026-03-20
 
 ## Documentation refresh
