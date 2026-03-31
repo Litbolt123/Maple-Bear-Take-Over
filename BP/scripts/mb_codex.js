@@ -6,7 +6,7 @@ import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTrac
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, formatInfectionHudTimeRemaining, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 import { getBuffBearCountdowns } from "./mb_buffAI.js";
-import { getSpawnConfigsForDevTools, getDisabledSpawnTypes, setDisabledSpawnTypes, getSpawnSpeedMultiplier, SPAWN_SPEED_PROPERTY, getBlockQueryMultiplier, getMaxGlobalSpawnsPerTick, getSpawnDistanceRange, getTileIntensityMultiplier, getBlocksPerTickMultiplier, SPAWN_OVERRIDE_PROPERTIES, getSpawnScanSettingsForDevTools, applySpawnScanPreset, SPAWN_SCAN_OVERRIDE_PROPERTIES, SPAWN_SCAN_PRESETS, getEmulsifierStateForDevTools, getEmulsifierDebugInfo, clearEmulsifierZoneCache, addEmulsifierZoneAtPlayer, removeNearestEmulsifierZone, setNearestEmulsifierFuel, getEmulsifierZoneAtBlock, upsertEmulsifierZoneAtBlock, setEmulsifierFuelAtBlock, addEmulsifierFuelAtBlock, getMaxFuelTicks, setEmulsifierActiveAtBlock, getZoneFuelQueueForUI, getZoneCurrentFuelType, zoneHasFuel, setEmulsifierFuelOrderAtBlock } from "./mb_spawnController.js";
+import { getSpawnConfigsForDevTools, getDisabledSpawnTypes, setDisabledSpawnTypes, getSpawnSpeedMultiplier, SPAWN_SPEED_PROPERTY, getBlockQueryMultiplier, getMaxGlobalSpawnsPerTick, getSpawnDistanceRange, getTileIntensityMultiplier, getBlocksPerTickMultiplier, SPAWN_OVERRIDE_PROPERTIES, getSpawnScanSettingsForDevTools, applySpawnScanPreset, SPAWN_SCAN_OVERRIDE_PROPERTIES, SPAWN_SCAN_PRESETS, getEmulsifierStateForDevTools, getEmulsifierDebugInfo, clearEmulsifierZoneCache, addEmulsifierZoneAtPlayer, removeNearestEmulsifierZone, setNearestEmulsifierFuel, getEmulsifierZoneAtBlock, upsertEmulsifierZoneAtBlock, setEmulsifierFuelAtBlock, addEmulsifierFuelAtBlock, getMaxFuelTicks, setEmulsifierActiveAtBlock, getZoneFuelQueueForUI, getZoneCurrentFuelType, zoneHasFuel, setEmulsifierFuelOrderAtBlock, isSpawnScanPerfOverlayEnabled, setSpawnScanPerfOverlayEnabled } from "./mb_spawnController.js";
 import { summonStorm, endStorm, getStormState, getStormDebugInfo, setStormOverride, resetStormOverride, getStormControlParams, isMultiStormEnabled, setMultiStormEnabled, getStorms, endStormById, setStormEnabled } from "./mb_snowStorm.js";
 import { getMiningAIState } from "./mb_miningAI.js";
 import { DEV_SOUND_CATEGORIES } from "./mb_devSoundCatalog.js";
@@ -4511,21 +4511,17 @@ export function showCodexBook(player, context) {
 
         const form = new ActionFormData()
             .title("§cSpawn Controller")
-            .body(`§7All spawn-related settings.\n\n§fScript: §7${spawnEnabled ? "§aON" : "§cOFF"}\n§fDifficulty: §7${diffLabel}\n§fSpeed: §7${speedLabel}\n§fTypes: §7${typeLabel}\n§8Advanced: §7BlockQ ${blockQLabel} | Max ${maxGlobal}/tick | Range ${rangeLabel} | Tiles ${tileLabel} | BlocksTick ${blocksLabel}\n§8Scan: §7${scanLabel}\n§8Emulsifier: §7${emulsifierLabel}`);
+            .body(`§7Hub for spawn tuning and dev spawns.\n\n§fScript: §7${spawnEnabled ? "§aON" : "§cOFF"}\n§fCore: §7${diffLabel} | ${speedLabel} | ${typeLabel}\n§8Performance: §7BlockQ ${blockQLabel} | Max ${maxGlobal}/tick | ${rangeLabel} | Tiles ${tileLabel} | B/T ${blocksLabel}\n§8Scan: §7${scanLabel}\n§8Emulsifier: §7${emulsifierLabel}`);
 
         form.button(spawnEnabled ? "§cSpawn Controller OFF" : "§aSpawn Controller ON");
-        form.button("§fSpawn Difficulty");
-        form.button("§fSpawn Speed");
-        form.button("§fSpawn Type Toggles");
-        form.button("§eForce Spawn");
-        form.button("§f§lPresets §8(Low → High)");
-        form.button("§6Advanced Options");
-        form.button("§bScan Scheduler");
+        form.button("§fCore §8(difficulty, speed, types)");
+        form.button("§6Performance §8(presets, advanced, scan)");
+        form.button("§eForce Spawn §8(by category)");
         form.button("§dEmulsifier");
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 9) {
+            if (!res || res.canceled || res.selection === 5) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
                 return openDeveloperTools();
             }
@@ -4535,26 +4531,84 @@ export function showCodexBook(player, context) {
                     setScriptEnabled(SCRIPT_IDS.spawnController, !spawnEnabled);
                     player.sendMessage(CHAT_SUCCESS + "Spawn Controller: " + (!spawnEnabled ? "ON" : "OFF"));
                     return openSpawnControllerMenu();
-                case 1: return openSpawnDifficultyMenu();
-                case 2: return openSpawnSpeedMenu();
-                case 3: return openSpawnTypeTogglesMenu();
-                case 4: return openForceSpawnMenu();
-                case 5: return openSpawnPresetsMenu(false);
-                case 6: return openSpawnAdvancedMenu();
-                case 7: return openScanSchedulerMenu();
-                case 8: return openEmulsifierMenu();
+                case 1: return openSpawnGameplayHub();
+                case 2: return openSpawnPerformanceHub();
+                case 3: return openForceSpawnMenu();
+                case 4: return openEmulsifierMenu();
                 default: return openDeveloperTools();
             }
         }).catch(() => openDeveloperTools());
     }
 
+    function openSpawnGameplayHub() {
+        const form = new ActionFormData()
+            .title("§cSpawn — Core")
+            .body("§7Difficulty, how often the controller runs, and which bear types are allowed.");
+        form.button("§fSpawn Difficulty");
+        form.button("§fSpawn Speed");
+        form.button("§fSpawn Type Toggles");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 3) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openSpawnControllerMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            if (res.selection === 0) return openSpawnDifficultyMenu();
+            if (res.selection === 1) return openSpawnSpeedMenu();
+            if (res.selection === 2) return openSpawnTypeTogglesMenu();
+            return openSpawnControllerMenu();
+        }).catch(() => openSpawnControllerMenu());
+    }
+
+    function openSpawnPerformanceHub() {
+        const overlayOn = isSpawnScanPerfOverlayEnabled();
+        const form = new ActionFormData()
+            .title("§cSpawn — Performance")
+            .body(`§7Spawn intensity presets, per-knob advanced options, scan scheduler, and one-tap spawn+scan combos.\n\n§8Scan HUD: §7${overlayOn ? "ON §a(action bar)" : "OFF"}`);
+        form.button("§fSpawn intensity presets");
+        form.button("§eQuick combos §8(game + scan)");
+        form.button("§6Advanced options");
+        form.button("§bScan scheduler");
+        form.button(overlayOn ? "§cTurn off scan HUD §8(action bar)" : "§aTurn on scan HUD §8(P/C/D/W)");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === 5) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openSpawnControllerMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            if (res.selection === 0) return openSpawnPresetsMenu(false);
+            if (res.selection === 1) return openSpawnComboPresetsMenu();
+            if (res.selection === 2) return openSpawnAdvancedMenu();
+            if (res.selection === 3) return openScanSchedulerMenu();
+            if (res.selection === 4) {
+                setSpawnScanPerfOverlayEnabled(!overlayOn);
+                player.sendMessage(CHAT_SUCCESS + (overlayOn ? "Scan perf HUD off." : "Scan perf HUD on (action bar: P players, C clusters, D discovery budget, W world load)."));
+                return openSpawnPerformanceHub();
+            }
+            return openSpawnControllerMenu();
+        }).catch(() => openSpawnControllerMenu());
+    }
+
     const SPAWN_PRESETS = {
+        ultraLow: { label: "§8Ultra-Low", desc: "Worst-case TPS / huge worlds", blockQuery: 0.2, maxGlobal: 10, range: "close", tileIntensity: 0.45, blocksPerTick: 0.45, spawnSpeed: 0.35, spawnDifficulty: -1 },
         low: { label: "§aLow", desc: "Minimal load, least lag", blockQuery: 0.25, maxGlobal: 12, range: "close", tileIntensity: 0.5, blocksPerTick: 0.5, spawnSpeed: 0.5, spawnDifficulty: -1 },
         medLow: { label: "§2Med-Low", desc: "Light load", blockQuery: 0.5, maxGlobal: 18, range: "close", tileIntensity: 0.75, blocksPerTick: 0.7, spawnSpeed: 0.75, spawnDifficulty: -1 },
+        mpLite: { label: "§3MP Lite", desc: "Small group, lighter scans", blockQuery: 0.55, maxGlobal: 20, range: "close", tileIntensity: 0.7, blocksPerTick: 0.65, spawnSpeed: 0.65, spawnDifficulty: -1 },
         med: { label: "§fMed", desc: "Balanced (default)", blockQuery: 1, maxGlobal: 24, range: "normal", tileIntensity: 1, blocksPerTick: 1, spawnSpeed: 1, spawnDifficulty: 0 },
         medHigh: { label: "§6Med-High", desc: "More active", blockQuery: 1.25, maxGlobal: 36, range: "normal", tileIntensity: 1.2, blocksPerTick: 1.2, spawnSpeed: 1.5, spawnDifficulty: 1 },
         high: { label: "§cHigh", desc: "Aggressive, most spawns", blockQuery: 1.5, maxGlobal: 48, range: "far", tileIntensity: 1.25, blocksPerTick: 1.5, spawnSpeed: 2, spawnDifficulty: 1 }
     };
+
+    /** One-tap: spawn intensity preset + scan scheduler preset (see SPAWN_SCAN_PRESETS in mb_spawnController). */
+    const SPAWN_COMBO_PRESETS = [
+        { spawnKey: "low", scanKey: "lowLag", label: "§aLow + Low Lag scan", desc: "Default lagfight" },
+        { spawnKey: "ultraLow", scanKey: "minimal", label: "§8Ultra + Minimal scan", desc: "Worst TPS / many players" },
+        { spawnKey: "medLow", scanKey: "multiplayerSpread", label: "§3Med-Low + MP Spread scan", desc: "6–8 players spread out" },
+        { spawnKey: "med", scanKey: "soloHost", label: "§fMed + Solo-host scan", desc: "Mostly solo on a server world" },
+        { spawnKey: "med", scanKey: "balanced", label: "§fMed + Balanced scan", desc: "Vanilla-like pacing" }
+    ];
 
     function applySpawnPreset(presetKey) {
         const p = SPAWN_PRESETS[presetKey];
@@ -4568,27 +4622,55 @@ export function showCodexBook(player, context) {
         setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, p.spawnDifficulty);
     }
 
-    function openSpawnPresetsMenu(fromAdvanced = false) {
-        const body = Object.entries(SPAWN_PRESETS).map(([k, v]) => `${v.label} §8– §8${v.desc}`).join("\n");
-        const form = new ActionFormData()
-            .title("§c§lSpawn Presets")
-            .body(`§f§lApply a coordinated preset to all spawn settings.\n§8Speed, difficulty, block budget, range, etc.\n\n${body}`);
+    function applySpawnAndScanCombo(spawnKey, scanKey) {
+        applySpawnPreset(spawnKey);
+        applySpawnScanPreset(scanKey);
+    }
 
-        form.button("§aLow §8(minimal lag)");
-        form.button("§2Med-Low §8(light)");
-        form.button("§fMed §8(balanced)");
-        form.button("§6Med-High §8(active)");
-        form.button("§cHigh §8(aggressive)");
+    function openSpawnComboPresetsMenu() {
+        const body = SPAWN_COMBO_PRESETS.map((c) => `${c.label}\n§8${c.desc}`).join("\n\n");
+        const form = new ActionFormData()
+            .title("§eSpawn + scan combos")
+            .body(`§7Applies both spawn intensity and scan scheduler presets.\n\n${body}`);
+        SPAWN_COMBO_PRESETS.forEach((c) => form.button(c.label));
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === SPAWN_COMBO_PRESETS.length) return openSpawnPerformanceHub();
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const combo = SPAWN_COMBO_PRESETS[res.selection];
+            if (combo) {
+                applySpawnAndScanCombo(combo.spawnKey, combo.scanKey);
+                const scanLabel = SPAWN_SCAN_PRESETS[combo.scanKey]?.label ?? combo.scanKey;
+                player.sendMessage(CHAT_SUCCESS + `Combo applied: ${combo.label.replace(/§./g, "")} + scan "${scanLabel}".`);
+            }
+            openSpawnComboPresetsMenu();
+        }).catch(() => openSpawnPerformanceHub());
+    }
+
+    function openSpawnPresetsMenu(fromAdvanced = false) {
+        const presetKeys = Object.keys(SPAWN_PRESETS);
+        const body = presetKeys.map((k) => {
+            const v = SPAWN_PRESETS[k];
+            return `${v.label} §8– §8${v.desc}`;
+        }).join("\n");
+        const form = new ActionFormData()
+            .title("§c§lSpawn intensity presets")
+            .body(`§f§lCoordinated spawn settings only §8(speed, caps, block budget, range).\n§7Use Performance → Quick combos for scan + spawn together.\n\n${body}`);
+
+        presetKeys.forEach((k) => {
+            const v = SPAWN_PRESETS[k];
+            form.button(`${v.label} §8(${k})`);
+        });
         form.button("§8Back");
 
-        const onBack = () => fromAdvanced ? openSpawnAdvancedMenu() : openSpawnControllerMenu();
+        const onBack = () => fromAdvanced ? openSpawnAdvancedMenu() : openSpawnPerformanceHub();
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 5) return onBack();
+            if (!res || res.canceled || res.selection === presetKeys.length) return onBack();
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
-            const keys = ["low", "medLow", "med", "medHigh", "high"];
-            if (res.selection < 5) {
-                applySpawnPreset(keys[res.selection]);
-                player.sendMessage(CHAT_SUCCESS + "Preset applied: " + SPAWN_PRESETS[keys[res.selection]].label.replace(/§./g, "") + ".");
+            const key = presetKeys[res.selection];
+            if (key && SPAWN_PRESETS[key]) {
+                applySpawnPreset(key);
+                player.sendMessage(CHAT_SUCCESS + "Preset applied: " + SPAWN_PRESETS[key].label.replace(/§./g, "") + ".");
             }
             openSpawnPresetsMenu(fromAdvanced);
         }).catch(() => onBack());
@@ -4609,7 +4691,7 @@ export function showCodexBook(player, context) {
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 7) return openSpawnControllerMenu();
+            if (!res || res.canceled || res.selection === 7) return openSpawnPerformanceHub();
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             switch (res.selection) {
                 case 0: return openSpawnPresetsMenu(true);
@@ -4624,9 +4706,9 @@ export function showCodexBook(player, context) {
                     setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, 0);
                     player.sendMessage(CHAT_SUCCESS + "Advanced spawn options reset.");
                     return openSpawnAdvancedMenu();
-                default: return openSpawnControllerMenu();
+                default: return openSpawnPerformanceHub();
             }
-        }).catch(() => openSpawnControllerMenu());
+        }).catch(() => openSpawnPerformanceHub());
     }
 
     function openSpawnBlockQueryMenu() {
@@ -4732,7 +4814,7 @@ export function showCodexBook(player, context) {
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 9) return openSpawnControllerMenu();
+            if (!res || res.canceled || res.selection === 9) return openSpawnPerformanceHub();
             switch (res.selection) {
                 case 0: return openScanPresetMenu();
                 case 1: return openScanDiscoveryRadiusMenu();
@@ -4747,9 +4829,9 @@ export function showCodexBook(player, context) {
                     player.sendMessage(CHAT_SUCCESS + "Scan scheduler settings reset.");
                     return openScanSchedulerMenu();
                 default:
-                    return openSpawnControllerMenu();
+                    return openSpawnPerformanceHub();
             }
-        }).catch(() => openSpawnControllerMenu());
+        }).catch(() => openSpawnPerformanceHub());
     }
 
     function openScanPresetMenu() {
@@ -4964,7 +5046,7 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled || res.selection === 4) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openSpawnControllerMenu();
+                return openSpawnGameplayHub();
             }
 
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4979,9 +5061,9 @@ export function showCodexBook(player, context) {
                 case 3:
                     return promptCustomSpawnDifficulty(currentRaw);
                 default:
-                    return openSpawnControllerMenu();
+                    return openSpawnGameplayHub();
             }
-        }).catch(() => openSpawnControllerMenu());
+        }).catch(() => openSpawnGameplayHub());
     }
 
     function promptCustomSpawnDifficulty(currentValue = 0) {
@@ -5028,7 +5110,7 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 6) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openSpawnControllerMenu();
+                return openSpawnGameplayHub();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             let mult;
@@ -5041,13 +5123,13 @@ export function showCodexBook(player, context) {
                 case 2: mult = 1; break;
                 case 3: mult = 2; break;
                 case 4: mult = 3; break;
-                default: return openSpawnControllerMenu();
+                default: return openSpawnGameplayHub();
             }
             setWorldProperty(SPAWN_SPEED_PROPERTY, mult);
             const msg = mult === 1 ? "Normal" : `${(mult * 100).toFixed(0)}%`;
             player.sendMessage(CHAT_SUCCESS + "Spawn speed: " + msg + ".");
             openSpawnSpeedMenu();
-        }).catch(() => openSpawnControllerMenu());
+        }).catch(() => openSpawnGameplayHub());
     }
 
     function promptCustomSpawnSpeed(currentValue = 1) {
@@ -5083,7 +5165,7 @@ export function showCodexBook(player, context) {
             if (!res || res.canceled) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-                return openSpawnControllerMenu();
+                return openSpawnGameplayHub();
             }
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
@@ -5097,8 +5179,8 @@ export function showCodexBook(player, context) {
             setDisabledSpawnTypes(newDisabled);
             const count = newDisabled.size;
             player.sendMessage(CHAT_SUCCESS + (count === 0 ? "All bear types can spawn." : `Spawn disabled for ${count} type(s).`));
-            openSpawnControllerMenu();
-        }).catch(() => openSpawnControllerMenu());
+            openSpawnTypeTogglesMenu();
+        }).catch(() => openSpawnGameplayHub());
     }
 
     function openInfectionDevMenu(targetName) {
@@ -5233,24 +5315,55 @@ export function showCodexBook(player, context) {
         { id: "mb:torpedo_mb_day20", label: "Torpedo (day 20)" }
     ];
 
+    const FORCE_SPAWN_CATEGORIES = [
+        { label: "§fTiny bears", start: 0, end: 5 },
+        { label: "§cInfected", start: 5, end: 9 },
+        { label: "§6Buff bears", start: 9, end: 12 },
+        { label: "§bFlying bears", start: 12, end: 15 },
+        { label: "§8Mining bears", start: 15, end: 17 },
+        { label: "§4Torpedo bears", start: 17, end: 19 }
+    ];
+
     function openForceSpawnMenu() {
         const form = new ActionFormData()
             .title("§cForce Spawn")
-            .body("§7Spawn a bear type near you or another player.");
-        for (const opt of FORCE_SPAWN_OPTIONS) {
-            form.button(`§f${opt.label} §8(${opt.id})`);
+            .body("§7Choose a category, then type, target, distance, and count.");
+        for (const cat of FORCE_SPAWN_CATEGORIES) {
+            form.button(cat.label);
         }
         form.button("§8Back");
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === FORCE_SPAWN_OPTIONS.length) {
+            if (!res || res.canceled || res.selection === FORCE_SPAWN_CATEGORIES.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
                 return openSpawnControllerMenu();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
-            const opt = FORCE_SPAWN_OPTIONS[res.selection];
-            if (opt) openForceSpawnTargetMenu(opt);
-            else openSpawnControllerMenu();
+            openForceSpawnCategoryMenu(res.selection);
         }).catch(() => openSpawnControllerMenu());
+    }
+
+    function openForceSpawnCategoryMenu(categoryIndex) {
+        const cat = FORCE_SPAWN_CATEGORIES[categoryIndex];
+        if (!cat) return openForceSpawnMenu();
+        const opts = FORCE_SPAWN_OPTIONS.slice(cat.start, cat.end);
+        const plainTitle = cat.label.replace(/§./g, "").trim();
+        const form = new ActionFormData()
+            .title(`§cForce Spawn — ${plainTitle}`)
+            .body("§7Choose a bear type.");
+        for (const opt of opts) {
+            form.button(`§f${opt.label} §8(${opt.id})`);
+        }
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            if (!res || res.canceled || res.selection === opts.length) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
+                return openForceSpawnMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
+            const opt = opts[res.selection];
+            if (opt) openForceSpawnTargetMenu(opt);
+            else openForceSpawnMenu();
+        }).catch(() => openForceSpawnMenu());
     }
 
     const FORCE_SPAWN_DISTANCES = [

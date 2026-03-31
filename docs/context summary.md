@@ -33,6 +33,20 @@
 
 **Date:** 2026-03-28
 
+## Multiplayer spawn load + snow hiccup self-only
+
+- **`mb_spawnController.js`:** Stronger per-player scan shrink (`perPlayerRadiusDrop`, tight-group penalty), slightly higher barren cooldown multiplier and queue stagger defaults; **lowLag** preset tuned further. **Barren cooldown** scales 2→8 players instead of capping at 3+. **Per-tick spawn budget** uses steeper multipliers for 4–8 players (floor 1). **Global spawn cap** uses `getEffectiveMaxGlobalSpawnsPerTick()` (scales down from world player count). **Spread / tight-group tick staggering** uses dedicated helpers so 4–8 players rotate less often per tick (spread up to 28t, tight up to 26t).
+- **`mb_infectionAudio.js`:** `playPowderHiccup` defaults to **radius 0** so only the eater hears the powder hiccup; pass `true` as 5th arg to restore nearby broadcast.
+
+### Spawn controller verification (same session, code pass)
+
+- **Scan HUD toggle:** `setSpawnScanPerfOverlayEnabled` stores **0** for off (not `undefined`) so deferred `setWorldProperty` cache does not re-read stale **1** from `world.getDynamicProperty`; codex toggle stays in sync.
+- **Dusted cache validation:** Wave start tick only advances when a **non-empty** sample exists; drain uses **`world.getDimension(value.dimension)`** so a shared queue validates entries in their real dimension.
+- **Scan yield balance:** `getScanYieldBalanceMultiplier` vs spread-MP reference limit; **`BLOCKS_PER_TICK_BUDGET`** keyed by **`getQueryBudgetPlayerCount`**; **`getEffectiveMaxCandidates` / SpacedTiles** and spawn tick modifiers use the same multiplier where intended.
+- **Ideal bear pressure:** `getIdealNearbyBearTarget` + `getIdealBearPressureFactors` computed once per processed player from **`totalNearbyBears`**; **`idealBearPressureChanceMult` / `idealBearSpawnRateMult`** on modifiers feed **`attemptSpawnType`** (chance before cap; per-tick spawn cap and attempts). Hard limits unchanged (type caps, `maxCount`, global cap). *Nuance:* End / milestone chance tweaks run **after** ideal chance multiply—intentional for dimension-specific curves.
+
+---
+
 ## Infection action bar hidden during scripted intro (`main.js`)
 
 - **Issue:** `tryRefreshInfectionHudActionBar` only skipped the major-infection **cure hint** when `introInProgress.has(id)`; **timer line** (`showInfectionTimer`) still drew during the intro.
@@ -937,3 +951,40 @@ Converted the Emulsifier from a dev-only abstract zone concept into a placeable 
    - No longer converts snow layers to air in Emulsifier detox pass.
 
 Result: Emulsifier is now a true placeable machine with fuel UI workflow, and corrupted snow neutralizes to harmless vanilla snow as requested.
+
+---
+
+## 2026-03-28 — Spatial cluster scan budgeting + spawn dev UI
+
+**Spawn controller (`mb_spawnController.js`)**
+
+- `countSpatialProximityClusters(players)` counts XZ-connected groups using the same 32-block threshold as tight groups.
+- Per dimension, that count is passed as `scanLoadCount` into `getTilesForPlayer` → tile collection.
+- `getDiscoveryBudgetPlayerCount` / `getQueryBudgetPlayerCount` feed `getAdaptiveDiscoveryRadius`, `getBlockQueryLimit`, and per-scan tile limits so **5 players in 3 distant clusters** shrink discovery and queries more like **3 players**, while **query** tiers never drop below a “duo” level when the dimension is actually multiplayer (avoids solo-sized block budgets for one stacked party).
+- New `SPAWN_SCAN_PRESETS`: `minimal`, `multiplayerSpread`, `soloHost` (existing presets unchanged).
+
+**Codex dev menus (`mb_codex.js`)**
+
+- Spawn Controller hub: **Core** (difficulty, speed, types), **Performance** (intensity presets, quick combos, advanced, scan scheduler), **Force spawn** (by category), Emulsifier.
+- **Spawn intensity presets**: added `ultraLow`, `mpLite`; menu builds from `Object.keys(SPAWN_PRESETS)`.
+- **Quick combos**: one tap applies spawn preset + `applySpawnScanPreset` (e.g. Low + Low Lag, Ultra + Minimal scan).
+- Force spawn: **category** screen then type list (Tiny / Infected / Buff / Flying / Mining / Torpedo).
+- Back navigation returns to Performance or Core hubs where appropriate.
+
+---
+
+## 2026-03-28 — Scan spikes, barren, global cap by world clusters, HUD
+
+**`mb_spawnController.js`**
+
+- **`computeSpatialClusterMeta`**: union-find at file top (shared 32-block XZ rule); `countSpatialProximityClusters` wraps it.
+- **`getWorldWideSpawnLoadCount`**: sums per-dimension cluster counts; **`getEffectiveMaxGlobalSpawnsPerTick`** scales the global spawn cap from this load (cached once per tick), not raw player count only.
+- **Barren:** `getBarrenCooldownTicks(..., scanLoadCount)` adds **stacked boost** when `totalPlayerCount > scanLoadCount` (many players, few clusters). Do not mark chunk barren if **`blockQueryCount >= queryLimit`** (incomplete scan); **`minQueriesForBarrenMark`** scales with query budget (~14%, min 48).
+- **Cache validation:** up to 50-sample waves, **`CACHE_VALIDATION_BLOCKS_PER_TICK` (10)** `getBlock` calls per `collectDustedTiles` call (spread spike). Drain step uses **`world.getDimension(value.dimension)`** so a wave started in one dimension is still validated when another dimension’s tile collect advances the queue; wave timestamp is set only when a non-empty sample is created.
+- **Chunk queue fairness:** `clusterIndex` on queue entries; **fairness wiggle** on new-chunk schedule; **readyScans** secondary sort rotates by `clusterIndex` over time.
+- **Same-tick load spreading:** **`playersTriggeredTileRescan`** — on tile rescan, defer **`getEntities`** (spawn cap counts) refresh if cache still “recent enough”. Buff proximity ambience is unchanged (no deferral).
+- **HUD:** world property `mb_spawn_scan_perf_debug`; **`isSpawnScanPerfOverlayEnabled` / `setSpawnScanPerfOverlayEnabled`**; action bar `P/C/D/W` per player’s dimension + world load.
+
+**`mb_codex.js`**
+
+- Spawn Performance hub: toggle **scan HUD** (action bar).

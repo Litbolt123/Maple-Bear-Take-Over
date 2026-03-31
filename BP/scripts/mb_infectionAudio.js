@@ -204,16 +204,17 @@ export function tickInfectionCoughAndBreath(sourcePlayer, infectionState, ctx) {
     return out;
 }
 
-/** After eating powder — higher pitch (~+25%) */
-export function playPowderHiccup(sourcePlayer, getEmitterTier, getHearOthersTier, getMasterVolume) {
+/** After eating powder — higher pitch (~+25%). Radius 0 = only the eater (no nearby players). */
+export function playPowderHiccup(sourcePlayer, getEmitterTier, getHearOthersTier, getMasterVolume, broadcastToNearby = false) {
     const pitch = 1.25;
     const baseVol = BASE_DEFINITION_ATTENUATION * 0.85;
+    const radius = broadcastToNearby ? HICCUP_RADIUS : 0;
     return playInfectionSpatialSound(
         sourcePlayer,
         HICCUP_SOUND,
         pitch,
         baseVol,
-        HICCUP_RADIUS,
+        radius,
         getEmitterTier,
         getHearOthersTier,
         getMasterVolume
