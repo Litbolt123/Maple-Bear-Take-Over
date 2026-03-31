@@ -2,6 +2,11 @@
 
 **Date:** 2026-03-31
 
+## Emulsifier fuel UI: Snow + Iron label contrast (`mb_codex.js`)
+
+- **Add Fuel / Change Fuel** option **Snow + Iron** used `§7` (gray) on the button title; hard to read on light-grey ActionForm backgrounds. **Change:** use `§9` (blue) for the iron-tier label in both `openAddFuelMenu` and `openFuelMenu` option arrays.
+- **Dev refuel menu** (`getFuelCostAvailabilityLine`): material names after counts were `§7`; **change** to `§f` (white) with `§8` on the “You have:” prefix for clearer inventory lines on buttons.
+
 ## Emulsifier machine item + dusted dirt crafting + recipes
 
 - **Emulsifier item:** `BP/items/emulsifier_machine.json` — `mb:emulsifier_machine` with `minecraft:block_placer` → `mb:emulsifier_machine` (loot table already referenced this item; it was missing from the pack). **No `minecraft:icon`** so the client uses the **block’s 3D/item appearance** (avoids broken flat icons when pointing `item_texture` at terrain-only paths).
@@ -11,7 +16,7 @@
 
 ## Emulsifier running sounds (`RP/sounds/emulsifier`, `mb_spawnController.js`)
 
-- **Definitions:** `sound_definitions.json` adds `mb.emulsifier_run` (block category, 24-block subtitle range) with three random variants: `Gurgling Machine Sounds`, `Loud Mechanical Machine Sound`, `Machine Sounds` under `sounds/emulsifier/` (paths match existing pack convention, no extension).
+- **Definitions:** `sound_definitions.json` adds `mb.emulsifier_run` (block category, **`max_distance` 16* blocks so it fades out sooner; was 24) with three random variants: `Gurgling Machine Sounds`, `Loud Mechanical Machine Sound`, `Machine Sounds` under `sounds/emulsifier/` (paths match existing pack convention, no extension).
 - **When it plays:** While `processEmulsifierZones` has a zone **active** and **with fuel** after `advanceZoneFuelQueue`, `maybePlayEmulsifierRunningSound` fires at most every **90 ticks** (~4.5s) per machine via **`dimension.playSound`** at the **block center** (true positional audio; `sound_definitions` `max_distance` still applies).
 - **Cleanup:** `emulsifierRunSoundLastTick` map keys cleared when fuel runs out, machine disabled, zone removed, block gone, or dev remove-nearest.
 - **Dev tools:** `mb_devSoundCatalog.js` — category "Emulsifier" for previewing `mb.emulsifier_run`.

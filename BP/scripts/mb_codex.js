@@ -95,9 +95,9 @@ function getFuelCostAvailabilityLine(player, fuelType) {
         const have = countItemInInventory(player, c.item);
         const haveColor = have >= c.count ? "§a" : "§c";
         const name = c.item.replace("minecraft:", "").replace("mb:", "");
-        parts.push(`${haveColor}${have}/${c.count}§7 × ${name}`);
+        parts.push(`${haveColor}${have}/${c.count}§f× ${name}`);
     }
-    return "§7You have: " + parts.join("  ");
+    return "§8You have: §f" + parts.join("  ");
 }
 
 export function showEmulsifierMachineUI(player, block) {
@@ -193,7 +193,7 @@ export function showEmulsifierMachineUI(player, block) {
     const openAddFuelMenu = () => {
         const options = [
             { key: "redstone", label: "Redstone", desc: "Starter power", color: "§c" },
-            { key: "iron", label: "Snow + Iron", desc: "Low-tier alloy fuel", color: "§7" },
+            { key: "iron", label: "Snow + Iron", desc: "Low-tier alloy fuel", color: "§8"},
             { key: "copper", label: "Snow + Copper", desc: "Mid-tier alloy fuel", color: "§6" },
             { key: "gold", label: "Snow + Gold", desc: "High-tier alloy fuel", color: "§e" },
             { key: "netherite", label: "Netherite", desc: "Permanent core", color: "§5" }
@@ -248,7 +248,7 @@ export function showEmulsifierMachineUI(player, block) {
     const openFuelMenu = () => {
         const options = [
             { key: "redstone", label: "Redstone", desc: "Starter power", color: "§c" },
-            { key: "iron", label: "Snow + Iron", desc: "Low-tier alloy fuel", color: "§7" },
+            { key: "iron", label: "Snow + Iron", desc: "Low-tier alloy fuel", color: "§8"},
             { key: "copper", label: "Snow + Copper", desc: "Mid-tier alloy fuel", color: "§6" },
             { key: "gold", label: "Snow + Gold", desc: "High-tier alloy fuel", color: "§e" },
             { key: "netherite", label: "Netherite", desc: "Permanent core", color: "§5" }
