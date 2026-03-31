@@ -9,6 +9,7 @@
 // ============================================================================
 
 import { system, world } from "@minecraft/server";
+import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 
 // ============================================================================
 // CONSTANTS
@@ -159,6 +160,8 @@ function removeFireResistance(entity) {
 
 system.runInterval(() => {
     try {
+        if (!isScriptEnabled(SCRIPT_IDS.dimensionAdaptation)) return;
+
         // Check all dimensions for bears
         const dimensions = ["minecraft:overworld", "minecraft:nether", "minecraft:the_end"];
         
@@ -217,6 +220,8 @@ system.runInterval(() => {
 
 world.afterEvents.entitySpawn.subscribe((event) => {
     try {
+        if (!isScriptEnabled(SCRIPT_IDS.dimensionAdaptation)) return;
+
         const entity = event.entity;
         if (!isMapleBear(entity)) return;
         

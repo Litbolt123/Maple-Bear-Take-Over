@@ -12,6 +12,7 @@ import { isDebugEnabled, getPlayerSoundVolume, getStormParticleDensity } from ".
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getStormSpawnTiles } from "./mb_snowStorm.js";
 import { STORM_PARTICLE_PASS_THROUGH } from "./mb_blockLists.js";
+import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
 
 // ============================================================================
 // SECTION 1: DEBUG AND ERROR LOGGING
@@ -2791,23 +2792,29 @@ export function countNearbyDustedDirtBlocks(center, dimension, radius, limit = 1
     if (!center) return 0;
     const dimensionId = typeof dimension === "string" ? dimension : dimension?.id;
     if (!dimensionId) return 0;
-    
+    const dim = typeof dimension === "string" ? world.getDimension(dimension) : dimension;
+    if (!dim?.getBlock) return 0;
+
     const radiusSq = radius * radius;
     let count = 0;
-    
+    const eye = { x: center.x, y: center.y + 1.5, z: center.z };
+
     for (const value of dustedDirtCache.values()) {
         if (value?.chunkKey && !activeChunks.has(value.chunkKey)) continue;
         if (value?.dimension && value.dimension !== dimensionId) continue;
-        
+
         const dx = value.x - center.x;
         const dy = value.y - center.y;
         const dz = value.z - center.z;
-        if ((dx * dx + dy * dy + dz * dz) <= radiusSq) {
-            count++;
-            if (count >= limit) break;
-        }
+        if ((dx * dx + dy * dy + dz * dz) > radiusSq) continue;
+
+        const blockCenter = { x: value.x + 0.5, y: value.y + 0.5, z: value.z + 0.5 };
+        if (!hasInfectionExposureLineOfSight(dim, eye, blockCenter)) continue;
+
+        count++;
+        if (count >= limit) break;
     }
-    
+
     return count;
 }
 

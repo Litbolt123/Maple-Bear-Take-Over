@@ -1,3 +1,6 @@
+/**
+ * Torpedo bears clear blocks via script (`setType(air)`, path bursts) — not via entity `break_blocks`.
+ */
 import { system, world, Player } from "@minecraft/server";
 import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";

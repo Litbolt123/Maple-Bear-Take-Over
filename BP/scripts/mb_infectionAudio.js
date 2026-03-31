@@ -4,6 +4,7 @@
  */
 
 import { world, system } from "@minecraft/server";
+import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
 
 const COUGH_DUST_PARTICLE = "mb:white_dust_particle_short";
 
@@ -75,6 +76,11 @@ export function playInfectionSpatialSound(sourcePlayer, soundId, pitch, baseVolu
         if (distSq(loc.x, loc.y, loc.z, pl.x, pl.y, pl.z) > r2) continue;
 
         const isSelf = p.id === sourcePlayer.id;
+        if (!isSelf) {
+            const from = { x: loc.x, y: loc.y + 1.5, z: loc.z };
+            const to = { x: pl.x, y: pl.y + 1.5, z: pl.z };
+            if (!hasInfectionExposureLineOfSight(dim, from, to)) continue;
+        }
         if (emitterMutedForOthers && !isSelf) continue;
 
         let hearMul = 1;
@@ -100,6 +106,13 @@ export function playInfectionSpatialSound(sourcePlayer, soundId, pitch, baseVolu
 }
 
 /**
+ * @param {object} ctx
+ * @param {boolean} [ctx.introActive]
+ * @param {boolean} [ctx.environmentSynergy]
+ * @param {number} [ctx.maxInfectionTicks] - minor/major cap from main (for “last quarter” dust rule)
+ * @param {function} ctx.getEmitterTier
+ * @param {function} ctx.getHearOthersTier
+ * @param {function} ctx.getMasterVolume
  * @returns {{ playedCough: boolean, playedBreath: boolean }}
  */
 export function tickInfectionCoughAndBreath(sourcePlayer, infectionState, ctx) {
@@ -112,20 +125,24 @@ export function tickInfectionCoughAndBreath(sourcePlayer, infectionState, ctx) {
     const snowCount = infectionState.snowCount || 0;
     const snowSynergy = isMajor ? (snowCount >= 21 ? 1.22 : snowCount >= 11 ? 1.12 : 1) : 1;
 
+    const maxT = typeof ctx.maxInfectionTicks === "number" && ctx.maxInfectionTicks > 0 ? ctx.maxInfectionTicks : 0;
+    const ticksLeft = infectionState.ticksLeft || 0;
+    /** Minor: white-dust “snow” puff only in final 25% of timer (same scale as main.js ratio). */
+    const minorInLastQuarter = !isMajor && maxT > 0 && ticksLeft * 4 <= maxT;
+
     const now = system.currentTick;
     const pid = sourcePlayer.id;
 
-    // --- Cough (audio): randomized gaps between attempts, less frequent than fixed cooldown + roll ---
+    // --- Cough (sound only, no particle): major common; minor much rarer ---
     let nextDue = nextCoughDueTickByPlayer.get(pid);
     if (nextDue === undefined) {
-        // Stagger first cough window so players do not sync
-        nextDue = now + randInt(isMajor ? 400 : 1000, isMajor ? 1400 : 3200);
+        nextDue = now + randInt(isMajor ? 400 : 2600, isMajor ? 1400 : 6200);
         nextCoughDueTickByPlayer.set(pid, nextDue);
     }
 
     if (now >= nextDue) {
         const pressure = synergy * (isMajor ? snowSynergy : 1);
-        const coughThreshold = isMajor ? 0.32 : 0.2;
+        const coughThreshold = isMajor ? 0.34 : 0.052;
         if (Math.random() <= coughThreshold * pressure) {
             const soundId = isMajor ? COUGH_SOUND_MAJOR : COUGH_SOUND_MINOR;
             const baseVol = BASE_DEFINITION_ATTENUATION * (isMajor ? MAJOR_VOLUME_MULT : MINOR_VOLUME_MULT) * (0.88 + Math.random() * 0.12);
@@ -142,22 +159,24 @@ export function tickInfectionCoughAndBreath(sourcePlayer, infectionState, ctx) {
             );
             if (played) {
                 out.playedCough = true;
-                const gapMin = isMajor ? 520 : 1300;
-                const gapMax = isMajor ? 1280 : 3400;
+                const gapMin = isMajor ? 520 : 2800;
+                const gapMax = isMajor ? 1280 : 7200;
                 const gap = Math.max(240, Math.round(randInt(gapMin, gapMax) / pressure));
                 nextCoughDueTickByPlayer.set(pid, now + gap);
             } else {
-                nextCoughDueTickByPlayer.set(pid, now + randInt(100, 320));
+                nextCoughDueTickByPlayer.set(pid, now + randInt(isMajor ? 100 : 200, isMajor ? 320 : 520));
             }
         } else {
-            nextCoughDueTickByPlayer.set(pid, now + randInt(140, 480));
+            nextCoughDueTickByPlayer.set(pid, now + randInt(isMajor ? 140 : 320, isMajor ? 480 : 900));
         }
     }
 
-    // --- Dust breath: rare particle + `mb.infection_cough_major` (RP picks a random major cough file per play)
+    // --- Dust breath: particle + cough sound. Major: rare anytime. Minor: only last quarter; rarer roll. ---
     const breathCooldown = 5600;
     const lastB = lastDustBreathTickByPlayer.get(pid) ?? -1e9;
-    if (now - lastB >= breathCooldown && Math.random() < 0.095 * synergy) {
+    const allowDustBreath = isMajor || minorInLastQuarter;
+    const breathChance = isMajor ? 0.095 * synergy : 0.048 * synergy;
+    if (allowDustBreath && now - lastB >= breathCooldown && Math.random() < breathChance) {
         lastDustBreathTickByPlayer.set(pid, now);
         try {
             const dim = sourcePlayer.dimension;
@@ -166,11 +185,12 @@ export function tickInfectionCoughAndBreath(sourcePlayer, infectionState, ctx) {
                 dim.spawnParticle(COUGH_DUST_PARTICLE, { x: l.x, y: l.y + 1.2, z: l.z });
             }
         } catch { /* ignore */ }
-        const breathVol = BASE_DEFINITION_ATTENUATION * MAJOR_VOLUME_MULT * (0.36 + Math.random() * 0.12);
+        const breathVol = BASE_DEFINITION_ATTENUATION * (isMajor ? MAJOR_VOLUME_MULT : MINOR_VOLUME_MULT) * (0.36 + Math.random() * 0.12);
         const breathPitch = 0.96 + Math.random() * 0.12;
+        const breathSound = isMajor ? COUGH_SOUND_MAJOR : COUGH_SOUND_MINOR;
         playInfectionSpatialSound(
             sourcePlayer,
-            COUGH_SOUND_MAJOR,
+            breathSound,
             breathPitch,
             breathVol,
             COUGH_RADIUS,

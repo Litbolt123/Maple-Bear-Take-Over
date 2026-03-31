@@ -70,7 +70,7 @@ On each **40-tick** interval of the main infection loop, minor players get sever
 
 ### 4.5 Death
 
-Minor infection **persists through death** (state kept; tag reapplied on respawn). Major infection is cleared on death so the next life starts from the “respawn → minor” path unless immune.
+Minor infection **persists through death** (state kept; tag reapplied on respawn). Major infection is cleared on death so the next life starts from the “respawn → minor” path unless immune. The **“persists even after death”** title/chat only runs after a **real death** with minor (`mb_minor_post_death_ui_pending` set in `handlePlayerDeath`, cleared on next `playerSpawn`) — **not** when rejoining the world without dying (`playerSpawn` also fires on join).
 
 ---
 
@@ -134,7 +134,7 @@ Boats and some water cases skip counting (see `isStandingOnInfectedGround`).
 
 ### 6.3 Timer buckets (`groundExposureState`)
 
-- **`groundSeconds`** / warnings / **`ambientSeconds`** (many dusted blocks in radius)—see `AMBIENT_PRESSURE_RADIUS` and `AMBIENT_PRESSURE_THRESHOLD` in `main.js`.
+- **`groundSeconds`** / warnings / **`ambientSeconds`** (many **visible** dusted blocks in radius; line-of-sight from the player’s eye to each cached `mb:dusted_dirt`—see `countNearbyDustedDirtBlocks` + `mb_infectionExposureLos.js`)—see `AMBIENT_PRESSURE_RADIUS` and `AMBIENT_PRESSURE_THRESHOLD` in `main.js`.
 - **`biomeSeconds`** — pressure while in infected biome (slow).
 - **`stormSeconds`** — from `getStormExposureRates()` in `mb_snowStorm.js` (faster than current ground rates).
 
@@ -292,12 +292,15 @@ flowchart TD
 
 - **Module**: `mb_infectionAudio.js` — spatial playback by iterating nearby players (each listener applies **master** `getPlayerSoundVolume` × **emitter** tier × **hear others** tier).
 - **Settings** (Powdery Journal → Settings): `infectionCueEmitterVolume` and `infectionCueHearOthersVolume` (Off / Low / High). Emitter **Off** suppresses cough, hiccup, and cure sigh for everyone; **Hear others** only affects other players’ infection noises.
-- **Coughs**: Random interval during minor/major infection (major more frequent and louder). **Storm** or **corrupted ground** increases chance (synergy).
+- **Coughs** (sound only — **no** particle): Random interval; **major** is much more frequent and louder than **minor** (longer gaps + lower roll chance for minor). **Storm** or **corrupted ground** increases chance (synergy).
 - **Powder hiccup**: Plays when consuming `mb:snow` (pitch ~1.25).
-- **Dust breath**: Very rare `mb:white_dust_particle_short` at the player’s head (short-lived variant of white dust) plus a softer **`mb.infection_cough_major`** play (RP picks a random file).
+- **Dust breath** (“snow” puff): Very rare `mb:white_dust_particle_short` at the head plus a cough sound — **major** anytime (major cough sound); **minor** only when `ticksLeft * 4 <= maxInfectionTicks` (final **25%** of the minor timer scale from `main.js`, same cap as severity ratio), uses **minor** cough sound, lower chance than major. `ctx.maxInfectionTicks` is passed from the infection loop.
 - **Cure sigh**: Minor and major cure paths play `mb.cure_sigh_relief_minor` / `mb.cure_sigh_relief_major`.
 - **Sounds** (definitions in `RP/sounds/sound_definitions.json`, assets under `sounds/infection_cough/`, `dust_eat_hiccup/`, `cure_sigh_relief/`): per-file volumes **0.68** (cough/hiccup) and **0.34** (cure sighs), with script-side tier multipliers.
 - **Codex**: `symptomsUnlocks.infectionBodySoundsUnlocked` unlocks **Symptoms → Body sounds (infection)** and an **Infection** book line under mechanics.
+- **Line of sight** (`mb_infectionExposureLos.js`): Other players only hear cough/breath/hiccup/sigh plays from `playInfectionSpatialSound` if a ray from **~eye height** to theirs is clear of **occluding** blocks. **Air, water, lava, snow layers, and plant/foliage IDs** (from `SNOW_REPLACEABLE_BLOCKS` + `STORM_PARTICLE_PASS_THROUGH` in `mb_blockLists.js`, plus thin redstone/tripwire/string/cobweb) do **not** block; typical **stone, dirt, wood, glass, fences** do. The same ray is used when **counting nearby `mb:dusted_dirt`** for **ambient infection pressure** (`countNearbyDustedDirtBlocks` in `mb_spawnController.js`) so buried or walled-off corruption does not inflate ambient meters.
+- **Cough / dust breath → nearby ambient pressure** (`main.js` `applyProximityAmbientFromInfectedPlayer`): When **`playedCough`** or **`playedBreath`** fires, other players within **~3 blocks** and **exposure LOS** gain **`ambientSeconds`** toward the same cap as dusted-dirt ambient (`AMBIENT_INFECTION_SECONDS` = **630**). Bumps (additive, capped at 630): **major** cough **+36**, **major** dust breath **+48**; **minor** cough **+8**, **minor** dust breath **+6**. Rough ceiling-only math (no decay): ~**18** major coughs or ~**14** major breaths to fill the meter; minor emitters need **~6×** more events than major for the same kind of cue. Decay while off corrupted ground and the requirement to be **on infected ground** for the infection check mean real play needs **more** exposure time than those counts.
+- **Powdery / Dusted Journal “infection timer on screen”**: Shown on the **action bar** (with optional **major cure** hint on the same line) instead of `setTitle`, to avoid flicker and conflicts with other title uses. The bar is **re-applied every 10 ticks** (`INFECTION_ACTIONBAR_REFRESH_TICKS` in `main.js`) so the client HUD does not fade out between the slower **40-tick** infection loop. While **dead** (respawn screen), the bar is **cleared** until **`playerSpawn`** (`infectionActionBarSuppressedUntilSpawn` in `main.js`). **Last in-game day** (≤24000 ticks): HUD uses **in-game hours/minutes** via `formatInfectionHudTimeRemaining` (1000 ticks = 1 hour); above that, `~N days left`. **First Powdery main summary** with a visible infection timer line adds a one-time tip to use **Settings** for the on-screen timer (`journal.powderyHudTimerHintShown`).
 
 ---
 
@@ -307,6 +310,7 @@ flowchart TD
 |------|-----------|
 | State maps, bear hit handler, ground loops, cures, transformation | `main.js` — `playerInfection`, `groundExposureState`, `entityHurt`, `entityDie`, `itemCompleteUse`, `system.runInterval` infection blocks |
 | Infection cough / hiccup / cure sigh spatial audio | `mb_infectionAudio.js` + calls from `main.js` |
+| Exposure LOS (audio + ambient dust count + proximity spread) | `mb_infectionExposureLos.js` + `main.js` `applyProximityAmbientFromInfectedPlayer` |
 | Storm exposure constants and storm logic | `mb_snowStorm.js` |
 | Difficulty `hitsBase`, decay multipliers | `mb_dynamicPropertyHandler.js` |
 | Infected mob movement / anger | `mb_infectedAI.js` |

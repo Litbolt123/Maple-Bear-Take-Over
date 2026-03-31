@@ -19,6 +19,7 @@ import "./mb_biomeAmbience.js";
 import "./mb_snowStorm.js";
 import { isPlayerInStorm, getStormExposureRates, summonStorm, setStormOverride, resetStormOverride, getStormState, wasKilledByStorm } from "./mb_snowStorm.js";
 import { tickInfectionCoughAndBreath, playPowderHiccup, playCureSighRelief, resetInfectionAudioCooldowns } from "./mb_infectionAudio.js";
+import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_DANGER_STRONG, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 
@@ -135,6 +136,16 @@ const AMBIENT_INFECTION_SECONDS = 630; // 10 minutes + 30 seconds
 const GROUND_NAUSIA_DURATION_TICKS = 100; // 5 seconds when standing on infected ground triggers warning
 const AMBIENT_DECAY_SECONDS_PER_TICK = 2; // Every 1 second, reduce by 1 second (2s interval -> -2)
 
+/** Nearby players in LOS gain `ambientSeconds` toward environmental major infection (needs infected ground to finish). */
+const COUGH_PROXIMITY_RADIUS_BLOCKS = 3;
+const COUGH_PROXIMITY_RADIUS_SQ = COUGH_PROXIMITY_RADIUS_BLOCKS * COUGH_PROXIMITY_RADIUS_BLOCKS;
+/** Per cough sound (no particle). Major emitters are a real exposure risk; minor much less. */
+const PROXIMITY_AMBIENT_COUGH_BUMP_MAJOR = 36;
+const PROXIMITY_AMBIENT_COUGH_BUMP_MINOR = 8;
+/** Per dust breath (particle + sound) — counts as “coughing out dust”; stronger for major, small for minor. */
+const PROXIMITY_AMBIENT_BREATH_BUMP_MAJOR = 48;
+const PROXIMITY_AMBIENT_BREATH_BUMP_MINOR = 6;
+
 // Storm exposure decay (uses old rate - same as old ground decay)
 const STORM_EXPOSURE_DECAY_SECONDS_PER_TICK = 1; // Every check when not in storm, reduce by 1 second
 
@@ -215,6 +226,16 @@ const SYMPTOM_LEVEL_CONFIG = {
 };
 const lastSymptomTick = new Map(); // playerId -> last tick applied
 const cureReminderLastTick = new Map(); // playerId -> last tick cure hint shown
+/** Hide infection HUD on death screen until respawn (`playerSpawn`). */
+const infectionActionBarSuppressedUntilSpawn = new Set();
+/** Action bar fades on Bedrock if not refreshed; main infection logic runs every 40t — re-apply HUD here. */
+const INFECTION_ACTIONBAR_REFRESH_TICKS = 10;
+
+function clearInfectionHudActionBar(player) {
+    try {
+        player?.onScreenDisplay?.setActionBar?.("");
+    } catch { /* ignore */ }
+}
 function getSymptomLevel(ticksLeft) {
     const total = INFECTION_TICKS;
     const ratio = Math.max(0, Math.min(1, (ticksLeft || 0) / total));
@@ -324,6 +345,8 @@ export const PERMANENT_IMMUNITY_PROPERTY = "mb_permanent_immunity";
 const MINOR_INFECTION_CURED_PROPERTY = "mb_minor_infection_cured";
 const MINOR_REINFECTED_PROPERTY = "mb_minor_reinfected";
 const MINOR_RESPAWNED_PROPERTY = "mb_minor_respawned";
+/** Set on death while minor infected; consumed on next spawn so “persists after death” UI only follows real death, not world rejoin. */
+const MINOR_POST_DEATH_UI_PENDING_PROPERTY = "mb_minor_post_death_ui_pending";
 const MAJOR_INFECTED_BEFORE_PROPERTY = "mb_major_infected_before";
 export const MINOR_CURE_GOLDEN_APPLE_PROPERTY = "mb_minor_cure_golden_apple";
 export const MINOR_CURE_GOLDEN_CARROT_PROPERTY = "mb_minor_cure_golden_carrot";
@@ -1107,6 +1130,62 @@ function getGroundExposureState(playerId) {
         }
     }
     return created;
+}
+
+/**
+ * When an infected player coughs or exhales dust, others within ~3 blocks and infection LOS gain `ambientSeconds`
+ * (same meter as dusted-dirt ambient; must hit threshold while on infected ground for major from environment).
+ * @param {"cough"|"dustBreath"} spreadKind
+ */
+function applyProximityAmbientFromInfectedPlayer(sourcePlayer, infectionState, spreadKind = "cough") {
+    try {
+        if (!sourcePlayer?.isValid || !infectionState || infectionState.cured) return;
+        const sgm = sourcePlayer.getGameMode?.();
+        if (sgm === "spectator") return;
+
+        const isMajor = (infectionState.infectionType || MAJOR_INFECTION_TYPE) === MAJOR_INFECTION_TYPE;
+        const breath = spreadKind === "dustBreath";
+        let bump;
+        if (isMajor) {
+            bump = breath ? PROXIMITY_AMBIENT_BREATH_BUMP_MAJOR : PROXIMITY_AMBIENT_COUGH_BUMP_MAJOR;
+        } else {
+            bump = breath ? PROXIMITY_AMBIENT_BREATH_BUMP_MINOR : PROXIMITY_AMBIENT_COUGH_BUMP_MINOR;
+        }
+
+        const dim = sourcePlayer.dimension;
+        const sloc = sourcePlayer.location;
+        if (!dim || !sloc) return;
+
+        const fromEye = { x: sloc.x, y: sloc.y + 1.5, z: sloc.z };
+
+        for (const p of world.getAllPlayers()) {
+            if (!p?.isValid || p.id === sourcePlayer.id) continue;
+            if (p.dimension?.id !== dim.id) continue;
+            const pgm = p.getGameMode?.();
+            if (pgm === "spectator" || pgm === "creative") continue;
+
+            if (normalizeBoolean(getPlayerProperty(p, PERMANENT_IMMUNITY_PROPERTY))) continue;
+
+            const pInf = playerInfection.get(p.id);
+            const pMajor = pInf && pInf.infectionType === MAJOR_INFECTION_TYPE && !pInf.cured;
+            if (pMajor) continue;
+
+            const pl = p.location;
+            if (!pl) continue;
+            const dx = pl.x - sloc.x;
+            const dy = pl.y - sloc.y;
+            const dz = pl.z - sloc.z;
+            if (dx * dx + dy * dy + dz * dz > COUGH_PROXIMITY_RADIUS_SQ) continue;
+
+            const toEye = { x: pl.x, y: pl.y + 1.5, z: pl.z };
+            if (!hasInfectionExposureLineOfSight(dim, fromEye, toEye)) continue;
+
+            if (isPlayerImmune(p)) continue;
+
+            const exp = getGroundExposureState(p.id);
+            exp.ambientSeconds = Math.min(AMBIENT_INFECTION_SECONDS, exp.ambientSeconds + bump);
+        }
+    } catch { /* ignore */ }
 }
 
 function isStandingOnInfectedGround(player) {
@@ -3025,6 +3104,9 @@ function handleGoldenCarrot(player, item) {
 // Handle player death - clear infection data
 function handlePlayerDeath(player) {
     try {
+        infectionActionBarSuppressedUntilSpawn.add(player.id);
+        clearInfectionHudActionBar(player);
+
         // Check if player has permanent immunity
         const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
         
@@ -3067,6 +3149,7 @@ function handlePlayerDeath(player) {
             try {
                 setPlayerProperty(player, "mb_immunity_end", undefined);
                 setPlayerProperty(player, "mb_bear_hit_count", undefined);
+                setPlayerProperty(player, MINOR_POST_DEATH_UI_PENDING_PROPERTY, true);
                 // Keep infection data and infection type - minor infection persists
             } catch (error) {
                 console.warn(`[DEATH] Error clearing properties for minor infected ${player.name}:`, error);
@@ -4630,6 +4713,74 @@ world.afterEvents.entityHurt.subscribe((event) => {
 // --- Cure Logic: Consolidated in itemCompleteUse above ---
 // Removed duplicate cure logic since it's now handled in the main itemCompleteUse handler
 
+/**
+ * In-world HUD line for infection time left. After the last full game day (≤24000 ticks), uses in-game hours/minutes (1000 ticks = 1 hour).
+ */
+export function formatInfectionHudTimeRemaining(ticksLeft, infectionType) {
+    const label = infectionType === MINOR_INFECTION_TYPE ? "§e" : "§c";
+    const t = Math.max(0, Math.floor(ticksLeft || 0));
+    if (t <= 0) return `${label}0s left`;
+    if (t > 24000) {
+        const days = Math.ceil(t / 24000);
+        return `${label}~${days} day${days !== 1 ? "s" : ""} left`;
+    }
+    const hours = Math.floor(t / 1000);
+    const tickRem = t % 1000;
+    const minutes = Math.floor((tickRem * 60) / 1000);
+    if (hours > 0) {
+        return `${label}${hours}h ${minutes}m left`;
+    }
+    if (minutes > 0) {
+        return `${label}${minutes}m left`;
+    }
+    const secs = Math.max(1, Math.ceil(t / 20));
+    return `${label}${secs}s left`;
+}
+
+/**
+ * Powdery/Dusted Journal setting `showInfectionTimer` + major cure hint (same line when both apply).
+ * Called on a short interval so the client does not fade the action bar between slow infection ticks.
+ */
+function tryRefreshInfectionHudActionBar(player, id, state) {
+    if (!player?.isValid || !state || state.ticksLeft <= 0) return;
+    try {
+        if (infectionActionBarSuppressedUntilSpawn.has(id)) {
+            clearInfectionHudActionBar(player);
+            return;
+        }
+
+        const opts = getPlayerSettings(player);
+        const osd = player.onScreenDisplay;
+        if (!osd?.setActionBar) return;
+
+        const infectionType = state.infectionType || MAJOR_INFECTION_TYPE;
+        let cureHint = "";
+        if (infectionType === MAJOR_INFECTION_TYPE && !introInProgress.has(id)) {
+            const hasWeakness = player.getEffect?.("minecraft:weakness");
+            if (hasWeakness && hasItem(player, "minecraft:enchanted_golden_apple")) {
+                const last = cureReminderLastTick.get(id) ?? 0;
+                if (system.currentTick - last >= 300) {
+                    cureReminderLastTick.set(id, system.currentTick);
+                    cureHint = "§aYou have the cure components.";
+                }
+            }
+        }
+
+        let timerLine = "";
+        if (opts.showInfectionTimer) {
+            timerLine = formatInfectionHudTimeRemaining(state.ticksLeft, infectionType);
+        }
+
+        if (cureHint && timerLine) {
+            osd.setActionBar(`${cureHint} §8| ${timerLine}`);
+        } else if (cureHint) {
+            osd.setActionBar(cureHint);
+        } else if (timerLine) {
+            osd.setActionBar(timerLine);
+        }
+    } catch { /* ignore */ }
+}
+
 // --- Infection Timers and Effects ---
 system.runInterval(() => {
     // Unified infection system
@@ -4637,6 +4788,9 @@ system.runInterval(() => {
     for (const [id, state] of playerInfection.entries()) {
         const player = world.getAllPlayers().find(p => p.id === id);
         if (!player || state.cured) continue;
+
+        const infectionType = state.infectionType || MAJOR_INFECTION_TYPE;
+        const maxTicks = infectionType === MINOR_INFECTION_TYPE ? MINOR_INFECTION_TICKS : INFECTION_TICKS;
 
         // Ambient infection cough / rare dust breath (audible to nearby players; settings in journal)
         try {
@@ -4652,6 +4806,7 @@ system.runInterval(() => {
                     const audioOut = tickInfectionCoughAndBreath(player, state, {
                         introActive: false,
                         environmentSynergy,
+                        maxInfectionTicks: maxTicks,
                         getEmitterTier: getInfectionCueEmitterTier,
                         getHearOthersTier: getInfectionCueHearOthersTier,
                         getMasterVolume: getPlayerSoundVolume
@@ -4659,13 +4814,15 @@ system.runInterval(() => {
                     if (audioOut.playedCough || audioOut.playedBreath) {
                         safeMarkCodex(player, "symptomsUnlocks.infectionBodySoundsUnlocked");
                     }
+                    if (audioOut.playedCough) {
+                        applyProximityAmbientFromInfectedPlayer(player, state, "cough");
+                    }
+                    if (audioOut.playedBreath) {
+                        applyProximityAmbientFromInfectedPlayer(player, state, "dustBreath");
+                    }
                 }
             }
         } catch { /* ignore */ }
-
-        // Check infection type (default to "major" for backward compatibility)
-        const infectionType = state.infectionType || MAJOR_INFECTION_TYPE;
-        const maxTicks = infectionType === MINOR_INFECTION_TYPE ? MINOR_INFECTION_TICKS : INFECTION_TICKS;
 
         // Update last active tick when player is online
         state.lastActiveTick = system.currentTick;
@@ -4675,40 +4832,6 @@ system.runInterval(() => {
         // Cap ticksLeft at max for infection type
         if (state.ticksLeft > maxTicks) {
             state.ticksLeft = maxTicks;
-        }
-
-        // Optional infection timer on screen (Settings) — top of screen, small (subtitle)
-        if (state.ticksLeft > 0) {
-            try {
-                const opts = getPlayerSettings(player);
-                if (opts.showInfectionTimer && player.onScreenDisplay?.setTitle) {
-                    const daysLeft = Math.ceil(state.ticksLeft / 24000);
-                    const label = infectionType === MINOR_INFECTION_TYPE ? "§e" : "§c";
-                    const text = `${label}~${daysLeft} day${daysLeft !== 1 ? "s" : ""} left`;
-                    player.onScreenDisplay.setTitle("", {
-                        subtitle: text,
-                        fadeInDuration: 0,
-                        stayDuration: 60,
-                        fadeOutDuration: 0
-                    });
-                }
-            } catch (e) { /* ignore */ }
-        }
-
-        // Cure reminder: if major infection and player has weakness + enchanted golden apple (one-time or rare)
-        if (infectionType === MAJOR_INFECTION_TYPE && state.ticksLeft > 0 && !introInProgress.has(id)) {
-            try {
-                const hasWeakness = player.getEffect?.("minecraft:weakness");
-                if (hasWeakness && hasItem(player, "minecraft:enchanted_golden_apple")) {
-                    let last = cureReminderLastTick.get(id) ?? 0;
-                    if (system.currentTick - last >= 300) {
-                        cureReminderLastTick.set(id, system.currentTick);
-                        if (player.onScreenDisplay?.setActionBar) {
-                            player.onScreenDisplay.setActionBar("§aYou have the cure components.");
-                        }
-                    }
-                }
-            } catch (e) { /* ignore */ }
         }
 
         if (infectionType === MINOR_INFECTION_TYPE) {
@@ -5151,6 +5274,18 @@ system.runInterval(() => {
         }
     } catch { }
 }, 40); // Changed from 20 to 40 ticks for better performance
+
+system.runInterval(() => {
+    try {
+        const players = world.getAllPlayers();
+        const byId = new Map(players.map((p) => [p.id, p]));
+        for (const [id, state] of playerInfection.entries()) {
+            if (!state || state.cured || state.ticksLeft <= 0) continue;
+            const pl = byId.get(id);
+            if (pl) tryRefreshInfectionHudActionBar(pl, id, state);
+        }
+    } catch { /* ignore */ }
+}, INFECTION_ACTIONBAR_REFRESH_TICKS);
 
 // Track players who need frequent checking (on infected ground)
 const playersOnInfectedGround = new Set(); // playerId -> true
@@ -6169,6 +6304,8 @@ world.afterEvents.playerSpawn.subscribe((event) => {
     try {
         const player = event.player;
         if (!player || !player.isValid) return;
+
+        infectionActionBarSuppressedUntilSpawn.delete(player.id);
         
         console.log(`[SPAWN] Player ${player.name} spawned`);
         
@@ -6207,7 +6344,7 @@ world.afterEvents.playerSpawn.subscribe((event) => {
             return;
         }
         
-        // Check if player died and has minor infection (not permanently immune)
+        // Minor infection: tag on any spawn (join / rejoin / respawn). Death-themed chat/title only if pending from real death.
         const infectionState = playerInfection.get(player.id);
         const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE;
         
@@ -6219,34 +6356,29 @@ world.afterEvents.playerSpawn.subscribe((event) => {
             
             // Don't apply effects here - they're applied periodically by the infection timer loop
             // This prevents effects from being applied immediately on respawn
-            
-            // Check if this is first time respawning with minor infection
-            const hasRespawnedBefore = getPlayerProperty(player, MINOR_RESPAWNED_PROPERTY) === true;
-            
-            if (!hasRespawnedBefore) {
-                // First time respawning with minor infection - show full message with sounds and title
-                player.onScreenDisplay.setTitle("§e§lMINOR INFECTION", {
-                    fadeInDuration: 10,
-                    stayDuration: 60,
-                    fadeOutDuration: 20
-                });
-                
-                player.sendMessage(CHAT_WARNING + "You are still infected with a minor infection.");
-                player.sendMessage(CHAT_INFO + "The infection persists even after death.");
-                
-                // Play infection sounds (milder than major infection)
-                const volumeMultiplier = getPlayerSoundVolume(player);
-                player.playSound("mob.enderman.portal", { pitch: 0.9, volume: 0.6 * volumeMultiplier });
-                player.playSound("mob.villager.idle", { pitch: 0.8, volume: 0.5 * volumeMultiplier });
-                
-                // Mark as having respawned with minor infection
-                setPlayerProperty(player, MINOR_RESPAWNED_PROPERTY, true);
-            } else {
-                // Subsequent respawns - minimal message
-                player.sendMessage(CHAT_WARNING + "Minor infection.");
+
+            // Death-specific UI only after handlePlayerDeath (minor path) set the pending flag — not on world rejoin.
+            const deathUiPending = normalizeBoolean(getPlayerProperty(player, MINOR_POST_DEATH_UI_PENDING_PROPERTY));
+            if (deathUiPending) {
+                setPlayerProperty(player, MINOR_POST_DEATH_UI_PENDING_PROPERTY, false);
+                const hasExplainedDeathPersistence = getPlayerProperty(player, MINOR_RESPAWNED_PROPERTY) === true;
+                if (!hasExplainedDeathPersistence) {
+                    player.onScreenDisplay.setTitle("§e§lMINOR INFECTION", {
+                        fadeInDuration: 10,
+                        stayDuration: 60,
+                        fadeOutDuration: 20
+                    });
+                    player.sendMessage(CHAT_WARNING + "You are still infected with a minor infection.");
+                    player.sendMessage(CHAT_INFO + "The infection persists even after death.");
+                    const volumeMultiplier = getPlayerSoundVolume(player);
+                    player.playSound("mob.enderman.portal", { pitch: 0.9, volume: 0.6 * volumeMultiplier });
+                    player.playSound("mob.villager.idle", { pitch: 0.8, volume: 0.5 * volumeMultiplier });
+                    setPlayerProperty(player, MINOR_RESPAWNED_PROPERTY, true);
+                } else {
+                    player.sendMessage(CHAT_WARNING + "Minor infection.");
+                }
+                console.log(`[SPAWN] ${player.name} respawned after death with minor infection active`);
             }
-            
-            console.log(`[SPAWN] ${player.name} respawned with minor infection active`);
         } else if (!infectionState && !hasPermanentImmunity) {
             // No infection data and not permanently immune - load data first, then initialize if needed
             loadInfectionData(player);

@@ -3,7 +3,7 @@ import { ActionFormData, ModalFormData, FormCancelationReason } from "@minecraft
 import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getPlayerPropertyChunked, setPlayerPropertyChunked, getWorldPropertyChunked, setWorldPropertyChunked, saveAllProperties, ADDON_DIFFICULTY_PROPERTY, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
 import { getAllScriptToggles, setScriptEnabled, SCRIPT_IDS, isBetaInfectedAIEnabled, setBetaInfectedAIEnabled, isBetaDustStormsEnabled, setBetaDustStormsEnabled, isBetaVisibleToAll, setBetaVisibleToAll, getBetaOwnerId, setBetaOwnerId } from "./mb_scriptToggles.js";
 import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTracker.js";
-import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
+import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, formatInfectionHudTimeRemaining, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 import { getBuffBearCountdowns } from "./mb_buffAI.js";
 import { getSpawnConfigsForDevTools, getDisabledSpawnTypes, setDisabledSpawnTypes, getSpawnSpeedMultiplier, SPAWN_SPEED_PROPERTY, getBlockQueryMultiplier, getMaxGlobalSpawnsPerTick, getSpawnDistanceRange, getTileIntensityMultiplier, getBlocksPerTickMultiplier, SPAWN_OVERRIDE_PROPERTIES, getSpawnScanSettingsForDevTools, applySpawnScanPreset, SPAWN_SCAN_OVERRIDE_PROPERTIES, SPAWN_SCAN_PRESETS, getEmulsifierStateForDevTools, getEmulsifierDebugInfo, clearEmulsifierZoneCache, addEmulsifierZoneAtPlayer, removeNearestEmulsifierZone, setNearestEmulsifierFuel, getEmulsifierZoneAtBlock, upsertEmulsifierZoneAtBlock, setEmulsifierFuelAtBlock, addEmulsifierFuelAtBlock, getMaxFuelTicks, setEmulsifierActiveAtBlock, getZoneFuelQueueForUI, getZoneCurrentFuelType, zoneHasFuel, setEmulsifierFuelOrderAtBlock } from "./mb_spawnController.js";
@@ -480,7 +480,8 @@ export function getDefaultCodex() {
             sectionLastViewed: {},
             subsectionLastUnlock: {},
             subsectionLastViewed: {},
-            hasOpenedBefore: false
+            hasOpenedBefore: false,
+            powderyHudTimerHintShown: false
         },
         biomeData: {} // Will store biome-specific infection data as discovered
     };
@@ -578,7 +579,7 @@ export function getInfectionCueHearOthersTier(player) {
 
 /**
  * Get player settings used by main/dayTracker (infection timer, critical warnings only).
- * Infection timer is Powdery-only; critical warnings can come from Basic or codex.
+ * Infection timer is **Dusted / Powdery Journal only** (not in Basic); critical warnings can come from Basic or codex.
  * @param {Player} player
  * @returns {{ showInfectionTimer: boolean, criticalWarningsOnly: boolean }}
  */
@@ -1340,7 +1341,10 @@ export function showCodexBook(player, context) {
                     if (typeof parsedBasicSettings.audioMessages === 'boolean') {
                         codex.settings.audioMessages = parsedBasicSettings.audioMessages;
                     }
-                    // showInfectionTimer is Powdery-only; do not sync from Basic
+                    // Powdery saves timer HUD here; Basic usually omits the key — only apply when present
+                    if ("showInfectionTimer" in parsedBasicSettings) {
+                        codex.settings.showInfectionTimer = Boolean(parsedBasicSettings.showInfectionTimer);
+                    }
                     if (typeof parsedBasicSettings.criticalWarningsOnly === 'boolean') {
                         codex.settings.criticalWarningsOnly = parsedBasicSettings.criticalWarningsOnly;
                     }
@@ -1401,7 +1405,21 @@ export function showCodexBook(player, context) {
                 if (hasExperiencedTimer) {
                     const ticks = infectionState.ticksLeft || 0;
                     const days = Math.ceil(ticks / 24000);
-                    summary.push(`§eTime: §c${formatTicksDuration(ticks)} (§f~${days} day${days !== 1 ? 's' : ''}§c)`);
+                    if (ticks > 24000) {
+                        summary.push(`§eTime: §c${formatTicksDuration(ticks)} (§f~${days} day${days !== 1 ? 's' : ''}§c)`);
+                    } else if (ticks > 0) {
+                        summary.push(`§eTime: §c${formatTicksDuration(ticks)} §7| ${formatInfectionHudTimeRemaining(ticks, infectionType)}`);
+                    } else {
+                        summary.push(`§eTime: §c—`);
+                    }
+                    if (hasPowderyJournal && !codex.journal?.powderyHudTimerHintShown) {
+                        summary.push(`§8Open §7Settings §8here to show that time on your HUD even when this book is closed.`);
+                        try {
+                            if (!codex.journal) codex.journal = {};
+                            codex.journal.powderyHudTimerHintShown = true;
+                            saveCodex(player, codex);
+                        } catch { /* ignore */ }
+                    }
                 } else {
                     summary.push(`§eTime: §8???`);
                 }
@@ -4194,21 +4212,21 @@ export function showCodexBook(player, context) {
     const PINNABLE_DEV_ITEMS = [
         { id: "script_toggles", label: "Script Toggles", action: () => openScriptTogglesMenu() },
         { id: "spawn_controller", label: "Spawn Controller", action: () => openSpawnControllerMenu() },
-        { id: "clear_bears", label: "Clear Bears", action: () => openClearBearsMenu() },
-        { id: "kill_bears", label: "Kill Bears %", action: () => openKillBearsMenu() },
         { id: "storm", label: "Storm hub", action: () => openStormHubMenu() },
+        { id: "set_day", label: "Set Day...", action: () => promptSetDay() },
+        { id: "simulate_day", label: "Simulate Next Day", action: () => { triggerDebugCommand("simulate_next_day", [], () => openDeveloperTools()); } },
+        { id: "infection", label: "Clear / Set Infection", action: () => openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name)) },
+        { id: "immunity", label: "Grant / Remove Immunity", action: () => openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name)) },
+        { id: "kill_bears", label: "Kill Bears %", action: () => openKillBearsMenu() },
+        { id: "clear_bears", label: "Clear Bears", action: () => openClearBearsMenu() },
         { id: "ai_throttle", label: "AI Throttle & Speed", action: () => openAIThrottleMenu() },
         { id: "debug_menu", label: "Debug Menu", action: () => openDebugMenu() },
         { id: "fully_unlock", label: "Fully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked."); openDeveloperTools(); } },
         { id: "reset_codex", label: "Reset My Codex", action: () => openTargetPlayerMenu("Reset Codex", (name) => { triggerDebugCommand("reset_codex", name ? [name] : []); openDeveloperTools(); }) },
         { id: "reset_day", label: "Reset World Day to 1", action: () => triggerDebugCommand("reset_day") },
-        { id: "set_day", label: "Set Day...", action: () => promptSetDay() },
-        { id: "infection", label: "Clear / Set Infection", action: () => openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name)) },
-        { id: "immunity", label: "Grant / Remove Immunity", action: () => openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name)) },
         { id: "reset_intro", label: "Reset Intro", action: () => triggerDebugCommand("reset_intro", [], () => openDeveloperTools()) },
         { id: "bears_target", label: "Bears Target Player", action: () => openBearsTargetPlayerMenu() },
         { id: "list_bears", label: "List Nearby Bears", action: () => openListBearsMenu() },
-        { id: "simulate_day", label: "Simulate Next Day", action: () => { triggerDebugCommand("simulate_next_day", [], () => openDeveloperTools()); } },
         { id: "inspect_bear", label: "Inspect Nearest Bear", action: () => triggerDebugCommand("inspect_entity", [], () => openDeveloperTools()) },
         { id: "reset_section", label: "Reset Codex Section", action: () => openResetCodexSectionMenu() },
         { id: "dump_codex", label: "Dump Codex State", action: () => openDumpCodexTargetMenu() },
@@ -4427,7 +4445,8 @@ export function showCodexBook(player, context) {
             [SCRIPT_IDS.biomeAmbience]: "Biome Ambience",
             [SCRIPT_IDS.infectionAudio]: "Infection Audio",
             [SCRIPT_IDS.spawnController]: "Spawn Controller",
-            [SCRIPT_IDS.snowStorm]: "Snow Storm"
+            [SCRIPT_IDS.snowStorm]: "Snow Storm",
+            [SCRIPT_IDS.dimensionAdaptation]: "Dimension Adaptation (Nether fire res.)"
         };
         const ids = [
             SCRIPT_IDS.mining,
@@ -4438,7 +4457,8 @@ export function showCodexBook(player, context) {
             SCRIPT_IDS.biomeAmbience,
             SCRIPT_IDS.infectionAudio,
             SCRIPT_IDS.spawnController,
-            SCRIPT_IDS.snowStorm
+            SCRIPT_IDS.snowStorm,
+            SCRIPT_IDS.dimensionAdaptation
         ];
         const body = ids.map(id => `§7${labels[id]}: §${toggles[id] ? "aON" : "cOFF"}`).join("\n");
         const form = new ActionFormData()
@@ -6634,7 +6654,6 @@ export function showCodexBook(player, context) {
 
     function openGeneralSettings() {
         const settings = getSettings();
-        const codex = getCodex(player);
         
         // Addon difficulty (world): -1 Easy, 0 Normal, 1 Hard
         const addonDifficultyValue = getAddonDifficultyState().value;
@@ -6677,7 +6696,7 @@ export function showCodexBook(player, context) {
                 .dropdown("Hearing others' infection sounds", volumeOptions, { defaultValueIndex: infectionHearOthersIndex })
                 .dropdown("Storm Particles §8(Less = better performance)", particleOptions, { defaultValueIndex: stormParticlesIndex })
                 .toggle("Show Search Button", { defaultValue: settings.showSearchButton !== false })
-                .toggle("Infection timer on screen (top, small)", { defaultValue: showInfectionTimer })
+                .toggle("Infection timer on screen (action bar)", { defaultValue: showInfectionTimer })
                 .toggle("Only critical infection/day warnings", { defaultValue: criticalWarningsOnly })
                 .dropdown((hasCheats(player) ? "Addon Difficulty — Spawn: E 0.7× N 1× H 1.3×. Major hits (from nothing): E 4 N 3 H 2. Major hits (from minor): E 3 N 2 H 1. Infection decay: E 0.8× N 1× H 1.2×. Mining interval: E 1.2× N 1× H 0.5×. Torpedo max blocks: E 0.85× N 1× H 2×." : "Addon Difficulty") + (canEditDifficulty ? "" : " §8(read-only)"), difficultyOptions, { defaultValueIndex: addonDifficultyIndex });
             
@@ -6709,7 +6728,9 @@ export function showCodexBook(player, context) {
                         setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, newAddonValue);
                     }
                     
-                    saveCodex(player, codex);
+                    const codexToSave = getCodex(player);
+                    Object.assign(codexToSave.settings, settings);
+                    saveCodex(player, codexToSave);
                     
                     const basicSettingsKey = `mb_player_settings_${player.id}`;
                     const basicSettings = {
@@ -7333,51 +7354,10 @@ function showGoalScreen(player) {
     });
 }
 
-function showBetaSettingsScreen(player, onBack) {
-    const canEdit = canChangeBeta(player);
-    const infectedOn = isBetaInfectedAIEnabled();
-    const dustStormsOn = isBetaDustStormsEnabled();
-    const visibleToAll = isBetaVisibleToAll();
-    const form = new ActionFormData()
-        .title("§dBeta Features")
-        .body(`§7Experimental features. §8(First joiner + mb_cheats can change)\n\n§7Infected AI (beta): §${infectedOn ? "aON" : "cOFF"}\n§7Dust storms (beta): §${dustStormsOn ? "aON" : "cOFF"}\n§7Visible to others in book: §${visibleToAll ? "aON" : "cOFF"}\n${!canEdit ? "\n§8You are viewing read-only." : ""}`);
-
-    if (canEdit) {
-        form.button(infectedOn ? "§aInfected AI §8(ON) → OFF" : "§cInfected AI §8(OFF) → ON");
-        form.button(dustStormsOn ? "§aDust Storms §8(ON) → OFF" : "§cDust Storms §8(OFF) → ON");
-        form.button(visibleToAll ? "§aVisible to others §8(ON) → OFF" : "§cVisible to others §8(OFF) → ON");
-    }
-    form.button("§8Back");
-
-    form.show(player).then((res) => {
-        if (!res || res.canceled || res.selection === (canEdit ? 3 : 0)) {
-            const volumeMultiplier = getPlayerSoundVolume(player);
-            player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
-            return onBack();
-        }
-        if (canEdit && res.selection === 0) {
-            setBetaInfectedAIEnabled(!infectedOn);
-            player.sendMessage(CHAT_INFO + "Infected AI (beta): " + (infectedOn ? CHAT_DANGER + "OFF" : CHAT_SUCCESS + "ON"));
-        } else if (canEdit && res.selection === 1) {
-            setBetaDustStormsEnabled(!dustStormsOn);
-            player.sendMessage(CHAT_INFO + "Dust storms (beta): " + (dustStormsOn ? CHAT_DANGER + "OFF" : CHAT_SUCCESS + "ON"));
-        } else if (canEdit && res.selection === 2) {
-            setBetaVisibleToAll(!visibleToAll);
-            player.sendMessage(CHAT_INFO + "Visible to others: " + (visibleToAll ? CHAT_DANGER + "OFF" : CHAT_SUCCESS + "ON"));
-        }
-        player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
-        showBetaSettingsScreen(player, onBack);
-    }).catch(() => onBack());
-}
-
 function showSettingsChooserBasic(player) {
-    const canSee = canSeeBeta(player);
     const form = new ActionFormData().title("§bSettings");
     form.body("§7Choose a section:");
     form.button("§fGeneral §8(Sound, Tips, Messages)");
-    if (canSee) {
-        form.button("§dBeta Features §8(experimental)");
-    }
     form.button("§8Back");
 
     form.show(player).then((res) => {
@@ -7388,9 +7368,6 @@ function showSettingsChooserBasic(player) {
         }
         if (res.selection === 0) {
             return showGeneralSettingsBasic(player);
-        }
-        if (canSee && res.selection === 1) {
-            return showBetaSettingsScreen(player, () => showSettingsChooserBasic(player));
         }
         const volumeMultiplier = getPlayerSoundVolume(player);
         player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });

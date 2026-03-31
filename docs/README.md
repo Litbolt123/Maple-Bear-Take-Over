@@ -43,6 +43,7 @@ Technical documentation, planning, and mechanics organized by category:
 - **[SESSION_SUMMARY.md](development/tracking/SESSION_SUMMARY.md)** - Development session summaries
 
 #### Overview (`development/` root)
+- **[DEVELOPER_ONBOARDING.md](development/DEVELOPER_ONBOARDING.md)** - Where code lives, `npm run check`, in-game testing, common pitfalls
 - **[ADDON_SYSTEMS_AND_FEATURES.md](development/ADDON_SYSTEMS_AND_FEATURES.md)** - Each script module, JSON systems, and player-facing features
 - **[PROJECT_STATUS.md](development/PROJECT_STATUS.md)** - Snapshot: recently done, gaps, suggested next steps
 

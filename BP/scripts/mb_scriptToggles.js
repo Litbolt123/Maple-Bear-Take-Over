@@ -29,7 +29,8 @@ export const SCRIPT_IDS = {
     biomeAmbience: "biome_ambience",
     infectionAudio: "infection_audio",
     spawnController: "spawn_controller",
-    snowStorm: "snow_storm"
+    snowStorm: "snow_storm",
+    dimensionAdaptation: "dimension_adaptation"
 };
 
 /** Default: all scripts enabled. Only explicit false disables. */
@@ -55,7 +56,8 @@ export function getAllScriptToggles() {
         [SCRIPT_IDS.biomeAmbience]: isScriptEnabled(SCRIPT_IDS.biomeAmbience),
         [SCRIPT_IDS.infectionAudio]: isScriptEnabled(SCRIPT_IDS.infectionAudio),
         [SCRIPT_IDS.spawnController]: isScriptEnabled(SCRIPT_IDS.spawnController),
-        [SCRIPT_IDS.snowStorm]: isScriptEnabled(SCRIPT_IDS.snowStorm)
+        [SCRIPT_IDS.snowStorm]: isScriptEnabled(SCRIPT_IDS.snowStorm),
+        [SCRIPT_IDS.dimensionAdaptation]: isScriptEnabled(SCRIPT_IDS.dimensionAdaptation)
     };
 }
 

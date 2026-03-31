@@ -2,6 +2,41 @@
 
 ## Recent Changes (Latest Session)
 
+### Powdery settings: infection timer toggle matches HUD (2026-03-28)
+- **`mb_codex.js` `getSettings`**: Merge **`showInfectionTimer`** from chunked `mb_player_settings_*` when the key exists (HUD already read it there; modal had skipped it). **`openGeneralSettings` save**: `Object.assign` merged **`settings`** into a fresh **`getCodex`** before **`saveCodex`** (avoid saving a stale second codex copy).
+
+### Minor infection “after death” UI only after real death (2026-03-28)
+- **`main.js`**: `playerSpawn` runs on **rejoin** too, so the old `!mb_minor_respawned` check wrongly showed **“persists even after death”** without dying. **`mb_minor_post_death_ui_pending`** is set in **`handlePlayerDeath`** (minor path) and cleared when showing UI on the next spawn; rejoin with minor = tag only, **no** death lines.
+
+### Proximity ambient: dust breath + tuned bumps (2026-03-28)
+- **`main.js`**: `applyProximityAmbientFromInfectedPlayer` runs on **`playedCough`** and **`playedBreath`**. Bumps toward **630** `ambientSeconds`: major **36** cough / **48** breath; minor **8** / **6** (doubled from earlier tuning to halve event count to fill meter).
+
+### Infection cough vs dust breath (minor vs major) (2026-03-28)
+- **`mb_infectionAudio.js`**: **Cough** stays **audio-only** (no particle). **Minor** coughs are **much rarer** than major (wider spacing, threshold ~0.052 vs ~0.34). **Dust breath** (particle + sound): **major** unchanged in spirit; **minor** only in **last quarter** of timer (`ticksLeft * 4 <= maxInfectionTicks`), lower chance, **minor** cough sound. **`main.js`** passes **`maxInfectionTicks`** on `tickInfectionCoughAndBreath` context; **`infectionType`/`maxTicks`** hoisted before the audio block.
+
+### Beta Features only in Powdery/Dusted journal settings (2026-03-28)
+- **`mb_codex.js`**: Removed **Beta Features** from **Basic** journal `showSettingsChooserBasic` (and removed unused `showBetaSettingsScreen`). Powdery book **`openSettings`** still offers General + Beta.
+
+### Infection HUD: death screen, last-day precision, journal hint (2026-03-28)
+- **`main.js`**: `infectionActionBarSuppressedUntilSpawn` + `clearInfectionHudActionBar` on **`handlePlayerDeath`**; cleared on **`playerSpawn`**. **`formatInfectionHudTimeRemaining`** — after **24000** ticks, `~days`; within last day, **in-game** `Xh Ym` / minutes / seconds.
+- **`mb_codex.js`**: Powdery summary **Time** line matches last-day precision; one-time **`powderyHudTimerHintShown`** tip under that line (saved with **`saveCodex`**, not **`markCodex`**, to avoid mis-mapping `journal.*` to Late Lore).
+
+### Infection action bar refresh rate (2026-03-28)
+- **`main.js`**: Infection timer / cure hint action bar moved to **`tryRefreshInfectionHudActionBar`** + **`system.runInterval(..., 10)`** so Bedrock does not fade the text between **40-tick** infection updates. Setting remains **Dusted/Powdery Journal only** (`getPlayerSettings` / `showInfectionTimer`).
+
+### Infection HUD, cough proximity, dimension toggle, mining break_blocks (2026-03-28)
+- **`main.js`**: Powdery **infection timer** uses **`setActionBar`** (with **major cure** hint combined when due). **`applyProximityAmbientFromInfectedPlayer`** — on **played cough** / **played breath**, bumps **`ambientSeconds`** for others within **3 blocks** with **`hasInfectionExposureLineOfSight`**; skips creative/spectator, permanent immunity, temporary immunity, and players already **major** infected.
+- **`mb_scriptToggles.js`**: **`SCRIPT_IDS.dimensionAdaptation`** (`dimension_adaptation`). **`mb_dimensionAdaptation.js`**: early return when disabled (interval + **`entitySpawn`**).
+- **`mb_codex.js`**: Script Toggles entry for dimension adaptation; Powdery settings toggle label **action bar**; **`PINNABLE_DEV_ITEMS`** reordered (storm / set day / simulate / infection / immunity / kill / clear earlier).
+- **`BP/entities/mining_mb.json`** & **`mining_mb_day20.json`**: **`minecraft:break_blocks`** lists synced from **`mb_miningBlockList.js`** (PowerShell-assisted insert in repo when Node unavailable).
+
+### Infection exposure line-of-sight + script breaking notes (2026-03-28)
+- **`BP/scripts/mb_infectionExposureLos.js`**: Ray from **~eye to ~eye**; **occludes** on solid blocks; **passes** air, liquids, snow layers, redstone/tripwire/string/cobweb, and IDs from **`SNOW_REPLACEABLE_BLOCKS`** + **`STORM_PARTICLE_PASS_THROUGH`** (`mb_blockLists.js`).
+- **`mb_infectionAudio.js`**: `playInfectionSpatialSound` applies LOS for **other** players (self unchanged).
+- **`mb_spawnController.js` `countNearbyDustedDirtBlocks`**: Only counts **`mb:dusted_dirt`** the player could “see” (same ray), so **walls** don’t inflate **ambient** pressure.
+- **`mb_miningAI.js` / `mb_torpedoAI.js`**: File-header notes — **block breaking is script-driven**; **`AGENTS.md`** Tools section updated (`updateMiningBlocks.js` syncs list to optional entity `break_blocks`).
+- **`docs/development/systems/INFECTION_SYSTEM.md`**: §11 LOS + ambient; quick-reference row.
+
 ### Short white dust particle for infection breath (2026-03-28)
 - **`RP/particles/white_dust_particle_short.particle.json`**: New effect `mb:white_dust_particle_short` — same texture/material as `mb:white_dust_particle`, tuned for **brief** emission (`emitter_lifetime_once` ~0.38s, particle `max_lifetime` ~0.42s, smaller burst vs the 6s original).
 - **`BP/scripts/mb_infectionAudio.js`**: Rare **dust breath** (infection cough/breath path) spawns **`mb:white_dust_particle_short`** instead of the long vanilla-style puff. Other systems (death dust, storms, conversion VFX) still use **`mb:white_dust_particle`**.

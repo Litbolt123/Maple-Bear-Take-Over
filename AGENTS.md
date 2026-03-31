@@ -34,7 +34,9 @@ All commands are defined in `package.json`:
 
 ### Tools
 
-- `tools/updateMiningBlocks.js` regenerates mining bear block lists from `data/bedrock_blocks.json`. It requires the entity files to have `minecraft:break_blocks` component (currently missing in `mining_mb.json` — pre-existing issue). Run with `node tools/updateMiningBlocks.js` from workspace root.
+- `tools/updateMiningBlocks.js` copies `MINING_BREAKABLE_BLOCKS` from `BP/scripts/mb_miningBlockList.js` into `minecraft:break_blocks` on mining bear entities (optional consistency with the list the **script** uses). **Actual digging** is done in `mb_miningAI.js` via `dimension.setPermutation` / break logic, not by vanilla entity break components. Run: `node tools/updateMiningBlocks.js` from repo root (requires Node on PATH).
+
+**Other script-driven block clearing**: `mb_torpedoAI.js` clears blocks with `setType("minecraft:air")` in path bursts — same idea (no reliance on entity `break_blocks`).
 
 ### Gotchas
 
