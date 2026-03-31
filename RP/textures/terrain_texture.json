@@ -11,7 +11,7 @@
 			"textures": "textures/blocks/'snow'_layer"
 		},
 		"emulsifier_machine": {
-			"textures": "textures/blocks/emulsifier_machine"
+			"textures": "textures/blocks/emuslsifierblocktexture_off_"
 		}
 	}
 }
