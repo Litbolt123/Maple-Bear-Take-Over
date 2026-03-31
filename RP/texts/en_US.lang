@@ -42,6 +42,7 @@ item.mb:snow="snow"
 item.mb:emulsifier_machine=Emulsifier
 tile.mb:emulsifier_machine.name=Emulsifier
 tile.mb:dusted_dirt.name=Dusted Dirt
+item.mb:dusted_dirt=Dusted Dirt
 item.spawn_egg.entity.mb:infected_cow.name=07. Infected Cow
 entity.mb:infected_cow.name=Infected cow
 item.spawn_egg.entity.mb:infected_pig.name=07. Infected Pig

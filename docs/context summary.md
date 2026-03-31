@@ -1,5 +1,31 @@
 # Context Summary
 
+**Date:** 2026-03-31
+
+## Emulsifier machine item + dusted dirt crafting + recipes
+
+- **Emulsifier item:** `BP/items/emulsifier_machine.json` — `mb:emulsifier_machine` with `minecraft:block_placer` → `mb:emulsifier_machine` (loot table already referenced this item; it was missing from the pack). **No `minecraft:icon`** so the client uses the **block’s 3D/item appearance** (avoids broken flat icons when pointing `item_texture` at terrain-only paths).
+- **Emulsifier recipe:** `BP/recipes/emulsifier_machine.json` — top `IHI` (iron corners, hopper above center), middle `RDG` (redstone **block**, `mb:dusted_dirt`, glowstone), bottom `III` (iron row). Unlock: `mb:dusted_dirt`.
+- **Dusted dirt item:** `BP/items/dusted_dirt.json` — placeable `mb:dusted_dirt` via `block_placer`; **no `minecraft:icon`** (same block-icon behavior as emulsifier).
+- **Dusted dirt (shapeless, crafting table):** one `mb:snow` + one soil block → 1× `mb:dusted_dirt` — `dusted_dirt_from_dirt.json`, `dusted_dirt_from_grass_block.json`, `dusted_dirt_from_coarse_dirt.json`, `dusted_dirt_from_podzol.json`, `dusted_dirt_from_mycelium.json` (replaced invalid `minecraft:rooted_dirt` recipe for Bedrock). Unlock: `mb:snow`.
+
+## Emulsifier running sounds (`RP/sounds/emulsifier`, `mb_spawnController.js`)
+
+- **Definitions:** `sound_definitions.json` adds `mb.emulsifier_run` (block category, 24-block subtitle range) with three random variants: `Gurgling Machine Sounds`, `Loud Mechanical Machine Sound`, `Machine Sounds` under `sounds/emulsifier/` (paths match existing pack convention, no extension).
+- **When it plays:** While `processEmulsifierZones` has a zone **active** and **with fuel** after `advanceZoneFuelQueue`, `maybePlayEmulsifierRunningSound` fires at most every **90 ticks** (~4.5s) per machine via **`dimension.playSound`** at the **block center** (true positional audio; `sound_definitions` `max_distance` still applies).
+- **Cleanup:** `emulsifierRunSoundLastTick` map keys cleared when fuel runs out, machine disabled, zone removed, block gone, or dev remove-nearest.
+- **Dev tools:** `mb_devSoundCatalog.js` — category "Emulsifier" for previewing `mb.emulsifier_run`.
+
+## Emulsifier machine on/off block textures
+
+- **RP:** `terrain_texture.json` adds `emulsifier_machine_on` → `textures/blocks/emuslsifierblocktexture_on`; `emulsifier_machine` stays on the off atlas (`emuslsifierblocktexture_off_`).
+- **BP:** `emulsifier_machine.json` defines state `mb:active` `[false, true]`, default off texture in base `material_instances`, permutation when `mb:active == true` uses `emulsifier_machine_on`.
+- **Script (`mb_spawnController.js`):** `BlockPermutation.resolve` + `scheduleSyncEmulsifierMachineBlockVisual` after zone mutations (fuel, enable/disable, upsert, fuel depletion) and one-time bootstrap on first `processEmulsifierZones` when zones exist (world load / addon upgrade).
+- **Fix (`mb_codex.js`):** Emulsifier UI “Enable/Disable” now checks `setEmulsifierActiveAtBlock` result with `r?.ok` (function returns `{ ok }`, not a boolean).
+- **Unchanged:** `emulsifier.geo.json` (same UV layout for both atlases); `main.js` not required—placement already calls `upsertEmulsifierZoneAtBlock`, which syncs the block.
+
+---
+
 **Date:** 2026-03-28
 
 ## Infection action bar hidden during scripted intro (`main.js`)

@@ -12,6 +12,9 @@
 		},
 		"emulsifier_machine": {
 			"textures": "textures/blocks/emuslsifierblocktexture_off_"
+		},
+		"emulsifier_machine_on": {
+			"textures": "textures/blocks/emuslsifierblocktexture_on"
 		}
 	}
 }

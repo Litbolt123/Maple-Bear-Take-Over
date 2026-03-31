@@ -382,6 +382,17 @@
 				}
 			]
 		},
+		"mb.emulsifier_run": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 24,
+			"subtitle": "Emulsifier running",
+			"sounds": [
+				{ "name": "sounds/emulsifier/Gurgling Machine Sounds", "volume": 0.38 },
+				{ "name": "sounds/emulsifier/Loud Mechanical Machine Sound", "volume": 0.28 },
+				{ "name": "sounds/emulsifier/Machine Sounds", "volume": 0.34 }
+			]
+		},
 		"infected_mb.ambient": {
 			"category": "hostile",
 			"min_distance": 0,

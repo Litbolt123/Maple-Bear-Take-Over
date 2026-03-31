@@ -182,8 +182,8 @@ export function showEmulsifierMachineUI(player, block) {
                 const fresh = getEmulsifierZoneAtBlock(dimId, x, y, z);
                 if (!fresh) return;
                 const nextActive = fresh.active !== true;
-                const ok = setEmulsifierActiveAtBlock(dimId, x, y, z, nextActive);
-                if (!ok) return;
+                const r = setEmulsifierActiveAtBlock(dimId, x, y, z, nextActive);
+                if (!r?.ok) return;
                 player.sendMessage(CHAT_INFO + `Emulsifier: ${nextActive ? CHAT_SUCCESS + "ON" : CHAT_DANGER + "OFF"}`);
                 return system.run(() => openMain());
             }

@@ -6,8 +6,24 @@
 			"menu_category": {
 				"category": "construction"
 			},
-			"is_experimental": false
+			"is_experimental": false,
+			"states": {
+				"mb:active": [false, true]
+			}
 		},
+		"permutations": [
+			{
+				"condition": "query.block_state('mb:active') == true",
+				"components": {
+					"minecraft:material_instances": {
+						"*": {
+							"texture": "emulsifier_machine_on",
+							"render_method": "opaque"
+						}
+					}
+				}
+			}
+		],
 		"components": {
 			"minecraft:display_name": "Emulsifier",
 			"minecraft:destructible_by_mining": {

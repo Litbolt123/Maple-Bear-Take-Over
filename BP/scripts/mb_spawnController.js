@@ -5,7 +5,7 @@
 // spawn location calculation, and entity spawning based on day progression.
 // ============================================================================
 
-import { system, world } from "@minecraft/server";
+import { system, world, BlockPermutation } from "@minecraft/server";
 import { getWorldProperty, setWorldProperty, getWorldPropertyChunked, setWorldPropertyChunked, getAddonDifficultyState, saveAllProperties } from "./mb_dynamicPropertyHandler.js";
 import { getCurrentDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { isDebugEnabled, getPlayerSoundVolume, getStormParticleDensity } from "./mb_codex.js";
@@ -173,6 +173,41 @@ const EMULSIFIER_NO_SPAWN_RADIUS_PROPERTY = "mb_emulsifier_no_spawn_radius";
 const EMULSIFIER_BASE_RADIUS_PROPERTY = "mb_emulsifier_base_radius";
 const EMULSIFIER_MACHINE_BLOCK_ID = "mb:emulsifier_machine";
 
+/** Match block model to zone `active` (green vs red indicator). Deferred one tick so placement/state apply cleanly. */
+function syncEmulsifierMachineBlockVisual(dimensionId, x, y, z, active) {
+    if (!dimensionId) return;
+    try {
+        const dim = world.getDimension(dimensionId);
+        if (!dim) return;
+        const bx = Math.floor(x);
+        const by = Math.floor(y);
+        const bz = Math.floor(z);
+        const block = dim.getBlock({ x: bx, y: by, z: bz });
+        if (!block?.isValid || block.typeId !== EMULSIFIER_MACHINE_BLOCK_ID) return;
+        const want = active === true;
+        let current = false;
+        try {
+            current = block.permutation.getState("mb:active") === true;
+        } catch {
+            current = false;
+        }
+        if (current === want) return;
+        const perm = BlockPermutation.resolve(EMULSIFIER_MACHINE_BLOCK_ID, { "mb:active": want });
+        block.setPermutation(perm);
+    } catch {
+        /* unloaded chunk / API */
+    }
+}
+
+function scheduleSyncEmulsifierMachineBlockVisual(dimensionId, x, y, z, active) {
+    const d = dimensionId;
+    const fx = Math.floor(x);
+    const fy = Math.floor(y);
+    const fz = Math.floor(z);
+    const on = active === true;
+    system.run(() => syncEmulsifierMachineBlockVisual(d, fx, fy, fz, on));
+}
+
 const DEFAULT_SCAN_SETTINGS = {
     discoveryRadius: 75,
     minDiscoveryRadius: 28,
@@ -282,6 +317,8 @@ const EMULSIFIER_DEFAULTS = {
 };
 
 let emulsifierZoneCache = null;
+/** One-time: align block `mb:active` with saved zones after addon update / world load. */
+let emulsifierMachineVisualBootstrapped = false;
 let lastEmulsifierEmptyCacheReloadTick = -999999;
 /** When first load returns empty, retry this many times before giving up (world props may not be ready yet). */
 const EMULSIFIER_INITIAL_LOAD_RETRIES = 8;
@@ -784,6 +821,7 @@ export function addEmulsifierZoneAtPlayer(player, fuelType = "redstone") {
         lastUpdatedTick: system.currentTick
     });
     saveEmulsifierZones();
+    scheduleSyncEmulsifierMachineBlockVisual(dimId, pos.x, pos.y, pos.z, true);
     return { ok: true };
 }
 
@@ -803,6 +841,7 @@ export function upsertEmulsifierZoneAtBlock(dimensionId, x, y, z, ownerName = ""
     if (existing) {
         if (!existing.ownerName && ownerName) existing.ownerName = ownerName;
         saveEmulsifierZones();
+        scheduleSyncEmulsifierMachineBlockVisual(dimensionId, fx, fy, fz, existing.active === true);
         return { ok: true, created: false };
     }
     zones = loadEmulsifierZones();
@@ -820,6 +859,7 @@ export function upsertEmulsifierZoneAtBlock(dimensionId, x, y, z, ownerName = ""
         lastUpdatedTick: system.currentTick
     });
     saveEmulsifierZones();
+    scheduleSyncEmulsifierMachineBlockVisual(dimensionId, fx, fy, fz, false);
     return { ok: true, created: true };
 }
 
@@ -831,6 +871,8 @@ export function removeEmulsifierZoneAtBlock(dimensionId, x, y, z) {
     const fz = Math.floor(z);
     const index = zones.findIndex(zn => zn.dimension === dimensionId && zn.x === fx && zn.y === fy && zn.z === fz);
     if (index === -1) return { ok: false, reason: "not_found" };
+    const removed = zones[index];
+    if (removed) emulsifierRunSoundLastTick.delete(emulsifierRunSoundKey(removed));
     zones.splice(index, 1);
     saveEmulsifierZones();
     return { ok: true };
@@ -869,6 +911,7 @@ export function removeNearestEmulsifierZone(player, maxDistance = 16) {
     const zones = loadEmulsifierZones();
     const index = zones.findIndex(z => z.id === nearest.id);
     if (index === -1) return { ok: false, reason: "not_found" };
+    emulsifierRunSoundLastTick.delete(emulsifierRunSoundKey(nearest));
     zones.splice(index, 1);
     saveEmulsifierZones();
     return { ok: true };
@@ -894,6 +937,7 @@ export function setNearestEmulsifierFuel(player, fuelType, maxDistance = 16) {
     zone.scanDx = null;
     zone.scanDz = null;
     saveEmulsifierZones();
+    scheduleSyncEmulsifierMachineBlockVisual(zone.dimension, zone.x, zone.y, zone.z, zone.active === true);
     system.runTimeout(() => { try { processEmulsifierZones(); } catch { } }, 1);
     return { ok: true };
 }
@@ -919,6 +963,7 @@ export function setEmulsifierFuelAtBlock(dimensionId, x, y, z, fuelType) {
     zone.scanDx = null;
     zone.scanDz = null;
     saveEmulsifierZones();
+    scheduleSyncEmulsifierMachineBlockVisual(dimensionId, x, y, z, zone.active === true);
     system.runTimeout(() => { try { processEmulsifierZones(); } catch { } }, 1);
     return { ok: true };
 }
@@ -951,6 +996,7 @@ export function addEmulsifierFuelAtBlock(dimensionId, x, y, z, fuelType) {
         }
         zone.lastUpdatedTick = system.currentTick;
         saveEmulsifierZones();
+        scheduleSyncEmulsifierMachineBlockVisual(dimensionId, x, y, z, zone.active === true);
         system.runTimeout(() => { try { processEmulsifierZones(); } catch { } }, 1);
         return { ok: true, addedTicks: 2147483647, newTotalTicks: 2147483647, refund };
     }
@@ -960,6 +1006,7 @@ export function addEmulsifierFuelAtBlock(dimensionId, x, y, z, fuelType) {
     }
     if (!Array.isArray(queue) || queue.length >= EMULSIFIER_MAX_QUEUE_LENGTH) {
         saveEmulsifierZones();
+        scheduleSyncEmulsifierMachineBlockVisual(dimensionId, x, y, z, zone.active === true);
         return { ok: true, addedTicks: 0, newTotalTicks: 0, capped: true };
     }
     const stats = getFuelStats(fuelType);
@@ -977,6 +1024,7 @@ export function addEmulsifierFuelAtBlock(dimensionId, x, y, z, fuelType) {
     }
     zone.lastUpdatedTick = system.currentTick;
     saveEmulsifierZones();
+    scheduleSyncEmulsifierMachineBlockVisual(dimensionId, x, y, z, zone.active === true);
     system.runTimeout(() => { try { processEmulsifierZones(); } catch { } }, 1);
     const totalTicks = queue.reduce((sum, e) => sum + (e.ticksRemaining ?? 0), 0);
     return { ok: true, addedTicks: oneUnit, newTotalTicks: totalTicks, capped: queue.length >= EMULSIFIER_MAX_QUEUE_LENGTH };
@@ -990,6 +1038,7 @@ export function setEmulsifierActiveAtBlock(dimensionId, x, y, z, active) {
     const zone = zones.find(z => z.dimension === dimensionId && z.x === fx && z.y === fy && z.z === fz);
     if (!zone) return { ok: false, reason: "not_found" };
     zone.active = active === true;
+    if (!zone.active) emulsifierRunSoundLastTick.delete(emulsifierRunSoundKey(zone));
     zone.lastUpdatedTick = system.currentTick;
     if (zone.active) {
         zone.lastDetoxTick = undefined;
@@ -999,10 +1048,12 @@ export function setEmulsifierActiveAtBlock(dimensionId, x, y, z, active) {
         zone.scanDx = null;
         zone.scanDz = null;
         saveEmulsifierZones();
+        scheduleSyncEmulsifierMachineBlockVisual(dimensionId, fx, fy, fz, zone.active === true);
         system.runTimeout(() => { try { processEmulsifierZones(); } catch { } }, 1);
         return { ok: true };
     }
     saveEmulsifierZones();
+    scheduleSyncEmulsifierMachineBlockVisual(dimensionId, fx, fy, fz, zone.active === true);
     return { ok: true };
 }
 
@@ -2842,6 +2893,28 @@ const pendingEmulsifierConversions = new Map(); // key -> { dimId, x, y, z, bloc
 const EMULSIFIER_CONVERSION_DELAY_TICKS = 400; // ~20 sec of particles before transform
 // White dust particle lifetime ~6 sec = 120 ticks; spawn new batch before first fades
 const EMULSIFIER_PARTICLE_INTERVAL_BY_DENSITY = [120, 80, 50]; // Less=120, Medium=80, More=50 ticks
+const EMULSIFIER_RUN_SOUND_ID = "mb.emulsifier_run";
+/** ~4.5s between ambient loops per machine (active + fueled). */
+const EMULSIFIER_RUN_SOUND_INTERVAL_TICKS = 90;
+const emulsifierRunSoundLastTick = new Map(); // key dim,x,y,z -> tick
+
+function emulsifierRunSoundKey(zone) {
+    return `${zone.dimension},${Math.floor(zone.x ?? 0)},${Math.floor(zone.y ?? 0)},${Math.floor(zone.z ?? 0)}`;
+}
+
+function maybePlayEmulsifierRunningSound(zone, now, dimension) {
+    if (!zone?.dimension || !dimension?.playSound) return;
+    const key = emulsifierRunSoundKey(zone);
+    const last = emulsifierRunSoundLastTick.get(key) ?? 0;
+    if (now - last < EMULSIFIER_RUN_SOUND_INTERVAL_TICKS) return;
+    emulsifierRunSoundLastTick.set(key, now);
+    try {
+        const bx = Math.floor(zone.x ?? 0) + 0.5;
+        const by = Math.floor(zone.y ?? 0) + 0.5;
+        const bz = Math.floor(zone.z ?? 0) + 0.5;
+        dimension.playSound(EMULSIFIER_RUN_SOUND_ID, { x: bx, y: by, z: bz }, { volume: 0.9, pitch: 1 });
+    } catch { }
+}
 
 function playSoundAtLocation(dimId, x, y, z, soundId, volume = 0.5, maxDist = 24) {
     try {
@@ -2997,6 +3070,13 @@ function getReachableCorruptedBlocks(dimension, cx, cy, cz, maxRadius, maxAirVis
 
 function processEmulsifierZones() {
     const zones = loadEmulsifierZones();
+    if (!emulsifierMachineVisualBootstrapped && Array.isArray(zones) && zones.length > 0) {
+        emulsifierMachineVisualBootstrapped = true;
+        for (const z of zones) {
+            if (!z?.dimension) continue;
+            scheduleSyncEmulsifierMachineBlockVisual(z.dimension, z.x, z.y, z.z, z.active === true);
+        }
+    }
     const dbg = (cat, ...args) => { if (typeof isDebugEnabled === "function" && isDebugEnabled("emulsifier", cat)) console.warn("[EMULSIFIER DEBUG]", cat, ...args); };
     if (!Array.isArray(zones) || zones.length === 0) {
         dbg("general", "processEmulsifierZones: no zones, exit. zones=", zones?.length, "cache=", emulsifierZoneCache?.length);
@@ -3014,6 +3094,7 @@ function processEmulsifierZones() {
         try {
             const dim = world.getDimension(zone.dimension);
             if (!isZoneMachinePresent(zone, dim)) {
+                emulsifierRunSoundLastTick.delete(emulsifierRunSoundKey(zone));
                 zones.splice(i, 1);
                 changed = true;
             }
@@ -3048,10 +3129,13 @@ function processEmulsifierZones() {
         const fuelStats = advanceZoneFuelQueue(zone, elapsed);
         if (!fuelStats) {
             zone.active = false;
+            emulsifierRunSoundLastTick.delete(emulsifierRunSoundKey(zone));
             changed = true;
+            scheduleSyncEmulsifierMachineBlockVisual(zone.dimension, zone.x, zone.y, zone.z, false);
             continue;
         }
         changed = true;
+        maybePlayEmulsifierRunningSound(zone, now, dimension);
 
         const powerRadius = Math.max(3, fuelStats.radius ?? Math.floor(baseRadius * fuelStats.performance));
         const zoneX = Math.floor(zone.x);

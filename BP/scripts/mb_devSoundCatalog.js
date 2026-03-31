@@ -91,6 +91,13 @@ export const DEV_SOUND_CATEGORIES = [
         ]
     },
     {
+        id: "emulsifier",
+        title: "Emulsifier",
+        sounds: [
+            { soundId: "mb.emulsifier_run", label: "Machine running (ambient loop)" }
+        ]
+    },
+    {
         id: "biome",
         title: "Infected biome ambient",
         sounds: [

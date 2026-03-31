@@ -1,0 +1,15 @@
+{
+	"format_version": "1.21.80",
+	"minecraft:recipe_shapeless": {
+		"description": {
+			"identifier": "mb:dusted_dirt_from_mycelium"
+		},
+		"tags": ["crafting_table"],
+		"unlock": [{ "item": "mb:snow" }],
+		"ingredients": [
+			{ "item": "mb:snow" },
+			{ "item": "minecraft:mycelium" }
+		],
+		"result": { "item": "mb:dusted_dirt", "count": 1 }
+	}
+}
