@@ -1,0 +1,742 @@
+{
+	"format_version": "1.14.0",
+	"sound_definitions": {
+		"tiny_mb_step": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 30,
+			"subtitle": "A tiny step...",
+			"sounds": [
+				{
+					"name": "sounds/tiny_mb_step",
+					"volume": 1
+				}
+			]
+		},
+		"tiny_mb.ambient": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 16,
+			"sounds": [
+				"sounds/tiny_mb/grunt1_tiny_mb",
+				"sounds/tiny_mb/grunt2_tiny_mb",
+				"sounds/tiny_mb/grunt3_tiny_mb",
+				"sounds/tiny_mb/grunt4_tiny_mb",
+				"sounds/tiny_mb/tiny_mb_giggle1",
+				"sounds/tiny_mb/tiny_mb_giggle2",
+				"sounds/tiny_mb/tiny_mb_giggle3",
+				"sounds/tiny_mb/tiny_mb_giggle4"
+			]
+		},
+		"tiny_mb.attack": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 16,
+			"sounds": [
+				"sounds/tiny_mb/tiny_mb_attack",
+				"sounds/tiny_mb/tiny_mb_attack1",
+				"sounds/tiny_mb/tiny_mb_attack10",
+				"sounds/tiny_mb/tiny_mb_attack11",
+				"sounds/tiny_mb/tiny_mb_attack12",
+				"sounds/tiny_mb/tiny_mb_attack13",
+				"sounds/tiny_mb/tiny_mb_attack14",
+				"sounds/tiny_mb/tiny_mb_attack2",
+				"sounds/tiny_mb/tiny_mb_attack3",
+				"sounds/tiny_mb/tiny_mb_attack4",
+				"sounds/tiny_mb/tiny_mb_attack5",
+				"sounds/tiny_mb/tiny_mb_attack6",
+				"sounds/tiny_mb/tiny_mb_attack7",
+				"sounds/tiny_mb/tiny_mb_attack8",
+				"sounds/tiny_mb/tiny_mb_attack9"
+			]
+		},
+		"tiny_mb.hurt": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 16,
+			"sounds": [
+				"sounds/tiny_mb/tiny_mb_hurt7",
+				"sounds/tiny_mb/tiny_mb_hurt6",
+				"sounds/tiny_mb/tiny_mb_hurt5",
+				"sounds/tiny_mb/tiny_mb_hurt4",
+				"sounds/tiny_mb/tiny_mb_hurt3",
+				"sounds/tiny_mb/tiny_mb_hurt2",
+				"sounds/tiny_mb/tiny_mb_hurt1",
+				"sounds/tiny_mb/tiny_mb_hurt"
+			]
+		},
+		"tiny_mb.death": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/tiny_mb/tiny_mb_death",
+				"sounds/tiny_mb/tiny_mb_death1",
+				"sounds/tiny_mb/tiny_mb_death10",
+				"sounds/tiny_mb/tiny_mb_death2",
+				"sounds/tiny_mb/tiny_mb_death3",
+				"sounds/tiny_mb/tiny_mb_death4",
+				"sounds/tiny_mb/tiny_mb_death5",
+				"sounds/tiny_mb/tiny_mb_death6",
+				"sounds/tiny_mb/tiny_mb_death7",
+				"sounds/tiny_mb/tiny_mb_death8",
+				"sounds/tiny_mb/tiny_mb_death9"
+			]
+		},
+		"buff_mb_step": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 40,
+			"subtitle": "A heavy step...",
+			"sounds": [
+				{
+					"name": "sounds/buff_mb_step",
+					"volume": 1
+				}
+			]
+		},
+		"buff_mb_ambient": {
+			"category": "hostile",
+			"__use_legacy_max_distance": true,
+			"sounds": [
+				"sounds/buff_mb/fart_toot_buff_mb",
+				"sounds/buff_mb/grumble1_buff_mb",
+				"sounds/buff_mb/grumble2_buff_mb",
+				"sounds/buff_mb/grumble3_buff_mb",
+				"sounds/buff_mb/grumble4_buff_mb",
+				"sounds/buff_mb/grumble5_buff_mb",
+				"sounds/buff_mb/grumble6_buff_mb"
+			]
+		},
+		"buff_mb.nearby_2": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				{
+					"name": "sounds/buff_mb/buff_mb_nearby_2",
+					"volume": 0.75
+				}
+			]
+		},
+		"buff_mb.roar": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 48,
+			"sounds": [
+				{
+					"name": "sounds/buff_mb/buff_mb_roar",
+					"volume": 1
+				}
+			]
+		},
+		"buff_mb_hurt": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/buff_mb/buff_mb_hurt1",
+				"sounds/buff_mb/buff_mb_hurt2",
+				"sounds/buff_mb/buff_mb_hurt3",
+				"sounds/buff_mb/buff_mb_hurt4",
+				"sounds/buff_mb/buff_mb_hurt5",
+				"sounds/buff_mb/buff_mb_hurt6",
+				"sounds/buff_mb/buff_mb_hurt7",
+				"sounds/buff_mb/buff_mb_hurt8",
+				"sounds/buff_mb/buff_mb_hurt9",
+				"sounds/buff_mb/buff_mb_hurt10",
+				"sounds/buff_mb/buff_mb_hurt11",
+				"sounds/buff_mb/buff_mb_hurt12",
+				"sounds/buff_mb/buff_mb_hurt13",
+				"sounds/buff_mb/buff_mb_hurt14",
+				"sounds/buff_mb/buff_mb_hurt15",
+				"sounds/buff_mb/buff_mb_hurt16",
+				"sounds/buff_mb/buff_mb_hurt17",
+				"sounds/buff_mb/buff_mb_hurt18",
+				"sounds/buff_mb/buff_mb_hurt19",
+				"sounds/buff_mb/buff_mb_hurt20"
+			]
+		},
+		"buff_mb.nearby_1": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				{
+					"name": "sounds/buff_mb/buff_mb_nearby_1",
+					"volume": 0.75
+				}
+			]
+		},
+		"mob.infected_pig.boost": {
+			"__use_legacy_max_distance": true,
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/infected_pig/boost1",
+				"sounds/infected_pig/boost2",
+				"sounds/infected_pig/boost3",
+				"sounds/infected_pig/boost4long",
+				"sounds/infected_pig/boost5long"
+			]
+		},
+		"mob.infected_pig.death": {
+			"__use_legacy_max_distance": true,
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/infected_pig/death"
+			]
+		},
+		"mob.infected_pig.say": {
+			"__use_legacy_max_distance": true,
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				{
+					"load_on_low_memory": true,
+					"name": "sounds/infected_pig/say1"
+				},
+				"sounds/infected_pig/say2",
+				"sounds/infected_pig/say3"
+			]
+		},
+		"mob.infected_pig.step": {
+			"__use_legacy_max_distance": true,
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/infected_pig/step1",
+				"sounds/infected_pig/step2",
+				"sounds/infected_pig/step3",
+				"sounds/infected_pig/step4",
+				"sounds/infected_pig/step5"
+			]
+		},
+		"mob.infected_cow.hurt": {
+			"__use_legacy_max_distance": true,
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/infected_cow/hurt1",
+				"sounds/infected_cow/hurt2",
+				"sounds/infected_cow/hurt3"
+			]
+		},
+		"mob.infected_cow.milk": {
+			"__use_legacy_max_distance": true,
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/infected_cow/milk1",
+				"sounds/infected_cow/milk2",
+				"sounds/infected_cow/milk3"
+			]
+		},
+		"mob.infected_cow.say": {
+			"__use_legacy_max_distance": true,
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/infected_cow/say2",
+				"sounds/infected_cow/say3",
+				"sounds/infected_cow/say4"
+			]
+		},
+		"mob.infected_cow.step": {
+			"__use_legacy_max_distance": true,
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				"sounds/infected_cow/step1",
+				"sounds/infected_cow/step2",
+				"sounds/infected_cow/step3",
+				"sounds/infected_cow/step4"
+			]
+		},
+		"mb.snow_powder_place": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Snow powder placed",
+			"sounds": [
+				{
+					"name": "sounds/Block Sounds/'snow'_powder_place",
+					"volume": 1
+				}
+			]
+		},
+		"mb.snow_layer_hit": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Snow layer hit",
+			"sounds": [
+				{
+					"name": "sounds/Block Sounds/'snow'_layer_hit",
+					"volume": 0.2
+				}
+			]
+		},
+		"mb.snow_layer_step": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Snow layer step",
+			"sounds": [
+				{
+					"name": "sounds/Block Sounds/'snow'_layer_step",
+					"volume": 0.7
+				}
+			]
+		},
+		"mb.snow_layer_jump": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Snow layer jump",
+			"sounds": [
+				{
+					"name": "sounds/Block Sounds/'snow'_layer_jump",
+					"volume": 0.7
+				}
+			]
+		},
+		"mb.snow_layer_fall": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Snow layer fall",
+			"sounds": [
+				{
+					"name": "sounds/Block Sounds/'snow'_layer_fall",
+					"volume": 0.7
+				}
+			]
+		},
+		"mb.snow_layer_land": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Snow layer land",
+			"sounds": [
+				{
+					"name": "sounds/Block Sounds/'snow'_layer_land",
+					"volume": 0.7
+				}
+			]
+		},
+		"mb.snow_layer_break": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Snow layer break",
+			"sounds": [
+				{
+					"name": "sounds/Block Sounds/'snow'_layer_break",
+					"volume": 0.2
+				}
+			]
+		},
+		"mb.codex_open": {
+			"category": "ui",
+			"min_distance": 0,
+			"max_distance": 8,
+			"subtitle": "Journal opens",
+			"sounds": [
+				{
+					"name": "sounds/Dusted Journal/dusted_journal_open",
+					"volume": 1
+				}
+			]
+		},
+		"mb.codex_close": {
+			"category": "ui",
+			"min_distance": 0,
+			"max_distance": 8,
+			"subtitle": "Journal closes",
+			"sounds": [
+				{
+					"name": "sounds/Dusted Journal/dusted_journal_close",
+					"volume": 1
+				}
+			]
+		},
+		"mb.codex_turn_page": {
+			"category": "ui",
+			"min_distance": 0,
+			"max_distance": 8,
+			"subtitle": "Page turns",
+			"sounds": [
+				{
+					"name": "sounds/Dusted Journal/dusted_journal_turn_page",
+					"volume": 1
+				}
+			]
+		},
+		"mb.emulsifier_run": {
+			"category": "block",
+			"min_distance": 0,
+			"max_distance": 16,
+			"subtitle": "Emulsifier running",
+			"sounds": [
+				{ "name": "sounds/emulsifier/Gurgling Machine Sounds", "volume": 0.35},
+				{ "name": "sounds/emulsifier/Loud Mechanical Machine Sound", "volume": 0.35},
+				{ "name": "sounds/emulsifier/Machine Sounds", "volume": 0.35}
+			]
+		},
+		"infected_mb.ambient": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				"sounds/infected_mb/infected_mb_ambient",
+				"sounds/infected_mb/infected_mb_ambient1",
+				"sounds/infected_mb/infected_mb_ambient12",
+				"sounds/infected_mb/infected_mb_ambient13",
+				"sounds/infected_mb/infected_mb_ambient14",
+				"sounds/infected_mb/infected_mb_ambient15",
+				"sounds/infected_mb/infected_mb_ambient16",
+				"sounds/infected_mb/infected_mb_ambient17",
+				"sounds/infected_mb/infected_mb_ambient18",
+				"sounds/infected_mb/infected_mb_ambient19",
+				"sounds/infected_mb/infected_mb_ambient2",
+				"sounds/infected_mb/infected_mb_ambient20",
+				"sounds/infected_mb/infected_mb_ambient21",
+				"sounds/infected_mb/infected_mb_ambient22",
+				"sounds/infected_mb/infected_mb_ambient3",
+				"sounds/infected_mb/infected_mb_ambient4",
+				"sounds/infected_mb/infected_mb_ambient5",
+				"sounds/infected_mb/infected_mb_ambient6",
+				"sounds/infected_mb/infected_mb_ambient7",
+				"sounds/infected_mb/infected_mb_ambient8",
+				"sounds/infected_mb/infected_mb_ambient9",
+				"sounds/infected_mb/infected_mb_ambient10",
+				"sounds/infected_mb/infected_mb_ambient11",
+				"sounds/infected_mb/infected_mb_ambient12",
+				"sounds/infected_mb/infected_mb_ambient13",
+				"sounds/infected_mb/infected_mb_ambient14",
+				"sounds/infected_mb/infected_mb_ambient15",
+				"sounds/infected_mb/infected_mb_ambient16",
+				"sounds/infected_mb/infected_mb_ambient17",
+				"sounds/infected_mb/infected_mb_ambient18",
+				"sounds/infected_mb/infected_mb_ambient19",
+				"sounds/infected_mb/infected_mb_ambient20",
+				"sounds/infected_mb/infected_mb_ambient21",
+				"sounds/infected_mb/infected_mb_ambient22",
+				"sounds/infected_mb/infected_mb_ambient23",
+				"sounds/infected_mb/infected_mb_ambient24",
+				"sounds/infected_mb/infected_mb_ambient25",
+				"sounds/infected_mb/infected_mb_ambient26",
+				"sounds/infected_mb/infected_mb_ambient27",
+				"sounds/infected_mb/infected_mb_ambient28",
+				"sounds/infected_mb/infected_mb_ambient29",
+				"sounds/infected_mb/infected_mb_ambient30",
+				"sounds/infected_mb/infected_mb_ambient31",
+				"sounds/infected_mb/infected_mb_ambient32",
+				"sounds/infected_mb/infected_mb_ambient33",
+				"sounds/infected_mb/infected_mb_ambient34",
+				"sounds/infected_mb/infected_mb_ambient35",
+				"sounds/infected_mb/infected_mb_ambient36",
+				"sounds/infected_mb/infected_mb_ambient37",
+				"sounds/infected_mb/infected_mb_ambient38",
+				"sounds/infected_mb/infected_mb_ambient39",
+				"sounds/infected_mb/infected_mb_ambient40",
+				"sounds/infected_mb/infected_mb_ambient41",
+				"sounds/infected_mb/infected_mb_ambient42",
+				"sounds/infected_mb/infected_mb_ambient43",
+				"sounds/infected_mb/infected_mb_ambient44",
+				"sounds/infected_mb/infected_mb_ambient45"
+			]
+		},
+		"infected_mb.attack": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 24,
+			"sounds": [
+				{
+					"name": "sounds/infected_mb/infected_mb_attack",
+					"volume": 0.8
+				}
+			]
+		},
+		"infected_mb.hurt": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 24,
+			"sounds": [
+				"sounds/infected_mb/infected_mb_hurt",
+				"sounds/infected_mb/infected_mb_hurt2",
+				"sounds/infected_mb/infected_mb_hurt3",
+				"sounds/infected_mb/infected_mb_hurt4",
+				"sounds/infected_mb/infected_mb_hurt5",
+				"sounds/infected_mb/infected_mb_hurt6",
+				"sounds/infected_mb/infected_mb_hurt7",
+				"sounds/infected_mb/infected_mb_hurt8",
+				"sounds/infected_mb/infected_mb_hurt9",
+				"sounds/infected_mb/infected_mb_hurt10",
+				"sounds/infected_mb/infected_mb_hurt11",
+				"sounds/infected_mb/infected_mb_hurt12",
+				"sounds/infected_mb/infected_mb_hurt13",
+				"sounds/infected_mb/infected_mb_hurt14",
+				"sounds/infected_mb/infected_mb_hurt15",
+				"sounds/infected_mb/infected_mb_hurt16",
+				"sounds/infected_mb/infected_mb_hurt17",
+				"sounds/infected_mb/infected_mb_hurt18",
+				"sounds/infected_mb/infected_mb_hurt19",
+				"sounds/infected_mb/infected_mb_hurt20",
+				"sounds/infected_mb/infected_mb_hurt21",
+				"sounds/infected_mb/infected_mb_hurt22",
+				"sounds/infected_mb/infected_mb_hurt23",
+				"sounds/infected_mb/infected_mb_hurt24",
+				"sounds/infected_mb/infected_mb_hurt25",
+				"sounds/infected_mb/infected_mb_hurt26",
+				"sounds/infected_mb/infected_mb_hurt27",
+				"sounds/infected_mb/infected_mb_hurt28",
+				"sounds/infected_mb/infected_mb_hurt29",
+				"sounds/infected_mb/infected_mb_hurt30",
+				"sounds/infected_mb/infected_mb_hurt31",
+				"sounds/infected_mb/infected_mb_hurt32"
+			]
+		},
+		"generic_bear_hurt": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 24,
+			"sounds": [
+				{
+					"name": "sounds/generic_bear_hurt",
+					"volume": 0.7
+				}
+			]
+		},
+		"infected_mb.death": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				"sounds/infected_mb/infected_mb_death",
+				"sounds/infected_mb/infected_mb_death2",
+				"sounds/infected_mb/infected_mb_death3",
+				"sounds/infected_mb/infected_mb_death4",
+				"sounds/infected_mb/infected_mb_death5",
+				"sounds/infected_mb/infected_mb_death6",
+				"sounds/infected_mb/infected_mb_death7",
+				"sounds/infected_mb/infected_mb_death8",
+				"sounds/infected_mb/infected_mb_death9",
+				"sounds/infected_mb/infected_mb_death10",
+				"sounds/infected_mb/infected_mb_death11",
+				"sounds/infected_mb/infected_mb_death12",
+				"sounds/infected_mb/infected_mb_death13",
+				"sounds/infected_mb/infected_mb_death14",
+				"sounds/infected_mb/infected_mb_death15",
+				"sounds/infected_mb/infected_mb_death16",
+				"sounds/infected_mb/infected_mb_death17",
+				"sounds/infected_mb/infected_mb_death18",
+				"sounds/infected_mb/infected_mb_death19",
+				"sounds/infected_mb/infected_mb_death20",
+				"sounds/infected_mb/infected_mb_death21",
+				"sounds/infected_mb/infected_mb_death22",
+				"sounds/infected_mb/infected_mb_death23",
+				"sounds/infected_mb/infected_mb_death24",
+				"sounds/infected_mb/infected_mb_death25",
+				"sounds/infected_mb/infected_mb_death26",
+				"sounds/infected_mb/infected_mb_death27",
+				"sounds/infected_mb/infected_mb_death28",
+				"sounds/infected_mb/infected_mb_death29",
+				"sounds/infected_mb/infected_mb_death30",
+				"sounds/infected_mb/infected_mb_death31",
+				"sounds/infected_mb/infected_mb_death32",
+				"sounds/infected_mb/infected_mb_death33",
+				"sounds/infected_mb/infected_mb_death34",
+				"sounds/infected_mb/infected_mb_death35",
+				"sounds/infected_mb/infected_mb_death36",
+				"sounds/infected_mb/infected_mb_death37",
+				"sounds/infected_mb/infected_mb_death38",
+				"sounds/infected_mb/infected_mb_death39",
+				"sounds/infected_mb/infected_mb_death40",
+				"sounds/infected_mb/infected_mb_death41",
+				"sounds/infected_mb/infected_mb_death42",
+				"sounds/infected_mb/infected_mb_death43",
+				"sounds/infected_mb/infected_mb_death44",
+				"sounds/infected_mb/infected_mb_death45",
+				"sounds/infected_mb/infected_mb_death46",
+				"sounds/infected_mb/infected_mb_death47",
+				"sounds/infected_mb/infected_mb_death48",
+				"sounds/infected_mb/infected_mb_death49",
+				"sounds/infected_mb/infected_mb_death50"
+			]
+		},
+		"flying_mb.flight": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				{
+					"name": "sounds/flying_mb/flying_mb_flight",
+					"volume": 0.7
+				}
+			]
+		},
+		"flying_mb.dive": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 40,
+			"sounds": [
+				{
+					"name": "sounds/flying_mb/flying_mb_dive",
+					"volume": 0.9
+				}
+			]
+		},
+		"mining_mb.dig": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 24,
+			"sounds": [
+				{
+					"name": "sounds/mining_mb/mining_mb_dig",
+					"volume": 0.7
+				}
+			]
+		},
+		"torpedo_mb.flight": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				{
+					"name": "sounds/torpedo_mb/torpedo_mb_flight",
+					"volume": 0.7
+				}
+			]
+		},
+		"torpedo_mb.explode": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 48,
+			"sounds": [
+				{
+					"name": "sounds/torpedo_mb/torpedo_mb_explode",
+					"volume": 0.75
+				}
+			]
+		},
+		"torpedo_mb.death": {
+			"category": "hostile",
+			"min_distance": 0,
+			"max_distance": 32,
+			"sounds": [
+				{
+					"name": "sounds/torpedo_mb/torpedo_mb_death",
+					"volume": 0.8
+				}
+			]
+		},
+		"biome.infected_ambient_1": {
+			"category": "ambient",
+			"min_distance": 0,
+			"max_distance": 64,
+			"sounds": [
+				{
+					"name": "sounds/biome_infected/biome_infected_1",
+					"volume": 0.5
+				}
+			]
+		},
+		"biome.infected_ambient_2": {
+			"category": "ambient",
+			"min_distance": 0,
+			"max_distance": 64,
+			"sounds": [
+				{
+					"name": "sounds/biome_infected/biome_infected_2",
+					"volume": 0.5
+				}
+			]
+		},
+		"biome.infected_ambient_3": {
+			"category": "ambient",
+			"min_distance": 0,
+			"max_distance": 64,
+			"sounds": [
+				{
+					"name": "sounds/biome_infected/biome_infected_3",
+					"volume": 0.5
+				}
+			]
+		},
+		"biome.infected_ambient_4": {
+			"category": "ambient",
+			"min_distance": 0,
+			"max_distance": 64,
+			"sounds": [
+				{
+					"name": "sounds/biome_infected/biome_infected_4",
+					"volume": 0.5
+				}
+			]
+		},
+		"mb.infection_cough_minor": {
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				{ "name": "sounds/infection_cough/Infected Player Coughing 1", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing 2", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing 3", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing 4", "volume": 0.68 }
+			]
+		},
+		"mb.infection_cough_major": {
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 24,
+			"sounds": [
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 1", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 2", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 3", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 4", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 5", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 6", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 7", "volume": 0.68 },
+				{ "name": "sounds/infection_cough/Infected Player Coughing Major 8", "volume": 0.68 }
+			]
+		},
+		"mb.dust_eat_hiccup": {
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 16,
+			"sounds": [
+				{ "name": "sounds/dust_eat_hiccup/Dust Hiccup 1", "volume": 0.68 },
+				{ "name": "sounds/dust_eat_hiccup/Dust Hiccup 2", "volume": 0.68 },
+				{ "name": "sounds/dust_eat_hiccup/Dust Hiccup 3", "volume": 0.68 },
+				{ "name": "sounds/dust_eat_hiccup/Dust Hiccup 4", "volume": 0.68 }
+			]
+		},
+		"mb.cure_sigh_relief_minor": {
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 18,
+			"sounds": [
+				{ "name": "sounds/cure_sigh_relief/Infection Cure Sigh Of Relief Minor", "volume": 0.34 }
+			]
+		},
+		"mb.cure_sigh_relief_major": {
+			"category": "neutral",
+			"min_distance": 0,
+			"max_distance": 20,
+			"sounds": [
+				{ "name": "sounds/cure_sigh_relief/Infection Cure Sigh Of Relief Major", "volume": 0.34 }
+			]
+		}
+	}
+}

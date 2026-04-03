@@ -1,0 +1,78 @@
+{
+	"format_version": "1.21.130",
+	"minecraft:block": {
+		"description": {
+			"identifier": "mb:snow_layer",
+			"menu_category": {
+				"category": "nature"
+			},
+			"is_experimental": false
+		},
+		"components": {
+			"tag:mb:maple_bear_snow_layer": {},
+			"minecraft:display_name": "Snow layer",
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 0.1
+			},
+			"minecraft:destructible_by_explosion": {
+				"explosion_resistance": 0.1
+			},
+			"minecraft:geometry": "geometry.'snow'_layer",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "'snow'_layer",
+					"render_method": "opaque"
+				}
+			},
+			"minecraft:collision_box": {
+				"origin": [
+					-8,
+					0,
+					-8
+				],
+				"size": [
+					16,
+					1,
+					16
+				]
+			},
+			"minecraft:selection_box": {
+				"origin": [
+					-8,
+					0,
+					-8
+				],
+				"size": [
+					16,
+					1,
+					16
+				]
+			},
+			"minecraft:loot": "loot_tables/blocks/snow_layer.json",
+			"tag:minecraft:is_shovel_item_destructible": {},
+			"minecraft:placement_filter": {
+				"conditions": [
+					{
+						"allowed_faces": [
+							"up"
+						],
+						"block_filter": [
+							{
+								"tags": "!q.any_tag('mb:maple_bear_snow_layer')"
+							}
+						]
+					},
+					{
+						"allowed_faces": [
+							"down",
+							"north",
+							"south",
+							"east",
+							"west"
+						]
+					}
+				]
+			}
+		}
+	}
+}

@@ -2,6 +2,8 @@
 
 This directory contains all project documentation organized by category.
 
+- **[context summary.md](context%20summary.md)** — Session / change log (canonical; append new work at the top as dated sections).
+
 ## 📁 Directory Structure
 
 ### `/design/` - Design & Vision Documents
@@ -61,9 +63,8 @@ Links and guides for Minecraft Bedrock development:
 - **[INDEXING_URLS_VERIFIED.md](reference/INDEXING_URLS_VERIFIED.md)** - Safer approach: verified base URLs and verification methods
 - **[USEFUL_LINKS.md](reference/USEFUL_LINKS.md)** - Collection of helpful links for Minecraft Bedrock development
 
-### `/ai/` - AI Assistant Context
-Files for AI assistant understanding:
-- **[CONTEXT_SUMMARY.md](ai/CONTEXT_SUMMARY.md)** - AI assistant's current understanding of the project (updated during development)
+### `/ai/` - AI assistant (redirect)
+- **[CONTEXT_SUMMARY.md](ai/CONTEXT_SUMMARY.md)** - Stub; canonical log is **[context summary.md](context%20summary.md)** (session history + merged archive).
 
 ### `/Compoohter/` - Co-Creator Resources
 Documentation for team members working on textures, lore, and design:

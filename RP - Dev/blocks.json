@@ -1,0 +1,12 @@
+{
+	"format_version": "1.21.40",
+	"mb:dusted_dirt": {
+		"sound": "dirt_with_roots"
+	},
+	"mb:snow_layer": {
+		"sound": "mb:snow_layer"
+	},
+	"mb:emulsifier_machine": {
+		"sound": "metal"
+	}
+}

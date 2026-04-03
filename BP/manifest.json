@@ -15,7 +15,7 @@
 	},
 	"header": {
 		"name": "MapleBear TakeOver",
-		"description": "Don't do drugs kids...",
+		"description": "Beta v0.9.0-beta.1 — release pack (admin storms/spawn only; no full dev tools). Semver in BP/scripts/mb_buildConfig.js.",
 		"min_engine_version": [
 			1,
 			26,

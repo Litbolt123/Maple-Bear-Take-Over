@@ -1,0 +1,20 @@
+{
+	"num_mip_levels": 4,
+	"padding": 8,
+	"resource_pack_name": "MapleBear TakeOver",
+	"texture_name": "atlas.terrain",
+	"texture_data": {
+		"dusted_dirt": {
+			"textures": "textures/blocks/dusted_dirt"
+		},
+		"'snow'_layer": {
+			"textures": "textures/blocks/'snow'_layer"
+		},
+		"emulsifier_machine": {
+			"textures": "textures/blocks/emuslsifierblocktexture_off_"
+		},
+		"emulsifier_machine_on": {
+			"textures": "textures/blocks/emuslsifierblocktexture_on"
+		}
+	}
+}

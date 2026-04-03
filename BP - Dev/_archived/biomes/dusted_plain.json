@@ -1,0 +1,70 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:biome": {
+		"description": {
+			"identifier": "mb:dusted_plain"
+		},
+		"components": {
+			"minecraft:climate": {
+				"temperature": 0,
+				"downfall": 0.9,
+				"snow_accumulation": [
+					0.25,
+					0.75
+				]
+			}
+		},
+		"minecraft:overworld_height": {
+			"noise_type": "lowlands"
+		},
+		"minecraft:surface_builder": {
+			"builder": {
+				"type": "minecraft:overworld",
+				"sea_floor_depth": 7,
+				"sea_floor_material": "minecraft:gravel",
+				"foundation_material": "minecraft:stone",
+				"mid_material": "minecraft:dirt",
+				"top_material": "mb:dusted_dirt"
+			}
+		},
+		"minecraft:overworld_generation_rules": {
+			"hills_transformation": [
+				[
+					"minecraft:forest_hills",
+					1
+				],
+				[
+					"minecraft:forest",
+					2
+				]
+			],
+			"mutate_transformation": "minecraft:sunflower_plains",
+			"generate_for_climates": [
+				[
+					"medium",
+					3
+				],
+				[
+					"warm",
+					1
+				],
+				[
+					"cold",
+					1
+				]
+			]
+		},
+		"minecraft:tags": {
+			"tags": [
+				"animal",
+				"monster",
+				"overworld",
+				"plains",
+				{
+					"dusted_plain": {}
+				}
+			]
+		}
+	}
+}
+

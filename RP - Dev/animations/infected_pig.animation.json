@@ -1,0 +1,102 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"animation.pig.baby_transform": {
+			"loop": true,
+			"bones": {
+				"head": {
+					"position": [
+						0,
+						4,
+						4
+					],
+					"scale": 2
+				}
+			}
+		},
+		"animation.pig.setup": {
+			"loop": true,
+			"bones": {
+				"body": {
+					"rotation": [
+						"-this",
+						0,
+						0
+					]
+				}
+			}
+		},
+		"animation.pig.setup.v1.0": {
+			"loop": true,
+			"bones": {
+				"body": {
+					"rotation": [
+						"90.0 - this",
+						0,
+						0
+					]
+				},
+				"head": {
+					"rotation": [
+						-90,
+						0,
+						0
+					],
+					"position": [
+						0,
+						9,
+						7
+					]
+				},
+				"leg0": {
+					"rotation": [
+						-90,
+						0,
+						0
+					],
+					"position": [
+						0,
+						2,
+						-12
+					]
+				},
+				"leg1": {
+					"rotation": [
+						-90,
+						0,
+						0
+					],
+					"position": [
+						0,
+						2,
+						-12
+					]
+				},
+				"leg2": {
+					"rotation": [
+						-90,
+						0,
+						0
+					],
+					"position": [
+						0,
+						15,
+						0
+					]
+				},
+				"leg3": {
+					"rotation": [
+						-90,
+						0,
+						0
+					],
+					"position": [
+						0,
+						15,
+						0
+					]
+				}
+			}
+		}
+	}
+}

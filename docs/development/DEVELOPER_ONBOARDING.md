@@ -39,4 +39,4 @@ There is no headless runner. Install the packs in a Bedrock world (or `developme
 ## Related
 
 - Root **`AGENTS.md`** — Cursor/agent notes and command table.
-- **`docs/ai/CONTEXT_SUMMARY.md`** — high-level recent change log.
+- **`docs/context summary.md`** — session / change log (canonical). **`docs/ai/CONTEXT_SUMMARY.md`** redirects there.

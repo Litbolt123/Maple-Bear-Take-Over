@@ -5,10 +5,10 @@
   "type": "module",
   "description": "MapleBear TakeOver - Minecraft Bedrock Edition Addon",
   "scripts": {
-    "lint": "eslint BP/scripts/ tools/",
-    "lint:fix": "eslint --fix BP/scripts/ tools/",
-    "validate:json": "node -e \"const fs=require('fs');const path=require('path');let ok=0,fail=0;const walk=(d)=>{for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory())walk(p);else if(e.name.endsWith('.json')){try{JSON.parse(fs.readFileSync(p,'utf8'));ok++}catch(err){console.error(p+': '+err.message);fail++}}}};walk('BP');walk('RP');console.log(ok+' JSON files valid, '+fail+' failed');if(fail)process.exit(1)\"",
-    "validate:syntax": "for f in BP/scripts/*.js; do node --check \"$f\" || exit 1; done && echo 'All JS files pass syntax check'",
+    "lint": "eslint BP/scripts/ \"BP - Dev/scripts/\" tools/",
+    "lint:fix": "eslint --fix BP/scripts/ \"BP - Dev/scripts/\" tools/",
+    "validate:json": "node -e \"const fs=require('fs');const path=require('path');let ok=0,fail=0;const walk=(d)=>{for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory())walk(p);else if(e.name.endsWith('.json')){try{JSON.parse(fs.readFileSync(p,'utf8'));ok++}catch(err){console.error(p+': '+err.message);fail++}}}};walk('BP');walk('BP - Dev');walk('RP');walk('RP - Dev');console.log(ok+' JSON files valid, '+fail+' failed');if(fail)process.exit(1)\"",
+    "validate:syntax": "for f in BP/scripts/*.js; do node --check \"$f\" || exit 1; done && for f in \"BP - Dev/scripts\"/*.js; do node --check \"$f\" || exit 1; done && echo 'All JS files pass syntax check'",
     "validate": "npm run validate:json && npm run validate:syntax",
     "check": "npm run validate && npm run lint"
   },

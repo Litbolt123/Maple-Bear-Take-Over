@@ -1,0 +1,48 @@
+{
+	"format_version": "1.20.80",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "mb:flying_mb_day20",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/flying_mb_texture"
+			},
+			"geometry": {
+				"default": "geometry.flying_mb"
+			},
+			"particle_effects": {
+				"death_dust": "mb:white_dust_particle"
+			},
+			"render_controllers": [
+				"controller.render.infected"
+			],
+			"spawn_egg": {
+				"texture": "flying_mb_egg_day20",
+				"texture_index": 0
+			},
+			"animations": {
+				"look_at_target": "animation.humanoid.look_at_target.default",
+				"death_particles": "animation.mb.death_particles",
+				"idle1flying": "animation.flyingmb.idle1flying",
+				"idle2flying": "animation.flyingmb.idle2flying",
+				"idle3flying": "animation.flyingmb.idle3flying",
+				"flying_mb_animation_controller": "controller.animation.flying_mb_animation_controller"
+			},
+			"scripts": {
+				"animate": [
+					{
+						"look_at_target": true
+					},
+					{
+						"death_particles": "!query.is_alive"
+					},
+					{
+						"flying_mb_animation_controller": true
+					}
+				]
+			}
+		}
+	}
+}

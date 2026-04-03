@@ -1,0 +1,98 @@
+{
+	"resource_pack_name": "MapleBear TakeOver",
+	"texture_name": "atlas.items",
+	"texture_data": {
+		"mb_buff_mb_egg": {
+			"textures": "textures/items/buff_mb_egg"
+		},
+		"mb_mb_egg": {
+			"textures": "textures/items/mb"
+		},
+		"mb_infected_mb_egg": {
+			"textures": "textures/items/Infected_human_mb_egg"
+		},
+		"mb_infected_egg": {
+			"textures": "textures/items/Infected_human_mb_egg"
+		},
+		"mb_snow": {
+			"textures": "textures/items/mb_snow"
+		},
+		"mb_snow_book": {
+			"textures": "textures/items/snow_book"
+		},
+		"mb_basic_journal": {
+			"textures": "textures/items/basic_journal"
+		},
+		"mb_mb_day04_egg": {
+			"textures": "textures/items/mb_day4"
+		},
+		"mb_mb_day08_egg": {
+			"textures": "textures/items/mb_day8"
+		},
+		"mb_infected_day08_egg": {
+			"textures": "textures/items/infected_day8_egg"
+		},
+		"mb_infected_pig_egg": {
+			"textures": "textures/items/infected_pig_spawn_egg"
+		},
+		"mb_infected_cow_egg": {
+			"textures": "textures/items/infected_cow_egg"
+		},
+		"mb_mb_day13_egg": {
+			"textures": "textures/items/mb_day13_egg"
+		},
+		"mb_infected_day13_egg": {
+			"textures": "textures/items/infected_day13_egg"
+		},
+		"mb_buff_mb_day13_egg": {
+			"textures": "textures/items/buff_mb_day13_egg"
+		},
+		"mb_mb_day20_egg": {
+			"textures": "textures/items/mb_day20_egg"
+		},
+		"mb_infected_day20_egg": {
+			"textures": "textures/items/infected_day20_egg"
+		},
+		"mb_buff_mb_day20_egg": {
+			"textures": "textures/items/buff_mb_day20_egg"
+		},
+		"flying_mb_egg": {
+			"textures": "textures/items/flying_mb_egg_texture"
+		},
+		"mb_infected_miner_egg": {
+			"textures": [
+				"textures/items/Infected_human_miner_egg"
+			]
+		},
+		"mb_infected_miner2_egg": {
+			"textures": [
+				"textures/items/Infected_human_miner2_egg"
+			]
+		},
+		"TORPEDO_EGG": {
+			"textures": [
+				"textures/items/TORPEDO_MB_EGG"
+			]
+		},
+		"TORPEDO_EGG_day20": {
+			"textures": [
+				"textures/items/TORPEDO_MB_EGG_day20"
+			]
+		},
+		"flying_mb_egg_day15": {
+			"textures": [
+				"textures/items/flying_mb_egg_day15"
+			]
+		},
+		"flying_mb_egg_day20": {
+			"textures": [
+				"textures/items/flying_mb_egg_day20"
+			]
+		},
+		"mb_buff_mb_day8_egg": {
+			"textures": [
+				"textures/items/buff_mb_day8_egg"
+			]
+		}
+	}
+}

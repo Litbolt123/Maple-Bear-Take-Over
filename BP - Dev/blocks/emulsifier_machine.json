@@ -1,0 +1,48 @@
+{
+	"format_version": "1.21.130",
+	"minecraft:block": {
+		"description": {
+			"identifier": "mb:emulsifier_machine",
+			"menu_category": {
+				"category": "construction"
+			},
+			"is_experimental": false,
+			"states": {
+				"mb:active": [false, true]
+			}
+		},
+		"permutations": [
+			{
+				"condition": "query.block_state('mb:active') == true",
+				"components": {
+					"minecraft:material_instances": {
+						"*": {
+							"texture": "emulsifier_machine_on",
+							"render_method": "opaque"
+						}
+					}
+				}
+			}
+		],
+		"components": {
+			"minecraft:display_name": "Emulsifier",
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 1.2,
+				"use_efficiency": true
+			},
+			"minecraft:destructible_by_explosion": {
+				"explosion_resistance": 12
+			},
+			"minecraft:geometry": "geometry.emulsifier",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "emulsifier_machine",
+					"render_method": "opaque"
+				}
+			},
+			"minecraft:collision_box": true,
+			"minecraft:selection_box": true,
+			"minecraft:loot": "loot_tables/blocks/emulsifier_machine.json"
+		}
+	}
+}

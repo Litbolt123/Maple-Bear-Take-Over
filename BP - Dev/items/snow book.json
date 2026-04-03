@@ -1,0 +1,25 @@
+{
+	"format_version": "1.21.80",
+	"minecraft:item": {
+		"description": {
+			"identifier": "mb:snow_book",
+			"menu_category": {
+				"category": "equipment"
+			}
+		},
+		"components": {
+			"minecraft:icon": "mb_snow_book",
+			"minecraft:max_stack_size": 1,
+			"minecraft:use_animation": "none",
+			"minecraft:display_name": {
+				"value": "Powdery Journal"
+			},
+			"minecraft:lore": [
+				"§7A mysterious journal that seems to",
+				"§7document your experiences...",
+				"§7Also, whats this white stuff?",
+				"§eRight-click to open your journal"
+			]
+		}
+	}
+}

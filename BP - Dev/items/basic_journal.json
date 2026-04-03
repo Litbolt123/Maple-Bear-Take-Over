@@ -1,0 +1,25 @@
+{
+	"format_version": "1.21.80",
+	"minecraft:item": {
+		"description": {
+			"identifier": "mb:basic_journal",
+			"menu_category": {
+				"category": "equipment"
+			}
+		},
+		"components": {
+			"minecraft:icon": "mb_basic_journal",
+			"minecraft:max_stack_size": 1,
+			"minecraft:use_animation": "none",
+			"minecraft:display_name": {
+				"value": "Basic Journal"
+			},
+			"minecraft:lore": [
+				"§7A simple journal to help you",
+				"§7understand what's happening...",
+				"§eRight-click to open"
+			]
+		}
+	}
+}
+

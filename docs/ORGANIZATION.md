@@ -50,8 +50,9 @@ docs/
 │   ├── USEFUL_LINKS.md          # Helpful development links
 │   └── COLORS_AND_STYLING.md    # UI color codes and styling reference
 │
-├── ai/                          # AI Assistant Context
-│   └── CONTEXT_SUMMARY.md       # AI's understanding of project
+├── context summary.md           # Session / change log (canonical; humans + AI)
+├── ai/
+│   └── CONTEXT_SUMMARY.md       # Stub → links to ../context summary.md
 │
 └── Compoohter/                  # Co-Creator Resources
     ├── TASKS_FOR_CO_CREATOR.md  # Task list with file locations

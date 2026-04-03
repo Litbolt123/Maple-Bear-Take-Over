@@ -1,0 +1,13 @@
+{
+	"_ARCHIVE_NOTE": "This file was archived on 2025-12-25 when split into 3 separate client biome files (large/medium/small) to match the split biome files. See mb_infected_biome_large.client.json, mb_infected_biome_medium.client.json, and mb_infected_biome_small.client.json for current implementation.",
+	"format_version": "1.21.40",
+	"minecraft:client_biome": {
+		"description": { "identifier": "mb:infected_biome" },
+		"components": {
+            "minecraft:sky_color": { "sky_color": "#C8D2E1" },
+            "minecraft:fog_appearance": { "fog_identifier": "mb:infected_biome" },
+            "minecraft:water_appearance": { "surface_color": "#F0F2F4" }
+		}
+	}
+}
+

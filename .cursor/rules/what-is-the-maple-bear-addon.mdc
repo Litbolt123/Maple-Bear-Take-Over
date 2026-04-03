@@ -1,3 +1,7 @@
 ---
 alwaysApply: true
 ---
+
+## Context summary (documentation)
+
+When summarizing chat or session work for the repo, append to **`docs/context summary.md`** only (dated block at the top). There is no separate long AI context file; `docs/ai/CONTEXT_SUMMARY.md` redirects there.

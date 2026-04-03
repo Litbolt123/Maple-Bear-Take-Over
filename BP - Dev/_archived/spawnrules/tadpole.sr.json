@@ -1,0 +1,55 @@
+{
+	"format_version": "1.8.0",
+	"minecraft:spawn_rules": {
+		"description": {
+			"identifier": "minecraft:tadpole",
+			"population_control": "water_animal"
+		},
+		"conditions": [
+			{
+				"minecraft:spawns_underwater": {},
+				"minecraft:brightness_filter": {
+					"min": 0,
+					"max": 15,
+					"adjust_for_weather": true
+				},
+				"minecraft:difficulty_filter": {
+					"min": "easy",
+					"max": "hard"
+				},
+				"minecraft:world_age_filter": {
+					"min": 0,
+					"max": 3600
+				},
+				"minecraft:weight": {
+					"default": 10
+				},
+				"minecraft:herd": {
+					"min_size": 2,
+					"max_size": 6
+				},
+				"minecraft:density_limit": {
+					"surface": 70
+				},
+				"minecraft:disallow_spawns_in_bubble": {},
+				"minecraft:distance_filter": {
+					"min": 24,
+					"max": 128
+				},
+				"minecraft:height_filter": {
+					"min": 0,
+					"max": 128
+				},
+				"minecraft:biome_filter": {
+					"any_of": [
+						{
+							"test": "has_biome_tag",
+							"operator": "==",
+							"value": "swamp"
+						}
+					]
+				}
+			}
+		]
+	}
+} 

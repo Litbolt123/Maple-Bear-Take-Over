@@ -1,0 +1,19 @@
+{
+	"format_version": "1.21.80",
+	"minecraft:recipe_shaped": {
+		"description": {
+			"identifier": "mb:emulsifier_machine_recipe"
+		},
+		"tags": ["crafting_table"],
+		"unlock": [{ "item": "mb:dusted_dirt" }],
+		"pattern": ["IHI", "RDG", "III"],
+		"key": {
+			"I": { "item": "minecraft:iron_ingot" },
+			"H": { "item": "minecraft:hopper" },
+			"R": { "item": "minecraft:redstone_block" },
+			"D": { "item": "mb:dusted_dirt" },
+			"G": { "item": "minecraft:glowstone" }
+		},
+		"result": { "item": "mb:emulsifier_machine", "count": 1 }
+	}
+}

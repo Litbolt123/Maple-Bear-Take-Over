@@ -1,0 +1,617 @@
+{
+	"format_version": "1.21.80",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "mb:mining_mb",
+			"is_spawnable": true,
+			"is_summonable": true,
+			"is_experimental": false,
+			"scripts": {}
+		},
+		"component_groups": {
+			"bridge:": {
+				"minecraft:on_target_acquired": {
+					"filters": [
+						{
+							"all_of": [
+								{
+									"any_of": [
+										{
+											"test": "is_family",
+											"value": "player"
+										}
+									]
+								}
+							]
+						}
+					],
+					"target": "player"
+				},
+				"minecraft:angry": {
+					"broadcast_anger": true,
+					"broadcast_range": 22,
+					"broadcast_anger_on_being_attacked": true,
+					"broadcast_anger_on_attack": true
+				}
+			},
+			"buffed": {
+				"minecraft:health": {
+					"value": 25,
+					"max": 25
+				},
+				"minecraft:attack": {
+					"damage": 6
+				}
+			},
+			"variant_0": {},
+			"variant_1": {},
+			"variant_2": {},
+			"variant_3": {},
+			"variant_4": {},
+			"mb:combat_enabled": {
+				"minecraft:behavior.melee_attack": {
+					"priority": 1,
+					"speed_multiplier": 1.05,
+					"track_target": true,
+					"y_max_head_rotation": 360,
+					"reach_multiplier": 1.8
+				},
+				"minecraft:behavior.hurt_by_target": {
+					"priority": 1
+				},
+				"minecraft:behavior.nearest_attackable_target": {
+					"priority": 1,
+					"reselect_targets": true,
+					"entity_types": [
+						{
+							"filters": {
+								"test": "is_family",
+								"subject": "other",
+								"value": "player"
+							},
+							"max_dist": 64
+						},
+						{
+							"filters": {
+								"test": "is_family",
+								"subject": "other",
+								"value": "mob"
+							},
+							"max_dist": 64
+						}
+					],
+					"must_see": false,
+					"set_persistent": true,
+					"target_search_height": 24,
+					"target_invisible_multiplier": 2,
+					"must_see_forget_duration": 6000,
+					"within_radius": 32,
+					"target_sneak_visibility_multiplier": 1
+				}
+			}
+		},
+		"components": {
+			"minecraft:inventory": {
+				"inventory_size": 1,
+				"private": false,
+				"restrict_to_owner": false
+			},
+			"minecraft:equipment": {
+				"table": "loot_tables/mb_loot_tables/infected_bear_equipment.json",
+				"slot_drop_chance": [
+					{
+						"slot": "slot.armor.head",
+						"drop_chance": 1
+					},
+					{
+						"slot": "slot.armor.chest",
+						"drop_chance": 1
+					},
+					{
+						"slot": "slot.armor.legs",
+						"drop_chance": 1
+					},
+					{
+						"slot": "slot.armor.feet",
+						"drop_chance": 1
+					},
+					{
+						"slot": "slot.weapon.offhand",
+						"drop_chance": 1
+					}
+				]
+			},
+			"minecraft:equippable": {
+				"slots": [
+					{
+						"slot": 0,
+						"accepted_items": [
+							"minecraft:leather_helmet",
+							"minecraft:iron_helmet",
+							"minecraft:diamond_helmet",
+							"minecraft:netherite_helmet",
+							"minecraft:golden_helmet",
+							"minecraft:chainmail_helmet",
+							"minecraft:turtle_helmet"
+						],
+						"on_equip": {
+							"event": "equip_armor"
+						}
+					},
+					{
+						"slot": 1,
+						"accepted_items": [
+							"minecraft:leather_chestplate",
+							"minecraft:iron_chestplate",
+							"minecraft:diamond_chestplate",
+							"minecraft:netherite_chestplate",
+							"minecraft:golden_chestplate",
+							"minecraft:chainmail_chestplate",
+							"minecraft:elytra"
+						],
+						"on_equip": {
+							"event": "equip_armor"
+						}
+					},
+					{
+						"slot": 2,
+						"accepted_items": [
+							"minecraft:leather_leggings",
+							"minecraft:iron_leggings",
+							"minecraft:diamond_leggings",
+							"minecraft:netherite_leggings",
+							"minecraft:golden_leggings",
+							"minecraft:chainmail_leggings"
+						],
+						"on_equip": {
+							"event": "equip_armor"
+						}
+					},
+					{
+						"slot": 3,
+						"accepted_items": [
+							"minecraft:leather_boots",
+							"minecraft:iron_boots",
+							"minecraft:diamond_boots",
+							"minecraft:netherite_boots",
+							"minecraft:golden_boots",
+							"minecraft:chainmail_boots"
+						],
+						"on_equip": {
+							"event": "equip_armor"
+						}
+					},
+					{
+						"slot": 4,
+						"accepted_items": [
+							"minecraft:shield",
+							"minecraft:totem_of_undying",
+							"minecraft:torch",
+							"minecraft:soul_torch",
+							"minecraft:lantern",
+							"minecraft:soul_lantern"
+						],
+						"on_equip": {
+							"event": "equip_weapon"
+						}
+					}
+				]
+			},
+			"minecraft:equip_item": {
+				"excluded_items": [
+					{
+						"item": "minecraft:banner:15"
+					}
+				]
+			},
+			"minecraft:behavior.equip_item": {
+				"priority": 2
+			},
+			"minecraft:jump.static": {
+				"jump_power": 0.4
+			},
+			"minecraft:damage_sensor": {
+				"triggers": {
+					"cause": "fall",
+					"deals_damage": "no"
+				}
+			},
+			"minecraft:health": {
+				"value": 15,
+				"max": 15
+			},
+			"minecraft:collision_box": {
+				"width": 0.55,
+				"height": 2.1
+			},
+			"minecraft:attack": {
+				"damage": 3
+			},
+			"minecraft:movement": {
+				"value": 0.38
+			},
+			"minecraft:navigation.generic": {
+				"can_float": false,
+				"can_walk": true,
+				"can_jump": true,
+				"can_swim": true,
+				"can_path_over_lava": true,
+				"can_sink": true,
+				"can_path_over_water": true,
+				"can_pass_doors": true,
+				"can_open_doors": true,
+				"can_break_doors": true,
+				"avoid_portals": true,
+				"is_amphibious": true
+			},
+			"minecraft:behavior.look_at_player": {
+				"priority": 5,
+				"look_distance": 12
+			},
+			"minecraft:pushable": {
+				"is_pushable": true,
+				"is_pushable_by_piston": true
+			},
+			"minecraft:breathable": {
+				"breathes_water": true,
+				"total_supply": 22,
+				"suffocate_time": -22
+			},
+			"minecraft:fire_immune": false,
+			"minecraft:physics": {
+				"has_collision": true,
+				"has_gravity": true
+			},
+			"minecraft:angry": {
+				"broadcast_anger": true,
+				"broadcast_range": 22,
+				"broadcast_anger_on_attack": true,
+				"broadcast_anger_on_being_attacked": true
+			},
+			"minecraft:follow_range": {
+				"value": 64,
+				"max": 64
+			},
+			"minecraft:annotation.break_door": {
+				"break_time": 7,
+				"min_difficulty": "peaceful"
+			},
+			"minecraft:knockback_resistance": {
+				"value": 0.3,
+				"max": 0.3
+			},
+			"minecraft:movement.generic": {},
+			"minecraft:conditional_bandwidth_optimization": {},
+			"minecraft:loot": {
+				"table": "loot_tables/mb_loot_tables/infected_loot_table.json"
+			},
+			"minecraft:behavior.pickup_items": {
+				"priority": 6,
+				"max_dist": 4,
+				"goal_radius": 1.5,
+				"speed_multiplier": 1.2,
+				"pickup_based_on_chance": false,
+				"can_pickup_any_item": true,
+				"excluded_items": [
+					"minecraft:glow_ink_sac"
+				]
+			},
+			"minecraft:shareables": {
+				"items": [
+					{
+						"item": "minecraft:netherite_sword",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 0
+					},
+					{
+						"item": "minecraft:diamond_sword",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 1
+					},
+					{
+						"item": "minecraft:iron_sword",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 2
+					},
+					{
+						"item": "minecraft:stone_sword",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 3
+					},
+					{
+						"item": "minecraft:golden_sword",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 4
+					},
+					{
+						"item": "minecraft:wooden_sword",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 5
+					},
+					{
+						"item": "minecraft:shield",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 0
+					},
+					{
+						"item": "minecraft:netherite_helmet",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 0
+					},
+					{
+						"item": "minecraft:diamond_helmet",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 1
+					},
+					{
+						"item": "minecraft:iron_helmet",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 2
+					},
+					{
+						"item": "minecraft:chainmail_helmet",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 3
+					},
+					{
+						"item": "minecraft:golden_helmet",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 4
+					},
+					{
+						"item": "minecraft:leather_helmet",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 5
+					},
+					{
+						"item": "minecraft:turtle_helmet",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 6
+					},
+					{
+						"item": "minecraft:skull:0",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 7
+					},
+					{
+						"item": "minecraft:skull:1",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 7
+					},
+					{
+						"item": "minecraft:carved_pumpkin",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 7
+					},
+					{
+						"item": "minecraft:netherite_chestplate",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 0
+					},
+					{
+						"item": "minecraft:diamond_chestplate",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 1
+					},
+					{
+						"item": "minecraft:iron_chestplate",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 2
+					},
+					{
+						"item": "minecraft:chainmail_chestplate",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 3
+					},
+					{
+						"item": "minecraft:golden_chestplate",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 4
+					},
+					{
+						"item": "minecraft:leather_chestplate",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 5
+					},
+					{
+						"item": "minecraft:netherite_leggings",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 0
+					},
+					{
+						"item": "minecraft:diamond_leggings",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 1
+					},
+					{
+						"item": "minecraft:iron_leggings",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 2
+					},
+					{
+						"item": "minecraft:chainmail_leggings",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 3
+					},
+					{
+						"item": "minecraft:golden_leggings",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 4
+					},
+					{
+						"item": "minecraft:leather_leggings",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 5
+					},
+					{
+						"item": "minecraft:netherite_boots",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 0
+					},
+					{
+						"item": "minecraft:diamond_boots",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 1
+					},
+					{
+						"item": "minecraft:iron_boots",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 2
+					},
+					{
+						"item": "minecraft:chainmail_boots",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 3
+					},
+					{
+						"item": "minecraft:golden_boots",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 4
+					},
+					{
+						"item": "minecraft:leather_boots",
+						"want_amount": 1,
+						"surplus_amount": 1,
+						"priority": 5
+					}
+				]
+			},
+			"minecraft:despawn": {
+				"despawn_from_distance": {
+					"max_distance": 128,
+					"min_distance": 64
+				},
+				"despawn_from_inactivity": true,
+				"min_range_inactivity_timer": 60,
+				"despawn_from_chance": true,
+				"min_range_random_chance": 800
+			},
+			"minecraft:type_family": {
+				"family": [
+					"infected",
+					"maple_bear",
+					"mining"
+				]
+			},
+			"minecraft:underwater_movement": {
+				"value": 0.18
+			}
+		},
+		"events": {
+			"become_buffed": {
+				"add": {
+					"component_groups": [
+						"buffed"
+					]
+				}
+			},
+			"equip_armor": {
+				"add": {
+					"component_groups": []
+				}
+			},
+			"equip_weapon": {
+				"add": {
+					"component_groups": []
+				}
+			},
+			"spawn": {
+				"randomize": [
+					{
+						"weight": 20,
+						"add": {
+							"component_groups": [
+								"variant_0",
+								"mb:combat_enabled"
+							]
+						}
+					},
+					{
+						"weight": 20,
+						"add": {
+							"component_groups": [
+								"variant_1",
+								"mb:combat_enabled"
+							]
+						}
+					},
+					{
+						"weight": 20,
+						"add": {
+							"component_groups": [
+								"variant_2",
+								"mb:combat_enabled"
+							]
+						}
+					},
+					{
+						"weight": 20,
+						"add": {
+							"component_groups": [
+								"variant_3",
+								"mb:combat_enabled"
+							]
+						}
+					},
+					{
+						"weight": 20,
+						"add": {
+							"component_groups": [
+								"variant_4",
+								"mb:combat_enabled"
+							]
+						}
+					}
+				]
+			},
+			"mb:enter_build_mode": {
+				"remove": {
+					"component_groups": [
+						"mb:combat_enabled"
+					]
+				}
+			},
+			"mb:exit_build_mode": {
+				"add": {
+					"component_groups": [
+						"mb:combat_enabled"
+					]
+				}
+			}
+		}
+	}
+}
