@@ -36,7 +36,7 @@
 		},
 		"components": {
 			"minecraft:inventory": {
-				"inventory_size": 20,
+				"inventory_size": 15,
 				"private": false,
 				"restrict_to_owner": false
 			},
@@ -149,6 +149,13 @@
 					{ "item": "minecraft:diamond_sword", "want_amount": 1, "surplus_amount": 1, "priority": 1 },
 					{ "item": "minecraft:iron_sword", "want_amount": 1, "surplus_amount": 1, "priority": 2 }
 				]
+			},
+			"minecraft:despawn": {
+				"despawn_from_distance": { "max_distance": 128, "min_distance": 64 },
+				"despawn_from_inactivity": true,
+				"min_range_inactivity_timer": 40,
+				"despawn_from_chance": true,
+				"min_range_random_chance": 520
 			}
 		}
 	}

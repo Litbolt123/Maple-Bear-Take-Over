@@ -8,6 +8,58 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 **Date:** 2026-03-28
 
+## Buff AI Debug: “Show Countdown” button clarity (`mb_codex.js`)
+
+- **Issue:** **Show Countdown** only re-opened the menu; stuck / explosion text was already in the body, so it looked like it did nothing.
+- **Change:** Menu body explains the block is a **64-block snapshot** and that **Refresh countdown** updates it. Button renamed to **Refresh countdown**; tap sends a short **chat** line that points at the menu text and General → content log. **BP - Dev** synced.
+
+## Buff AI: content log countdowns when script toggle is off (`mb_buffAI.js`, `mb_codex.js`)
+
+- **Issue:** Buff AI Debug in the journal could list nearby bears while **`console.warn`** countdown lines never appeared. The main interval returned immediately when **`isScriptEnabled(SCRIPT_IDS.buff)`** was false; **`getBuffBearCountdowns`** only scans the world and does not use that toggle.
+- **Change:** If **General** buff debug is on (**`getDebugGeneral()`**), the interval still runs: **spawn/stuck tracking + countdown logs**. **Climbing / block break** and **explosions** run only when the Buff AI script toggle is on; if stuck fuse completes with script off, log **would explode — enable Buff AI**.
+- **UI:** Buff AI Debug menu shows a short note when General is on but the Buff AI script is off. **`BP - Dev/scripts`** synced.
+
+## Buff AI debug countdown: show bears before AI loop registers them (`mb_buffAI.js`)
+
+- **`getBuffBearCountdowns`** (Buff AI Debug menu body) filtered out any buff bear **missing** **`BUFF_SPAWN_TIME`**; that map is only filled when the **2t AI interval** first processes the entity. Right after spawn / join, the menu could say **no bears within 64** despite entities present. **Fix:** if nearby buff bear has no spawn tick yet, **seed** **`currentTick - MIN_ALIVE_TIME_TICKS`** (same as the main loop) and store it. **Not** a continuous HUD — countdown text is built when that menu (re)opens.
+
+## Journal: how to pin + Admin tools entry (`mb_codex.js`)
+
+- **Full dev build:** Powdery Journal main → **Developer Tools** (accept disclaimer once) → **Codex** → **Pin / unpin to journal main** — tap an item to toggle; pinned rows show **(pinned)** in green. Reopen the journal main menu to see shortcuts above Settings.
+- **Requirements:** `mb_cheats` (or legacy host name gate) and a build with dev or admin tools; pins save on the player as **`mb_pinned_dev_items`**.
+- **Public Admin tools only:** Pin UI was only under Developer → Codex; **Admin tools** now includes **Pin / unpin journal main** (sets **`journalPowerToolsBack`** to Admin). **BP - Dev** synced.
+
+## Buff bear stuck fuse: horizontal-only + hit advance (`mb_buffAI.js`)
+
+- **Issue:** Stuck reset used **3D** distance, so **climbing** in a small **XZ** footprint exceeded **`STUCK_MOVEMENT_THRESHOLD`** and **cleared** the fuse repeatedly (alternating short vs long “stuck” in logs). After removing the wrong **`+stuckStartTick`** hit fix, hits no longer moved the fuse toward explosion.
+- **Change:** **`checkIfStuck`** uses **horizontal `hypot(dx,dz)`** for escape / hurt-suppress. **`HIT_ADVANCE_STUCK_TICKS` (48):** while the fuse is active, each hit **pulls `stuckStartTick` earlier** (clamped to **`currentTick - STUCK_TIME_TICKS`**). **`BUFF_LAST_HURT_TICK`** still suppresses **horizontal** knockback reset for **`BUFF_HURT_SUPPRESS_STUCK_RESET_TICKS`**. **BP - Dev** synced.
+
+## Spawn/scan preset recognition + HUD (`mb_spawnController.js`, `mb_codex.js`, `mb_actionBarHud.js`)
+
+- **`SPAWN_INTENSITY_PRESETS`** exported from **`mb_spawnController.js`** (codex aliases as `SPAWN_PRESETS`). **`findMatchingSpawnIntensityPresetKey`**, **`findMatchingSpawnScanPresetKey`**, **`resolveSpawnTuningRecognition`** compare world overrides to named tiers + **`SPAWN_SCAN_PRESETS`**; detect **quick combos** and **world perf combos** when storm/mining manual multipliers align.
+- **`getSpawnTuningSummaryForDevTools()`** → **`menuBody`** for dev menus (spawn controller hub, performance hub, intensity / quick / world combo menus, scan scheduler, scan presets, heavy perf).
+- **Action bar** slot **`ACTION_BAR_SLOT.SPAWN_TUNING` (15)**: optional **preset hint HUD** (`mb_spawn_preset_hud`), dev builds only, toggled from **Spawn → Performance** next to scan HUD; 10t refresh with scan overlay.
+- **`BP - Dev/scripts`** synced.
+
+## Spawn load metrics + Developer Tools categories (`mb_spawnLoadMetrics.js`, `mb_codex.js`, `main.js`)
+
+- **`mb_spawnLoadMetrics.js`**: periodic bear totals (all listed addon mob types, 3 dimensions), throttled overworld item-entity sample, storm count + perf probes; world props **`mb_spawn_load_auto`**, **`mb_spawn_load_bias`**; multipliers consumed by **`mb_spawnController.js`** (interval, block budget, caps, scan cooldown).
+- **`main.js`**: **`initializeSpawnLoadScalerWatch()`** + **`registerSpawnLoadProbes`** with **`getActiveStormCount`**, **`getPerfWallStress01`**, **`getPerfMobPressureForSpawn01`**; early **`runTimeout`** primes metrics.
+- **`mb_codex.js`**: Developer Tools is a **category hub** (Performance, Systems, Codex, World, Bears, Storm, Infection, Audio, Public preview); **Performance** holds **Spawn load & efficiency** (auto toggle, bias 0–4, chat dump, link to Heavy perf), camp, AI throttle. **`journalPowerToolsBack`** + **`triggerDebugCommand`** default completion return to the correct parent menu; new **pinnable** **`spawn_load`**. **`BP - Dev/scripts`** synced for edited scripts + new **`mb_spawnLoadMetrics.js`**.
+- **`AGENTS.md`**: spawn load section.
+
+## Adaptive storm/mining auto (`mb_performanceProfile.js`)
+
+- **No Script API MSPT** — added **wall-clock ms per game tick** (rolling median, spike proxy) + **weighted Maple Bear counts** (mining heaviest, buff/flying/torpedo) refreshed every **40t** across overworld/nether/end. **`getAdaptiveWorkMultiplierAddon()`** applies only when **storm & mining multipliers are Auto** (manual overrides unchanged); **LAGGY** comfort tier skips adaptive; world **`mb_perf_disable_adaptive`** = `1` disables. **`main.js`** calls **`initializeAdaptivePerformanceWatch()`** after the property handler. **Heavy perf** menu shows live adaptive × when both autos on. **`AGENTS.md`**: short note.
+
+## Dev / admin disclaimer persistence (`mb_dynamicPropertyHandler.js`)
+
+- **`mb_dev_tools_disclaimer_v1`** and **`mb_admin_tools_disclaimer_v1`** were missing from **`loadPlayerProperties`**’s `playerProps` list, so acknowledgements were not reloaded after cache rebuild / rejoin — dev tools disclaimer could appear every time. **Fix:** add both keys to the whitelist. **`mb_codex.js`:** call **`saveAllProperties()`** after setting each disclaimer so the flag flushes immediately.
+
+## AGENTS.md: public release checklist
+
+- Added **Release checklist (public `BP/` + `RP/`)** — merge from dev trees, never overwrite public `mb_buildConfig.js` with dev, manifests, `npm run check`, ship only `BP`+`RP`, optional context log note.
+
 ## Camp: big-base footprint (100 XZ / ±150 Y) + gentler ramp
 
 - **`mb_spawnMobilityCamp.js`**: **Ramping** still only while cluster centroid is inside **30 XZ / ±50 Y** of the anchor (leave = no camp build + 2× decay). **Big-base mode**: centroid must stay inside **100 XZ / ±150 Y** for **48 000 ticks (~2 in-game days)** to qualify; leaving that footprint resets qualification and turns big mode off. When `bigBaseActive`: full ramp **36 000t** (vs 12 000t), spawn cap **+22%** (vs +35%), storm slice **+7%** (vs +12%). Storm scale uses **per-cluster** `ramp × stormCap` max across overworld clusters (`lastOverworldStormCampExtra`).
@@ -1666,7 +1718,81 @@ Long-form **Recent Changes** bullets and **Current Project State** from the form
 
 ### 2026-03-28 — Merged action bar (multi-HUD)
 
-- **`mb_actionBarHud.js`:** slot priorities **INFECTION (10)**, **SPAWN_SCAN_PERF (20)**, **CAMP_DEV (30)**; **`setHudActionBarSegment` / `clearHudActionBarSegment`** merge with **`┃`**; when **2+** segments, line is prefixed with **`[n]`**; **`getHudActionBarDebugInfo`** for dev dump.
-- **`main.js`:** infection timer/cure line uses infection slot (tag **`Infect`** in segment).
-- **`mb_spawnController.js`:** camp dev + spawn scan overlay use composer; overlay off clears scan slot for all players.
-- **Camp dev dump** includes merged action-bar segment count and preview.
+- **`mb_actionBarHud.js`:** slots **INFECTION (10)**, **SPAWN_TUNING (15)**, **SPAWN_SCAN_PERF (20)**, **NARRATIVE (25)**, **CAMP_DEV (30)**, **TOAST (40)**; compact **`·`** separator and **`(n)`** prefix when many segments; **`formatHudMergeOrderForMenu`**, **`clearAllHudSegments`**, **`pushHudActionBarToast`**, **`getHudActiveSegmentCount`**, **`getHudActionBarDebugInfo`**; toast timeouts cleared on leave.
+- **`main.js`:** infection line → infection slot; first minor/major cure messages → **`pushHudActionBarToast`** (no full-line wipe).
+- **`mb_dayTracker.js`:** **`showPlayerActionbar`** → **NARRATIVE** slot (RawMessage still uses raw **`setActionBar`**).
+- **`mb_spawnController.js`:** preset/scan/camp dev labels shorten (**Pr/Sc/Cp**) when **`getHudActiveSegmentCount` ≥ 4**.
+- **`mb_codex.js`:** Developer Tools → **HUD & action bar** (merge legend, live preview, scan/preset toggles, camp-watch tag, clear, test toast, link to Spawn — Performance); pinnable **`hud_action_bar`**.
+
+### 2026-03-28 — Perf: fewer bears, faster despawn (non-buff), smaller infected inventories
+
+- **`mb_spawnController.js`:** Type caps **tiny 38** / **infected 26**; default **global cap/tick 18**; lower **per-tick spawn curve** and **`getPerTypeSpawnLimit`** for tiny/infected variants; per-player max spawns/tick **12**.
+- **`main.js`:** **`MB_CONVERSION_NEARBY_BEAR_SOFT_CAP = 30`** for kill/storm mob→bear conversions (was 40).
+- **Entities (non-buff):** **`minecraft:despawn`** inactivity **40** ticks, random chance **520** (was 60 / 800) on tiny, infected, flying, mining, torpedo (+ torpedo gained despawn); **infected pig/cow** gained full despawn (were distance-only).
+- **Buff bears:** Despawn **slower** (inactivity **200**, chance **1600**) so they stay longer than other types.
+- **Inventories (~−25%):** infected bears **15** (day20 **18**), torpedo **15**, flying **15** (day20 **18**), infected pig **14**.
+
+### 2026-03-28 — Minor immunity copy, spawn HUD ~nearest, preset auto, spawn menu reorg
+
+- **Journal:** Main summary + infection section clarify **permanent immunity is for minor infection** (major rules still apply).
+- **`mb_spawnController.js`:** **`findClosestSpawnIntensityPresetKey` / `findClosestSpawnScanPresetKey`**; **`resolveSpawnTuningRecognition`** uses **`~Nearest`** labels + nearest-named line when not exact; **`§cA§r`** HUD prefix when **`mb_spawn_preset_auto`** ON; **`applySpawnIntensityPreset`**; **`tickSpawnPresetAutoApply`** (~100t) picks combo from **spawn load `load01` + `getWorldWideSpawnLoadCount()`**.
+- **`mb_codex.js`:** Spawn Controller hub: **World tuning** | **Overlays & auto** (HUDs, spatial, spawn+scan AUTO, spawn load AUTO, load menu, storm/mining → Auto) | Core | Force | Emulsifier; **World tuning** submenu is presets/combos only (old Performance).
+
+### 2026-03-28 — Spawn+scan AUTO default ON + bear-heavy tier scaling
+
+- **`isSpawnPresetAutoEnabled`:** Unset property now means **ON** (explicit `0`/`false`/`"0"` = OFF), aligned with spawn load auto.
+- **`computeAutoSpawnScanTarget`:** **`bearTierPressure`** from snapshot bear count + stronger **`load01 * 5.2`** so solo worlds with ~100+ bears reach **low/ultra** tiers (old `load01*3.2` maxed ~3.2 and bear term in `load01` saturated at 90 bears ≈ tier 0 Med).
+- **`mb_spawnLoadMetrics.js`:** **`computeLoad01`** bear curve reworked; bear recount interval **24t** (was 40).
+
+### 2026-03-28 — Spawn scan/preset HUD: per-player + optional broadcast
+
+- **`mb_spawnController.js`:** Player props **`mb_dev_hud_scan_perf`**, **`mb_dev_hud_spawn_preset`**; world **`mb_dev_spawn_hud_broadcast`**. **`isSpawnScanPerfOverlayEnabledForPlayer` / `isSpawnPresetHudEnabledForPlayer`**; legacy world flags **`mb_spawn_scan_perf_debug`** / **`mb_spawn_preset_hud`** still apply to everyone until toggled (then cleared when using per-player setters). **`setSpawnScanPerfOverlayEnabled(enabled, player)`** requires toggling player.
+- **`refreshSpawnScanPerfHudOverlay` / `refreshSpawnPresetHudOverlay`:** Update/clear per player from ForPlayer helpers.
+- **`mb_codex.js`:** Spawn **HUD & spatial** + Developer **HUD & action bar**: **my** scan/preset toggles + **Broadcast spawn HUDs to all players**. **`mb_actionBarHud.js`:** merge legend text updated.
+
+### 2026-03-28 — Spawn+scan AUTO: explicit 1–8 online player term
+
+- **`mb_spawnController.js`:** `computeAutoSpawnScanTarget()` now adds **`onlineTerm`** from valid online players capped at **`AUTO_PRESET_ONLINE_CAP` (8)** (9+ saturates like 8), alongside existing **`load01`** and **cluster** sum. Design comment block documents how this relates to barren cooldowns, stagger, and `getEffectiveMaxGlobalSpawnsPerTick`. HUD/journal line: `online 1–8 + clusters + spawn load`. **`mb_codex.js`** Auto modes body text aligned.
+
+### 2026-03-28 — Spawn dev UI: AUTO hub, HUD merge, narrative RawMessage
+
+- **Behavior (unchanged in code):** **Spawn+scan AUTO** (`tickSpawnPresetAutoApply` ~100t) **overrides** manual spawn intensity + scan presets while ON. **Spawn load AUTO** scales controller interval/block budget separately (can stack). Manual picks **stick** when preset+scan AUTO is OFF.
+- **`mb_codex.js` (BP + BP - Dev sync):** Spawn Controller root — **§aAuto modes** button first after script toggle; **HUD & spatial** (was overlays) for scan/preset HUD + spatial + links to AUTO hub and load menu; new **`openSpawnAutoModesMenu`** (preset+scan, load, storm/mining auto, load details). Performance + HUD dev menus link into AUTO hub. World tuning / heavy perf / spawn intensity preset bodies warn when AUTO replaces manual choices.
+- **`mb_dayTracker.js`:** **`showPlayerActionbar`** flattens common **RawMessage** `rawText` into a string and uses **NARRATIVE** merged slot so day text does not wipe infection/spawn HUDs.
+- **`main.js`:** Infection HUD refresh no longer bails on missing `setActionBar` check (merge API handles display).
+
+### 2026-03-28 — Share knowledge: per-player first-kill achievements
+
+- **Cause:** `shareKnowledge` merged all `codex.mobs` entries; numeric **Kills / MobKills / Hits** and **variantKills** from the sharer could copy to the recipient when their tallies were `0` (`!0` was true). `trackBearKill` then ran **every** first-kill check on **every** kill, so a copied `buffBearKills === 1` could grant **KO Buff Maple Bear** on the next unrelated bear kill.
+- **Fix (`BP` + `BP - Dev`):** **`mb_codex.js`** — skip stat keys in the mob share loop via **`isMobCodexStatKey`**. **`main.js`** — **`getFirstKillAchievementForBearType`** awards the KO message/achievement only for the **slain** bear category.
+
+### 2026-03-28 — New worlds: “full auto” = spawn controller + script toggles (not beta Infected AI)
+
+- **User intent:** New worlds should run **spawning and related systems** in automatic mode until something is changed in the **book** (Spawn Controller menus, dev toggles, etc.). **Beta Infected AI** stays **OFF by default** — opt-in under **Settings → Beta**.
+- **`isScriptEnabled`:** All main script toggles (including **spawn_controller**, mining, storms, etc.) default **ON** unless explicitly disabled in Developer Tools.
+- **Spawn AUTO:** Preset+scan and related spawn-load auto behavior default **ON** when unset (explicit `0`/`false` turns off); see earlier **Spawn+scan AUTO default ON** entry.
+
+### 2026-03-28 — Clarify: spawn AUTO defaults + entity-driven tuning
+
+- **Preset+scan AUTO** and **spawn load AUTO** are both **ON** for a fresh world until toggled off in the book.
+- **Entity/load reaction:** Addon bear-type counts (all dimensions, ~24t refresh) drive **`load01`** in **`mb_spawnLoadMetrics.js`**; **`computeAutoSpawnScanTarget`** also adds **`bearTierPressure`** from bear count plus cluster/online terms so high populations push toward lighter spawn+scan tiers. Storm/mining **Auto** in the journal means cleared manual multipliers so lag tiers + probes control cadence (separate from those two world properties).
+
+### 2026-03-28 — Scan perf HUD: show bears + load scalers (not only P/C/D/W)
+
+- **Issue:** Action bar showed **P1 C1 D1 W1** for solo worlds — correct for **player/spatial** counts but looked “stuck” vs the journal spawn-load screen (bears, `load01`, interval/block multipliers).
+- **Fix (`mb_spawnController.js` + `BP - Dev` mirror):** **`refreshSpawnScanPerfHudOverlay`** calls **`refreshSpawnLoadMetrics(system.currentTick)`** each refresh (~10t) and appends **`b`ears, `L`% (load model), `i×` interval mult, `b×` block scale**; keeps **P/C/D/W** (compact **P/W** when HUD is crowded + solo). **`mb_actionBarHud.js`:** merge-order blurb updated.
+
+### 2026-03-28 — Major infection: Maplethrall on PvP / non–bear death when infection is advanced
+
+- **Cause:** **`handleInfectedPlayerDeath`** required **`damagingEntity`** to be a maple bear / infected pig-cow. **Player kills** use **`minecraft:player`** as killer, so the function **returned** and **no** infected bear (display **Maplethrall**) spawned. An early **`if (!source \|\| !source.damagingEntity) return`** also blocked thralls when there was no damage entity.
+- **Fix (`main.js`, BP + BP - Dev):** **`MAJOR_THRALL_ON_DEATH_REMAINING_FRAC` (0.42)** — if **active major** infection and **`ticksLeft`** ≤ 42% of a full **major** timer (~58%+ through the timeline), any death that would have skipped the bear-kill path still **spawns** the same day-scaled infected bear + broadcast + daily log (distinct message vs bear kill).
+
+### 2026-03-28 — Buff bear stuck explosion: hits no longer extend fuse or break countdown
+
+- **Cause:** `entityHurt` advanced **`stuckStartTick` by +30 ticks**, which **shortened** accumulated stuck time and **delayed** explosion; repeated hits could make **`stuckStartTick > currentTick`** (negative “stuck” in logs). **Melee knockback** also moved the bear past **`STUCK_MOVEMENT_THRESHOLD`**, so **`checkIfStuck`** cleared **`stuckStartTick`** and **restarted** the 15s fuse — felt like the timer reset.
+- **Fix (`mb_buffAI.js`, BP + BP - Dev):** Removed hit-based **`stuckStartTick`** edits. Added **`BUFF_LAST_HURT_TICK`** + **`BUFF_HURT_SUPPRESS_STUCK_RESET_TICKS`** (~2.5s): after damage, large movement **updates `lastPosition` but keeps `stuckStartTick`** so knockback does not reset the fuse. Cleanup on despawn / post-explosion.
+
+### 2026-03-28 — Journal pins: all sections + full admin dev list; mob conversion pressure curve
+
+- **`mb_codex.js` (BP + BP - Dev):** **`getJournalMainPinnableItems()`** adds pin-eligible **journal** shortcuts (Infection, Symptoms, Mobs, … Settings, Search when enabled) with **`journalPin`** so release builds skip the admin disclaimer for those. **`getPinEligibleDevItems()`** merges journal shortcuts with **all** **`PINNABLE_DEV_ITEMS`** when **`INCLUDE_ADMIN_TOOLS`** or full dev **`INCLUDE_FULL_DEVELOPER_TOOLS`** (release admin no longer limited to two pins). Main menu resolves pins via **`findPinnableItemById`**.
+- **`main.js`:** Removed hard **nearby 30** conversion cutoff. **Nearby** (64m) and **world-wide** addon bear counts (via **`refreshSpawnLoadMetrics` / `getSpawnLoadDebugSnapshot`**) apply a **ramped multiplier** to **`getInfectionRate`** for pig/cow infected conversions and normal mob→bear rolls. **Buff-bear outcomes** (large mob + day 8+, storm or bear kill) keep the **full** conversion rate so boss-tier pressure stays. **Buff bear count ≥5 nearby** still blocks **new** buff spawns. Constants: **`MB_CONVERSION_NEARBY_PRESSURE_*`**, **`MB_CONVERSION_WORLD_PRESSURE_*`**.

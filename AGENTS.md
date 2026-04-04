@@ -49,6 +49,26 @@ All commands are defined in `package.json`:
 
 Point Bridge (or any Bedrock pack project) at **`BP - Dev/`** and **`RP - Dev/`**: copy or sync those folders into your Bridge behavior pack and resource pack roots (replace the pack contents you use for Maple Bear). After a full sync from public `BP/`, restore **`BP - Dev/scripts/mb_buildConfig.js`** so `INCLUDE_FULL_DEVELOPER_TOOLS` stays `true`. Entry script loads **`./mb_buildConfig.js` first** from `main.js`; on **public** `BP/`, that module no-ops `console.log` / `info` / `warn` / `debug` so release builds stay quiet (`console.error` unchanged).
 
+### Release checklist (public `BP/` + `RP/`)
+
+When folding work from **`BP - Dev/`** / **`RP - Dev/`** into a store or public drop:
+
+- **Merge into public trees:** copy or sync changed scripts, JSON, and assets into **`BP/`** and **`RP/`** (whatever actually changed in dev).
+- **Do not paste the dev build config over release:** keep **`BP/scripts/mb_buildConfig.js`** as the **public** flavor — **`INCLUDE_FULL_DEVELOPER_TOOLS` must stay `false`**, `BUILD_FLAVOR` / version strings as intended for that release. Edit that file by hand if needed; never replace it wholesale with `BP - Dev/scripts/mb_buildConfig.js`.
+- **Manifests:** confirm **`BP/manifest.json`** and **`RP/manifest.json`** (name, description, uuid/version policy) match what you publish.
+- **Validate:** run **`npm run check`** (or at least `npm run validate` + `npm run lint`) against the **`BP/`** and **`RP/`** trees after the merge.
+- **Ship only public packs** to players: **`BP/`** + **`RP/`** — do not distribute **`BP - Dev/`** or **`RP - Dev/`** as the main download.
+- **Optional:** add a short note to **`docs/context summary.md`** (dated section) for notable release-facing changes.
+
+### Adaptive storm / mining load (no true MSPT)
+
+- Scripts cannot read server MSPT. **`mb_performanceProfile.js`** runs a **wall-clock ms-per-game-tick** median (spike proxy) and a **weighted count** of expensive Maple Bear types (mining, buff, flying, torpedo) every 40 ticks, and **only when storm & mining multipliers are on Auto** multiplies the existing auto storm/mining work factors (capped). **Journal → LAGGY** tier disables this nudge. World property **`mb_perf_disable_adaptive`** = `1` turns adaptive off.
+
+### Spawn load auto-scaling (spawn controller only)
+
+- **`mb_spawnLoadMetrics.js`** samples **addon mob counts** (all types in `ALL_MB_MOB_TYPES`) across overworld/nether/end every **40t**, and **overworld `minecraft:item`** count every **120t** (capped at 4000 for the formula). It combines those with **active storm count** (`getActiveStormCount` from **`mb_snowStorm.js`**) and optional probes wired from **`main.js`**: **`getPerfWallStress01`**, **`getPerfMobPressureForSpawn01`**. World properties: **`mb_spawn_load_auto`** (default on — use snapshot + probes), **`mb_spawn_load_bias`** (0–4 manual thrift tier). Outputs drive **`mb_spawnController.js`**: main-loop interval multiplier, block-query budget scale, candidate/global spawn caps, and scan cooldown multiplier. **Developer Tools → Performance → Spawn load & efficiency** (and optional journal pin) toggles auto/bias and shows a live snapshot; **`initializeSpawnLoadScalerWatch()`** + **`registerSpawnLoadProbes(...)`** run next to adaptive perf init in **`main.js`**.
+- **Spawn/scan preset labels:** **`SPAWN_INTENSITY_PRESETS`** and **`resolveSpawnTuningRecognition()`** in **`mb_spawnController.js`** infer the active **spawn intensity** tier, **scan preset**, **quick combo**, and (when storm/mining manuals match) **world perf combo**. Dev spawn menus show **`menuBody`**; optional action-bar preset hint uses world property **`mb_spawn_preset_hud`** (toggle under **Spawn → Performance**, dev builds, slot **`ACTION_BAR_SLOT.SPAWN_TUNING`**).
+
 ### Gotchas
 
 - There are no automated test frameworks. Testing is done manually inside Minecraft. See `docs/development/testing/TESTING_CHECKLIST.md` for manual test scenarios.

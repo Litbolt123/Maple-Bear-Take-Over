@@ -36,7 +36,7 @@
 		},
 		"components": {
 			"minecraft:inventory": {
-				"inventory_size": 20,
+				"inventory_size": 15,
 				"private": false,
 				"restrict_to_owner": false
 			},
@@ -148,6 +148,13 @@
 				"pickup_based_on_chance": false,
 				"can_pickup_any_item": true,
 				"excluded_items": [ "minecraft:glow_ink_sac" ]
+			},
+			"minecraft:despawn": {
+				"despawn_from_distance": { "max_distance": 128, "min_distance": 64 },
+				"despawn_from_inactivity": true,
+				"min_range_inactivity_timer": 40,
+				"despawn_from_chance": true,
+				"min_range_random_chance": 520
 			}
 		}
 	}

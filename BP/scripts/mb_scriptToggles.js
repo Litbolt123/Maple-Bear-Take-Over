@@ -68,7 +68,7 @@ const DUST_STORMS_ENABLED = "mb_dust_storms_enabled";
 const BETA_VISIBLE_TO_ALL = "mb_beta_visible_to_all";
 const BETA_OWNER_ID = "mb_beta_settings_owner_id";
 
-/** Beta: Infected AI enabled. Default OFF on world load - must be turned on in book. */
+/** Beta: Infected AI brain (mb_infectedAI). Default OFF — enable under Settings → Beta in the book. */
 export function isBetaInfectedAIEnabled() {
     const val = getWorldProperty(BETA_INFECTED_AI);
     if (val === true || val === 1 || val === "1") return true;

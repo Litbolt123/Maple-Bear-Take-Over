@@ -102,6 +102,8 @@ function loadPlayerProperties(player) {
             "mb_minor_respawned",
             "mb_minor_reinfected",
             "mb_world_intro_seen", // legacy; intro is now per-player (mb_intro_seen)
+            "mb_admin_tools_disclaimer_v1",
+            "mb_dev_tools_disclaimer_v1"
         ];
         
         for (const key of playerProps) {

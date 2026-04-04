@@ -1,4 +1,5 @@
 import { world, system } from "@minecraft/server";
+import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment } from "./mb_actionBarHud.js";
 import { getWorldProperty, setWorldProperty, getPlayerProperty } from "./mb_dynamicPropertyHandler.js";
 import { getCodex, saveCodex, markSectionUnlock, markSubsectionUnlock, getKnowledgeLevel, hasKnowledge, checkKnowledgeProgression, getPlayerSoundVolume, getPlayerSettings } from "./mb_codex.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_DANGER_STRONG, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT } from "./mb_chatColors.js";
@@ -536,6 +537,28 @@ function showPlayerTitle(player, text, subtitle = undefined, options = {}, day =
 }
 
 /**
+ * Flatten common RawMessage shapes so day narrative uses the merged action bar with infection/spawn HUDs.
+ * @param {string|import("@minecraft/server").RawMessage} text
+ * @returns {string|null} null if nothing to show
+ */
+function actionBarInputToLegacyString(text) {
+    if (text == null) return null;
+    if (typeof text === "string") return text;
+    try {
+        const raw = /** @type {{ rawText?: unknown[] }} */ (text).rawText;
+        if (Array.isArray(raw)) {
+            const parts = [];
+            for (const p of raw) {
+                if (typeof p === "string") parts.push(p);
+                else if (p && typeof p === "object" && "text" in p) parts.push(String(/** @type {{ text?: string }} */ (p).text ?? ""));
+            }
+            return parts.join("");
+        }
+    } catch { /* ignore */ }
+    return "";
+}
+
+/**
  * Shows an actionbar message to a player
  * @param {Player} player The player to show the message to
  * @param {string|RawMessage} text The text to display
@@ -543,7 +566,12 @@ function showPlayerTitle(player, text, subtitle = undefined, options = {}, day =
 export function showPlayerActionbar(player, text) {
     try {
         if (player && player.isValid) {
-            player.onScreenDisplay.setActionBar(text);
+            const legacy = actionBarInputToLegacyString(text);
+            if (legacy === null || legacy === "") {
+                clearHudActionBarSegment(player, ACTION_BAR_SLOT.NARRATIVE);
+            } else {
+                setHudActionBarSegment(player, ACTION_BAR_SLOT.NARRATIVE, legacy);
+            }
         }
     } catch (error) {
         console.warn("Error showing actionbar to player:", error);

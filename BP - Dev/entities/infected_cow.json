@@ -120,7 +120,11 @@
 				"value": 0.25
 			},
 			"minecraft:despawn": {
-				"despawn_from_distance": {}
+				"despawn_from_distance": { "max_distance": 128, "min_distance": 64 },
+				"despawn_from_inactivity": true,
+				"min_range_inactivity_timer": 40,
+				"despawn_from_chance": true,
+				"min_range_random_chance": 520
 			},
 			"minecraft:behavior.float": {
 				"priority": 0

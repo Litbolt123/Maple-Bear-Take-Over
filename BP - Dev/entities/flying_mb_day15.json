@@ -51,7 +51,7 @@
 		},
 		"components": {
 			"minecraft:inventory": {
-				"inventory_size": 20,
+				"inventory_size": 15,
 				"private": false,
 				"restrict_to_owner": false
 			},
@@ -527,9 +527,9 @@
 					"min_distance": 64
 				},
 				"despawn_from_inactivity": true,
-				"min_range_inactivity_timer": 60,
+				"min_range_inactivity_timer": 40,
 				"despawn_from_chance": true,
-				"min_range_random_chance": 800
+				"min_range_random_chance": 520
 			},
 			"minecraft:type_family": {
 				"family": [

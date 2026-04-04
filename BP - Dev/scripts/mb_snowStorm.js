@@ -1340,6 +1340,15 @@ function getAllStormSpawnInfos() {
     });
 }
 
+/** Active dust storms (enabled) — for spawn load / perf scaling. */
+export function getActiveStormCount() {
+    try {
+        return storms.filter((s) => s.enabled !== false).length;
+    } catch {
+        return 0;
+    }
+}
+
 /** Returns spawn tiles inside storm radius (surface blocks with air above) for Maple Bear spawning. Merges tiles from all storms. */
 export function getStormSpawnTiles(dimension, playerPos, minDistSq, maxDistSq, limit = 15) {
     const infos = getAllStormSpawnInfos();

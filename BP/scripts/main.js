@@ -5,8 +5,11 @@ import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSection
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock, getEmulsifierZoneAtBlock, getZoneFuelQueueForUI, isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
+import { initializeAdaptivePerformanceWatch, getPerfWallStress01, getPerfMobPressureForSpawn01 } from "./mb_performanceProfile.js";
+import { registerSpawnLoadProbes, initializeSpawnLoadScalerWatch, refreshSpawnLoadMetrics, getSpawnLoadDebugSnapshot } from "./mb_spawnLoadMetrics.js";
+import { getActiveStormCount } from "./mb_snowStorm.js";
 import { isDustStormsEnabled, isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
-import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment } from "./mb_actionBarHud.js";
+import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment, pushHudActionBarToast } from "./mb_actionBarHud.js";
 import { findItem, hasItem } from "./mb_itemFinder.js";
 import { initializeItemRegistry, registerItemHandler } from "./mb_itemRegistry.js";
 import "./mb_spawnController.js";
@@ -114,6 +117,16 @@ const INFECTED_COW_ID = "mb:infected_cow";
 const SNOW_ITEM_ID = "mb:snow";
 const INFECTED_TAG = "mb_infected";
 const INFECTED_CORPSE_ID = "mb:infected_corpse";
+/** Below this nearby count (64m), mob→bear conversions use full pressure mult (1.0). */
+const MB_CONVERSION_NEARBY_PRESSURE_START = 24;
+/** Above this nearby count, nearby pressure mult bottoms out at MB_CONVERSION_NEARBY_MULT_MIN. */
+const MB_CONVERSION_NEARBY_PRESSURE_END = 96;
+const MB_CONVERSION_NEARBY_MULT_MIN = 0.035;
+
+/** World-wide addon bear total: start extra dampening (spread-out herds). */
+const MB_CONVERSION_WORLD_PRESSURE_START = 60;
+const MB_CONVERSION_WORLD_PRESSURE_END = 300;
+const MB_CONVERSION_WORLD_MULT_MIN = 0.025;
 const SNOW_LAYER_BLOCK = "minecraft:snow_layer";
 const INFECTED_GROUND_BLOCKS = new Set(["mb:dusted_dirt", "mb:snow_layer"]);
 // SNOW_REPLACEABLE_BLOCKS and SNOW_TWO_BLOCK_PLANTS imported from mb_blockLists.js
@@ -338,6 +351,8 @@ const infectionExperience = new Map(); // playerId -> { bearInfected, snowInfect
 const groundExposureState = new Map(); // playerId -> { groundSeconds, groundWarningSent, ambientSeconds, ambientWarningSent, majorSeconds }
 const INFECTION_TICKS = 24000 * 5; // 5 Minecraft days
 const MINOR_INFECTION_TICKS = 24000 * 10; // 10 Minecraft days
+/** Major infection: if ticks remaining ≤ this fraction of a full major timer, death from a non–maple-bear source still spawns a Maplethrall (infected bear). */
+const MAJOR_THRALL_ON_DEATH_REMAINING_FRAC = 0.42;
 export const MINOR_INFECTION_TYPE = "minor";
 export const MAJOR_INFECTION_TYPE = "major";
 export const MINOR_HITS_TO_INFECT = 2; // Hits needed when minor infected
@@ -396,6 +411,29 @@ function checkAndUnlockMobDiscovery(codex, player, killType, mobKillType, hitTyp
         return true;
     }
     return false;
+}
+
+/** First-kill KO only for the type actually slain (avoids cross-trigger from shared/wrong tallies). */
+function getFirstKillAchievementForBearType(bearType) {
+    if (bearType === MAPLE_BEAR_ID || bearType === MAPLE_BEAR_DAY4_ID || bearType === MAPLE_BEAR_DAY8_ID || bearType === MAPLE_BEAR_DAY13_ID || bearType === MAPLE_BEAR_DAY20_ID) {
+        return { countKey: "tinyBearKills", achievementKey: "firstKill_tinyBear", label: "Maple Bear" };
+    }
+    if (bearType === INFECTED_BEAR_ID || bearType === INFECTED_BEAR_DAY8_ID || bearType === INFECTED_BEAR_DAY13_ID || bearType === INFECTED_BEAR_DAY20_ID) {
+        return { countKey: "infectedBearKills", achievementKey: "firstKill_infectedBear", label: "Infected Bear" };
+    }
+    if (bearType === BUFF_BEAR_ID || bearType === BUFF_BEAR_DAY8_ID || bearType === BUFF_BEAR_DAY13_ID || bearType === BUFF_BEAR_DAY20_ID) {
+        return { countKey: "buffBearKills", achievementKey: "firstKill_buffBear", label: "Buff Maple Bear" };
+    }
+    if (bearType === FLYING_BEAR_ID || bearType === FLYING_BEAR_DAY15_ID || bearType === FLYING_BEAR_DAY20_ID) {
+        return { countKey: "flyingBearKills", achievementKey: "firstKill_flyingBear", label: "Flying Maple Bear" };
+    }
+    if (bearType === MINING_BEAR_ID || bearType === MINING_BEAR_DAY20_ID) {
+        return { countKey: "miningBearKills", achievementKey: "firstKill_miningBear", label: "Mining Maple Bear" };
+    }
+    if (bearType === TORPEDO_BEAR_ID || bearType === TORPEDO_BEAR_DAY20_ID) {
+        return { countKey: "torpedoBearKills", achievementKey: "firstKill_torpedoBear", label: "Torpedo Maple Bear" };
+    }
+    return null;
 }
 
 function trackBearKill(player, bearType) {
@@ -524,23 +562,16 @@ function trackBearKill(player, bearType) {
         // Check for day variant unlocks based on specific variant kills
         checkVariantUnlock(player, codex);
         
-        // First kill per base bear type (achievement + chat message)
-        const firstKillChecks = [
-            { countKey: "tinyBearKills", achievementKey: "firstKill_tinyBear", label: "Maple Bear" },
-            { countKey: "infectedBearKills", achievementKey: "firstKill_infectedBear", label: "Infected Bear" },
-            { countKey: "buffBearKills", achievementKey: "firstKill_buffBear", label: "Buff Maple Bear" },
-            { countKey: "flyingBearKills", achievementKey: "firstKill_flyingBear", label: "Flying Maple Bear" },
-            { countKey: "miningBearKills", achievementKey: "firstKill_miningBear", label: "Mining Maple Bear" },
-            { countKey: "torpedoBearKills", achievementKey: "firstKill_torpedoBear", label: "Torpedo Maple Bear" }
-        ];
-        for (const { countKey, achievementKey, label } of firstKillChecks) {
-            const count = codex.mobs[countKey] || 0;
+        // First kill per base bear type (achievement + chat message) — only for this kill's type
+        const firstKill = getFirstKillAchievementForBearType(bearType);
+        if (firstKill) {
+            const count = codex.mobs[firstKill.countKey] || 0;
             if (count === 1) {
                 if (!codex.achievements) codex.achievements = {};
-                if (!codex.achievements[achievementKey]) {
-                    codex.achievements[achievementKey] = true;
+                if (!codex.achievements[firstKill.achievementKey]) {
+                    codex.achievements[firstKill.achievementKey] = true;
                     markSectionUnlock(player, "achievements");
-                    player.sendMessage(`${CHAT_ACHIEVEMENT}KO ${label}.`);
+                    player.sendMessage(`${CHAT_ACHIEVEMENT}KO ${firstKill.label}.`);
                 }
             }
         }
@@ -1864,44 +1895,19 @@ function convertMobToMapleBear(deadMob, killer) {
             return;
         }
         
-        // Check nearby bear count - stop converting if 40+ Maple Bears within range
+        // Buff bear cap nearby (conversion chance already throttled by world/nearby pressure in handleMobConversion)
         try {
-            const nearbyEntities = deadMob.dimension.getEntities({
-                location: deadMob.location,
-                maxDistance: 64,
-                families: ["maple_bear", "infected"]
-            });
-            let totalBearCount = 0;
-            let buffBearCount = 0;
-            const mbTypePrefixes = ["mb:mb_day00", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
-            
-            for (const nearby of nearbyEntities) {
-                const typeId = nearby.typeId;
-                if (mbTypePrefixes.some(prefix => typeId.startsWith(prefix))) {
-                    totalBearCount++;
-                    if (typeId === BUFF_BEAR_ID || typeId === BUFF_BEAR_DAY8_ID || typeId === BUFF_BEAR_DAY13_ID || typeId === BUFF_BEAR_DAY20_ID) {
-                        buffBearCount++;
-                    }
-                }
-            }
-            
-            // Stop conversion if too many bears (40 max)
-            if (totalBearCount >= 40) {
-                return; // Too many bears nearby - stop converting
-            }
-            // Stop buff bear creation if too many (5 max)
+            const { buff: buffBearCount } = countNearbyAddonBears(deadMob.dimension, deadMob.location, 64);
             if (buffBearCount >= 5) {
-                const willBeBuff = (mobType.includes('warden') || mobType.includes('ravager') || 
+                const willBeBuff = (mobType.includes('warden') || mobType.includes('ravager') ||
                                   mobType.includes('iron_golem') || mobType.includes('wither') ||
                                   mobType.includes('ender_dragon') || mobType.includes('giant') ||
                                   mobType.includes('shulker') || mobType.includes('elder_guardian'));
                 if (willBeBuff) {
-                    return; // Would create buff bear - skip conversion
+                    return;
                 }
             }
-        } catch (error) {
-            // Error checking nearby entities - allow conversion to proceed
-        }
+        } catch { /* ignore */ }
         
         const killerType = killer.typeId;
         const currentDay = getCurrentDay();
@@ -2080,6 +2086,67 @@ function getMobSize(mobType) {
     } else {
         return "normal"; // Default size for most mobs
     }
+}
+
+const MB_TYPE_PREFIXES_FOR_CONVERSION = ["mb:mb_day00", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
+
+function countNearbyAddonBears(dimension, location, maxDistance = 64) {
+    let total = 0;
+    let buff = 0;
+    try {
+        const nearbyEntities = dimension.getEntities({
+            location,
+            maxDistance,
+            families: ["maple_bear", "infected"]
+        });
+        for (const nearby of nearbyEntities) {
+            const typeId = nearby.typeId;
+            if (!MB_TYPE_PREFIXES_FOR_CONVERSION.some((prefix) => typeId.startsWith(prefix))) continue;
+            total++;
+            if (typeId === BUFF_BEAR_ID || typeId === BUFF_BEAR_DAY8_ID || typeId === BUFF_BEAR_DAY13_ID || typeId === BUFF_BEAR_DAY20_ID) {
+                buff++;
+            }
+        }
+    } catch { /* ignore */ }
+    return { total, buff };
+}
+
+function rampMultiplierFromCount(count, start, end, multMin) {
+    if (count <= start) return 1;
+    if (count >= end) return multMin;
+    const t = (count - start) / (end - start);
+    return multMin + (1 - multMin) * (1 - t);
+}
+
+function getConversionWorldBearPressureMultiplier() {
+    try {
+        refreshSpawnLoadMetrics(system.currentTick);
+        const n = Math.max(0, getSpawnLoadDebugSnapshot().bears | 0);
+        return rampMultiplierFromCount(n, MB_CONVERSION_WORLD_PRESSURE_START, MB_CONVERSION_WORLD_PRESSURE_END, MB_CONVERSION_WORLD_MULT_MIN);
+    } catch {
+        return 1;
+    }
+}
+
+function getConversionNearbyPressureMultiplier(nearbyTotal) {
+    return rampMultiplierFromCount(nearbyTotal, MB_CONVERSION_NEARBY_PRESSURE_START, MB_CONVERSION_NEARBY_PRESSURE_END, MB_CONVERSION_NEARBY_MULT_MIN);
+}
+
+/** True if this kill would spawn a buff-maple outcome (large mob + day), excluding buff-bear killers (they force normal tiny). */
+function wouldSpawnBuffBearFromMobKill(mobType, killerType, currentDay) {
+    const mobSize = getMobSize(mobType);
+    if (mobSize === "tiny" || mobSize === "pig") return false;
+    const buffKillers = [BUFF_BEAR_ID, BUFF_BEAR_DAY8_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID];
+    if (buffKillers.includes(killerType)) return false;
+    const tinyKillers = [MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID];
+    if (tinyKillers.includes(killerType)) {
+        return mobSize === "large" && currentDay >= 8;
+    }
+    return mobSize === "large" && currentDay >= 8;
+}
+
+function wouldSpawnBuffBearFromStorm(mobType, currentDay) {
+    return getMobSize(mobType) === "large" && currentDay >= 8;
 }
 
 // Note: Spawn rate calculation removed - now handled via spawn rules and multiple entity files
@@ -2499,9 +2566,7 @@ function cureMinorInfection(player) {
             if (!codex.achievements.firstMinorCure) {
                 codex.achievements.firstMinorCure = true;
                 markSectionUnlock(player, "achievements");
-                if (player.onScreenDisplay && player.onScreenDisplay.setActionBar) {
-                    player.onScreenDisplay.setActionBar("§7First cure. Well done.");
-                }
+                pushHudActionBarToast(player, "§7First cure. Well done.", 80);
             }
             saveCodex(player, codex);
         } catch (error) {
@@ -2623,9 +2688,7 @@ function handleEnchantedGoldenApple(player, item) {
                     if (!codex.achievements.firstMajorCure) {
                         codex.achievements.firstMajorCure = true;
                         markSectionUnlock(player, "achievements");
-                        if (player.onScreenDisplay && player.onScreenDisplay.setActionBar) {
-                            player.onScreenDisplay.setActionBar("§7Major infection cured. You did it.");
-                        }
+                        pushHudActionBarToast(player, "§7Major infection cured. You did it.", 80);
                     }
                     saveCodex(player, codex);
                 } catch { }
@@ -3218,35 +3281,28 @@ function handleStormMobConversion(entity) {
         return;
     }
     
-    // Check nearby bear count (same limits as bear kills)
+    let totalBearCount = 0;
+    let buffBearCount = 0;
     try {
-        const nearbyEntities = entity.dimension.getEntities({
-            location: entity.location,
-            maxDistance: 64,
-            families: ["maple_bear", "infected"]
-        });
-        let totalBearCount = 0;
-        let buffBearCount = 0;
-        const mbTypePrefixes = ["mb:mb_day00", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
-        for (const nearby of nearbyEntities) {
-            const typeId = nearby.typeId;
-            if (mbTypePrefixes.some(prefix => typeId.startsWith(prefix))) {
-                totalBearCount++;
-                if (typeId === BUFF_BEAR_ID || typeId === BUFF_BEAR_DAY8_ID || typeId === BUFF_BEAR_DAY13_ID || typeId === BUFF_BEAR_DAY20_ID) {
-                    buffBearCount++;
-                }
-            }
-        }
-        if (totalBearCount >= 40) return;
-        if (buffBearCount >= 5) {
-            const willBeBuff = (entityType.includes('warden') || entityType.includes('ravager') ||
-                entityType.includes('iron_golem') || entityType.includes('wither') ||
-                entityType.includes('ender_dragon') || entityType.includes('giant'));
-            if (willBeBuff) return;
-        }
-    } catch { }
-    
-    if (Math.random() >= conversionRate) return;
+        const nb = countNearbyAddonBears(entity.dimension, entity.location, 64);
+        totalBearCount = nb.total;
+        buffBearCount = nb.buff;
+    } catch { /* ignore */ }
+
+    if (buffBearCount >= 5) {
+        const willBeBuff = (entityType.includes('warden') || entityType.includes('ravager') ||
+            entityType.includes('iron_golem') || entityType.includes('wither') ||
+            entityType.includes('ender_dragon') || entityType.includes('giant'));
+        if (willBeBuff) return;
+    }
+
+    const nearbyMult = getConversionNearbyPressureMultiplier(totalBearCount);
+    const worldMult = getConversionWorldBearPressureMultiplier();
+    const pressureMult = Math.max(0, Math.min(1, nearbyMult * worldMult));
+    const buffStorm = wouldSpawnBuffBearFromStorm(entityType, currentDay);
+    const effectiveRate = buffStorm ? conversionRate : Math.min(1, conversionRate * pressureMult);
+
+    if (Math.random() >= effectiveRate) return;
     
     const loc = entity.location;
     const dim = entity.dimension;
@@ -3356,68 +3412,50 @@ function handleMobConversion(entity, killer) {
             return;
         }
         
-        // Check nearby bear count - stop converting if 40+ Maple Bears within range
+        let totalBearCount = 0;
+        let buffBearCount = 0;
         try {
-            const nearbyEntities = entity.dimension.getEntities({
-                location: entity.location,
-                maxDistance: 64,
-                families: ["maple_bear", "infected"]
-            });
-            let totalBearCount = 0;
-            let buffBearCount = 0;
-            const mbTypePrefixes = ["mb:mb_day00", "mb:infected", "mb:buff_mb", "mb:flying_mb", "mb:mining_mb", "mb:torpedo_mb"];
-            
-            for (const nearby of nearbyEntities) {
-                const typeId = nearby.typeId;
-                if (mbTypePrefixes.some(prefix => typeId.startsWith(prefix))) {
-                    totalBearCount++;
-                    if (typeId === BUFF_BEAR_ID || typeId === BUFF_BEAR_DAY8_ID || typeId === BUFF_BEAR_DAY13_ID || typeId === BUFF_BEAR_DAY20_ID) {
-                        buffBearCount++;
-                    }
-                }
+            const nb = countNearbyAddonBears(entity.dimension, entity.location, 64);
+            totalBearCount = nb.total;
+            buffBearCount = nb.buff;
+        } catch { /* ignore */ }
+
+        if (buffBearCount >= 5) {
+            const willBeBuff = (entityType.includes('warden') || entityType.includes('ravager') ||
+                entityType.includes('iron_golem') || entityType.includes('wither') ||
+                entityType.includes('ender_dragon') || entityType.includes('giant'));
+            if (willBeBuff) {
+                return;
             }
-            
-            // Stop conversion if too many bears (40 max) or too many buff bears (5 max)
-            if (totalBearCount >= 40) {
-                return; // Too many bears nearby - stop converting
-            }
-            if (buffBearCount >= 5) {
-                // Too many buff bears - only allow non-buff conversions
-                const willBeBuff = (entityType.includes('warden') || entityType.includes('ravager') || 
-                                  entityType.includes('iron_golem') || entityType.includes('wither') ||
-                                  entityType.includes('ender_dragon') || entityType.includes('giant'));
-                if (willBeBuff) {
-                    return; // Would create buff bear - skip
-                }
-            }
-        } catch (error) {
-            // Error checking nearby entities - allow conversion to proceed
         }
-        
+
+        const nearbyMult = getConversionNearbyPressureMultiplier(totalBearCount);
+        const worldMult = getConversionWorldBearPressureMultiplier();
+        const pressureMult = Math.max(0, Math.min(1, nearbyMult * worldMult));
+        const buffOutcome = wouldSpawnBuffBearFromMobKill(entityType, killerType, currentDay);
+        const effectiveRate = buffOutcome ? conversionRate : Math.min(1, conversionRate * pressureMult);
+
         // Check if victim is a pig and convert to infected pig
         if (entityType === "minecraft:pig") {
-            // console.log(`[PIG CONVERSION] Maple Bear killing pig on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
-            if (Math.random() < conversionRate) {
+            if (Math.random() < effectiveRate) {
                 system.run(() => {
                     convertPigToInfectedPig(entity, killer);
                 });
             }
-            return; // IMPORTANT: Return early to prevent any other conversion logic from running
-        } else if (entityType === "minecraft:cow") {
-            // console.log(`[COW CONVERSION] Maple Bear killing cow on day ${currentDay} (${Math.round(conversionRate * 100)}% conversion rate)`);
-            if (Math.random() < conversionRate) {
+            return;
+        }
+        if (entityType === "minecraft:cow") {
+            if (Math.random() < effectiveRate) {
                 system.run(() => {
                     convertCowToInfectedCow(entity, killer);
                 });
             }
-            return; // IMPORTANT: Return early to prevent any other conversion logic from running
-        } else {
-            // Normal Maple Bear conversion for other mobs (pigs and cows handled above)
-            if (Math.random() < conversionRate) {
-                system.run(() => {
-                    convertMobToMapleBear(entity, killer);
-                });
-            }
+            return;
+        }
+        if (Math.random() < effectiveRate) {
+            system.run(() => {
+                convertMobToMapleBear(entity, killer);
+            });
         }
     } else {
         // console.log(`[CONVERSION] Non-Maple Bear killing ${entityType} on day ${currentDay} - no conversion (only Maple Bears can convert mobs)`);
@@ -3723,15 +3761,49 @@ function spreadDustedDirt(location, dimension, killerType, victimType) {
     }
 }
 
-// Handle infected player death
+function spawnMapleThrallFromPlayerCorpse(player) {
+    const currentDay = getCurrentDay();
+    let infectedBearType = INFECTED_BEAR_ID;
+    if (currentDay >= 20) {
+        infectedBearType = INFECTED_BEAR_DAY20_ID;
+    } else if (currentDay >= 13) {
+        infectedBearType = INFECTED_BEAR_DAY13_ID;
+    } else if (currentDay >= 8) {
+        infectedBearType = INFECTED_BEAR_DAY8_ID;
+    }
+    const bear = player.dimension.spawnEntity(infectedBearType, player.location);
+    if (bear) {
+        bear.nameTag = `§4! ${player.name}'s Infected Form`;
+        bear.setDynamicProperty("infected_by", player.id);
+    }
+    return bear;
+}
+
+function broadcastPlayerBecameThrall(player, tellrawText, dailyLogMessage) {
+    try {
+        player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"${tellrawText}"}]}`);
+    } catch {
+        try {
+            world.sendMessage(tellrawText);
+        } catch { /* ignore */ }
+    }
+    const tomorrowDay = getCurrentDay() + 1;
+    for (const p of world.getAllPlayers()) {
+        if (p?.isValid) {
+            try {
+                recordDailyEvent(p, tomorrowDay, dailyLogMessage, "general");
+            } catch (error) {
+                console.warn(`[DAILY LOG] Error recording player death for ${p.name}:`, error);
+            }
+        }
+    }
+}
+
+// Handle infected player death: thrall if killed by a maple bear, or if major infection is far along (e.g. PvP / non-bear kill)
 function handleInfectedPlayerDeath(player, source) {
-    // Check if player was killed by a Maple Bear
-    if (!source || !source.damagingEntity) return;
-    
-    const killer = source.damagingEntity;
+    const killer = source?.damagingEntity;
     const killerType = killer?.typeId;
-    
-    // Check if killer is any type of Maple Bear
+
     const mapleBearTypes = [
         MAPLE_BEAR_ID, MAPLE_BEAR_DAY4_ID, MAPLE_BEAR_DAY8_ID, MAPLE_BEAR_DAY13_ID, MAPLE_BEAR_DAY20_ID,
         INFECTED_BEAR_ID, INFECTED_BEAR_DAY8_ID, INFECTED_BEAR_DAY13_ID, INFECTED_BEAR_DAY20_ID,
@@ -3741,44 +3813,38 @@ function handleInfectedPlayerDeath(player, source) {
         TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID,
         INFECTED_PIG_ID, INFECTED_COW_ID
     ];
-    
-    if (!mapleBearTypes.includes(killerType)) return;
-    
-    // Transform player into a Maple Bear
+
+    const killedByMapleBear = Boolean(killerType && mapleBearTypes.includes(killerType));
+
+    const inf = playerInfection.get(player.id);
+    const isActiveMajor = Boolean(
+        inf && !inf.cured && inf.ticksLeft > 0 &&
+        (inf.infectionType || MAJOR_INFECTION_TYPE) === MAJOR_INFECTION_TYPE
+    );
+    const lateMajorThrall = Boolean(
+        isActiveMajor &&
+        inf.ticksLeft <= Math.floor(INFECTION_TICKS * MAJOR_THRALL_ON_DEATH_REMAINING_FRAC)
+    );
+
+    if (!killedByMapleBear && !lateMajorThrall) return;
+
     try {
-        const currentDay = getCurrentDay();
-        let infectedBearType = INFECTED_BEAR_ID; // Default to original
-        
-        // Choose appropriate infected bear variant based on current day
-        if (currentDay >= 20) {
-            infectedBearType = INFECTED_BEAR_DAY20_ID;
-        } else if (currentDay >= 13) {
-            infectedBearType = INFECTED_BEAR_DAY13_ID;
-        } else if (currentDay >= 8) {
-            infectedBearType = INFECTED_BEAR_DAY8_ID;
-        }
-        
-        const bear = player.dimension.spawnEntity(infectedBearType, player.location);
-        if (bear) {
-            bear.nameTag = `§4! ${player.name}'s Infected Form`;
-            bear.setDynamicProperty("infected_by", player.id);
-        }
-        player.dimension.runCommand(`tellraw @a {"rawtext":[{"text":"§4${player.name} was transformed into a Maple Bear!"}]}`);
-        
-        // Record this event in daily logs for all players (reflection on next day)
-        const tomorrowDay = getCurrentDay() + 1;
-        const eventMessage = `${player.name} was transformed into a Maple Bear after being killed by the infection.`;
-        for (const p of world.getAllPlayers()) {
-            if (p && p.isValid) {
-                try {
-                    recordDailyEvent(p, tomorrowDay, eventMessage, "general");
-                } catch (error) {
-                    console.warn(`[DAILY LOG] Error recording player death for ${p.name}:`, error);
-                }
-            }
+        spawnMapleThrallFromPlayerCorpse(player);
+        if (killedByMapleBear) {
+            broadcastPlayerBecameThrall(
+                player,
+                `§4${player.name} was transformed into a Maple Bear!`,
+                `${player.name} was transformed into a Maple Bear after being killed by the infection.`
+            );
+        } else {
+            broadcastPlayerBecameThrall(
+                player,
+                `§4${player.name}'s infection overwrote them — a Maplethrall rises!`,
+                `${player.name} succumbed to major infection and became a Maplethrall.`
+            );
         }
     } catch (error) {
-        console.warn(`[TRANSFORMATION] Error transforming ${player.name}:`, error);
+        console.warn(`[TRANSFORMATION] Error spawning thrall for ${player.name}:`, error);
     }
 }
 
@@ -4756,8 +4822,6 @@ function tryRefreshInfectionHudActionBar(player, id, state) {
         }
 
         const opts = getPlayerSettings(player);
-        const osd = player.onScreenDisplay;
-        if (!osd?.setActionBar) return;
 
         const infectionType = state.infectionType || MAJOR_INFECTION_TYPE;
         let cureHint = "";
@@ -8701,6 +8765,13 @@ try {
 // --- Initialize Dynamic Property Handler ---
 // Initialize handler early to cache properties
 initializePropertyHandler();
+initializeAdaptivePerformanceWatch();
+initializeSpawnLoadScalerWatch();
+registerSpawnLoadProbes({
+    storm: getActiveStormCount,
+    wallStress: getPerfWallStress01,
+    mobPressure: getPerfMobPressureForSpawn01
+});
 
 // --- Initialize Item Registry ---
 // Initialize item registry for modular item handlers

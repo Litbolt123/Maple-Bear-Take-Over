@@ -59,7 +59,11 @@
 				"mass": 0.9
 			},
 			"minecraft:despawn": {
-				"despawn_from_distance": {}
+				"despawn_from_distance": { "max_distance": 128, "min_distance": 64 },
+				"despawn_from_inactivity": true,
+				"min_range_inactivity_timer": 40,
+				"despawn_from_chance": true,
+				"min_range_random_chance": 520
 			},
 			"minecraft:behavior.mount_pathing": {
 				"priority": 2,
@@ -154,7 +158,7 @@
 				"value": 1
 			},
 			"minecraft:inventory": {
-				"inventory_size": 18,
+				"inventory_size": 14,
 				"can_be_siphoned_from": false
 			},
 			"minecraft:behavior.pickup_items": {

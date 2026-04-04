@@ -6,14 +6,25 @@
 // ============================================================================
 
 import { system, world, BlockPermutation } from "@minecraft/server";
-import { getWorldProperty, setWorldProperty, getWorldPropertyChunked, setWorldPropertyChunked, getAddonDifficultyState, saveAllProperties } from "./mb_dynamicPropertyHandler.js";
+import { getWorldProperty, setWorldProperty, getWorldPropertyChunked, setWorldPropertyChunked, getAddonDifficultyState, saveAllProperties, getPlayerProperty, setPlayerProperty } from "./mb_dynamicPropertyHandler.js";
 import { getCurrentDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { isDebugEnabled, getPlayerSoundVolume, getStormParticleDensity } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { getStormSpawnTiles } from "./mb_snowStorm.js";
 import { STORM_PARTICLE_PASS_THROUGH } from "./mb_blockLists.js";
 import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
-import { isSpatialSpawnTuningEnabled } from "./mb_performanceProfile.js";
+import {
+    isSpatialSpawnTuningEnabled,
+    getStormWorkManualOrZero,
+    getMiningWorkManualOrZero
+} from "./mb_performanceProfile.js";
+import {
+    getSpawnBlockBudgetScale,
+    getSpawnControllerIntervalMultiplier,
+    getSpawnScanCooldownMultiplier,
+    refreshSpawnLoadMetrics,
+    getSpawnLoadDebugSnapshot
+} from "./mb_spawnLoadMetrics.js";
 import {
     tickMobilityCampForDimension,
     getPlayerMobilityQueryMult,
@@ -24,7 +35,7 @@ import {
     getClusterCampDebugMetrics,
     CAMP_RAMP_FULL_TICKS
 } from "./mb_spawnMobilityCamp.js";
-import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment } from "./mb_actionBarHud.js";
+import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment, getHudActiveSegmentCount } from "./mb_actionBarHud.js";
 import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
 
 // ============================================================================
@@ -346,6 +357,263 @@ export const SPAWN_SCAN_PRESETS = {
     }
 };
 
+/**
+ * Spawn intensity presets (dev / journal). Single source: codex menus import this as `SPAWN_PRESETS`.
+ * Used to detect which named tier matches current world overrides.
+ */
+export const SPAWN_INTENSITY_PRESETS = {
+    ultraLow: { label: "§8Ultra-Low", desc: "Worst-case TPS / huge worlds", blockQuery: 0.2, maxGlobal: 10, range: "close", tileIntensity: 0.45, blocksPerTick: 0.45, spawnSpeed: 0.35, spawnDifficulty: -1 },
+    low: { label: "§aLow", desc: "Minimal load, least lag", blockQuery: 0.25, maxGlobal: 12, range: "close", tileIntensity: 0.5, blocksPerTick: 0.5, spawnSpeed: 0.5, spawnDifficulty: -1 },
+    medLow: { label: "§2Med-Low", desc: "Light load", blockQuery: 0.5, maxGlobal: 18, range: "close", tileIntensity: 0.75, blocksPerTick: 0.7, spawnSpeed: 0.75, spawnDifficulty: -1 },
+    mpLite: { label: "§3MP Lite", desc: "Small group, lighter scans", blockQuery: 0.55, maxGlobal: 20, range: "close", tileIntensity: 0.7, blocksPerTick: 0.65, spawnSpeed: 0.65, spawnDifficulty: -1 },
+    med: { label: "§fMed", desc: "Balanced (default)", blockQuery: 1, maxGlobal: 24, range: "normal", tileIntensity: 1, blocksPerTick: 1, spawnSpeed: 1, spawnDifficulty: 0 },
+    medHigh: { label: "§6Med-High", desc: "More active", blockQuery: 1.25, maxGlobal: 36, range: "normal", tileIntensity: 1.2, blocksPerTick: 1.2, spawnSpeed: 1.5, spawnDifficulty: 1 },
+    high: { label: "§cHigh", desc: "Aggressive, most spawns", blockQuery: 1.5, maxGlobal: 48, range: "far", tileIntensity: 1.25, blocksPerTick: 1.5, spawnSpeed: 2, spawnDifficulty: 1 }
+};
+
+const SPAWN_INTENSITY_PRESET_ORDER = ["ultraLow", "low", "medLow", "mpLite", "med", "medHigh", "high"];
+
+/** Quick combo: spawn intensity key + scan preset key (matches journal Performance → Quick combos). */
+const SPAWN_QUICK_COMBO_ROWS = [
+    { spawnKey: "low", scanKey: "lowLag", menu: "Low + Low Lag scan", hud: "Low+LL" },
+    { spawnKey: "ultraLow", scanKey: "minimal", menu: "Ultra + Minimal scan", hud: "Ultra+Min" },
+    { spawnKey: "medLow", scanKey: "multiplayerSpread", menu: "Med-Low + MP Spread scan", hud: "MedL+MP" },
+    { spawnKey: "med", scanKey: "soloHost", menu: "Med + Solo-host scan", hud: "Med+Solo" },
+    { spawnKey: "med", scanKey: "balanced", menu: "Med + Balanced scan", hud: "Med+Bal" }
+];
+
+/** World perf combo hints: spawn+scan must match; then storm/mining manual multipliers (see codex WORLD_PERF_COMBO_PRESETS). */
+const WORLD_PERF_COMBO_HINTS = [
+    { spawnKey: "low", scanKey: "lowLag", storm: 1.25, mining: 1.2, menu: "Low (all systems)", hud: "W:Low" },
+    { spawnKey: "ultraLow", scanKey: "minimal", storm: 2.4, mining: 2.2, menu: "Ultra-light (all)", hud: "W:Ultra" },
+    { spawnKey: "medLow", scanKey: "multiplayerSpread", storm: 1.38, mining: 1.32, menu: "Med-low MP (+ storm/mining)", hud: "W:MedL" },
+    { spawnKey: "med", scanKey: "balanced", storm: 1, mining: 1, menu: "Med 1× storm & mining", hud: "W:M1×" },
+    { spawnKey: "med", scanKey: "balanced", autoHeavy: true, menu: "Med + Auto storm/mining", hud: "W:MAuto" }
+];
+
+function stripMcFormatCodes(s) {
+    return String(s || "").replace(/§./g, "");
+}
+
+function approxEqSpawn(a, b, eps = 0.0005) {
+    return Math.abs(Number(a) - Number(b)) < eps;
+}
+
+function getSpawnRangeModeForPresetMatch() {
+    const raw = getWorldProperty("mb_spawn_range");
+    if (raw === "close" || raw === "far" || raw === "normal") return raw;
+    return "normal";
+}
+
+function readSpawnDifficultyForPresetMatch() {
+    const raw = getWorldProperty(SPAWN_DIFFICULTY_PROPERTY);
+    if (raw === undefined || raw === null || raw === "") return 0;
+    const n = Number(raw);
+    return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+
+export function findMatchingSpawnIntensityPresetKey() {
+    const bq = getBlockQueryMultiplier();
+    const mg = getMaxGlobalSpawnsPerTick();
+    const range = getSpawnRangeModeForPresetMatch();
+    const ti = getTileIntensityMultiplier();
+    const bpt = getBlocksPerTickMultiplier();
+    const spd = getSpawnSpeedMultiplier();
+    const diff = readSpawnDifficultyForPresetMatch();
+    for (const key of SPAWN_INTENSITY_PRESET_ORDER) {
+        const p = SPAWN_INTENSITY_PRESETS[key];
+        if (!p) continue;
+        if (!approxEqSpawn(bq, p.blockQuery)) continue;
+        if (mg !== p.maxGlobal) continue;
+        if (range !== p.range) continue;
+        if (!approxEqSpawn(ti, p.tileIntensity)) continue;
+        if (!approxEqSpawn(bpt, p.blocksPerTick)) continue;
+        if (!approxEqSpawn(spd, p.spawnSpeed)) continue;
+        if (diff !== p.spawnDifficulty) continue;
+        return key;
+    }
+    return null;
+}
+
+export function findMatchingSpawnScanPresetKey() {
+    const s = getScanSettings();
+    for (const key of Object.keys(SPAWN_SCAN_PRESETS)) {
+        const p = SPAWN_SCAN_PRESETS[key];
+        if (p == null || typeof p.discoveryRadius !== "number") continue;
+        if (s.discoveryRadius !== p.discoveryRadius) continue;
+        if (s.minDiscoveryRadius !== p.minDiscoveryRadius) continue;
+        if (!approxEqSpawn(s.perPlayerRadiusDrop, p.perPlayerRadiusDrop, 0.0001)) continue;
+        if (!approxEqSpawn(s.tightGroupRadiusPenalty, p.tightGroupRadiusPenalty, 0.0001)) continue;
+        if (!approxEqSpawn(s.barrenCooldownMult, p.barrenCooldownMult, 0.0001)) continue;
+        if (s.staggerTicks !== p.staggerTicks) continue;
+        if (s.chunkLoadDelay !== p.chunkLoadDelay) continue;
+        return key;
+    }
+    return null;
+}
+
+function rangeToNumForPreset(r) {
+    if (r === "close") return 0;
+    if (r === "far") return 2;
+    return 1;
+}
+
+/** Named spawn tier with smallest weighted distance to current world overrides (for HUD when custom). */
+export function findClosestSpawnIntensityPresetKey() {
+    const bq = getBlockQueryMultiplier();
+    const mg = getMaxGlobalSpawnsPerTick();
+    const range = getSpawnRangeModeForPresetMatch();
+    const rn = rangeToNumForPreset(range);
+    const ti = getTileIntensityMultiplier();
+    const bpt = getBlocksPerTickMultiplier();
+    const spd = getSpawnSpeedMultiplier();
+    const diff = readSpawnDifficultyForPresetMatch();
+    let best = SPAWN_INTENSITY_PRESET_ORDER[0];
+    let bestD = Infinity;
+    for (const key of SPAWN_INTENSITY_PRESET_ORDER) {
+        const p = SPAWN_INTENSITY_PRESETS[key];
+        if (!p) continue;
+        const d =
+            Math.abs(bq - p.blockQuery) * 2.1 +
+            Math.abs(mg - p.maxGlobal) / 14 +
+            Math.abs(rn - rangeToNumForPreset(p.range)) * 0.55 +
+            Math.abs(ti - p.tileIntensity) * 1.6 +
+            Math.abs(bpt - p.blocksPerTick) * 1.6 +
+            Math.abs(spd - p.spawnSpeed) * 0.85 +
+            Math.abs(diff - p.spawnDifficulty) * 0.08;
+        if (d < bestD) {
+            bestD = d;
+            best = key;
+        }
+    }
+    return best;
+}
+
+/** Named scan preset closest to current scan overrides (for HUD when custom). */
+export function findClosestSpawnScanPresetKey() {
+    const s = getScanSettings();
+    let best = Object.keys(SPAWN_SCAN_PRESETS)[0];
+    let bestD = Infinity;
+    for (const key of Object.keys(SPAWN_SCAN_PRESETS)) {
+        const p = SPAWN_SCAN_PRESETS[key];
+        if (p == null || typeof p.discoveryRadius !== "number") continue;
+        const d =
+            Math.abs(s.discoveryRadius - p.discoveryRadius) / 45 +
+            Math.abs(s.minDiscoveryRadius - p.minDiscoveryRadius) / 22 +
+            Math.abs(s.perPlayerRadiusDrop - p.perPlayerRadiusDrop) * 6 +
+            Math.abs(s.tightGroupRadiusPenalty - p.tightGroupRadiusPenalty) * 6 +
+            Math.abs(s.barrenCooldownMult - p.barrenCooldownMult) * 2.2 +
+            Math.abs(s.staggerTicks - p.staggerTicks) / 45 +
+            Math.abs(s.chunkLoadDelay - p.chunkLoadDelay) / 22;
+        if (d < bestD) {
+            bestD = d;
+            best = key;
+        }
+    }
+    return best;
+}
+
+function matchWorldPerfComboHint(spawnKey, scanKey) {
+    const stormM = getStormWorkManualOrZero();
+    const minM = getMiningWorkManualOrZero();
+    const rows = WORLD_PERF_COMBO_HINTS.filter((r) => r.spawnKey === spawnKey && r.scanKey === scanKey);
+    rows.sort((a, b) => (a.autoHeavy ? 1 : 0) - (b.autoHeavy ? 1 : 0));
+    for (const row of rows) {
+        if (row.autoHeavy) {
+            if (stormM === 0 && minM === 0) return { menu: row.menu, hud: row.hud, autoHeavy: true };
+        } else if (approxEqSpawn(stormM, row.storm, 0.05) && approxEqSpawn(minM, row.mining, 0.05)) {
+            return { menu: row.menu, hud: row.hud, autoHeavy: false };
+        }
+    }
+    return null;
+}
+
+/** Spawn+scan AUTO: default ON for new worlds (same idea as spawn load auto). Explicit 0/false turns off. */
+const SPAWN_PRESET_AUTO_PROPERTY = "mb_spawn_preset_auto";
+
+export function isSpawnPresetAutoEnabled() {
+    const v = getWorldProperty(SPAWN_PRESET_AUTO_PROPERTY);
+    if (v === false || v === 0 || v === "0") return false;
+    return true;
+}
+
+export function setSpawnPresetAutoEnabled(on) {
+    setWorldProperty(SPAWN_PRESET_AUTO_PROPERTY, on ? 1 : 0);
+}
+
+/** Saturate player-count term for preset+scan AUTO (1–8 curve; 9+ treated as 8). Declared before any function references it (codex ↔ spawn circular import). */
+const AUTO_PRESET_ONLINE_CAP = 8;
+
+/**
+ * Detect named spawn tier, scan preset, quick combo, and world perf combo (if storm/mining manuals align).
+ * When settings are not an exact named preset, labels use ~nearest for HUD / summary.
+ */
+export function resolveSpawnTuningRecognition() {
+    const spawnKey = findMatchingSpawnIntensityPresetKey();
+    const scanKey = findMatchingSpawnScanPresetKey();
+    const closestSpawnKey = findClosestSpawnIntensityPresetKey();
+    const closestScanKey = findClosestSpawnScanPresetKey();
+    const closestSpawnLabel = stripMcFormatCodes(SPAWN_INTENSITY_PRESETS[closestSpawnKey]?.label || "Med");
+    const closestScanLabel = stripMcFormatCodes(SPAWN_SCAN_PRESETS[closestScanKey]?.label || "Balanced");
+    const spawnLabel = spawnKey ? stripMcFormatCodes(SPAWN_INTENSITY_PRESETS[spawnKey].label) : `~${closestSpawnLabel}`;
+    const scanLabel = scanKey ? stripMcFormatCodes(SPAWN_SCAN_PRESETS[scanKey].label) : `~${closestScanLabel}`;
+    const spawnLabelExact = spawnKey ? stripMcFormatCodes(SPAWN_INTENSITY_PRESETS[spawnKey].label) : null;
+    const scanLabelExact = scanKey ? stripMcFormatCodes(SPAWN_SCAN_PRESETS[scanKey].label) : null;
+    let quickCombo = null;
+    let quickHud = null;
+    for (const row of SPAWN_QUICK_COMBO_ROWS) {
+        if (row.spawnKey === spawnKey && row.scanKey === scanKey) {
+            quickCombo = row.menu;
+            quickHud = row.hud;
+            break;
+        }
+    }
+    const worldHit = spawnKey && scanKey ? matchWorldPerfComboHint(spawnKey, scanKey) : null;
+    /** "Med + Auto storm/mining" matches any Med+Balanced + auto heavy — same as quick combo alone; prefer quick label. */
+    const suppressAutoWorld = worldHit?.autoHeavy === true && quickCombo != null;
+    const worldPerf = worldHit && !suppressAutoWorld ? worldHit.menu : null;
+    const worldHud = worldHit && !suppressAutoWorld ? worldHit.hud : null;
+    let menuBody = "";
+    if (worldPerf && spawnKey && scanKey) {
+        menuBody = `§8World perf combo: §f${worldPerf}\n§8Spawn / scan: §f${spawnLabelExact} §7+ §f${scanLabelExact}`;
+    } else if (quickCombo && spawnKey && scanKey) {
+        menuBody = `§8Quick combo: §f${quickCombo}\n§8Spawn / scan: §f${spawnLabelExact} §7+ §f${scanLabelExact}`;
+    } else {
+        menuBody = `§8Spawn intensity: §f${spawnLabel}\n§8Scan scheduler: §f${scanLabel}`;
+        if (!spawnKey || !scanKey) {
+            menuBody += `\n§8Nearest named preset: §f${closestSpawnLabel} §7+ §f${closestScanLabel}`;
+        }
+    }
+    if (isSpawnPresetAutoEnabled()) {
+        menuBody = `§8Spawn+scan §dAUTO§8: §aON §7(online 1–${AUTO_PRESET_ONLINE_CAP} + clusters + spawn load)\n${menuBody}`;
+    }
+    const hudExact = spawnLabelExact && scanLabelExact ? `${spawnLabelExact}|${scanLabelExact}` : `${spawnLabel}|${scanLabel}`;
+    let hudToken = worldHud || quickHud || hudExact;
+    if (isSpawnPresetAutoEnabled()) {
+        hudToken = `§cA§r${hudToken}`;
+    }
+    return {
+        spawnKey,
+        scanKey,
+        closestSpawnKey,
+        closestScanKey,
+        spawnLabel,
+        scanLabel,
+        closestSpawnLabel,
+        closestScanLabel,
+        quickCombo,
+        quickHud,
+        worldPerf,
+        worldHud,
+        menuBody,
+        hudToken
+    };
+}
+
+export function getSpawnTuningSummaryForDevTools() {
+    return resolveSpawnTuningRecognition();
+}
+
 // Per-fuel: durationTicks = one "unit" of fuel. maxFuelUnits = cap (stack) per machine.
 // Scan pacing: first run is faster (interval 1, higher budget); then steady then slowly slower (interval ramps).
 // Intervals in ticks between scan runs. So fuel runs out roughly as scan completes when paced per tier.
@@ -501,6 +769,98 @@ export function applySpawnScanPreset(presetKey) {
     setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.staggerTicks, preset.staggerTicks);
     setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.chunkLoadDelay, preset.chunkLoadDelay);
     return true;
+}
+
+/** Apply a named spawn intensity preset (same fields as journal / dev Spawn intensity menu). */
+export function applySpawnIntensityPreset(presetKey) {
+    const p = SPAWN_INTENSITY_PRESETS[presetKey];
+    if (!p) return false;
+    setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.blockQueryMult, p.blockQuery);
+    setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.maxGlobal, p.maxGlobal);
+    setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.range, p.range);
+    setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.tileIntensity, p.tileIntensity);
+    setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.blocksPerTickMult, p.blocksPerTick);
+    setWorldProperty(SPAWN_SPEED_PROPERTY, p.spawnSpeed);
+    setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, p.spawnDifficulty);
+    return true;
+}
+
+/**
+ * Preset+scan AUTO picks one row from this table (0 = lightest work, last = heaviest thrift).
+ * Target index blends:
+ * - Spawn load model (bears, storms, items, tick wall stress, mob pressure) → `load01`
+ * - World “logical load” from dimensions: cluster count when spatial groups ON, else per-dim player counts
+ * - Online headcount 1..AUTO_PRESET_ONLINE_CAP (9+ saturates at cap) so MP gets a baseline nudge even when spread/low entity load
+ *
+ * Same cap curve also feeds `getEffectiveMaxGlobalSpawnsPerTick` via cluster load; barren cooldowns and
+ * stagger intervals use raw per-dimension player counts (see getBarrenCooldownTicks, getSpreadPlayerStaggerInterval).
+ */
+const AUTO_SPAWN_SCAN_COMBO_TIERS = [
+    { spawnKey: "med", scanKey: "balanced" },
+    { spawnKey: "med", scanKey: "soloHost" },
+    { spawnKey: "medLow", scanKey: "multiplayerSpread" },
+    { spawnKey: "low", scanKey: "lowLag" },
+    { spawnKey: "ultraLow", scanKey: "minimal" },
+    { spawnKey: "ultraLow", scanKey: "minimal" }
+];
+
+function countOnlinePlayersForSpawnAuto() {
+    try {
+        const pl = world.getAllPlayers();
+        if (!pl?.length) return 1;
+        let n = 0;
+        for (const p of pl) {
+            if (p?.isValid && p.dimension?.id) n++;
+        }
+        if (n < 1) return 1;
+        return Math.min(AUTO_PRESET_ONLINE_CAP, n);
+    } catch {
+        return 1;
+    }
+}
+
+function computeAutoSpawnScanTarget() {
+    try {
+        refreshSpawnLoadMetrics(system.currentTick);
+    } catch { /* ignore */ }
+    let load01 = 0;
+    let bearCount = 0;
+    try {
+        const snap = getSpawnLoadDebugSnapshot();
+        load01 = snap.load01;
+        bearCount = snap.bears | 0;
+    } catch {
+        load01 = 0;
+        bearCount = 0;
+    }
+    let clusterN = 1;
+    try {
+        clusterN = getWorldWideSpawnLoadCount();
+    } catch {
+        clusterN = 1;
+    }
+    const onlineN = countOnlinePlayersForSpawnAuto();
+    const clusterTerm = Math.min(2.6, Math.max(0, clusterN - 1) * 0.42);
+    const onlineTerm = (onlineN - 1) * 0.12;
+    // Solo worlds could sit at Med forever: load01 alone used load01*3.2 (max ~3.2) and bear weight in load01 saturated at 90 bears.
+    // Extra tier pressure from raw addon bear count so heavy populations reach low/ultra presets.
+    const bearTierPressure = Math.min(3.2, Math.max(0, (bearCount - 10) / 38));
+    const tierF = load01 * 5.2 + clusterTerm + onlineTerm + bearTierPressure;
+    const ti = Math.min(AUTO_SPAWN_SCAN_COMBO_TIERS.length - 1, Math.max(0, Math.floor(tierF)));
+    return AUTO_SPAWN_SCAN_COMBO_TIERS[ti];
+}
+
+function tickSpawnPresetAutoApply() {
+    try {
+        if (!isScriptEnabled(SCRIPT_IDS.spawnController)) return;
+        if (!isSpawnPresetAutoEnabled()) return;
+        const t = computeAutoSpawnScanTarget();
+        if (findMatchingSpawnIntensityPresetKey() === t.spawnKey && findMatchingSpawnScanPresetKey() === t.scanKey) return;
+        if (!applySpawnIntensityPreset(t.spawnKey) || !applySpawnScanPreset(t.scanKey)) return;
+        try {
+            saveAllProperties();
+        } catch { /* ignore */ }
+    } catch { /* ignore */ }
 }
 
 /**
@@ -1224,8 +1584,16 @@ export function getSpawnSpeedMultiplier() {
 
 // Dev tools overrides for spawn tuning
 const SPAWN_BLOCK_QUERY_MULT_PROPERTY = "mb_spawn_block_query_mult";
-/** 1 = action bar: per-dimension P/C/D and world cluster load (dev). */
+/** Legacy world flag: scan perf HUD for everyone. HUD line includes bears, load %, scalers, P/C/D/W. */
 const SPAWN_SCAN_PERF_DEBUG_PROPERTY = "mb_spawn_scan_perf_debug";
+/** 1 = action-bar hint for recognized spawn/scan (and combo) presets. Dev builds only. */
+const SPAWN_PRESET_HUD_PROPERTY = "mb_spawn_preset_hud";
+/** Per-player: show scan perf HUD for this player. */
+const MB_DEV_HUD_SCAN_PERF_PLAYER = "mb_dev_hud_scan_perf";
+/** Per-player: show spawn preset match HUD (dev builds). */
+const MB_DEV_HUD_PRESET_PLAYER = "mb_dev_hud_spawn_preset";
+/** World: when ON, all players see scan+preset spawn HUDs if at least one player has theirs ON. */
+const MB_DEV_SPAWN_HUD_BROADCAST = "mb_dev_spawn_hud_broadcast";
 const SPAWN_MAX_GLOBAL_PROPERTY = "mb_spawn_max_global";
 const SPAWN_RANGE_PROPERTY = "mb_spawn_range";
 const SPAWN_TILE_INTENSITY_PROPERTY = "mb_spawn_tile_intensity";
@@ -1240,12 +1608,12 @@ export function getBlockQueryMultiplier() {
     return Math.max(0.25, Math.min(2, num));
 }
 
-/** Max global spawns per tick override. Default 24. */
+/** Max global spawns per tick override. Default 18 when unset (lighter than old 24). */
 export function getMaxGlobalSpawnsPerTick() {
     const raw = getWorldProperty(SPAWN_MAX_GLOBAL_PROPERTY);
-    if (raw === undefined || raw === null || raw === "") return 24;
+    if (raw === undefined || raw === null || raw === "") return 18;
     const num = parseInt(raw, 10);
-    if (!Number.isFinite(num) || num < 1) return 24;
+    if (!Number.isFinite(num) || num < 1) return 18;
     return Math.max(6, Math.min(60, num));
 }
 
@@ -1279,49 +1647,201 @@ function getWorldWideSpawnLoadCount() {
     }
 }
 
+function readPlayerHudBool(player, key) {
+    try {
+        if (!player?.isValid) return false;
+        const v = getPlayerProperty(player, key);
+        return v === 1 || v === true || v === "1";
+    } catch {
+        return false;
+    }
+}
+
+function anyPlayerWantsScanPerfHud() {
+    try {
+        for (const p of world.getAllPlayers()) {
+            if (p?.isValid && readPlayerHudBool(p, MB_DEV_HUD_SCAN_PERF_PLAYER)) return true;
+        }
+    } catch { /* ignore */ }
+    return false;
+}
+
+function anyPlayerWantsPresetHud() {
+    try {
+        for (const p of world.getAllPlayers()) {
+            if (p?.isValid && readPlayerHudBool(p, MB_DEV_HUD_PRESET_PLAYER)) return true;
+        }
+    } catch { /* ignore */ }
+    return false;
+}
+
+/** Legacy world flag: previously turned scan HUD on for everyone. */
 export function isSpawnScanPerfOverlayEnabled() {
     const raw = getWorldProperty(SPAWN_SCAN_PERF_DEBUG_PROPERTY);
-    // Must use 0 for OFF (not undefined): the property handler defers writes; clearing cache only
-    // would make the next read reload the old 1 from world.getDynamicProperty until flush.
     return raw === 1 || raw === true || raw === "1";
 }
 
-export function setSpawnScanPerfOverlayEnabled(enabled) {
-    setWorldProperty(SPAWN_SCAN_PERF_DEBUG_PROPERTY, enabled ? 1 : 0);
+export function isSpawnHudBroadcastEnabled() {
+    const raw = getWorldProperty(MB_DEV_SPAWN_HUD_BROADCAST);
+    return raw === 1 || raw === true || raw === "1";
+}
+
+export function setSpawnHudBroadcastEnabled(on) {
+    setWorldProperty(MB_DEV_SPAWN_HUD_BROADCAST, on ? 1 : 0);
+}
+
+/** @param {import("@minecraft/server").Player} player */
+export function isSpawnScanPerfHudPersonalEnabled(player) {
+    return readPlayerHudBool(player, MB_DEV_HUD_SCAN_PERF_PLAYER);
+}
+
+/** @param {import("@minecraft/server").Player} player */
+export function isSpawnPresetHudPersonalEnabled(player) {
+    return readPlayerHudBool(player, MB_DEV_HUD_PRESET_PLAYER);
+}
+
+/**
+ * Whether this player should see the scan perf action-bar segment.
+ * @param {import("@minecraft/server").Player} player
+ */
+export function isSpawnScanPerfOverlayEnabledForPlayer(player) {
+    if (!player?.isValid) return false;
+    if (readPlayerHudBool(player, MB_DEV_HUD_SCAN_PERF_PLAYER)) return true;
+    if (isSpawnHudBroadcastEnabled() && anyPlayerWantsScanPerfHud()) return true;
+    return isSpawnScanPerfOverlayEnabled();
+}
+
+/**
+ * Whether this player should see the preset hint segment (dev builds only).
+ * @param {import("@minecraft/server").Player} player
+ */
+export function isSpawnPresetHudEnabledForPlayer(player) {
+    if (!INCLUDE_FULL_DEVELOPER_TOOLS || !player?.isValid) return false;
+    if (readPlayerHudBool(player, MB_DEV_HUD_PRESET_PLAYER)) return true;
+    if (isSpawnHudBroadcastEnabled() && anyPlayerWantsPresetHud()) return true;
+    return isSpawnPresetHudEnabled();
+}
+
+export function isSpawnPresetHudEnabled() {
+    const raw = getWorldProperty(SPAWN_PRESET_HUD_PROPERTY);
+    return raw === 1 || raw === true || raw === "1";
+}
+
+/**
+ * @param {boolean} enabled
+ * @param {import("@minecraft/server").Player} togglingPlayer
+ */
+export function setSpawnScanPerfOverlayEnabled(enabled, togglingPlayer) {
+    if (togglingPlayer?.isValid) {
+        try {
+            setPlayerProperty(togglingPlayer, MB_DEV_HUD_SCAN_PERF_PLAYER, enabled ? 1 : 0);
+        } catch { /* ignore */ }
+    }
+    setWorldProperty(SPAWN_SCAN_PERF_DEBUG_PROPERTY, 0);
+}
+
+/**
+ * @param {boolean} enabled
+ * @param {import("@minecraft/server").Player} togglingPlayer
+ */
+export function setSpawnPresetHudEnabled(enabled, togglingPlayer) {
+    if (togglingPlayer?.isValid) {
+        try {
+            setPlayerProperty(togglingPlayer, MB_DEV_HUD_PRESET_PLAYER, enabled ? 1 : 0);
+        } catch { /* ignore */ }
+    }
+    setWorldProperty(SPAWN_PRESET_HUD_PROPERTY, 0);
 }
 
 /**
  * Spawn scan action-bar segment must not live inside the throttled main spawn loop (day < 2
  * and speed multiplier skip most ticks) — camp HUD would then be the only segment refreshed.
  */
-function refreshSpawnScanPerfHudOverlay() {
+function refreshSpawnPresetHudOverlay() {
     try {
         const allPlayers = world.getAllPlayers();
-        if (!isSpawnScanPerfOverlayEnabled()) {
-            if (!allPlayers?.length) return;
+        if (!allPlayers?.length) return;
+        if (!INCLUDE_FULL_DEVELOPER_TOOLS) {
             for (const pl of allPlayers) {
-                if (pl?.isValid) clearHudActionBarSegment(pl, ACTION_BAR_SLOT.SPAWN_SCAN_PERF);
+                if (pl?.isValid) clearHudActionBarSegment(pl, ACTION_BAR_SLOT.SPAWN_TUNING);
             }
             return;
         }
+        let anyPresetHud = false;
+        for (const pl of allPlayers) {
+            if (pl?.isValid && isSpawnPresetHudEnabledForPlayer(pl)) {
+                anyPresetHud = true;
+                break;
+            }
+        }
+        if (!anyPresetHud) {
+            for (const pl of allPlayers) {
+                if (pl?.isValid) clearHudActionBarSegment(pl, ACTION_BAR_SLOT.SPAWN_TUNING);
+            }
+            return;
+        }
+        const rec = resolveSpawnTuningRecognition();
+        for (const pl of allPlayers) {
+            if (!pl?.isValid) continue;
+            if (!isSpawnPresetHudEnabledForPlayer(pl)) {
+                clearHudActionBarSegment(pl, ACTION_BAR_SLOT.SPAWN_TUNING);
+                continue;
+            }
+            const short = getHudActiveSegmentCount(pl) >= 4;
+            const tag = short ? "§6Pr§r" : "§6Preset§r";
+            setHudActionBarSegment(pl, ACTION_BAR_SLOT.SPAWN_TUNING, `${tag} ${rec.hudToken}`);
+        }
+    } catch { /* ignore */ }
+}
+
+function refreshSpawnScanPerfHudOverlay() {
+    try {
+        const allPlayers = world.getAllPlayers();
         if (!allPlayers?.length) return;
+        try {
+            refreshSpawnLoadMetrics(system.currentTick);
+        } catch { /* ignore */ }
+        let snap = { bears: 0, load01: 0, intervalMult: 1, blockScale: 1 };
+        try {
+            snap = getSpawnLoadDebugSnapshot();
+        } catch { /* ignore */ }
+        const bearN = Math.min(9999, Math.max(0, snap.bears | 0));
+        const loadPct = Math.min(100, Math.max(0, Math.round((Number(snap.load01) || 0) * 100)));
+        const intM = Number(snap.intervalMult);
+        const blkM = Number(snap.blockScale);
+        const iStr = Number.isFinite(intM) ? Math.max(0.5, Math.min(9.99, intM)).toFixed(1) : "1.0";
+        const bStr = Number.isFinite(blkM) ? Math.max(0.35, Math.min(1.5, blkM)).toFixed(2) : "1.00";
         const playersByDimension = new Map();
-        for (const player of allPlayers) {
-            if (!player?.isValid || !player.dimension?.id) continue;
-            const dimId = player.dimension.id;
+        for (const p of allPlayers) {
+            if (!p?.isValid || !p.dimension?.id) continue;
+            const dimId = p.dimension.id;
             if (!playersByDimension.has(dimId)) playersByDimension.set(dimId, []);
-            playersByDimension.get(dimId).push(player);
+            playersByDimension.get(dimId).push(p);
         }
         const worldL = getWorldWideSpawnLoadCount();
         for (const pl of allPlayers) {
             if (!pl?.isValid) continue;
+            if (!isSpawnScanPerfOverlayEnabledForPlayer(pl)) {
+                clearHudActionBarSegment(pl, ACTION_BAR_SLOT.SPAWN_SCAN_PERF);
+                continue;
+            }
             try {
                 const list = playersByDimension.get(pl.dimension?.id);
                 if (!list?.length) continue;
                 const meta = computeSpatialClusterMeta(list);
                 const disc = getDiscoveryBudgetPlayerCount(list.length, meta.count);
                 const shortDim = (pl.dimension.id || "?").replace("minecraft:", "");
-                setHudActionBarSegment(pl, ACTION_BAR_SLOT.SPAWN_SCAN_PERF, `§eScan§r ${shortDim} P${list.length} C${meta.count} D${disc} W${worldL}`);
+                const short = getHudActiveSegmentCount(pl) >= 4;
+                const scanTag = short ? "§eSc§r" : "§eScan§r";
+                // P/C/D/W = players & spatial clusters (solo is often 1/1/1/1). Bears + load model + scalers track real-world pressure.
+                const loadSeg = short
+                    ? `§7${bearN}§8·§7${loadPct}§8·§7i${iStr}§8·§7b${bStr}`
+                    : `§7b${bearN} §8L§7${loadPct}% §8i×§7${iStr} §8b×§7${bStr}`;
+                const soloCompact = list.length === 1 && meta.count === 1;
+                const geoSeg = short && soloCompact
+                    ? `§8P§7${list.length} §8W§7${worldL}`
+                    : `§8P§7${list.length} §8C§7${meta.count} §8D§7${disc} §8W§7${worldL}`;
+                setHudActionBarSegment(pl, ACTION_BAR_SLOT.SPAWN_SCAN_PERF, `${scanTag} ${shortDim} ${loadSeg} ${geoSeg}`);
             } catch { /* ignore per player */ }
         }
     } catch { /* ignore */ }
@@ -1342,7 +1862,8 @@ function getEffectiveMaxGlobalSpawnsPerTick() {
     const load = Math.max(1, cachedWorldSpawnLoadForCap);
     if (load <= 1) return base;
     const scale = load === 2 ? 0.86 : load === 3 ? 0.74 : load === 4 ? 0.64 : load === 5 ? 0.56 : load === 6 ? 0.5 : load === 7 ? 0.45 : 0.41;
-    return Math.max(6, Math.floor(base * scale));
+    const loadS = getSpawnBlockBudgetScale();
+    return Math.max(5, Math.floor(base * scale * loadS));
 }
 
 /** Spawn distance range: "close" (20-35), "normal" (15-45), "far" (10-55). */
@@ -1367,14 +1888,16 @@ function getEffectiveMaxCandidates(totalPlayerCount = 1, isSinglePlayer = false,
     const base = MAX_CANDIDATES_PER_SCAN * getTileIntensityMultiplier();
     const yieldM = getScanYieldBalanceMultiplier(isSinglePlayer, totalPlayerCount, scanLoadCount);
     const boost = Math.min(1.35, Math.sqrt(yieldM));
-    return Math.max(48, Math.floor(base * boost));
+    const loadS = getSpawnBlockBudgetScale();
+    return Math.max(40, Math.floor(base * boost * loadS));
 }
 /** Effective max spaced tiles (tile intensity + mild boost when query budget is compressed). */
 function getEffectiveMaxSpacedTiles(totalPlayerCount = 1, isSinglePlayer = false, scanLoadCount = null) {
     const base = MAX_SPACED_TILES * getTileIntensityMultiplier();
     const yieldM = getScanYieldBalanceMultiplier(isSinglePlayer, totalPlayerCount, scanLoadCount);
     const boost = Math.min(1.3, Math.sqrt(yieldM));
-    return Math.max(32, Math.floor(base * boost));
+    const loadS = getSpawnBlockBudgetScale();
+    return Math.max(28, Math.floor(base * boost * loadS));
 }
 
 /** Tile scan intensity: multiplies candidates and spaced tiles. <1 = less scanning. */
@@ -1409,8 +1932,10 @@ const TORPEDO_TYPE = "torpedo";
 // Spawn caps for each type (all variants count toward the same cap)
 // Mining capped at 3 to reduce lag (mining AI is CPU-heavy when multiple active)
 const ENTITY_TYPE_CAPS = {
-    [TINY_TYPE]: 50,
-    [INFECTED_TYPE]: 35,
+    /** Nearby cap shared by all tiny variants (perf — was 50). */
+    [TINY_TYPE]: 38,
+    /** All infected-bear variants (perf — was 35). */
+    [INFECTED_TYPE]: 26,
     [MINING_TYPE]: 3,
     [FLYING_TYPE]: 30,
     [TORPEDO_TYPE]: 10
@@ -2056,10 +2581,11 @@ const BASE_MIN_TILE_SPACING = 2.5; // blocks between spawn tiles (reduced from 3
 const SCAN_INTERVAL = 60; // ticks (~3 seconds) - reduced for more frequent smaller scans
 // Dynamic scan cooldown based on player count (longer for multiplayer to spread load)
 function getBlockScanCooldown(totalPlayerCount) {
-    if (totalPlayerCount === 1) return SCAN_INTERVAL * 2; // 6 seconds for single player
-    if (totalPlayerCount === 2) return SCAN_INTERVAL * 3; // 9 seconds for 2 players
-    if (totalPlayerCount === 3) return SCAN_INTERVAL * 4; // 12 seconds for 3 players
-    return SCAN_INTERVAL * 6; // 18 seconds for 4+ players (aggressive optimization)
+    const cd = getSpawnScanCooldownMultiplier();
+    if (totalPlayerCount === 1) return Math.round(SCAN_INTERVAL * 2 * cd);
+    if (totalPlayerCount === 2) return Math.round(SCAN_INTERVAL * 3 * cd);
+    if (totalPlayerCount === 3) return Math.round(SCAN_INTERVAL * 4 * cd);
+    return Math.round(SCAN_INTERVAL * 6 * cd);
 }
 const BLOCK_SCAN_COOLDOWN = SCAN_INTERVAL * 2; // Default (single player) - use getBlockScanCooldown() for multiplayer
 const MAX_BLOCK_QUERIES_PER_SCAN = 6000; // Limit block queries per scan (smaller batches, more frequent)
@@ -2085,7 +2611,8 @@ function getBlockQueryLimit(isSinglePlayer, totalPlayerCount, scanLoadCount = nu
     
     // Dev tools override: block query budget multiplier
     const overrideMult = getBlockQueryMultiplier();
-    return Math.max(500, Math.floor(baseLimit * overrideMult));
+    const loadScale = getSpawnBlockBudgetScale();
+    return Math.max(400, Math.floor(baseLimit * overrideMult * loadScale));
 }
 
 /** Max multiplier when compensating for a low block-query budget (fewer scans → more work per tick / more spawns). */
@@ -2556,10 +3083,10 @@ function getEntityCountCacheTTL(totalPlayerCount, isIsolated = false) {
     return baseTTL;
 }
 const ENTITY_COUNT_CACHE_TTL = SCAN_INTERVAL * 4; // Default (single player) - use getEntityCountCacheTTL() for multiplayer
-const MAX_SPAWNS_PER_TICK_PER_PLAYER_BASE = 4; // Base spawn limit (day 2) - increased from 3
-const MAX_SPAWNS_PER_TICK_PER_PLAYER_MAX = 16; // Maximum spawn limit (day 20+) - increased from 12
+const MAX_SPAWNS_PER_TICK_PER_PLAYER_BASE = 3; // Base spawn limit (day 2)
+const MAX_SPAWNS_PER_TICK_PER_PLAYER_MAX = 12; // Maximum spawn limit (day 20+)
 // Global spawn limit to prevent entity explosion with multiple players
-const MAX_GLOBAL_SPAWNS_PER_TICK = 24; // Maximum total spawns across all players per tick
+const MAX_GLOBAL_SPAWNS_PER_TICK = 18; // Maximum total spawns across all players per tick (default when property unset)
 let playerRotationIndex = 0;
 let lastBlockScanTick = 0; // Track when we last did expensive block scans
 // Global spawn counter (resets each tick)
@@ -2935,13 +3462,13 @@ function isPlayerIsolated(player, allPlayers) {
 function getMaxSpawnsPerTick(day, totalPlayerCount = 1, scanYieldBalanceMult = 1) {
     let baseLimit;
     if (day < 2) baseLimit = 2;
-    else if (day < 4) baseLimit = 3; // Day 2-3: 3 spawns
-    else if (day < 8) baseLimit = 4; // Day 4-7: 4 spawns
-    else if (day < 13) baseLimit = 6; // Day 8-12: 6 spawns
-    else if (day < 20) baseLimit = 8; // Day 13-19: 8 spawns
+    else if (day < 4) baseLimit = 2; // Day 2-3
+    else if (day < 8) baseLimit = 3; // Day 4-7
+    else if (day < 13) baseLimit = 4; // Day 8-12
+    else if (day < 20) baseLimit = 6; // Day 13-19
     else {
-        // Day 20+: Scale from 10 to 16 based on how far past day 20
-        baseLimit = Math.min(MAX_SPAWNS_PER_TICK_PER_PLAYER_MAX, 10 + Math.floor((day - 20) / 5));
+        // Day 20+: scale up toward MAX (12) more slowly than before
+        baseLimit = Math.min(MAX_SPAWNS_PER_TICK_PER_PLAYER_MAX, 8 + Math.floor((day - 20) / 5));
     }
     
     // Reduce per-player limit when multiple players are present
@@ -6700,9 +7227,7 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
         return false; // Too many of this type nearby - stop spawning until some are killed
     }
     
-    // Note: Type-based caps are now the primary control mechanism
-    // Global cap check removed - type caps (75 tiny, 50 infected, 20 mining, 30 flying, 10 torpedo) handle limits
-    // Maximum theoretical total if all types hit their caps: 185 bears
+    // Note: Type-based caps are the primary control mechanism (see ENTITY_TYPE_CAPS).
     
     // Check buff bear limit - dynamic cap based on nearby player count
     if (config.id === BUFF_BEAR_ID || config.id === BUFF_BEAR_DAY8_ID || config.id === BUFF_BEAR_DAY13_ID || config.id === BUFF_BEAR_DAY20_ID) {
@@ -7176,29 +7701,29 @@ function getPerTypeSpawnLimit(day, config) {
     
     // Day 20+ variants get higher limits
     if (config.id === DAY20_BEAR_ID) {
-        if (day < 25) return 4; // Day 20-24: 4 per tick
-        if (day < 30) return 5; // Day 25-29: 5 per tick
-        return 6; // Day 30+: 6 per tick
+        if (day < 25) return 3;
+        if (day < 30) return 4;
+        return 5;
     }
     
     if (config.id === INFECTED_BEAR_DAY20_ID) {
-        if (day < 25) return 3; // Day 20-24: 3 per tick
-        if (day < 30) return 4; // Day 25-29: 4 per tick
-        return 5; // Day 30+: 5 per tick
+        if (day < 25) return 2;
+        if (day < 30) return 3;
+        return 4;
     }
     
     // Day 13 variants
     if (config.id === DAY13_BEAR_ID || config.id === INFECTED_BEAR_DAY13_ID) {
-        return 3;
+        return 2;
     }
     
     // Day 8 variants
     if (config.id === DAY8_BEAR_ID || config.id === INFECTED_BEAR_DAY8_ID) {
-        return 2;
+        return 1;
     }
     
     // Day 4 variants and early game
-    return 2;
+    return 1;
 }
 
 // ============================================================================
@@ -7330,7 +7855,8 @@ system.runInterval(() => {
                 toMaxToken = campDbg.inSmall ? `§6>${eta}§r` : `§c!${eta}§r`;
             }
             const bb = campDbg?.bigBaseActive ? "§dB§r" : "§7·§r";
-            const bar = `§bCamp§r${bb}c${ci} ${(ramp * 100).toFixed(0)}% ${toMaxToken} x${mult.toFixed(2)} mobQ${mobQ.toFixed(2)} OW${(owStormR * 100).toFixed(0)}% roll${stormSc.toFixed(2)}`;
+            const campTag = getHudActiveSegmentCount(p) >= 4 ? "§bCp§r" : "§bCamp§r";
+            const bar = `${campTag}${bb}c${ci} ${(ramp * 100).toFixed(0)}% ${toMaxToken} x${mult.toFixed(2)} mobQ${mobQ.toFixed(2)} OW${(owStormR * 100).toFixed(0)}% roll${stormSc.toFixed(2)}`;
             setHudActionBarSegment(p, ACTION_BAR_SLOT.CAMP_DEV, bar);
         }
     } catch { /* ignore */ }
@@ -7341,13 +7867,23 @@ system.runInterval(() => {
         if (!isScriptEnabled(SCRIPT_IDS.spawnController)) {
             const pls = world.getAllPlayers();
             for (const pl of pls) {
-                if (pl?.isValid) clearHudActionBarSegment(pl, ACTION_BAR_SLOT.SPAWN_SCAN_PERF);
+                if (pl?.isValid) {
+                    clearHudActionBarSegment(pl, ACTION_BAR_SLOT.SPAWN_SCAN_PERF);
+                    clearHudActionBarSegment(pl, ACTION_BAR_SLOT.SPAWN_TUNING);
+                }
             }
             return;
         }
         refreshSpawnScanPerfHudOverlay();
+        refreshSpawnPresetHudOverlay();
     } catch { /* ignore */ }
 }, 10);
+
+try {
+    system.runInterval(() => {
+        tickSpawnPresetAutoApply();
+    }, 100);
+} catch { /* ignore */ }
 
 system.runInterval(() => {
     try {
@@ -7360,7 +7896,9 @@ system.runInterval(() => {
         
         // Spawn speed override (dev tools): throttle or speed up based on multiplier
         const speedMult = getSpawnSpeedMultiplier();
-        const effectiveInterval = Math.max(20, Math.min(240, Math.round(60 / speedMult)));
+        let effectiveInterval = Math.max(20, Math.min(240, Math.round(60 / speedMult)));
+        effectiveInterval = Math.round(effectiveInterval * getSpawnControllerIntervalMultiplier());
+        effectiveInterval = Math.max(22, Math.min(280, effectiveInterval));
         const now = system.currentTick;
         if (lastSpawnControllerRunTick >= 0 && (now - lastSpawnControllerRunTick) < effectiveInterval) {
             return;
@@ -7766,7 +8304,7 @@ system.runInterval(() => {
                          (entityCounts[BUFF_BEAR_DAY13_ID] || 0) + 
                          (entityCounts[BUFF_BEAR_DAY20_ID] || 0);
         
-        debugLog('spawn', `${player.name}: ${totalNearbyBears} total bears nearby (Tiny: ${tinyCount}/75, Infected: ${infectedCount}/50, Mining: ${miningCount}/3, Flying: ${flyingCount}/30, Torpedo: ${torpedoCount}/10, Buff: ${buffCount}/dynamic), ${spacedTiles.length} spawn tiles available`);
+        debugLog('spawn', `${player.name}: ${totalNearbyBears} total bears nearby (Tiny: ${tinyCount}/${ENTITY_TYPE_CAPS[TINY_TYPE]}, Infected: ${infectedCount}/${ENTITY_TYPE_CAPS[INFECTED_TYPE]}, Mining: ${miningCount}/3, Flying: ${flyingCount}/30, Torpedo: ${torpedoCount}/10, Buff: ${buffCount}/dynamic), ${spacedTiles.length} spawn tiles available`);
 
         const idealNearbyBearTarget = getIdealNearbyBearTarget(currentDay, dimensionPlayerCount, dimension.id);
         const idealBearPressure = getIdealBearPressureFactors(totalNearbyBears, idealNearbyBearTarget);
@@ -7893,7 +8431,7 @@ system.runInterval(() => {
         }
         
         // Note: Removed the 30-bear global cap check - type-based caps now handle all spawn limiting
-            // Type caps: 75 tiny, 50 infected, 3 mining, 30 flying, 10 torpedo (buff bears have dynamic cap)
+            // Type caps: ENTITY_TYPE_CAPS (buff bears have dynamic cap)
 
         // Check if single player (no group cache benefit)
         const isSinglePlayer = !useGroupCache || (dimensionPlayers && dimensionPlayers.length === 1);

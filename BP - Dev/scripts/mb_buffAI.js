@@ -51,8 +51,12 @@ const STUCK_TIME_TICKS = 300; // 15 seconds (300 ticks) without moving = stuck
 const MIN_ALIVE_TIME_TICKS = 600; // 30 seconds (600 ticks) before explosion can trigger
 const EXPLOSION_RADIUS = 6; // 6 block radius for explosion (larger than before)
 const SNOW_SPRAY_RADIUS = 8; // 8 block radius for snow spray (much larger)
-const STUCK_MOVEMENT_THRESHOLD = 2.5; // Must move at least 2.5 blocks to not be considered stuck (harder to trap)
-const HIT_REDUCTION_TICKS = 30; // Each hit reduces stuck timer by 30 ticks (1.5 seconds) when stuck
+/** Horizontal (XZ) movement this far clears stuck — vertical climb in the same column must NOT reset the fuse. */
+const STUCK_MOVEMENT_THRESHOLD = 2.5;
+/** After damage, ignore horizontal movement-based stuck reset (melee knockback). */
+const BUFF_HURT_SUPPRESS_STUCK_RESET_TICKS = 50;
+/** While stuck fuse is running, each hit advances toward explosion by this many ticks (clamped). */
+const HIT_ADVANCE_STUCK_TICKS = 48;
 
 let buffAIIntervalId = null;
 const MAX_BUFF_INIT_ATTEMPTS = 10;
@@ -63,6 +67,7 @@ let buffAIInitialized = false;
 // Track spawn time and position history for stuck detection
 const BUFF_SPAWN_TIME = new Map(); // entityId -> spawnTick
 const BUFF_POSITION_HISTORY = new Map(); // entityId -> { lastPosition, stuckStartTick }
+const BUFF_LAST_HURT_TICK = new Map(); // entityId -> tick (suppress knockback resetting stuck fuse)
 
 function pickBreakSound(typeId) {
     if (!typeId) return BREAK_SOUND_DEFAULT;
@@ -478,6 +483,7 @@ function createBuffExplosion(entity) {
         
         // Reset stuck tracking after explosion
         BUFF_POSITION_HISTORY.delete(entity.id);
+        BUFF_LAST_HURT_TICK.delete(entity.id);
     } catch (error) {
         if (getDebugGeneral()) {
             console.warn(`[BUFF AI] Error creating explosion for entity ${entity.id.substring(0, 8)}:`, error);
@@ -505,14 +511,21 @@ function checkIfStuck(entity, currentTick) {
         return false;
     }
     
-    // Calculate distance moved
     const dx = currentPos.x - history.lastPosition.x;
-    const dy = currentPos.y - history.lastPosition.y;
     const dz = currentPos.z - history.lastPosition.z;
-    const distance = Math.hypot(dx, dy, dz);
+    const horizontalDist = Math.hypot(dx, dz);
     
-    // If moved significantly, reset stuck tracking
-    if (distance >= STUCK_MOVEMENT_THRESHOLD) {
+    // Horizontal escape only — buff bears climb in place; 3D distance was resetting the fuse every jump.
+    if (horizontalDist >= STUCK_MOVEMENT_THRESHOLD) {
+        const hurtAt = BUFF_LAST_HURT_TICK.get(entityId);
+        if (hurtAt != null && history.stuckStartTick != null &&
+            currentTick - hurtAt < BUFF_HURT_SUPPRESS_STUCK_RESET_TICKS) {
+            BUFF_POSITION_HISTORY.set(entityId, {
+                lastPosition: { x: currentPos.x, y: currentPos.y, z: currentPos.z },
+                stuckStartTick: history.stuckStartTick
+            });
+            return false;
+        }
         BUFF_POSITION_HISTORY.set(entityId, {
             lastPosition: { x: currentPos.x, y: currentPos.y, z: currentPos.z },
             stuckStartTick: null
@@ -689,9 +702,11 @@ function initializeBuffAI() {
     
     buffAIIntervalId = system.runInterval(() => {
         try {
-            if (!isScriptEnabled(SCRIPT_IDS.buff)) return;
             const currentTick = system.currentTick;
-        
+            const buffScriptEnabled = isScriptEnabled(SCRIPT_IDS.buff);
+            // Journal/menu queries bears without this toggle; countdown logs need the interval to run.
+            if (!buffScriptEnabled && !getDebugGeneral()) return;
+
             // Cleanup tracking maps for entities that no longer exist
             const seen = new Set();
         const loggedThisTick = new Set(); // Track which entities we've logged countdown for this tick
@@ -758,10 +773,12 @@ function initializeBuffAI() {
                                 const aliveTime = currentTick - spawnTick;
                                 const loc = entity.location;
                                 
-                                if (isClimbing(entity)) {
-                                    const broken = breakBlocksAboveEntity(entity, bearType.maxHeight, bearType);
-                                    if (getDebugBlockBreaking() && broken > 0) {
-                                        console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} broke ${broken} blocks above while climbing`);
+                                if (buffScriptEnabled) {
+                                    if (isClimbing(entity)) {
+                                        const broken = breakBlocksAboveEntity(entity, bearType.maxHeight, bearType);
+                                        if (getDebugBlockBreaking() && broken > 0) {
+                                            console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} broke ${broken} blocks above while climbing`);
+                                        }
                                     }
                                 }
                                 
@@ -781,9 +798,13 @@ function initializeBuffAI() {
                                         loggedThisTick.add(entityId);
                                     }
                                     if (checkIfStuck(entity, currentTick)) {
-                                        createBuffExplosion(entity);
-                                        if (getDebugGeneral()) {
-                                            console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} was stuck for 15 seconds, created explosion`);
+                                        if (buffScriptEnabled) {
+                                            createBuffExplosion(entity);
+                                            if (getDebugGeneral()) {
+                                                console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} was stuck for 15 seconds, created explosion`);
+                                            }
+                                        } else if (getDebugGeneral()) {
+                                            console.warn(`[BUFF AI] Entity ${entity.id.substring(0, 8)} would explode (stuck 15s) — enable Buff AI in Script toggles for explosions`);
                                         }
                                     }
                                 } else if (aliveTime < MIN_ALIVE_TIME_TICKS && currentTick % STUCK_CHECK_INTERVAL === 0) {
@@ -816,6 +837,7 @@ function initializeBuffAI() {
                 if (!seen.has(entityId)) {
                     BUFF_SPAWN_TIME.delete(entityId);
                     BUFF_POSITION_HISTORY.delete(entityId);
+                    BUFF_LAST_HURT_TICK.delete(entityId);
                 }
             }
         } catch (error) {
@@ -859,10 +881,13 @@ export function getBuffBearCountdowns(player) {
             if (!entity?.isValid) continue;
             
             const entityId = entity.id;
-            const spawnTick = BUFF_SPAWN_TIME.get(entityId);
+            let spawnTick = BUFF_SPAWN_TIME.get(entityId);
+            // Main AI loop registers spawn time on first sight; debug menu can open same tick as spawn — don't hide nearby bears.
+            if (spawnTick == null) {
+                spawnTick = currentTick - MIN_ALIVE_TIME_TICKS;
+                BUFF_SPAWN_TIME.set(entityId, spawnTick);
+            }
             const history = BUFF_POSITION_HISTORY.get(entityId);
-            
-            if (!spawnTick) continue;
             
             const aliveTime = currentTick - spawnTick;
             const aliveSeconds = Math.floor(aliveTime / 20);
@@ -914,39 +939,35 @@ export function getBuffBearCountdowns(player) {
     return results;
 }
 
-// Handle buff bear being hit - reduce stuck timer if stuck
+// Hurt: suppress horizontal knockback reset + advance stuck fuse when it is already running (hits speed up explosion).
 world.afterEvents.entityHurt.subscribe((event) => {
     const hurtEntity = event.hurtEntity;
     if (!hurtEntity?.isValid) return;
-    
-    const entityId = hurtEntity.id;
     const typeId = hurtEntity.typeId;
-    
-    // Check if it's a buff bear
-    const isBuffBear = BUFF_BEAR_TYPES.some(t => t.id === typeId);
-    if (!isBuffBear) return;
-    
-    // Check if bear is stuck
-    const history = BUFF_POSITION_HISTORY.get(entityId);
-    if (history && history.stuckStartTick !== null) {
-        // Bear is stuck and being hit - reduce timer
-        const currentTick = system.currentTick;
-        const newStuckStartTick = history.stuckStartTick + HIT_REDUCTION_TICKS; // Move timer forward
-        
-        // Update history with reduced timer
-        BUFF_POSITION_HISTORY.set(entityId, {
-            lastPosition: history.lastPosition,
-            stuckStartTick: newStuckStartTick
-        });
-        
-        if (getDebugGeneral()) {
-            const ticksStuck = currentTick - newStuckStartTick;
-            const secondsStuck = Math.floor(ticksStuck / 20);
-            const ticksUntilExplosion = STUCK_TIME_TICKS - ticksStuck;
-            const secondsUntilExplosion = Math.ceil(ticksUntilExplosion / 20);
-            console.warn(`[BUFF AI] Entity ${entityId.substring(0, 8)} HIT while stuck! Timer reduced by ${HIT_REDUCTION_TICKS} ticks. Now ${secondsStuck}s stuck, ${secondsUntilExplosion}s until explosion`);
+    if (!BUFF_BEAR_TYPES.some((t) => t.id === typeId)) return;
+    const entityId = hurtEntity.id;
+    const tick = system.currentTick;
+    try {
+        BUFF_LAST_HURT_TICK.set(entityId, tick);
+        const h = BUFF_POSITION_HISTORY.get(entityId);
+        if (h && h.stuckStartTick != null) {
+            const advanced = Math.max(
+                tick - STUCK_TIME_TICKS,
+                h.stuckStartTick - HIT_ADVANCE_STUCK_TICKS
+            );
+            const loc = hurtEntity.location;
+            BUFF_POSITION_HISTORY.set(entityId, {
+                lastPosition: { x: loc.x, y: loc.y, z: loc.z },
+                stuckStartTick: advanced
+            });
+            if (getDebugGeneral()) {
+                const ts = tick - advanced;
+                console.warn(
+                    `[BUFF AI] Entity ${entityId.substring(0, 8)} hit while stuck fuse active: +${HIT_ADVANCE_STUCK_TICKS}t progress (~${(ts / 20).toFixed(1)}s stuck banked)`
+                );
+            }
         }
-    }
+    } catch { /* ignore */ }
 });
 
 // Auto-initialize on script load

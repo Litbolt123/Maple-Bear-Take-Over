@@ -1,12 +1,12 @@
 import { system, world, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData, FormCancelationReason } from "@minecraft/server-ui";
 import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getPlayerPropertyChunked, setPlayerPropertyChunked, getWorldPropertyChunked, setWorldPropertyChunked, saveAllProperties, ADDON_DIFFICULTY_PROPERTY, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
-import { getAllScriptToggles, setScriptEnabled, SCRIPT_IDS, isBetaInfectedAIEnabled, setBetaInfectedAIEnabled, isDustStormsEnabled, setDustStormsEnabled, isBetaVisibleToAll, setBetaVisibleToAll, getBetaOwnerId, setBetaOwnerId } from "./mb_scriptToggles.js";
+import { getAllScriptToggles, setScriptEnabled, SCRIPT_IDS, isScriptEnabled, isBetaInfectedAIEnabled, setBetaInfectedAIEnabled, isDustStormsEnabled, setDustStormsEnabled, isBetaVisibleToAll, setBetaVisibleToAll, getBetaOwnerId, setBetaOwnerId } from "./mb_scriptToggles.js";
 import { recordDailyEvent, getCurrentDay, getDayDisplayInfo } from "./mb_dayTracker.js";
 import { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, formatInfectionHudTimeRemaining, HITS_TO_INFECT, bearHitCount, maxSnowLevels, MINOR_INFECTION_TYPE, MAJOR_INFECTION_TYPE, MINOR_HITS_TO_INFECT, IMMUNE_HITS_TO_INFECT, PERMANENT_IMMUNITY_PROPERTY, MINOR_CURE_GOLDEN_APPLE_PROPERTY, MINOR_CURE_GOLDEN_CARROT_PROPERTY } from "./main.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT, CHAT_SPECIAL } from "./mb_chatColors.js";
 import { getBuffBearCountdowns } from "./mb_buffAI.js";
-import { getSpawnConfigsForDevTools, getDisabledSpawnTypes, setDisabledSpawnTypes, getSpawnSpeedMultiplier, SPAWN_SPEED_PROPERTY, getBlockQueryMultiplier, getMaxGlobalSpawnsPerTick, getSpawnDistanceRange, getTileIntensityMultiplier, getBlocksPerTickMultiplier, SPAWN_OVERRIDE_PROPERTIES, getSpawnScanSettingsForDevTools, applySpawnScanPreset, SPAWN_SCAN_OVERRIDE_PROPERTIES, SPAWN_SCAN_PRESETS, getEmulsifierStateForDevTools, getEmulsifierDebugInfo, clearEmulsifierZoneCache, addEmulsifierZoneAtPlayer, removeNearestEmulsifierZone, setNearestEmulsifierFuel, getEmulsifierZoneAtBlock, upsertEmulsifierZoneAtBlock, setEmulsifierFuelAtBlock, addEmulsifierFuelAtBlock, getMaxFuelTicks, setEmulsifierActiveAtBlock, getZoneFuelQueueForUI, getZoneCurrentFuelType, zoneHasFuel, setEmulsifierFuelOrderAtBlock, isSpawnScanPerfOverlayEnabled, setSpawnScanPerfOverlayEnabled, computeSpatialClusterMeta } from "./mb_spawnController.js";
+import { getSpawnConfigsForDevTools, getDisabledSpawnTypes, setDisabledSpawnTypes, getSpawnSpeedMultiplier, SPAWN_SPEED_PROPERTY, getBlockQueryMultiplier, getMaxGlobalSpawnsPerTick, getSpawnDistanceRange, getTileIntensityMultiplier, getBlocksPerTickMultiplier, SPAWN_OVERRIDE_PROPERTIES, getSpawnScanSettingsForDevTools, applySpawnScanPreset, applySpawnIntensityPreset, SPAWN_SCAN_OVERRIDE_PROPERTIES, SPAWN_SCAN_PRESETS, SPAWN_INTENSITY_PRESETS, getSpawnTuningSummaryForDevTools, getEmulsifierStateForDevTools, getEmulsifierDebugInfo, clearEmulsifierZoneCache, addEmulsifierZoneAtPlayer, removeNearestEmulsifierZone, setNearestEmulsifierFuel, getEmulsifierZoneAtBlock, upsertEmulsifierZoneAtBlock, setEmulsifierFuelAtBlock, addEmulsifierFuelAtBlock, getMaxFuelTicks, setEmulsifierActiveAtBlock, getZoneFuelQueueForUI, getZoneCurrentFuelType, zoneHasFuel, setEmulsifierFuelOrderAtBlock, isSpawnScanPerfOverlayEnabled, isSpawnScanPerfOverlayEnabledForPlayer, isSpawnScanPerfHudPersonalEnabled, setSpawnScanPerfOverlayEnabled, isSpawnPresetHudEnabledForPlayer, isSpawnPresetHudPersonalEnabled, setSpawnPresetHudEnabled, isSpawnHudBroadcastEnabled, setSpawnHudBroadcastEnabled, isSpawnPresetAutoEnabled, setSpawnPresetAutoEnabled, computeSpatialClusterMeta } from "./mb_spawnController.js";
 import {
     getCampTuningConstants,
     getClusterCampDebugMetrics,
@@ -21,7 +21,7 @@ import {
     getStormStartChanceCampScale,
     CAMP_RAMP_FULL_TICKS
 } from "./mb_spawnMobilityCamp.js";
-import { getHudActionBarDebugInfo } from "./mb_actionBarHud.js";
+import { getHudActionBarDebugInfo, formatHudMergeOrderForMenu, clearAllHudSegments, pushHudActionBarToast } from "./mb_actionBarHud.js";
 import {
     INCLUDE_FULL_DEVELOPER_TOOLS,
     INCLUDE_ADMIN_TOOLS,
@@ -38,8 +38,15 @@ import {
     setStormWorkMultiplierManual,
     setMiningWorkMultiplierManual,
     getStormWorkManualOrZero,
-    getMiningWorkManualOrZero
+    getMiningWorkManualOrZero,
+    getAdaptivePerfDebugSnapshot
 } from "./mb_performanceProfile.js";
+import {
+    getSpawnLoadDebugSnapshot,
+    setSpawnLoadAutoEnabled,
+    isSpawnLoadAutoEnabled,
+    setSpawnLoadBiasLevel
+} from "./mb_spawnLoadMetrics.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
@@ -1112,6 +1119,12 @@ export function getBiomeInfectionLevel(player, biomeId) {
 // Knowledge sharing cooldown tracking
 const knowledgeShareCooldowns = new Map(); // playerId -> { lastShareTime, hasSharedBefore }
 
+/** Personal kill/hit tallies must not merge on share (would break per-player first-kill achievements). */
+function isMobCodexStatKey(mobKey) {
+    if (mobKey === "variantKills") return true;
+    return /(Kills|MobKills|Hits)$/.test(mobKey);
+}
+
 // Knowledge sharing system
 export function shareKnowledge(fromPlayer, toPlayer) {
     const now = Date.now();
@@ -1157,6 +1170,7 @@ export function shareKnowledge(fromPlayer, toPlayer) {
     // Share mob discoveries
     if (!toCodex.mobs) toCodex.mobs = {};
     for (const [mobKey, discovered] of Object.entries(fromCodex.mobs)) {
+        if (isMobCodexStatKey(mobKey)) continue;
         if (discovered && !toCodex.mobs[mobKey]) {
             toCodex.mobs[mobKey] = discovered;
             hasNewKnowledge = true;
@@ -1383,6 +1397,9 @@ export function updateSymptomMeta(player, effectId, durationTicks, amp, source, 
 
 export function showCodexBook(player, context) {
     const { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, getCurrentDay, getDayDisplayInfo } = context;
+
+    /** Alias for menus — definitions live in `mb_spawnController.js` (`SPAWN_INTENSITY_PRESETS`). */
+    const SPAWN_PRESETS = SPAWN_INTENSITY_PRESETS;
 
     // Play journal open sound
     const volumeMultiplier = getPlayerSoundVolume(player);
@@ -1625,8 +1642,8 @@ export function showCodexBook(player, context) {
             const hasBeenInfected = codex.history.totalInfections > 0;
             if (hasPermanentImmunity) {
                 const addonHits = getAddonDifficultyState();
-                summary.push(`§eStatus: §aHealthy (Permanently Immune)`);
-                summary.push(`§7You are permanently immune to minor infection.`);
+                summary.push(`§eStatus: §aHealthy §7(§fminor infection: §apermanently immune§7)`);
+                summary.push(`§7You will not contract minor infection again. Major infection rules still apply.`);
                 summary.push(`§7You require ${addonHits.hitsBase} hits from Maple Bears to get infected.`);
             } else if (hasBeenInfected && infectionKnowledge >= 1 && (infectionSectionEverViewed || (codex.history?.totalCures || 0) > 0 || minorCuredFlag)) {
                 summary.push(`§eStatus: §aHealthy (Previously Infected)`);
@@ -1641,7 +1658,7 @@ export function showCodexBook(player, context) {
         if (immunityStoryOnSummary) {
             if (hasPowderyJournal && (hasExperiencedImmunity || infectionKnowledge >= 1)) {
                 if (hasPermanentImmunity) {
-                    summary.push("§bImmunity: §aPERMANENT");
+                    summary.push("§bImmunity: §aPERMANENT §7(minor infection)");
                 } else if (immune && codex.status.immuneKnown) {
                     const end = curedPlayers.get(player.id);
                     const remainingMs = Math.max(0, end - Date.now());
@@ -1651,7 +1668,7 @@ export function showCodexBook(player, context) {
                 }
             } else if (!hasPowderyJournal && hasExperiencedImmunity) {
                 if (hasPermanentImmunity) {
-                    summary.push("§bImmunity: §aPERMANENT");
+                    summary.push("§bImmunity: §aPERMANENT §7(minor infection)");
                 } else if (immune) {
                     summary.push("§bImmunity: §fACTIVE");
                 }
@@ -1776,7 +1793,7 @@ export function showCodexBook(player, context) {
             for (const itemId of pinned) {
                 const resolvedId = LEGACY_PIN_IDS[itemId] || itemId;
                 if (!eligiblePins.has(resolvedId)) continue;
-                const item = PINNABLE_DEV_ITEMS.find(i => i.id === resolvedId);
+                const item = findPinnableItemById(resolvedId);
                 if (item) {
                     buttons.push("§f" + item.label + " §8(pinned)");
                     buttonActions.push(() => {
@@ -1784,7 +1801,7 @@ export function showCodexBook(player, context) {
                             journalPowerToolsBack = () => openMain();
                             item.action();
                         };
-                        if (!INCLUDE_FULL_DEVELOPER_TOOLS) {
+                        if (!INCLUDE_FULL_DEVELOPER_TOOLS && !item.journalPin) {
                             runAdminSurfaceWithDisclaimer(runPin);
                         } else {
                             runPin();
@@ -1894,9 +1911,9 @@ export function showCodexBook(player, context) {
                 lines.push("");
             } else if (hasPermanentImmunity) {
                 const immuneHits = getAddonDifficultyState().hitsBase;
-                lines.push("§aCurrent Status: Permanently Immune");
-                lines.push("§7You have cured your minor infection and gained permanent immunity.");
-                lines.push("§7You will never contract minor infection again.");
+                lines.push("§aCurrent Status: Permanently immune to §eminor §ainfection");
+                lines.push("§7You cured minor infection; you will not get minor infection again.");
+                lines.push("§7Maple Bear hit rules for major infection still apply.");
                 lines.push(`§7You now require ${immuneHits} hits from Maple Bears to get infected.`);
                 lines.push("");
             } else {
@@ -4103,14 +4120,14 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 1 + others.length + 1) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openDeveloperTools();
+                return journalPowerToolsBack();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
-            if (res.selection === 0) triggerDebugCommand("set_force_target_player", [player.name], () => openDeveloperTools());
-            else if (res.selection <= others.length) triggerDebugCommand("set_force_target_player", [others[res.selection - 1].name], () => openDeveloperTools());
-            else if (res.selection === 1 + others.length) triggerDebugCommand("set_force_target_player", [], () => openDeveloperTools());
-            else openDeveloperTools();
-        }).catch(() => openDeveloperTools());
+            if (res.selection === 0) triggerDebugCommand("set_force_target_player", [player.name], () => journalPowerToolsBack());
+            else if (res.selection <= others.length) triggerDebugCommand("set_force_target_player", [others[res.selection - 1].name], () => journalPowerToolsBack());
+            else if (res.selection === 1 + others.length) triggerDebugCommand("set_force_target_player", [], () => journalPowerToolsBack());
+            else journalPowerToolsBack();
+        }).catch(() => journalPowerToolsBack());
     }
 
     function openListBearsMenu() {
@@ -4157,12 +4174,12 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 2) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openDeveloperTools();
+                return journalPowerToolsBack();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             const radius = res.selection === 0 ? "64" : "128";
-            triggerDebugCommand("clear_bears", [radius], () => openDeveloperTools());
-        }).catch(() => openDeveloperTools());
+            triggerDebugCommand("clear_bears", [radius], () => journalPowerToolsBack());
+        }).catch(() => journalPowerToolsBack());
     }
 
     const KILL_BEARS_TYPES = [
@@ -4211,14 +4228,14 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 3) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openDeveloperTools();
+                return journalPowerToolsBack();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             if (res.selection === 0) promptKillBearsPct("all", "", () => openKillBearsMenu());
             else if (res.selection === 1) openKillBearsByTypeMenu();
             else if (res.selection === 2) openKillBearsByVariantMenu();
-            else openDeveloperTools();
-        }).catch(() => openDeveloperTools());
+            else journalPowerToolsBack();
+        }).catch(() => journalPowerToolsBack());
     }
 
     function openKillBearsByTypeMenu() {
@@ -4300,16 +4317,16 @@ export function showCodexBook(player, context) {
             form.show(player).then((res) => {
                 if (!res || res.canceled || res.selection === 5) {
                     player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                    return openDeveloperTools();
+                    return journalPowerToolsBack();
                 }
                 player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
                 const sections = ["mobs", "items", "infections", "journal", "all"];
                 const section = sections[res.selection];
                 if (section) {
                     const args = targetName ? [section, targetName] : [section];
-                    triggerDebugCommand("reset_codex_section", args, () => openDeveloperTools());
-                } else openDeveloperTools();
-            }).catch(() => openDeveloperTools());
+                    triggerDebugCommand("reset_codex_section", args, () => journalPowerToolsBack());
+                } else journalPowerToolsBack();
+            }).catch(() => journalPowerToolsBack());
         });
     }
 
@@ -4327,7 +4344,7 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 1 + others.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openDeveloperTools();
+                return journalPowerToolsBack();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             if (res.selection === 0) {
@@ -4335,9 +4352,9 @@ export function showCodexBook(player, context) {
             } else if (res.selection >= 1 && res.selection <= others.length) {
                 onSelect(others[res.selection - 1].name);
             } else {
-                openDeveloperTools();
+                journalPowerToolsBack();
             }
-        }).catch(() => openDeveloperTools());
+        }).catch(() => journalPowerToolsBack());
     }
 
     function openDumpCodexTargetMenu() {
@@ -4357,35 +4374,94 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 3) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openDeveloperTools();
+                return journalPowerToolsBack();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             const args = targetName ? (res.selection === 0 ? [targetName] : res.selection === 1 ? ["summary", targetName] : ["full", targetName]) : (res.selection === 0 ? [] : res.selection === 1 ? ["summary"] : ["full"]);
-            if (res.selection >= 0 && res.selection <= 2) triggerDebugCommand("dump_codex", args, () => openDeveloperTools());
-            else openDeveloperTools();
-        }).catch(() => openDeveloperTools());
+            if (res.selection >= 0 && res.selection <= 2) triggerDebugCommand("dump_codex", args, () => journalPowerToolsBack());
+            else journalPowerToolsBack();
+        }).catch(() => journalPowerToolsBack());
+    }
+
+    /** Journal sections (same visibility rules as main menu). `journalPin` skips admin disclaimer when opened from a pin. */
+    function getJournalMainPinnableItems() {
+        const codex = getCodex(player);
+        const out = [];
+        const add = (id, label, fn) => out.push({ id, label, journalPin: true, action: fn });
+
+        add("jm_infection", "Journal: Infection", () => openInfections());
+
+        const hasAnySymptoms = Object.values(codex.effects).some((seen) => seen);
+        const hasAnySnowEffects = Object.values(codex.snowEffects).some((seen) => seen);
+        const hasSnowKnowledge = codex.items.snowIdentified;
+        const maxSnow = maxSnowLevels.get(player.id);
+        if (hasAnySymptoms || hasAnySnowEffects || (hasSnowKnowledge && maxSnow && maxSnow.maxLevel > 0)) {
+            add("jm_symptoms", "Journal: Symptoms", () => openSymptoms());
+        }
+
+        if (Object.values(codex.mobs).some((seen) => seen === true)) {
+            add("jm_mobs", "Journal: Mobs", () => openMobs());
+        }
+
+        if (Object.values(codex.items).some((seen) => seen)) {
+            add("jm_items", "Journal: Items", () => openItems());
+        }
+
+        const hasAnyBiomes = codex.biomes.infectedBiomeSeen || codex.biomes.dustedDirtSeen || codex.biomes.snowLayerSeen || codex.biomes.stormSeen;
+        if (hasAnyBiomes) {
+            add("jm_biomes", "Journal: Biomes & blocks", () => openBiomes());
+        }
+
+        const hasEndgameLore = !!(codex.journal?.day20TinyLoreUnlocked || codex.journal?.day20InfectedLoreUnlocked || codex.journal?.day20BuffLoreUnlocked || codex.journal?.day20WorldLoreUnlocked);
+        if (hasEndgameLore) {
+            add("jm_lateLore", "Journal: Late lore", () => openLateLore());
+        }
+
+        const currentDayJn = getCurrentDay ? getCurrentDay() : 0;
+        const hasDailyEvents = codex.dailyEvents && Object.keys(codex.dailyEvents).length > 0;
+        if (currentDayJn >= 2 || hasDailyEvents) {
+            add("jm_timeline", "Journal: Timeline", () => openTimeline());
+        }
+
+        add("jm_achievements", "Journal: Achievements", () => openAchievements());
+        add("jm_settings", "Journal: Settings", () => openSettings());
+
+        const st = getSettings();
+        if (st.showSearchButton) {
+            add("jm_search", "Journal: Search", () => openSearch());
+        }
+
+        return out;
+    }
+
+    function findPinnableItemById(id) {
+        const j = getJournalMainPinnableItems().find((i) => i.id === id);
+        if (j) return j;
+        return PINNABLE_DEV_ITEMS.find((i) => i.id === id);
     }
 
     const PINNABLE_DEV_ITEMS = [
         { id: "script_toggles", label: "Script Toggles", action: () => openScriptTogglesMenu() },
         { id: "spawn_controller", label: "Spawn Controller", action: () => openSpawnControllerMenu() },
+        { id: "spawn_load", label: "Spawn load & efficiency", action: () => openSpawnLoadEfficiencyMenu(() => openMain()) },
+        { id: "hud_action_bar", label: "HUD & action bar", action: () => openDeveloperToolsHudMenu(() => openMain()) },
         { id: "camp_mobility", label: "Camp / mobility debug", action: () => openMobilityCampDevMenu() },
         { id: "storm", label: "Storm hub", pinInReleaseAdmin: true, action: () => openStormHubMenu() },
         { id: "set_day", label: "Set Day...", action: () => promptSetDay() },
-        { id: "simulate_day", label: "Simulate Next Day", action: () => { triggerDebugCommand("simulate_next_day", [], () => openDeveloperTools()); } },
+        { id: "simulate_day", label: "Simulate Next Day", action: () => { triggerDebugCommand("simulate_next_day", [], () => journalPowerToolsBack()); } },
         { id: "infection", label: "Clear / Set Infection", action: () => openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name)) },
         { id: "immunity", label: "Grant / Remove Immunity", action: () => openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name)) },
         { id: "kill_bears", label: "Kill Bears %", action: () => openKillBearsMenu() },
         { id: "clear_bears", label: "Clear Bears", action: () => openClearBearsMenu() },
         { id: "ai_throttle", label: "AI Throttle & Speed", action: () => openAIThrottleMenu() },
         { id: "debug_menu", label: "Debug Menu", action: () => openDebugMenu() },
-        { id: "fully_unlock", label: "Fully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked."); openDeveloperTools(); } },
-        { id: "reset_codex", label: "Reset My Codex", action: () => openTargetPlayerMenu("Reset Codex", (name) => { triggerDebugCommand("reset_codex", name ? [name] : []); openDeveloperTools(); }) },
+        { id: "fully_unlock", label: "Fully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked."); journalPowerToolsBack(); } },
+        { id: "reset_codex", label: "Reset My Codex", action: () => openTargetPlayerMenu("Reset Codex", (name) => { triggerDebugCommand("reset_codex", name ? [name] : []); journalPowerToolsBack(); }) },
         { id: "reset_day", label: "Reset World Day to 1", action: () => triggerDebugCommand("reset_day") },
-        { id: "reset_intro", label: "Reset Intro", action: () => triggerDebugCommand("reset_intro", [], () => openDeveloperTools()) },
+        { id: "reset_intro", label: "Reset Intro", action: () => triggerDebugCommand("reset_intro", [], () => journalPowerToolsBack()) },
         { id: "bears_target", label: "Bears Target Player", action: () => openBearsTargetPlayerMenu() },
         { id: "list_bears", label: "List Nearby Bears", pinInReleaseAdmin: true, action: () => openListBearsMenu() },
-        { id: "inspect_bear", label: "Inspect Nearest Bear", action: () => triggerDebugCommand("inspect_entity", [], () => openDeveloperTools()) },
+        { id: "inspect_bear", label: "Inspect Nearest Bear", action: () => triggerDebugCommand("inspect_entity", [], () => journalPowerToolsBack()) },
         { id: "reset_section", label: "Reset Codex Section", action: () => openResetCodexSectionMenu() },
         { id: "dump_codex", label: "Dump Codex State", action: () => openDumpCodexTargetMenu() },
         { id: "set_kill_counts", label: "Set Kill Counts", action: () => openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name)) },
@@ -4393,8 +4469,10 @@ export function showCodexBook(player, context) {
     ];
 
     function getPinEligibleDevItems() {
-        if (INCLUDE_FULL_DEVELOPER_TOOLS) return PINNABLE_DEV_ITEMS;
-        return PINNABLE_DEV_ITEMS.filter((it) => it.pinInReleaseAdmin);
+        const dev = INCLUDE_FULL_DEVELOPER_TOOLS || INCLUDE_ADMIN_TOOLS
+            ? PINNABLE_DEV_ITEMS.slice()
+            : PINNABLE_DEV_ITEMS.filter((it) => it.pinInReleaseAdmin);
+        return [...getJournalMainPinnableItems(), ...dev];
     }
 
     function getPinnedDevItems(p) {
@@ -4428,7 +4506,7 @@ export function showCodexBook(player, context) {
         const pinned = new Set(getPinnedDevItems(player));
         const form = new ActionFormData()
             .title("§fPin/Unpin to Main Menu")
-            .body("§7Pinned items appear on the journal main menu for quick access.\n§8Current pins: " + (pinned.size ? Array.from(pinned).map(id => PINNABLE_DEV_ITEMS.find(i => i.id === id)?.label || id).join(", ") : "none"));
+            .body("§7Journal sections + dev tools can be pinned to the main menu.\n§8Current pins: " + (pinned.size ? Array.from(pinned).map((id) => findPinnableItemById(id)?.label || id).join(", ") : "none"));
         for (const item of pinEligible) {
             const isPinned = pinned.has(item.id);
             form.button((isPinned ? "§a" : "§f") + item.label + (isPinned ? " §8(pinned)" : ""));
@@ -4437,7 +4515,7 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === pinEligible.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openDeveloperTools();
+                return journalPowerToolsBack();
             }
             const item = pinEligible[res.selection];
             if (item) {
@@ -4452,7 +4530,7 @@ export function showCodexBook(player, context) {
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             openPinUnpinMenu(); // Refresh
-        }).catch(() => openDeveloperTools());
+        }).catch(() => journalPowerToolsBack());
     }
 
     function openSoundPlayTargetMenu(categoryIndex, soundEntry) {
@@ -4513,7 +4591,7 @@ export function showCodexBook(player, context) {
             if (!snd) return openSoundPreviewCategoryMenu(categoryIndex);
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             openSoundPlayTargetMenu(categoryIndex, snd);
-        }).catch(() => openDeveloperTools());
+        }).catch(() => journalPowerToolsBack());
     }
 
     function openSoundPreviewDevMenu() {
@@ -4527,16 +4605,16 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === DEV_SOUND_CATEGORIES.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openDeveloperTools();
+                return journalPowerToolsBack();
             }
             const cat = DEV_SOUND_CATEGORIES[res.selection];
             if (cat) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
                 openSoundPreviewCategoryMenu(res.selection);
             } else {
-                openDeveloperTools();
+                journalPowerToolsBack();
             }
-        }).catch(() => openDeveloperTools());
+        }).catch(() => journalPowerToolsBack());
     }
 
     function getMobilityCampDevContext(p) {
@@ -4633,7 +4711,7 @@ export function showCodexBook(player, context) {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 6) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
-                return openDeveloperTools();
+                return journalPowerToolsBack();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
             if (!ctx) {
@@ -4674,7 +4752,7 @@ export function showCodexBook(player, context) {
                 player.sendMessage(CHAT_WARNING + "[Camp dev] Cleared camp state for this cluster.");
             }
             openMobilityCampDevMenu();
-        }).catch(() => openDeveloperTools());
+        }).catch(() => journalPowerToolsBack());
     }
 
     /**
@@ -4707,7 +4785,10 @@ export function showCodexBook(player, context) {
                 return openMain();
             }
             if (res.selection === 0) {
-                try { setPlayerProperty(player, ADMIN_TOOLS_DISCLAIMER_PROP, true); } catch { /* ignore */ }
+                try {
+                    setPlayerProperty(player, ADMIN_TOOLS_DISCLAIMER_PROP, true);
+                    saveAllProperties();
+                } catch { /* ignore */ }
                 player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
                 thenFn();
             }
@@ -4728,14 +4809,15 @@ export function showCodexBook(player, context) {
         journalPowerToolsBack = () => openAdminToolsMenu();
         const form = new ActionFormData()
             .title("§6Admin tools")
-            .body(`§7Shortcuts for hosts: storms and manual spawns. Heavy use can still cause lag.\n\n§8${getAddonVersionDisplayString()}`)
+            .body(`§7Shortcuts for hosts: storms, pins, manual spawns. Heavy use can still cause lag.\n\n§8${getAddonVersionDisplayString()}`)
             .button("§6Storm hub")
+            .button("§fPin / unpin journal main")
             .button("§cForce spawn bears")
             .button("§fList nearby bears")
             .button("§8Back");
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
-            if (!res || res.canceled || res.selection === 3) {
+            if (!res || res.canceled || res.selection === 4) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
                 return openMain();
             }
@@ -4745,97 +4827,428 @@ export function showCodexBook(player, context) {
                 return;
             }
             if (res.selection === 1) {
+                journalPowerToolsBack = () => openAdminToolsMenu();
+                openPinUnpinMenu();
+                return;
+            }
+            if (res.selection === 2) {
                 forceSpawnNav.rootBack = () => openAdminToolsMenu();
                 forceSpawnNav.afterComplete = () => openAdminToolsMenu();
                 openForceSpawnMenu();
                 return;
             }
-            if (res.selection === 2) {
+            if (res.selection === 3) {
                 openListBearsMenu();
             }
         }).catch(() => openMain());
     }
 
+    /**
+     * @param {() => void} [onBack] Pin from journal: pass () => openMain()
+     */
+    function openSpawnLoadEfficiencyMenu(onBack) {
+        const goBack = typeof onBack === "function" ? onBack : () => openDeveloperToolsPerformanceMenu();
+        journalPowerToolsBack = () => openSpawnLoadEfficiencyMenu(onBack);
+        const s = getSpawnLoadDebugSnapshot();
+        const p = getAdaptivePerfDebugSnapshot();
+        const body = `§7Spawn scans get cheaper when addon bears, overworld item entities §8(sampled)§7, storms, tick stress, or heavy mob pressure rise. §8Does not remove entities.\n\n§8Addon mobs §7· §f${s.bears}§7 · §8OW items §7· §f${s.itemsOw}§7 · §8Storms §7· §f${s.storms}\n§8Model §7· §f${(s.load01 * 100).toFixed(0)}% §8load §7→ interval §f×${s.intervalMult.toFixed(2)}§7 blocks §f×${s.blockScale.toFixed(2)}§7 scan CD §f×${s.scanCooldownMult.toFixed(2)}\n§8Auto §7· §f${s.auto ? "ON" : "OFF"}§7 · §8Thrift bias §7· §f${s.bias} §8(0–4)\n§8Heavy systems adaptive §7· §f×${p.adaptiveAddon.toFixed(2)}`;
+        const form = new ActionFormData().title("§bSpawn load & efficiency").body(body);
+        form.button(s.auto ? "§cTurn auto spawn load scaling OFF" : "§aTurn auto spawn load scaling ON");
+        form.button("§fBias 0 §8· Default");
+        form.button("§eBias 1 §8· Light thrift");
+        form.button("§6Bias 2 §8· Mid thrift");
+        form.button("§cBias 3 §8· Strong thrift");
+        form.button("§4Bias 4 §8· Max thrift");
+        form.button("§fDump snapshot §8(chat)");
+        form.button("§6Heavy perf presets §8(storm / mining / spatial)");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 8) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return goBack();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            try {
+                if (res.selection === 0) {
+                    setSpawnLoadAutoEnabled(!isSpawnLoadAutoEnabled());
+                    saveAllProperties();
+                    player.sendMessage(CHAT_INFO + "Auto spawn load scaling: " + (isSpawnLoadAutoEnabled() ? "ON" : "OFF"));
+                } else if (res.selection >= 1 && res.selection <= 5) {
+                    setSpawnLoadBiasLevel(res.selection - 1);
+                    saveAllProperties();
+                    player.sendMessage(CHAT_INFO + "Spawn load thrift bias: " + (res.selection - 1) + " §8(0–4)");
+                } else if (res.selection === 6) {
+                    const s2 = getSpawnLoadDebugSnapshot();
+                    player.sendMessage(CHAT_DEV + `[Spawn load] bears=${s2.bears} itemsOW=${s2.itemsOw} storms=${s2.storms} load01=${s2.load01.toFixed(3)} int×${s2.intervalMult.toFixed(3)} block×${s2.blockScale.toFixed(3)} scanCD×${s2.scanCooldownMult.toFixed(3)} auto=${s2.auto} bias=${s2.bias}`);
+                } else if (res.selection === 7) {
+                    journalPowerToolsBack = () => openSpawnLoadEfficiencyMenu(onBack);
+                    return openHeavyPerfPresetsMenu();
+                }
+            } catch { /* ignore */ }
+            openSpawnLoadEfficiencyMenu(onBack);
+        }).catch(() => goBack());
+    }
+
+    function openDeveloperToolsPerformanceMenu() {
+        journalPowerToolsBack = () => openDeveloperToolsPerformanceMenu();
+        const form = new ActionFormData()
+            .title("§bPerformance")
+            .body(
+                "§7§aSpawn AUTO hub§7: preset+scan ~5s, load scaling, storm/mining auto §8(opens spawn menus).\n" +
+                    "§7Heavy presets §8(storm/mining/spatial)§7, camp HUD, AI throttle.\n" +
+                    "§8Manual spawn presets §7stick unless §dspawn+scan AUTO §7is ON §8(see hub)§7."
+            );
+        form.button("§aSpawn AUTO & presets hub §8(full spawn UI)");
+        form.button("§bSpawn load & efficiency §8(auto scaling)");
+        form.button("§6Heavy perf §8(storm, mining, spatial)");
+        form.button("§eCamp / mobility debug");
+        form.button("§eAI throttle & speed");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 5) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            if (res.selection === 0) {
+                journalPowerToolsBack = () => openDeveloperToolsPerformanceMenu();
+                return openSpawnAutoModesMenu(() => openDeveloperToolsPerformanceMenu());
+            }
+            if (res.selection === 1) openSpawnLoadEfficiencyMenu(() => openDeveloperToolsPerformanceMenu());
+            else if (res.selection === 2) openHeavyPerfPresetsMenu();
+            else if (res.selection === 3) openMobilityCampDevMenu();
+            else if (res.selection === 4) openAIThrottleMenu();
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openDeveloperToolsSystemsMenu() {
+        journalPowerToolsBack = () => openDeveloperToolsSystemsMenu();
+        const form = new ActionFormData()
+            .title("§aSystems")
+            .body("§7Script switches and the spawn controller hub §8(core + performance + emulsifier)§7.");
+        form.button("§fScript toggles §8(AI, storms, infection audio…)");
+        form.button("§fSpawn controller");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 2) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            journalPowerToolsBack = () => openDeveloperToolsSystemsMenu();
+            if (res.selection === 0) openScriptTogglesMenu();
+            else openSpawnControllerMenu();
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openDeveloperToolsCodexMenu() {
+        journalPowerToolsBack = () => openDeveloperToolsCodexMenu();
+        const form = new ActionFormData()
+            .title("§dCodex tools")
+            .body("§7Pin shortcuts, unlock, reset, and dump codex state.");
+        form.button("§fPin / unpin to journal main");
+        form.button("§aFully unlock codex");
+        form.button("§fReset my codex");
+        form.button("§fReset codex section");
+        form.button("§fDump codex state");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 5) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            if (res.selection === 0) openPinUnpinMenu();
+            else if (res.selection === 1) {
+                fullyUnlockCodex(player);
+                player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked.");
+                openDeveloperToolsCodexMenu();
+            } else if (res.selection === 2) {
+                openTargetPlayerMenu("Reset Codex", (name) => {
+                    triggerDebugCommand("reset_codex", name ? [name] : [], () => openDeveloperToolsCodexMenu());
+                });
+            } else if (res.selection === 3) openResetCodexSectionMenu();
+            else if (res.selection === 4) openDumpCodexTargetMenu();
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openDeveloperToolsWorldMenu() {
+        journalPowerToolsBack = () => openDeveloperToolsWorldMenu();
+        const form = new ActionFormData()
+            .title("§eWorld & day")
+            .body("§7Day counter and intro progression flags.");
+        form.button("§fReset world day to 1");
+        form.button("§fSet day…");
+        form.button("§fSimulate next day");
+        form.button("§fReset intro");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 4) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            if (res.selection === 0) triggerDebugCommand("reset_day", [], () => openDeveloperToolsWorldMenu());
+            else if (res.selection === 1) promptSetDay();
+            else if (res.selection === 2) triggerDebugCommand("simulate_next_day", [], () => openDeveloperToolsWorldMenu());
+            else if (res.selection === 3) triggerDebugCommand("reset_intro", [], () => openDeveloperToolsWorldMenu());
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openDeveloperToolsBearsMenu() {
+        journalPowerToolsBack = () => openDeveloperToolsBearsMenu();
+        const form = new ActionFormData()
+            .title("§6Bears")
+            .body("§7Clear, cull, list, inspect, and force AI targeting.");
+        form.button("§fClear bears §8(radius)");
+        form.button("§fKill bears % §7(all / type / variant)");
+        form.button("§fBears target player");
+        form.button("§fList nearby bears");
+        form.button("§fInspect nearest bear");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 5) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            journalPowerToolsBack = () => openDeveloperToolsBearsMenu();
+            if (res.selection === 0) openClearBearsMenu();
+            else if (res.selection === 1) openKillBearsMenu();
+            else if (res.selection === 2) openBearsTargetPlayerMenu();
+            else if (res.selection === 3) openListBearsMenu();
+            else if (res.selection === 4) triggerDebugCommand("inspect_entity", [], () => openDeveloperToolsBearsMenu());
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openDeveloperToolsStormMenu() {
+        journalPowerToolsBack = () => openDeveloperToolsStormMenu();
+        const form = new ActionFormData()
+            .title("§3Storm")
+            .body("§7Summon, list, overrides, and snow-storm debug §8(full hub)§7.");
+        form.button("§bOpen storm hub");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 1) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openDeveloperTools();
+            }
+            journalPowerToolsBack = () => openDeveloperToolsStormMenu();
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            openStormHubMenu();
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openDeveloperToolsInfectionMenu() {
+        journalPowerToolsBack = () => openDeveloperToolsInfectionMenu();
+        const form = new ActionFormData()
+            .title("§cInfection & players")
+            .body("§7Per-player infection, immunity, and codex kill counters.");
+        form.button("§fClear / set infection");
+        form.button("§fGrant / remove immunity");
+        form.button("§fSet kill counts");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 3) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            journalPowerToolsBack = () => openDeveloperToolsInfectionMenu();
+            if (res.selection === 0) openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name));
+            else if (res.selection === 1) openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name));
+            else openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name));
+        }).catch(() => openDeveloperTools());
+    }
+
+    function openDeveloperToolsAudioMenu() {
+        journalPowerToolsBack = () => openDeveloperToolsAudioMenu();
+        const form = new ActionFormData()
+            .title("§5Audio & debug")
+            .body("§7Sound catalog and per-subsystem debug logging toggles.");
+        form.button("§dPlay sound §8(catalog)");
+        form.button("§fDebug menu §8(logging categories)");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 2) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            journalPowerToolsBack = () => openDeveloperToolsAudioMenu();
+            if (res.selection === 0) openSoundPreviewDevMenu();
+            else openDebugMenu(true);
+        }).catch(() => openDeveloperTools());
+    }
+
+    /**
+     * Merged action-bar segments (infection, spawn HUDs, day line, camp dev, toasts).
+     * @param {() => void} [onBack] From journal pin: pass () => openMain()
+     */
+    function openDeveloperToolsHudMenu(onBack) {
+        const goBack = typeof onBack === "function" ? onBack : () => openDeveloperTools();
+        journalPowerToolsBack = () => openDeveloperToolsHudMenu(onBack);
+        const dbg = getHudActionBarDebugInfo(player);
+        let preview = dbg.preview || "§8(none)";
+        if (preview.length > 220) preview = preview.slice(0, 220) + "§8…";
+        const scanPersonal = isSpawnScanPerfHudPersonalEnabled(player);
+        const presetPersonal = isSpawnPresetHudPersonalEnabled(player);
+        const broadcastHud = isSpawnHudBroadcastEnabled();
+        const scanSee = isSpawnScanPerfOverlayEnabledForPlayer(player);
+        const presetSee = isSpawnPresetHudEnabledForPlayer(player);
+        const legacyScanWorld = isSpawnScanPerfOverlayEnabled();
+        const form = new ActionFormData()
+            .title("§fHUD & action bar")
+            .body(
+                `§7Bedrock allows §fone §7action-bar line. Spawn scan/preset HUDs are §fper player§7; optional §ebroadcast§7 shows them to everyone if any dev has theirs on.\n` +
+                    `${formatHudMergeOrderForMenu()}\n\n` +
+                    `§8Your toggles §7scan ${scanPersonal ? "§aON" : "§7OFF"} §8preset ${presetPersonal ? "§aON" : "§7OFF"} §8| §8Broadcast §7${broadcastHud ? "§aON" : "§7OFF"}\n` +
+                    `§8You see §7scan ${scanSee ? "§aON" : "§7OFF"} §8preset ${presetSee ? "§aON" : "§7OFF"}` +
+                    (legacyScanWorld ? "\n§8Legacy world scan HUD §7was ON §8— toggle scan to migrate to per-player." : "") +
+                    `\n\n§8Live §7(${dbg.count} seg): §r${preview}`
+            );
+        const campWatch = player.hasTag("mb_dev_camp_watch");
+        form.button(scanPersonal ? "§cTurn off §e§lmy§r §7scan perf HUD" : "§aTurn on §e§lmy§r §7scan perf HUD");
+        form.button(presetPersonal ? "§cTurn off §6§lmy§r §7preset hint HUD" : "§aTurn on §6§lmy§r §7preset hint HUD");
+        form.button(broadcastHud ? "§cBroadcast spawn HUDs §8→ OFF §7(all players)" : "§aBroadcast spawn HUDs §8→ ON §7(all players)");
+        form.button(campWatch ? "§cRemove §bcamp watch §7tag" : "§aAdd §bcamp watch §7tag");
+        form.button("§eClear all merged segments §8(your line)");
+        form.button("§fTest toast §8(~3s, merged)");
+        form.button("§aSpawn AUTO hub §8(preset+scan+load)…");
+        form.button("§bSpawn — World tuning §8(presets & combos)…");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 8) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return goBack();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            if (res.selection === 0) {
+                setSpawnScanPerfOverlayEnabled(!scanPersonal, player);
+                try { saveAllProperties(); } catch { /* ignore */ }
+                player.sendMessage(CHAT_INFO + (scanPersonal ? "Your scan perf HUD off." : "Your scan perf HUD on."));
+                return openDeveloperToolsHudMenu(onBack);
+            }
+            if (res.selection === 1) {
+                setSpawnPresetHudEnabled(!presetPersonal, player);
+                try { saveAllProperties(); } catch { /* ignore */ }
+                player.sendMessage(CHAT_SUCCESS + (presetPersonal ? "Your preset hint HUD off." : "Your preset hint HUD on."));
+                return openDeveloperToolsHudMenu(onBack);
+            }
+            if (res.selection === 2) {
+                setSpawnHudBroadcastEnabled(!broadcastHud);
+                try { saveAllProperties(); } catch { /* ignore */ }
+                player.sendMessage(CHAT_INFO + "Spawn HUD broadcast to all players: " + (!broadcastHud ? "ON." : "OFF."));
+                return openDeveloperToolsHudMenu(onBack);
+            }
+            if (res.selection === 3) {
+                try {
+                    if (campWatch) player.removeTag("mb_dev_camp_watch");
+                    else player.addTag("mb_dev_camp_watch");
+                } catch { /* ignore */ }
+                player.sendMessage(CHAT_INFO + (campWatch ? "Removed mb_dev_camp_watch." : "Added mb_dev_camp_watch (camp HUD needs cheats / allowlist)."));
+                return openDeveloperToolsHudMenu(onBack);
+            }
+            if (res.selection === 4) {
+                clearAllHudSegments(player);
+                player.sendMessage(CHAT_SUCCESS + "Cleared all merged HUD segments for you.");
+                return openDeveloperToolsHudMenu(onBack);
+            }
+            if (res.selection === 5) {
+                pushHudActionBarToast(player, "§7HUD test toast §8(merged)", 60);
+                return openDeveloperToolsHudMenu(onBack);
+            }
+            if (res.selection === 6) {
+                journalPowerToolsBack = () => openDeveloperToolsHudMenu(onBack);
+                return openSpawnAutoModesMenu(() => openDeveloperToolsHudMenu(onBack));
+            }
+            if (res.selection === 7) {
+                journalPowerToolsBack = () => openDeveloperToolsHudMenu(onBack);
+                return openSpawnPerformanceHub();
+            }
+            return openDeveloperToolsHudMenu(onBack);
+        }).catch(() => goBack());
+    }
+
+    function openDeveloperToolsPublicPreviewMenu() {
+        journalPowerToolsBack = () => openDeveloperToolsPublicPreviewMenu();
+        const previewOn = isDevPreviewAdminMainMenuEnabled();
+        const form = new ActionFormData()
+            .title("§7Public release preview")
+            .body("§7Match journal + admin flow closer to the public pack.");
+        form.button(previewOn ? "§cHide §6Admin tools §7on journal main" : "§aShow §6Admin tools §7on journal main");
+        form.button("§fOpen admin panel §7(public disclaimer flow)");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 2) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openDeveloperTools();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            if (res.selection === 0) {
+                try {
+                    setWorldProperty(MB_WORLD_DEV_PREVIEW_ADMIN_MAIN, !previewOn);
+                    saveAllProperties();
+                } catch { /* ignore */ }
+                player.sendMessage(CHAT_INFO + (previewOn ? "Journal main no longer shows the public-style Admin button." : "Journal main now shows §6Admin tools§r like the public build (toggle again to hide)."));
+                openDeveloperToolsPublicPreviewMenu();
+            } else {
+                runAdminSurfaceWithDisclaimer(() => openAdminToolsMenu(), { forcePublicDisclaimer: true });
+            }
+        }).catch(() => openDeveloperTools());
+    }
+
     function openDeveloperTools() {
         journalPowerToolsBack = () => openDeveloperTools();
-        const options = [
-            { label: "§8§l── Codex ──", action: () => openDeveloperTools(), group: true },
-            { label: "§fPin/Unpin to Main Menu", action: () => openPinUnpinMenu() },
-            { label: "§aFully Unlock Codex", action: () => { fullyUnlockCodex(player); player.sendMessage(CHAT_SUCCESS + "Codex fully unlocked."); openDeveloperTools(); } },
-            { label: "§fReset My Codex", action: () => openTargetPlayerMenu("Reset Codex", (name) => { triggerDebugCommand("reset_codex", name ? [name] : []); openDeveloperTools(); }) },
-            { label: "§fReset Codex Section", action: () => openResetCodexSectionMenu() },
-            { label: "§fDump Codex State", action: () => openDumpCodexTargetMenu() },
-            { label: "§8§l── World & Day ──", action: () => openDeveloperTools(), group: true },
-            { label: "§fReset World Day to 1", action: () => triggerDebugCommand("reset_day") },
-            { label: "§fSet Day...", action: () => promptSetDay() },
-            { label: "§fSimulate Next Day", action: () => { triggerDebugCommand("simulate_next_day", [], () => openDeveloperTools()); } },
-            { label: "§fReset Intro", action: () => triggerDebugCommand("reset_intro", [], () => openDeveloperTools()) },
-            { label: "§8§l── Spawning & systems ──", action: () => openDeveloperTools(), group: true },
-            { label: "§fScript Toggles §8(AI, storms, infection audio…)", action: () => openScriptTogglesMenu() },
-            { label: "§fSpawn Controller", action: () => openSpawnControllerMenu() },
-            { label: "§eCamp / mobility debug", action: () => openMobilityCampDevMenu() },
-            { label: "§6Heavy perf §8(storm, mining, spatial spawn)", action: () => openHeavyPerfPresetsMenu() },
-            { label: "§8§l── Bears ──", action: () => openDeveloperTools(), group: true },
-            { label: "§fClear Bears (radius)", action: () => openClearBearsMenu() },
-            { label: "§fKill Bears % §7(all/type/variant)", action: () => openKillBearsMenu() },
-            { label: "§fBears Target Player", action: () => openBearsTargetPlayerMenu() },
-            { label: "§fList Nearby Bears", action: () => openListBearsMenu() },
-            { label: "§fInspect Nearest Bear", action: () => triggerDebugCommand("inspect_entity", [], () => openDeveloperTools()) },
-            { label: "§8§l── Storm ──", action: () => openDeveloperTools(), group: true },
-            { label: "§bStorm hub", action: () => openStormHubMenu() },
-            { label: "§8§l── Infection & players ──", action: () => openDeveloperTools(), group: true },
-            { label: "§fClear / Set Infection", action: () => openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name)) },
-            { label: "§fGrant / Remove Immunity", action: () => openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name)) },
-            { label: "§fSet Kill Counts", action: () => openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name)) },
-            { label: "§8§l── Audio & debug ──", action: () => openDeveloperTools(), group: true },
-            { label: "§dPlay sound §8(catalog)", action: () => openSoundPreviewDevMenu() },
-            { label: "§eAI Throttle & Speed", action: () => openAIThrottleMenu() },
-            { label: "§fDebug Menu", action: () => openDebugMenu(true) }
-        ];
-
-        if (INCLUDE_FULL_DEVELOPER_TOOLS) {
-            const previewOn = isDevPreviewAdminMainMenuEnabled();
-            options.push(
-                { label: "§8§l── Public release preview ──", action: () => openDeveloperTools(), group: true },
-                {
-                    label: previewOn ? "§cHide §6Admin tools §7on journal main" : "§aShow §6Admin tools §7on journal main",
-                    action: () => {
-                        try {
-                            setWorldProperty(MB_WORLD_DEV_PREVIEW_ADMIN_MAIN, !previewOn);
-                            saveAllProperties();
-                        } catch { /* ignore */ }
-                        player.sendMessage(CHAT_INFO + (previewOn ? "Journal main no longer shows the public-style Admin button." : "Journal main now shows §6Admin tools§r like the public build (toggle again to hide)."));
-                        openDeveloperTools();
-                    }
-                },
-                {
-                    label: "§fOpen admin panel §7(public flow: disclaimer)",
-                    action: () => runAdminSurfaceWithDisclaimer(() => openAdminToolsMenu(), { forcePublicDisclaimer: true })
-                }
-            );
-        }
-
-        const form = new ActionFormData().title("§cDeveloper Tools");
-        form.body("§7Grouped by job: codex, world, systems, bears, storm, infection, then audio/debug. §8Headers refresh the list.");
-        for (const opt of options) {
-            form.button(opt.label);
-        }
+        const hasPreview = INCLUDE_FULL_DEVELOPER_TOOLS;
+        const form = new ActionFormData()
+            .title("§cDeveloper Tools")
+            .body("§7Pick a category. §8Performance §7= §aSpawn AUTO hub§7, load scaling, heavy presets, camp, mining.");
+        form.button("§b■ Performance");
+        form.button("§a■ Systems §8(scripts, spawn)");
+        form.button("§d■ Codex");
+        form.button("§e■ World & day");
+        form.button("§6■ Bears");
+        form.button("§3■ Storm");
+        form.button("§c■ Infection & players");
+        form.button("§5■ Audio & debug");
+        form.button("§f■ HUD & action bar");
+        if (hasPreview) form.button("§7■ Public preview");
         form.button("§8Back");
-
+        const backIdx = hasPreview ? 10 : 9;
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === options.length) {
-                const volumeMultiplier = getPlayerSoundVolume(player);
-                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === backIdx) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
                 return openMain();
             }
-
-            const chosen = options[res.selection];
-            if (chosen) {
-                const volumeMultiplier = getPlayerSoundVolume(player);
-                player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
-                chosen.action();
-            } else {
-                openDeveloperTools();
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            if (hasPreview && res.selection === 9) {
+                openDeveloperToolsPublicPreviewMenu();
+                return;
+            }
+            switch (res.selection) {
+                case 0: openDeveloperToolsPerformanceMenu(); break;
+                case 1: openDeveloperToolsSystemsMenu(); break;
+                case 2: openDeveloperToolsCodexMenu(); break;
+                case 3: openDeveloperToolsWorldMenu(); break;
+                case 4: openDeveloperToolsBearsMenu(); break;
+                case 5: openDeveloperToolsStormMenu(); break;
+                case 6: openDeveloperToolsInfectionMenu(); break;
+                case 7: openDeveloperToolsAudioMenu(); break;
+                case 8: openDeveloperToolsHudMenu(); break;
+                default: openDeveloperTools();
             }
         }).catch(() => openMain());
     }
@@ -4864,7 +5277,10 @@ export function showCodexBook(player, context) {
                 return openMain();
             }
             if (res.selection === 0) {
-                try { setPlayerProperty(player, DEVELOPER_TOOLS_DISCLAIMER_PROP, true); } catch { /* ignore */ }
+                try {
+                    setPlayerProperty(player, DEVELOPER_TOOLS_DISCLAIMER_PROP, true);
+                    saveAllProperties();
+                } catch { /* ignore */ }
                 player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
                 openDeveloperTools();
             }
@@ -4924,6 +5340,65 @@ export function showCodexBook(player, context) {
         }).catch(() => journalPowerToolsBack());
     }
 
+    /**
+     * @param {() => void} [onBack] Parent menu; default Spawn Controller root.
+     */
+    function openSpawnAutoModesMenu(onBack) {
+        const goBack = typeof onBack === "function" ? onBack : () => openSpawnControllerMenu();
+        const presetAuto = isSpawnPresetAutoEnabled();
+        const loadAuto = isSpawnLoadAutoEnabled();
+        const stormM = getStormWorkManualOrZero();
+        const minM = getMiningWorkManualOrZero();
+        const stormLine = stormM ? `${stormM}× manual` : "§aauto §7(journal + probes)";
+        const minLine = minM ? `${minM}× manual` : "§aauto §7(journal + probes)";
+        const form = new ActionFormData()
+            .title("§aSpawn — Auto modes")
+            .body(
+                "§7§lManual §r§8(World tuning)§7: spawn intensity + scan presets §fstay§7 until you change them.\n\n" +
+                    "§7§lSpawn+scan AUTO§7 §8(~5s, §adefault ON§8)§7: §cRe-applies§7 intensity §8+§7 scan from §fbear count§7, §fload model§7, §fclusters§7, §fplayers§7. §8Turn OFF§7 to lock manual presets.\n\n" +
+                    "§7§lSpawn load AUTO§7: scales controller §8interval / block budget§7 from bears, storms, tick stress §8(separate from preset AUTO; both can be on).\n\n" +
+                    "§7§lStorm & mining§7: §aAuto§7 clears manual multipliers so §eHave lag?§7 tiers + probes drive cadence.\n\n" +
+                    `§8Preset+scan AUTO: §7${presetAuto ? "§aON" : "§7OFF"}\n§8Load AUTO: §7${loadAuto ? "§aON" : "§7OFF"}\n§8Storm: §7${stormLine} §8· §8Mining: §7${minLine}`
+            );
+        form.button(presetAuto ? "§cTurn OFF §dspawn+scan §7AUTO" : "§aTurn ON §dspawn+scan §7AUTO");
+        form.button(loadAuto ? "§cTurn OFF §bspawn load §7AUTO" : "§aTurn ON §bspawn load §7AUTO");
+        form.button("§aStorm & mining → §7Auto §8(clear manuals)");
+        form.button("§fSpawn load details & bias §8(intervals, snapshot)…");
+        form.button("§8Back");
+
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 4) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return goBack();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            if (res.selection === 0) {
+                setSpawnPresetAutoEnabled(!presetAuto);
+                try { saveAllProperties(); } catch { /* ignore */ }
+                player.sendMessage(CHAT_INFO + "Spawn+scan preset auto: " + (!presetAuto ? "ON (~5s re-check)." : "OFF (manual presets stick)."));
+                return openSpawnAutoModesMenu(onBack);
+            }
+            if (res.selection === 1) {
+                setSpawnLoadAutoEnabled(!loadAuto);
+                try { saveAllProperties(); } catch { /* ignore */ }
+                player.sendMessage(CHAT_INFO + "Spawn load auto-scaling: " + (!loadAuto ? "ON." : "OFF (bias only)."));
+                return openSpawnAutoModesMenu(onBack);
+            }
+            if (res.selection === 2) {
+                setStormWorkMultiplierManual(undefined);
+                setMiningWorkMultiplierManual(undefined);
+                try { saveAllProperties(); } catch { /* ignore */ }
+                player.sendMessage(CHAT_SUCCESS + "Storm and mining cadence: Auto (journal lag tier + probes).");
+                return openSpawnAutoModesMenu(onBack);
+            }
+            if (res.selection === 3) {
+                return openSpawnLoadEfficiencyMenu(() => openSpawnAutoModesMenu(onBack));
+            }
+            return goBack();
+        }).catch(() => goBack());
+    }
+
     function openSpawnControllerMenu() {
         const spawnEnabled = getAllScriptToggles()[SCRIPT_IDS.spawnController];
         const diffRaw = Number(getWorldProperty(SPAWN_DIFFICULTY_PROPERTY) ?? 0);
@@ -4946,19 +5421,32 @@ export function showCodexBook(player, context) {
         const scanLabel = `R${scan.discoveryRadius}/Min${scan.minDiscoveryRadius} | Stagger ${scan.staggerTicks}t`;
         const emulsifierLabel = `${emulsifier.active}/${emulsifier.total} active`;
 
+        const tuneSum = getSpawnTuningSummaryForDevTools();
+        const presetAuto = isSpawnPresetAutoEnabled();
+        const loadAuto = isSpawnLoadAutoEnabled();
         const form = new ActionFormData()
             .title("§cSpawn Controller")
-            .body(`§7Hub for spawn tuning and dev spawns.\n\n§fScript: §7${spawnEnabled ? "§aON" : "§cOFF"}\n§fCore: §7${diffLabel} | ${speedLabel} | ${typeLabel}\n§8Performance: §7BlockQ ${blockQLabel} | Max ${maxGlobal}/tick | ${rangeLabel} | Tiles ${tileLabel} | B/T ${blocksLabel}\n§8Scan: §7${scanLabel}\n§8Emulsifier: §7${emulsifierLabel}`);
+            .body(
+                `§7One action bar merges infection, spawn HUDs, day text, camp dev, toasts §8(Developer → HUD)§7.\n` +
+                    `§8AUTO hub: §a§lfirst green button§7 below — preset+scan, load scaling, storm/mining auto.\n\n` +
+                    `${tuneSum.menuBody}\n\n` +
+                    `§fScript: §7${spawnEnabled ? "§aON" : "§cOFF"}\n§fCore: §7${diffLabel} | ${speedLabel} | ${typeLabel}\n` +
+                    `§8Numbers: §7BlockQ ${blockQLabel} | Max ${maxGlobal}/tick | ${rangeLabel} | Tiles ${tileLabel} | B/T ${blocksLabel}\n` +
+                    `§8Scan: §7${scanLabel}\n§8Emulsifier: §7${emulsifierLabel}\n` +
+                    `§8Preset+scan AUTO: §7${presetAuto ? "§aON" : "§7OFF"} §8| §8Load AUTO: §7${loadAuto ? "§aON" : "§7OFF"}`
+            );
 
         form.button(spawnEnabled ? "§cSpawn Controller OFF" : "§aSpawn Controller ON");
-        form.button("§fCore §8(difficulty, speed, types)");
-        form.button("§6Performance §8(presets, advanced, scan)");
-        form.button("§eForce Spawn §8(by category)");
+        form.button("§a§lAuto modes §r§8(preset+scan, load, storm/mining)");
+        form.button("§6Manual world tuning §8(intensity, combos, scan)");
+        form.button("§bHUD & spatial §8(overlays, clusters)");
+        form.button("§fCore rules §8(difficulty, speed, types)");
+        form.button("§eForce spawn §8(by category)");
         form.button("§dEmulsifier");
         form.button("§8Back");
 
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 5) {
+            if (!res || res.canceled || res.selection === 7) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
                 return journalPowerToolsBack();
             }
@@ -4968,14 +5456,22 @@ export function showCodexBook(player, context) {
                     setScriptEnabled(SCRIPT_IDS.spawnController, !spawnEnabled);
                     player.sendMessage(CHAT_SUCCESS + "Spawn Controller: " + (!spawnEnabled ? "ON" : "OFF"));
                     return openSpawnControllerMenu();
-                case 1: return openSpawnGameplayHub();
-                case 2: return openSpawnPerformanceHub();
+                case 1:
+                    return openSpawnAutoModesMenu(() => openSpawnControllerMenu());
+                case 2:
+                    return openSpawnPerformanceHub();
                 case 3:
+                    return openSpawnHudSpatialMenu();
+                case 4:
+                    return openSpawnGameplayHub();
+                case 5:
                     forceSpawnNav.rootBack = () => openSpawnControllerMenu();
                     forceSpawnNav.afterComplete = () => openSpawnControllerMenu();
                     return openForceSpawnMenu();
-                case 4: return openEmulsifierMenu();
-                default: return journalPowerToolsBack();
+                case 6:
+                    return openEmulsifierMenu();
+                default:
+                    return journalPowerToolsBack();
             }
         }).catch(() => journalPowerToolsBack());
     }
@@ -5001,22 +5497,97 @@ export function showCodexBook(player, context) {
         }).catch(() => openSpawnControllerMenu());
     }
 
-    function openSpawnPerformanceHub() {
-        const overlayOn = isSpawnScanPerfOverlayEnabled();
+    function openSpawnHudSpatialMenu() {
+        const scanPersonal = isSpawnScanPerfHudPersonalEnabled(player);
+        const presetPersonal = isSpawnPresetHudPersonalEnabled(player);
+        const broadcastHud = isSpawnHudBroadcastEnabled();
+        const scanSee = isSpawnScanPerfOverlayEnabledForPlayer(player);
+        const presetSee = isSpawnPresetHudEnabledForPlayer(player);
         const spatialOn = isSpatialSpawnTuningEnabled();
+        const tuneActive = getSpawnTuningSummaryForDevTools();
+        let loadLine = "";
+        try {
+            const s = getSpawnLoadDebugSnapshot();
+            loadLine = `§8Spawn load §7${(s.load01 * 100).toFixed(0)}% §8→ int×${s.intervalMult.toFixed(2)} block×${s.blockScale.toFixed(2)}`;
+        } catch {
+            loadLine = "§8Spawn load: §7…";
+        }
         const form = new ActionFormData()
-            .title("§cSpawn — Performance")
-            .body(`§7Spawn presets, scan scheduler, spawn+scan combos, and §dworld perf combos §7(spawn+scan+storm+mining).\n\n§8Scan HUD: §7${overlayOn ? "ON §a(action bar)" : "OFF"}\n§8Spatial groups: §7${spatialOn ? "ON §a(cluster budgets)" : "OFF §e(full spread / max cost)"}`);
+            .title("§bSpawn — HUD & spatial")
+            .body(
+                `§7Spawn HUDs are §fper player§7. §eBroadcast§7: everyone sees scan+preset lines if §fany§7 dev has theirs on.\n` +
+                    `§8Preset+scan AUTO / load: §7§aAuto modes§7.\n\n` +
+                    `${tuneActive.menuBody}\n\n` +
+                    `${loadLine}\n` +
+                    `§8Your toggles §7scan ${scanPersonal ? "§aON" : "§7OFF"} §8preset ${presetPersonal ? "§aON" : "§7OFF"} §8| §8Broadcast §7${broadcastHud ? "§aON" : "§7OFF"}\n` +
+                    `§8You see §7scan ${scanSee ? "§aON" : "§7OFF"} §8preset ${presetSee ? "§aON" : "§7OFF"}\n` +
+                    `§8Spatial groups: §7${spatialOn ? "ON" : "OFF"}`
+            );
+        form.button(scanPersonal ? "§cTurn off §e§lmy§r §7scan perf HUD" : "§aTurn on §e§lmy§r §7scan perf HUD");
+        form.button(presetPersonal ? "§cTurn off §6§lmy§r §7preset match HUD" : "§aTurn on §6§lmy§r §7preset match HUD §8(~nearest tier)");
+        form.button(broadcastHud ? "§cBroadcast spawn HUDs §8→ OFF" : "§aBroadcast spawn HUDs §8→ ON");
+        form.button(spatialOn ? "§6Spatial groups §aON §8→ OFF" : "§eSpatial groups §cOFF §8→ ON");
+        form.button("§a§lAuto modes hub §r§8(preset+scan, load, storm/mining)…");
+        form.button("§fSpawn load details & bias §8(intervals, snapshot)…");
+        form.button("§8Back");
+        form.show(player).then((res) => {
+            const v = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 6) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
+                return openSpawnControllerMenu();
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
+            if (res.selection === 0) {
+                setSpawnScanPerfOverlayEnabled(!scanPersonal, player);
+                try { saveAllProperties(); } catch { /* ignore */ }
+                player.sendMessage(CHAT_SUCCESS + (scanPersonal ? "Your scan perf HUD off." : "Your scan perf HUD on."));
+                return openSpawnHudSpatialMenu();
+            }
+            if (res.selection === 1) {
+                setSpawnPresetHudEnabled(!presetPersonal, player);
+                try { saveAllProperties(); } catch { /* ignore */ }
+                player.sendMessage(CHAT_SUCCESS + (presetPersonal ? "Your preset match HUD off." : "Your preset match HUD on."));
+                return openSpawnHudSpatialMenu();
+            }
+            if (res.selection === 2) {
+                setSpawnHudBroadcastEnabled(!broadcastHud);
+                try { saveAllProperties(); } catch { /* ignore */ }
+                player.sendMessage(CHAT_INFO + "Spawn HUD broadcast to all players: " + (!broadcastHud ? "ON." : "OFF."));
+                return openSpawnHudSpatialMenu();
+            }
+            if (res.selection === 3) {
+                setSpatialSpawnTuningEnabled(!spatialOn);
+                try { saveAllProperties(); } catch { /* ignore */ }
+                player.sendMessage(CHAT_INFO + "Spatial spawn groups: " + (!spatialOn ? "ON." : "OFF."));
+                return openSpawnHudSpatialMenu();
+            }
+            if (res.selection === 4) {
+                return openSpawnAutoModesMenu(() => openSpawnHudSpatialMenu());
+            }
+            if (res.selection === 5) {
+                return openSpawnLoadEfficiencyMenu(() => openSpawnHudSpatialMenu());
+            }
+            return openSpawnControllerMenu();
+        }).catch(() => openSpawnControllerMenu());
+    }
+
+    function openSpawnPerformanceHub() {
+        const tuneActive = getSpawnTuningSummaryForDevTools();
+        const form = new ActionFormData()
+            .title("§cSpawn — World tuning")
+            .body(
+                `§7Named spawn intensity, scan scheduler, quick combos, §dworld perf combos §7(+ storm + mining).\n` +
+                    `§8While §dspawn+scan AUTO §7is ON §8(Spawn Controller → Auto modes)§7, intensity+scan refresh ~5s and §cmay replace§7 manual picks.\n\n` +
+                    `${tuneActive.menuBody}`
+            );
         form.button("§fSpawn intensity presets");
         form.button("§eQuick combos §8(spawn + scan only)");
         form.button("§dWorld perf combos §8(+ storm + mining)");
         form.button("§6Advanced options");
         form.button("§bScan scheduler");
-        form.button(overlayOn ? "§cTurn off scan HUD §8(action bar)" : "§aTurn on scan HUD §8(P/C/D/W)");
-        form.button(spatialOn ? "§6Spatial spawn groups §aON §8→ OFF" : "§eSpatial spawn groups §cOFF §8→ ON");
         form.button("§8Back");
         form.show(player).then((res) => {
-            if (!res || res.canceled || res.selection === 7) {
+            if (!res || res.canceled || res.selection === 5) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
                 return openSpawnControllerMenu();
             }
@@ -5026,17 +5597,6 @@ export function showCodexBook(player, context) {
             if (res.selection === 2) return openWorldPerfComboMenu();
             if (res.selection === 3) return openSpawnAdvancedMenu();
             if (res.selection === 4) return openScanSchedulerMenu();
-            if (res.selection === 5) {
-                setSpawnScanPerfOverlayEnabled(!overlayOn);
-                player.sendMessage(CHAT_SUCCESS + (overlayOn ? "Scan perf HUD off." : "Scan perf HUD on (action bar: P players, C clusters, D discovery budget, W world load)."));
-                return openSpawnPerformanceHub();
-            }
-            if (res.selection === 6) {
-                setSpatialSpawnTuningEnabled(!spatialOn);
-                try { saveAllProperties(); } catch { /* ignore */ }
-                player.sendMessage(CHAT_INFO + "Spatial spawn groups: " + (!spatialOn ? "ON (cluster-aware budgets)." : "OFF (per-dimension full player spread cost)."));
-                return openSpawnPerformanceHub();
-            }
             return openSpawnControllerMenu();
         }).catch(() => openSpawnControllerMenu());
     }
@@ -5046,9 +5606,25 @@ export function showCodexBook(player, context) {
         const minM = getMiningWorkManualOrZero();
         const spatial = isSpatialSpawnTuningEnabled();
         const lag = getLagComfortLevel();
+        let adaptHint = "";
+        if (!stormM && !minM) {
+            const s = getAdaptivePerfDebugSnapshot();
+            const medTxt = s.msptSampleCount >= 6 ? `${s.medianMsPerTick.toFixed(0)}ms/t` : "…";
+            adaptHint = `\n§8Auto adaptive §7×${s.adaptiveAddon.toFixed(2)} §8(mob ${s.weightedMobScore.toFixed(0)}w · ${medTxt})`;
+        }
+        const tuneNow = getSpawnTuningSummaryForDevTools();
         const form = new ActionFormData()
             .title("§6Heavy systems performance")
-            .body(`§7Journal §eHave lag? §7sets auto tiers. Storm & mining: §fnamed presets §7like spawn intensity §8(plus Auto).\n§8Spawn → Performance → §dWorld perf combos §8= one tap spawn+scan+storm+mining.\n\n§8Lag comfort: §7${journalLagComfortLabel(lag)}\n§8Storm work: §7${stormM ? `${stormM}× manual` : "auto (lag + players)"}\n§8Mining load: §7${minM ? `${minM}× manual` : "auto (lag + players)"}\n§8Spatial spawn groups: §7${spatial ? "ON" : "OFF"}`);
+            .body(
+                `§7Journal §eHave lag? §7sets auto tiers. Storm & mining: §fnamed presets §7like spawn intensity §8(top row §aAuto§7).\n` +
+                    `§8Spawn §d+scan AUTO§7 §8(Spawn Controller → Auto modes)§7 drives intensity+scan separately from these storm/mining rows.\n` +
+                    `§8Spawn → World tuning → §dWorld perf combos §8= one tap spawn+scan+storm+mining.\n\n` +
+                    `${tuneNow.menuBody}\n\n` +
+                    `§8Lag comfort: §7${journalLagComfortLabel(lag)}\n` +
+                    `§8Storm work: §7${stormM ? `${stormM}× manual` : "auto (lag + players + bears + tick probe)"}\n` +
+                    `§8Mining load: §7${minM ? `${minM}× manual` : "auto (lag + players + bears + tick probe)"}\n` +
+                    `§8Spatial spawn groups: §7${spatial ? "ON" : "OFF"}${adaptHint}`
+            );
         form.button("§bDust storm cadence §8(preset)");
         form.button("§bMining AI cadence §8(preset)");
         form.button(spatial ? "§6Spatial spawn groups §aON §8→ OFF" : "§eSpatial spawn groups §cOFF §8→ ON");
@@ -5141,16 +5717,6 @@ export function showCodexBook(player, context) {
         }).catch(() => openHeavyPerfPresetsMenu());
     }
 
-    const SPAWN_PRESETS = {
-        ultraLow: { label: "§8Ultra-Low", desc: "Worst-case TPS / huge worlds", blockQuery: 0.2, maxGlobal: 10, range: "close", tileIntensity: 0.45, blocksPerTick: 0.45, spawnSpeed: 0.35, spawnDifficulty: -1 },
-        low: { label: "§aLow", desc: "Minimal load, least lag", blockQuery: 0.25, maxGlobal: 12, range: "close", tileIntensity: 0.5, blocksPerTick: 0.5, spawnSpeed: 0.5, spawnDifficulty: -1 },
-        medLow: { label: "§2Med-Low", desc: "Light load", blockQuery: 0.5, maxGlobal: 18, range: "close", tileIntensity: 0.75, blocksPerTick: 0.7, spawnSpeed: 0.75, spawnDifficulty: -1 },
-        mpLite: { label: "§3MP Lite", desc: "Small group, lighter scans", blockQuery: 0.55, maxGlobal: 20, range: "close", tileIntensity: 0.7, blocksPerTick: 0.65, spawnSpeed: 0.65, spawnDifficulty: -1 },
-        med: { label: "§fMed", desc: "Balanced (default)", blockQuery: 1, maxGlobal: 24, range: "normal", tileIntensity: 1, blocksPerTick: 1, spawnSpeed: 1, spawnDifficulty: 0 },
-        medHigh: { label: "§6Med-High", desc: "More active", blockQuery: 1.25, maxGlobal: 36, range: "normal", tileIntensity: 1.2, blocksPerTick: 1.2, spawnSpeed: 1.5, spawnDifficulty: 1 },
-        high: { label: "§cHigh", desc: "Aggressive, most spawns", blockQuery: 1.5, maxGlobal: 48, range: "far", tileIntensity: 1.25, blocksPerTick: 1.5, spawnSpeed: 2, spawnDifficulty: 1 }
-    };
-
     /** One-tap: spawn intensity preset + scan scheduler preset (see SPAWN_SCAN_PRESETS in mb_spawnController). */
     const SPAWN_COMBO_PRESETS = [
         { spawnKey: "low", scanKey: "lowLag", label: "§aLow + Low Lag scan", desc: "Default lagfight" },
@@ -5161,15 +5727,7 @@ export function showCodexBook(player, context) {
     ];
 
     function applySpawnPreset(presetKey) {
-        const p = SPAWN_PRESETS[presetKey];
-        if (!p) return;
-        setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.blockQueryMult, p.blockQuery);
-        setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.maxGlobal, p.maxGlobal);
-        setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.range, p.range);
-        setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.tileIntensity, p.tileIntensity);
-        setWorldProperty(SPAWN_OVERRIDE_PROPERTIES.blocksPerTickMult, p.blocksPerTick);
-        setWorldProperty(SPAWN_SPEED_PROPERTY, p.spawnSpeed);
-        setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, p.spawnDifficulty);
+        applySpawnIntensityPreset(presetKey);
     }
 
     function applySpawnAndScanCombo(spawnKey, scanKey) {
@@ -5204,10 +5762,11 @@ export function showCodexBook(player, context) {
     ];
 
     function openWorldPerfComboMenu() {
+        const tuneNow = getSpawnTuningSummaryForDevTools();
         const body = WORLD_PERF_COMBO_PRESETS.map((c) => `${c.label}\n§8${c.desc}`).join("\n\n");
         const form = new ActionFormData()
             .title("§dWorld perf combos")
-            .body(`§7One tap: spawn intensity + scan scheduler + §bstorm §7and §bmining §7work multipliers §8(see Heavy perf presets for individual steps).\n\n${body}`);
+            .body(`§7One tap: spawn intensity + scan scheduler + §bstorm §7and §bmining §7work multipliers §8(see Heavy perf presets for individual steps).\n\n${tuneNow.menuBody}\n\n${body}`);
         WORLD_PERF_COMBO_PRESETS.forEach((c) => form.button(c.label));
         form.button("§8Back");
         form.show(player).then((res) => {
@@ -5225,10 +5784,11 @@ export function showCodexBook(player, context) {
     }
 
     function openSpawnComboPresetsMenu() {
+        const tuneNow = getSpawnTuningSummaryForDevTools();
         const body = SPAWN_COMBO_PRESETS.map((c) => `${c.label}\n§8${c.desc}`).join("\n\n");
         const form = new ActionFormData()
             .title("§eSpawn + scan combos")
-            .body(`§7Applies both spawn intensity and scan scheduler presets.\n\n${body}`);
+            .body(`§7Applies both spawn intensity and scan scheduler presets.\n\n${tuneNow.menuBody}\n\n${body}`);
         SPAWN_COMBO_PRESETS.forEach((c) => form.button(c.label));
         form.button("§8Back");
         form.show(player).then((res) => {
@@ -5245,14 +5805,24 @@ export function showCodexBook(player, context) {
     }
 
     function openSpawnPresetsMenu(fromAdvanced = false) {
+        const tuneNow = getSpawnTuningSummaryForDevTools();
         const presetKeys = Object.keys(SPAWN_PRESETS);
         const body = presetKeys.map((k) => {
             const v = SPAWN_PRESETS[k];
             return `${v.label} §8– §8${v.desc}`;
         }).join("\n");
+        const presetAutoOn = isSpawnPresetAutoEnabled();
         const form = new ActionFormData()
             .title("§c§lSpawn intensity presets")
-            .body(`§f§lCoordinated spawn settings only §8(speed, caps, block budget, range).\n§7Use Performance → Quick combos §8(spawn+scan) §7or §dWorld perf combos §7(+ storm + mining).\n\n${body}`);
+            .body(
+                `§f§lCoordinated spawn settings only §8(speed, caps, block budget, range).\n` +
+                    `§7Use World tuning → Quick combos §8(spawn+scan) §7or §dWorld perf combos §7(+ storm + mining).\n` +
+                    (presetAutoOn
+                        ? `§c§lSpawn+scan AUTO is ON§r§7 — picks re-apply ~5s; §8turn off §7in §aAuto modes §7to keep this preset.\n\n`
+                        : `§8Spawn+scan AUTO: §7OFF §8(manual presets stick until you change them).\n\n`) +
+                    `${tuneNow.menuBody}\n\n` +
+                    `${body}`
+            );
 
         presetKeys.forEach((k) => {
             const v = SPAWN_PRESETS[k];
@@ -5393,11 +5963,22 @@ export function showCodexBook(player, context) {
     }
 
     function openScanSchedulerMenu() {
+        const tuneNow = getSpawnTuningSummaryForDevTools();
         const s = getSpawnScanSettingsForDevTools();
         const presetBody = Object.entries(SPAWN_SCAN_PRESETS).map(([_, v]) => `§7• ${v.label}: R${v.discoveryRadius}, Min ${v.minDiscoveryRadius}`).join("\n");
         const form = new ActionFormData()
             .title("§bScan Scheduler")
-            .body(`§7Tune how spawn scans are spread and scaled.\n\n§fDiscovery Radius: §7${s.discoveryRadius}\n§fMin Radius: §7${s.minDiscoveryRadius}\n§fPer-Player Radius Drop: §7${(s.perPlayerRadiusDrop * 100).toFixed(0)}%\n§fTight Group Penalty: §7${(s.tightGroupRadiusPenalty * 100).toFixed(0)}%\n§fBarren Cooldown Mult: §7${s.barrenCooldownMult.toFixed(2)}x\n§fStagger: §7${s.staggerTicks} ticks\n§fChunk Load Delay: §7${s.chunkLoadDelay} ticks\n\n§8Presets:\n${presetBody}`);
+            .body(
+                `${tuneNow.menuBody}\n\n` +
+                    `§7Tune how spawn scans are spread and scaled.\n` +
+                    `§8If §dspawn+scan AUTO §7is ON, scan tier may refresh ~5s §8(Spawn Controller → Auto modes)§7.\n\n` +
+                    `§fDiscovery Radius: §7${s.discoveryRadius}\n§fMin Radius: §7${s.minDiscoveryRadius}\n` +
+                    `§fPer-Player Radius Drop: §7${(s.perPlayerRadiusDrop * 100).toFixed(0)}%\n` +
+                    `§fTight Group Penalty: §7${(s.tightGroupRadiusPenalty * 100).toFixed(0)}%\n` +
+                    `§fBarren Cooldown Mult: §7${s.barrenCooldownMult.toFixed(2)}x\n` +
+                    `§fStagger: §7${s.staggerTicks} ticks\n§fChunk Load Delay: §7${s.chunkLoadDelay} ticks\n\n` +
+                    `§8Presets:\n${presetBody}`
+            );
 
         form.button("§fApply Preset");
         form.button("§fSet Discovery Radius");
@@ -5432,8 +6013,14 @@ export function showCodexBook(player, context) {
     }
 
     function openScanPresetMenu() {
+        const tuneNow = getSpawnTuningSummaryForDevTools();
         const keys = Object.keys(SPAWN_SCAN_PRESETS);
-        const form = new ActionFormData().title("§bScan Presets").body("§7Apply a coordinated scan profile.");
+        const scanAutoWarn = isSpawnPresetAutoEnabled()
+            ? "§c§lSpawn+scan AUTO is ON§r§7 — this may be replaced on the next auto tick.\n\n"
+            : "";
+        const form = new ActionFormData()
+            .title("§bScan Presets")
+            .body(`§7Apply a coordinated scan profile.\n\n${scanAutoWarn}${tuneNow.menuBody}`);
         keys.forEach((k) => {
             const p = SPAWN_SCAN_PRESETS[k];
             form.button(`§f${p.label} §8(R${p.discoveryRadius}/Min${p.minDiscoveryRadius})`);
@@ -5796,7 +6383,7 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 6) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openDeveloperTools();
+                return journalPowerToolsBack();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             if (res.selection === 0) {
@@ -5808,8 +6395,8 @@ export function showCodexBook(player, context) {
             } else if (res.selection === 3) triggerDebugCommand("clear_infection", infectArgs([]), () => openInfectionDevMenu(targetName));
             else if (res.selection === 4) triggerDebugCommand("set_infection", infectArgs(["minor"]), () => openInfectionDevMenu(targetName));
             else if (res.selection === 5) triggerDebugCommand("set_infection", infectArgs(["major"]), () => openInfectionDevMenu(targetName));
-            else openDeveloperTools();
-        }).catch(() => openDeveloperTools());
+            else journalPowerToolsBack();
+        }).catch(() => journalPowerToolsBack());
     }
 
     function showInfectionStatus(target, onBack) {
@@ -5880,14 +6467,14 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 3) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openDeveloperTools();
+                return journalPowerToolsBack();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             if (res.selection === 0) triggerDebugCommand("grant_immunity", immunArgs(["permanent"]), () => openImmunityDevMenu(targetName));
             else if (res.selection === 1) triggerDebugCommand("grant_immunity", immunArgs(["temporary"]), () => openImmunityDevMenu(targetName));
             else if (res.selection === 2) triggerDebugCommand("remove_immunity", immunArgs([]), () => openImmunityDevMenu(targetName));
-            else openDeveloperTools();
-        }).catch(() => openDeveloperTools());
+            else journalPowerToolsBack();
+        }).catch(() => journalPowerToolsBack());
     }
 
     const FORCE_SPAWN_OPTIONS = [
@@ -6071,11 +6658,11 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === KILL_COUNT_KEYS.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openDeveloperTools();
+                return journalPowerToolsBack();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             const opt = KILL_COUNT_KEYS[res.selection];
-            if (!opt) return openDeveloperTools();
+            if (!opt) return journalPowerToolsBack();
             const codex = targetPlayer ? getCodex(targetPlayer) : getCodex(player);
             const current = codex.mobs?.[opt.key] ?? 0;
             const modal = new ModalFormData()
@@ -6087,7 +6674,7 @@ export function showCodexBook(player, context) {
                 const setArgs = targetName ? [opt.key, String(value), targetName] : [opt.key, String(value)];
                 triggerDebugCommand("set_kill_count", setArgs, () => openSetKillCountMenu(targetName));
             }).catch(() => openSetKillCountMenu(targetName));
-        }).catch(() => openDeveloperTools());
+        }).catch(() => journalPowerToolsBack());
     }
 
     function openStormHubMenu() {
@@ -6295,12 +6882,12 @@ export function showCodexBook(player, context) {
             form.button("§8Back");
             form.show(player).then((res) => {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                openDeveloperTools();
-            }).catch(() => openDeveloperTools());
+                journalPowerToolsBack();
+            }).catch(() => journalPowerToolsBack());
         } catch (err) {
             console.warn("[CODEX] Error getting storm state:", err);
             player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Error getting storm state: " + (err?.message || err));
-            openDeveloperTools();
+            journalPowerToolsBack();
         }
     }
 
@@ -6432,7 +7019,7 @@ export function showCodexBook(player, context) {
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 4) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
-                return openDeveloperTools();
+                return journalPowerToolsBack();
             }
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
             switch (res.selection) {
@@ -6446,9 +7033,9 @@ export function showCodexBook(player, context) {
                     player.sendMessage(CHAT_SUCCESS + "AI throttle overrides reset.");
                     console.warn(`[MBI] AI throttle overrides reset by ${player.name}`);
                     return openAIThrottleMenu();
-                default: return openDeveloperTools();
+                default: return journalPowerToolsBack();
             }
-        }).catch(() => openDeveloperTools());
+        }).catch(() => journalPowerToolsBack());
     }
 
     function openAIDynamicIntervalMenu() {
@@ -6534,7 +7121,7 @@ export function showCodexBook(player, context) {
         });
     }
 
-    function triggerDebugCommand(subcommand, args = [], onComplete = () => openDeveloperTools()) {
+    function triggerDebugCommand(subcommand, args = [], onComplete) {
         try {
             const payload = JSON.stringify({ command: subcommand, args });
             let handled = false;
@@ -6582,7 +7169,8 @@ export function showCodexBook(player, context) {
             console.warn("[MBI] Failed to prepare debug command payload:", err);
             player?.sendMessage?.(CHAT_DEV + "[MBI] " + CHAT_INFO + "Failed to send debug command.");
         } finally {
-            system.run(onComplete);
+            const done = typeof onComplete === "function" ? onComplete : () => journalPowerToolsBack();
+            system.run(done);
         }
     }
 
@@ -6592,14 +7180,14 @@ export function showCodexBook(player, context) {
 
         modal.show(player).then((res) => {
             if (!res || res.canceled) {
-                return openDeveloperTools();
+                return journalPowerToolsBack();
             }
 
             const dayString = res.formValues?.[0] ?? "";
             const dayNumber = parseInt(dayString, 10);
             if (Number.isNaN(dayNumber) || dayNumber < 1) {
                 player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Invalid day number.");
-                return openDeveloperTools();
+                return journalPowerToolsBack();
             }
 
             triggerDebugCommand("set_day", [String(dayNumber)]);
@@ -6663,7 +7251,7 @@ export function showCodexBook(player, context) {
 
     function openDebugMenu(fromDevTools = false) {
         const settings = getDebugSettings(player);
-        const onBack = () => fromDevTools ? openDeveloperTools() : openMain();
+        const onBack = () => fromDevTools ? journalPowerToolsBack() : openMain();
 
         const form = new ActionFormData().title("§bDebug Menu");
         form.body("§7Toggle debug logging for different AI systems:\n\n§8Select a category to configure:");
@@ -6891,14 +7479,25 @@ export function showCodexBook(player, context) {
                 console.warn(`[BUFF DEBUG] Error:`, error);
             }
         }
-        
+
+        let scriptNote = "";
+        try {
+            if (buff.general && !isScriptEnabled(SCRIPT_IDS.buff)) {
+                scriptNote = "\n\n§6Buff AI script is OFF: no climbing breaks or explosions; countdown logs still print while General is on.";
+            }
+        } catch {
+            // ignore
+        }
+
         const form = new ActionFormData().title("§bBuff AI Debug");
-        form.body(`§7Toggle debug logging for Buff Bears:\n\n§8Current settings:\n§7• General: ${buff.general ? "§aON" : "§cOFF"}\n§7• Block Breaking: ${buff.blockBreaking ? "§aON" : "§cOFF"}${countdownText}`);
-        
+        form.body(
+            `§7Toggle debug logging for Buff Bears.\n§8Nearby bears (64 blocks): alive time, 15s stuck fuse, and explosion countdown are listed below. §8That list is a snapshot — tap §eRefresh §8to update without leaving.\n\n§8Current settings:\n§7• General: ${buff.general ? "§aON" : "§cOFF"}\n§7• Block Breaking: ${buff.blockBreaking ? "§aON" : "§cOFF"}${countdownText}${scriptNote}`
+        );
+
         form.button(`§${buff.general ? "a" : "c"}General Logging`);
         form.button(`§${buff.blockBreaking ? "a" : "c"}Block Breaking`);
         form.button(`§${buff.all ? "a" : "c"}Toggle All`);
-        form.button("§eShow Countdown");
+        form.button("§eRefresh countdown");
         form.button("§8Back");
 
         form.show(player).then((res) => {
@@ -6910,8 +7509,14 @@ export function showCodexBook(player, context) {
 
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
-            
+
             if (res.selection === 3) {
+                player.sendMessage(
+                    CHAT_DEV +
+                        "[Buff debug] " +
+                        CHAT_INFO +
+                        "Menu countdown refreshed (alive / stuck / explosion). Turn General on for the same info in the content log."
+                );
                 return openBuffDebugMenu(getDebugSettings(player), fromDevTools);
             }
             
@@ -7237,7 +7842,7 @@ export function showCodexBook(player, context) {
 
     function openEmulsifierDebugMenu(settings, fromDevTools = false) {
         const emulsifier = settings.emulsifier || {};
-        const onBack = () => fromDevTools ? openDeveloperTools() : openDebugMenu(fromDevTools);
+        const onBack = () => fromDevTools ? journalPowerToolsBack() : openDebugMenu(fromDevTools);
         const form = new ActionFormData().title("§bEmulsifier Debug");
         form.body(`§7Debug the Emulsifier (purification + persistence).\n\n§8Current:\n§7• General: ${emulsifier.general ? "§aON" : "§cOFF"}\n§7• Persistence: ${emulsifier.persistence ? "§aON" : "§cOFF"}\n§7• Purification: ${emulsifier.purification ? "§aON" : "§cOFF"}\n§7• Zones: ${emulsifier.zones ? "§aON" : "§cOFF"}\n\n§eRun diagnostics to see live state and locate save/purify issues.`);
 
