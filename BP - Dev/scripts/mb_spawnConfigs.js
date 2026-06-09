@@ -159,10 +159,10 @@ export const SPAWN_CONFIGS = [
         baseChance: 0.14,
         chancePerDay: 0.015,
         maxChance: 0.38,
-        baseMaxCount: 2,
+        baseMaxCount: 1,
         maxCountStep: 1,
-        maxCountStepDays: 3,
-        maxCountCap: 3, // Cap at 3 to reduce mining AI lag
+        maxCountStepDays: 4,
+        maxCountCap: 2,
         delayTicks: 420,
         spreadRadius: 26
     },
@@ -283,19 +283,19 @@ export const SPAWN_CONFIGS = [
         baseChance: 0.16,
         chancePerDay: 0.015,
         maxChance: 0.40,
-        baseMaxCount: 3,
+        baseMaxCount: 1,
         maxCountStep: 1,
         maxCountStepDays: 4,
-        maxCountCap: 3, // Cap at 3 to reduce mining AI lag (matches ENTITY_TYPE_CAPS)
+        maxCountCap: 2,
         delayTicks: 420,
         spreadRadius: 28,
         lateRamp: {
             tierSpan: 6,
             chanceStep: 0.025,
             maxChance: 0.52,
-            capStep: 1,
-            capBonusMax: 2,
-            maxCountCap: 10
+            capStep: 0,
+            capBonusMax: 0,
+            maxCountCap: 2
         }
     },
     {

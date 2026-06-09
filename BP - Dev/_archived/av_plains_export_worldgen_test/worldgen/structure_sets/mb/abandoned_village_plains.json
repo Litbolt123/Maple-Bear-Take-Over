@@ -1,0 +1,21 @@
+{
+	"format_version": "1.26.10",
+	"minecraft:structure_set": {
+		"description": {
+			"identifier": "mb:abandoned_village_plains"
+		},
+		"placement": {
+			"type": "minecraft:random_spread",
+			"salt": 88294401,
+			"separation": 0,
+			"spacing": 2,
+			"spread_type": "linear"
+		},
+		"structures": [
+			{
+				"structure": "mb:abandoned_village_plains",
+				"weight": 1
+			}
+		]
+	}
+}

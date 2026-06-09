@@ -7,7 +7,8 @@ import { world, system } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
 import { CHAT_INFO, CHAT_SUCCESS, CHAT_WARNING } from "./mb_chatColors.js";
-import { getPlayerProperty, setPlayerProperty, saveAllProperties } from "./mb_dynamicPropertyHandler.js";
+import { DEV_BTN_BACK, devBtnParen } from "./mb_devFormUi.js";
+import { getPlayerProperty, setPlayerProperty, saveAllProperties, flushPlayerPropertyToDisk } from "./mb_dynamicPropertyHandler.js";
 import {
     ACTION_BAR_SLOT,
     setHudActionBarSegment,
@@ -64,6 +65,7 @@ export function setBiomeCheckerHudPersonalEnabled(enabled, togglingPlayer) {
     if (!togglingPlayer?.isValid) return;
     try {
         setPlayerProperty(togglingPlayer, MB_DEV_HUD_BIOME_CHECKER_PLAYER, enabled ? 1 : 0);
+        flushPlayerPropertyToDisk(togglingPlayer, MB_DEV_HUD_BIOME_CHECKER_PLAYER);
     } catch { /* ignore */ }
     if (!enabled) {
         try {
@@ -149,8 +151,8 @@ function formatIdList(ids, max = 12) {
 
 function biomeHudToggleLabel(on) {
     return on
-        ? "§cTurn off §2§lmy§r §7biome HUD §8(action bar)"
-        : "§aTurn on §2§lmy§r §7biome HUD §8(action bar)";
+        ? `§cTurn off §2§lmy§r §fbiome HUD${devBtnParen("action bar")}`
+        : `§aTurn on §2§lmy§r §fbiome HUD${devBtnParen("action bar")}`;
 }
 
 /**
@@ -185,15 +187,15 @@ export function openBiomeCheckerHub(player, onBack) {
                 "\n§8Regenerate: §7node tools/syncBiomeReplaceRegistry.cjs"
         );
 
-    form.button("§aRefresh §8(at feet)");
+    form.button(`§aRefresh${devBtnParen("at feet")}`);
     form.button(biomeHudToggleLabel(biomeHudOn));
-    form.button(`§bSafe by design §8(${gaps.intentionalSafe.length})`);
-    form.button(`§eReview gaps §8(${gaps.unlisted.length})`);
-    form.button(`§cNether/End §8(${gaps.otherDimensionInCatalog.length})`);
+    form.button(`§bSafe by design${devBtnParen(String(gaps.intentionalSafe.length))}`);
+    form.button(`§eReview gaps${devBtnParen(String(gaps.unlisted.length))}`);
+    form.button(`§cNether/End${devBtnParen(String(gaps.otherDimensionInCatalog.length))}`);
     form.button("§fBrowse replace groups");
-    form.button("§bSample 5 spots §8(NSEW)");
-    form.button("§dLog all targets §8(Content Log)");
-    form.button("§8Back");
+    form.button(`§bSample 5 spots${devBtnParen("NSEW")}`);
+    form.button(`§dLog all targets${devBtnParen("Content Log")}`);
+    form.button(DEV_BTN_BACK);
 
     form.show(player).then((res) => {
         if (!res || res.canceled || res.selection === 8) {
@@ -261,7 +263,7 @@ function openBiomeIdListMenu(player, onBack, opts) {
         .title(opts.title)
         .body(opts.intro + formatIdList(opts.ids));
     form.button("§dLog full list");
-    form.button("§8Back");
+    form.button(DEV_BTN_BACK);
     form.show(player).then((res) => {
         if (!res || res.canceled || res.selection === 1) return openBiomeCheckerHub(player, onBack);
         logLines(player, opts.logTitle, opts.ids);
@@ -280,7 +282,7 @@ function openBiomeReplaceGroupsMenu(player, onBack) {
     for (const g of REPLACEMENT_GROUPS) {
         form.button(`§f${g.label}`);
     }
-    form.button("§8Back");
+    form.button(DEV_BTN_BACK);
     form.show(player).then((res) => {
         if (!res || res.canceled || res.selection === REPLACEMENT_GROUPS.length) {
             return openBiomeCheckerHub(player, onBack);

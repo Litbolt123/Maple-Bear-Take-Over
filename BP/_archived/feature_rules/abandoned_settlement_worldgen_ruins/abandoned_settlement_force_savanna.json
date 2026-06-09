@@ -1,0 +1,27 @@
+{
+	"format_version": "1.21.0",
+	"minecraft:feature_rules": {
+		"description": {
+			"identifier": "mb:abandoned_settlement_force_savanna",
+			"places_feature": "mb:abandoned_settlement/ruin"
+		},
+		"conditions": {
+			"placement_pass": "surface_pass",
+			"minecraft:biome_filter": {
+				"any_of": [
+					{
+						"test": "has_biome_tag",
+						"operator": "==",
+						"value": "savanna"
+					}
+				]
+			}
+		},
+		"distribution": {
+			"iterations": 1,
+			"x": 0,
+			"z": 0,
+			"y": "q.heightmap(v.worldx, v.worldz)"
+		}
+	}
+}

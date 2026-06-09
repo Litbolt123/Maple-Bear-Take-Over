@@ -301,6 +301,26 @@ export const MINING_BREAKABLE_BLOCKS = [
 ];
 export const MINING_BREAKABLE_BLOCK_SET = new Set(MINING_BREAKABLE_BLOCKS);
 
+/** Never overwritten by abandoned village structure placement (bedrock, fluids, etc.). */
+export const SETTLEMENT_NEVER_REPLACE_IDS = new Set([
+    ...UNBREAKABLE_BLOCKS,
+    "minecraft:water",
+    "minecraft:flowing_water",
+    "minecraft:lava",
+    "minecraft:flowing_lava",
+    "minecraft:bubble_column"
+]);
+
+/**
+ * Mining-style: replace anything except unbreakables and open fluids.
+ * @param {string|undefined} typeId
+ */
+export function isSettlementReplaceableBlockId(typeId) {
+    if (!typeId || typeId === "minecraft:air") return true;
+    if (SETTLEMENT_NEVER_REPLACE_IDS.has(typeId)) return false;
+    return true;
+}
+
 // Extended block list for torpedo bears - includes more building blocks
 export const TORPEDO_BREAKABLE_BLOCKS = [
     ...MINING_BREAKABLE_BLOCKS,

@@ -7,7 +7,8 @@ import { world, system } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
 import { CHAT_INFO, CHAT_SUCCESS, CHAT_WARNING } from "./mb_chatColors.js";
-import { getPlayerProperty, setPlayerProperty, saveAllProperties } from "./mb_dynamicPropertyHandler.js";
+import { DEV_BTN_BACK, devBtnBackTo, devBtnParen } from "./mb_devFormUi.js";
+import { getPlayerProperty, setPlayerProperty, saveAllProperties, flushPlayerPropertyToDisk } from "./mb_dynamicPropertyHandler.js";
 import { getCurrentDay } from "./mb_dayTracker.js";
 import {
     buildDayZeroBisectStatusLines,
@@ -27,6 +28,31 @@ import {
     isVillagerSuppressionEnabled,
     toggleVillagerSuppressionEnabled
 } from "./mb_villagerSpawnPolicy.js";
+import { resetAbandonedVillageNotifyFlagsForPlayer } from "./mb_abandonedVillageNotify.js";
+import { AV_DEBUG_LOG_ALL, AV_DEBUG_LOG_CAT } from "./mb_avDebugLog.js";
+import {
+    clearAbandonedVillageChunkCache,
+    devPlaceAbandonedVillageAtPlayer,
+    resetAbandonedVillageSiteAtWorld,
+    FORCE_PLACE_RULESET_TIERS,
+    FORCE_SINGLE_BUILDING_MENU,
+    forcePlaceAbandonedVillageAtPlayer,
+    forcePlaceAbandonedVillageCompareAtPlayer,
+    forcePlaceHousePlanAtPlayer,
+    placeStarterSetForExportAtPlayer,
+    forcePlaceStructureCatalogAtPlayer,
+    formatAbandonedVillageLogCategoriesReport,
+    getAbandonedVillageDebugReport,
+    isAbandonedVillageDebugChatEnabled,
+    isAbandonedVillageDebugLogEnabled,
+    isAbandonedVillageLogCategoryEnabled,
+    logAbandonedVillageDiagnosticsToContentLog,
+    setAbandonedVillageDebugChatEnabled,
+    setAbandonedVillageDebugLogEnabled,
+    setAbandonedVillageDebugLogMask,
+    setAbandonedVillageLogCategoryEnabled
+} from "./mb_abandonedVillageWorldgen.js";
+import { HOUSE_VARIANT_COUNT, listHouseShellSummaries } from "./mb_settlementStructures.js";
 import { getBearSnapshotDebug } from "./mb_bearSnapshot.js";
 import {
     ACTION_BAR_SLOT,
@@ -112,6 +138,7 @@ export function setEntityQueryHudPersonalEnabled(enabled, togglingPlayer) {
     if (!togglingPlayer?.isValid) return;
     try {
         setPlayerProperty(togglingPlayer, MB_DEV_HUD_ENTITY_QUERY_PLAYER, enabled ? 1 : 0);
+        flushPlayerPropertyToDisk(togglingPlayer, MB_DEV_HUD_ENTITY_QUERY_PLAYER);
     } catch { /* ignore */ }
     if (!enabled) {
         try {
@@ -262,14 +289,14 @@ export function initializeEntityQueryDebugHudWatch() {
 
 function hudToggleLabel(on) {
     return on
-        ? "§cTurn off §2§lmy§r §7entity-query HUD §8(action bar)"
-        : "§aTurn on §2§lmy§r §7entity-query HUD §8(action bar)";
+        ? `§cTurn off §2§lmy§r §fentity-query HUD${devBtnParen("action bar")}`
+        : `§aTurn on §2§lmy§r §fentity-query HUD${devBtnParen("action bar")}`;
 }
 
 function logToggleLabel(on) {
     return on
-        ? "§cTurn off §2§lmy§r §7Content log §8(~2s)"
-        : "§aTurn on §2§lmy§r §7Content log §8(~2s)";
+        ? `§cTurn off §2§lmy§r §fContent log${devBtnParen("~2s")}`
+        : `§aTurn on §2§lmy§r §fContent log${devBtnParen("~2s")}`;
 }
 
 /**
@@ -301,10 +328,10 @@ export function openDayZeroBisectMenu(player, onBack) {
         for (const id of DAY0_BISECT_MENU_ORDER) {
             const on = isDayZeroBisectCategoryEnabled(id);
             const short = DAY0_BISECT_SHORT[id] ?? id;
-            form.button(`${on ? "§aONLY" : "§7off"} §f${short}`);
+            form.button(`${on ? "§aONLY" : "§coff"} §f${short}`);
         }
     }
-    form.button("§8Back");
+    form.button(DEV_BTN_BACK);
 
     const categoryList = eligible && modeOn ? DAY0_BISECT_MENU_ORDER : [];
     const backIndex = 3 + categoryList.length;
@@ -393,6 +420,513 @@ export function openDayZeroBisectMenu(player, onBack) {
     });
 }
 
+const HOUSE_PLAN_MENU_PAGE_SIZE = 12;
+
+/** @type {Map<string, boolean>} */
+const avForcePlaceCompareByPlayer = new Map();
+
+/** @param {import("@minecraft/server").Player} player */
+function isAvForcePlaceCompare(player) {
+    return avForcePlaceCompareByPlayer.get(player.id) === true;
+}
+
+/** @param {import("@minecraft/server").Player} player */
+function toggleAvForcePlaceCompare(player) {
+    const next = !isAvForcePlaceCompare(player);
+    avForcePlaceCompareByPlayer.set(player.id, next);
+    return next;
+}
+
+/** @param {string} label */
+function stripFormLabel(label) {
+    return label.replace(/§./g, "");
+}
+
+/**
+ * @param {import("@minecraft/server").Player} player
+ * @param {{ mode: string, label: string }} pick
+ * @param {import("./mb_abandonedSettlementBuilder.js").SettlementRuleset} [forceRuleset]
+ * @param {boolean} compare
+ */
+function runAvForcePlacePreset(player, pick, forceRuleset, compare) {
+    const opts = forceRuleset ? { mode: pick.mode, forceRuleset } : pick.mode;
+    if (compare) return forcePlaceAbandonedVillageCompareAtPlayer(player, opts);
+    return forcePlaceAbandonedVillageAtPlayer(player, opts);
+}
+
+/**
+ * @param {import("@minecraft/server").Player} player
+ * @param {() => void} onBack
+ * @param {import("./mb_abandonedSettlementBuilder.js").SettlementRuleset} [forceRuleset]
+ */
+function openAbandonedVillageBuildingMenu(player, onBack, forceRuleset) {
+    if (!player?.isValid) return;
+    const kinds = FORCE_SINGLE_BUILDING_MENU;
+    const compare = isAvForcePlaceCompare(player);
+    const rulesetHint = forceRuleset
+        ? `\n§7Materials: §f${forceRuleset}§7 (biome underfoot ignored).`
+        : "";
+    const form = new ActionFormData()
+        .title("§6Place building")
+        .body(
+            `§7Force one structure at your feet.${rulesetHint}\n§7Compare mode: west = pick, east = random house (5-block gap).`
+        )
+        .button(compare ? "§a+ Random neighbor: ON" : "§c+ Random neighbor: OFF")
+        .button("§fHouse plan index…");
+    for (const k of kinds) form.button(k.label);
+    form.button(DEV_BTN_BACK);
+
+    const presetOffset = 2;
+    const backIdx = presetOffset + kinds.length;
+
+    form.show(player).then((res) => {
+        if (!res || res.canceled || res.selection === backIdx) {
+            return openAbandonedVillageDebugMenu(player, onBack);
+        }
+        if (res.selection === 0) {
+            const on = toggleAvForcePlaceCompare(player);
+            try {
+                player.sendMessage(
+                    CHAT_INFO + (on ? "Compare mode ON — next place adds a random house east." : "Compare mode OFF.")
+                );
+            } catch {
+                /* ignore */
+            }
+            return openAbandonedVillageBuildingMenu(player, onBack, forceRuleset);
+        }
+        if (res.selection === 1) {
+            return openAbandonedVillageHousePlanMenu(player, onBack, 0, forceRuleset);
+        }
+        const pick = kinds[res.selection - presetOffset];
+        if (!pick) return openAbandonedVillageBuildingMenu(player, onBack, forceRuleset);
+        const ok = runAvForcePlacePreset(player, pick, forceRuleset, compare);
+        if (!ok) logAbandonedVillageDiagnosticsToContentLog(player);
+        try {
+            const name = stripFormLabel(pick.label);
+            player.sendMessage(
+                CHAT_SUCCESS +
+                    (ok
+                        ? compare
+                            ? `Compare row: ${name} + random house queued.`
+                            : `${name} queued at your feet.`
+                        : "Place failed — see Content Log [ABANDONED VILLAGE].")
+            );
+        } catch {
+            /* ignore */
+        }
+        return openAbandonedVillageBuildingMenu(player, onBack, forceRuleset);
+    }).catch(() => openAbandonedVillageDebugMenu(player, onBack));
+}
+
+/**
+ * @param {import("@minecraft/server").Player} player
+ * @param {() => void} onBack
+ * @param {number} page
+ * @param {import("./mb_abandonedSettlementBuilder.js").SettlementRuleset} [forceRuleset]
+ */
+function openAbandonedVillageHousePlanMenu(player, onBack, page, forceRuleset) {
+    if (!player?.isValid) return;
+    const compare = isAvForcePlaceCompare(player);
+    const shells = listHouseShellSummaries();
+    const pageCount = Math.max(1, Math.ceil(shells.length / HOUSE_PLAN_MENU_PAGE_SIZE));
+    const safePage = Math.max(0, Math.min(page, pageCount - 1));
+    const start = safePage * HOUSE_PLAN_MENU_PAGE_SIZE;
+    const slice = shells.slice(start, start + HOUSE_PLAN_MENU_PAGE_SIZE);
+    const rulesetHint = forceRuleset ? `\n§7Materials: §f${forceRuleset}§7.` : "";
+    const form = new ActionFormData()
+        .title(`§6House plans §f(${safePage + 1}/${pageCount})`)
+        .body(
+            `§7Plans §f0–${HOUSE_VARIANT_COUNT - 1}§7.${rulesetHint}\n§7Compare: §f${compare ? "ON" : "OFF"}§7 — toggle on the previous menu.`
+        )
+        .button(compare ? "§a+ Random neighbor: ON" : "§c+ Random neighbor: OFF");
+    for (const s of slice) {
+        form.button(`§f#${s.index} ${s.id} §f(${s.w}×${s.d})`);
+    }
+    if (safePage > 0) form.button("§f← Prev page");
+    if (safePage < pageCount - 1) form.button("§fNext page →");
+    form.button(DEV_BTN_BACK);
+
+    /** @type {Array<{ action: "toggle"|"plan", shell?: typeof slice[0] }|{ action: "prev"|"next"|"back" }>} */
+    const actions = [{ action: "toggle" }];
+    for (const shell of slice) actions.push({ action: "plan", shell });
+    if (safePage > 0) actions.push({ action: "prev" });
+    if (safePage < pageCount - 1) actions.push({ action: "next" });
+    actions.push({ action: "back" });
+
+    form.show(player).then((res) => {
+        if (!res || res.canceled) {
+            return openAbandonedVillageBuildingMenu(player, onBack, forceRuleset);
+        }
+        const pick = actions[res.selection];
+        if (!pick || pick.action === "back") {
+            return openAbandonedVillageBuildingMenu(player, onBack, forceRuleset);
+        }
+        if (pick.action === "toggle") {
+            toggleAvForcePlaceCompare(player);
+            return openAbandonedVillageHousePlanMenu(player, onBack, safePage, forceRuleset);
+        }
+        if (pick.action === "prev") {
+            return openAbandonedVillageHousePlanMenu(player, onBack, safePage - 1, forceRuleset);
+        }
+        if (pick.action === "next") {
+            return openAbandonedVillageHousePlanMenu(player, onBack, safePage + 1, forceRuleset);
+        }
+        const shell = pick.shell;
+        if (!shell) {
+            return openAbandonedVillageHousePlanMenu(player, onBack, safePage, forceRuleset);
+        }
+        const useCompare = isAvForcePlaceCompare(player);
+        const ok = forcePlaceHousePlanAtPlayer(player, shell.index, forceRuleset, useCompare);
+        if (!ok) logAbandonedVillageDiagnosticsToContentLog(player);
+        try {
+            player.sendMessage(
+                CHAT_SUCCESS +
+                    (ok
+                        ? useCompare
+                            ? `Compare row: plan #${shell.index} (${shell.id}) + random house queued.`
+                            : `Plan #${shell.index} (${shell.id}) queued at your feet.`
+                        : "Place failed — see Content Log [ABANDONED VILLAGE].")
+            );
+        } catch {
+            /* ignore */
+        }
+        return openAbandonedVillageHousePlanMenu(player, onBack, safePage, forceRuleset);
+    }).catch(() => openAbandonedVillageBuildingMenu(player, onBack, forceRuleset));
+}
+
+/**
+ * Pick hamlet / village / large for a chosen ruleset (ignores biome underfoot).
+ * @param {import("@minecraft/server").Player} player
+ * @param {() => void} onBack
+ * @param {import("./mb_abandonedSettlementBuilder.js").SettlementRuleset} ruleset
+ * @param {string} rulesetLabel
+ */
+function openAbandonedVillageRulesetTierMenu(player, onBack, ruleset, rulesetLabel) {
+    if (!player?.isValid) return;
+    const form = new ActionFormData()
+        .title(`§6${rulesetLabel} village`)
+        .body(`§7Force-spawn tier at your feet.\n§7Ruleset: §f${ruleset}§7 · overwrites this site cell.`)
+        .button("§aHamlet")
+        .button("§eVillage")
+        .button("§cLarge")
+        .button("§fPlace building…")
+        .button(DEV_BTN_BACK);
+
+    form.show(player).then((res) => {
+        if (!res || res.canceled || res.selection === 4) {
+            return openAbandonedVillageRulesetForceMenu(player, onBack);
+        }
+        if (res.selection === 3) {
+            return openAbandonedVillageBuildingMenu(player, onBack, ruleset);
+        }
+        const tier =
+            res.selection === 2 ? "large" : res.selection === 1 ? "village" : "hamlet";
+        const ok = forcePlaceAbandonedVillageAtPlayer(player, { forceRuleset: ruleset, tier });
+        if (!ok) logAbandonedVillageDiagnosticsToContentLog(player);
+        try {
+            player.sendMessage(
+                CHAT_SUCCESS +
+                    (ok
+                        ? `${rulesetLabel} ${tier} queued at your feet.`
+                        : "Force place failed — see Content Log [ABANDONED VILLAGE].")
+            );
+        } catch {
+            /* ignore */
+        }
+        return openAbandonedVillageRulesetTierMenu(player, onBack, ruleset, rulesetLabel);
+    }).catch(() => openAbandonedVillageDebugMenu(player, onBack));
+}
+
+/**
+ * @param {import("@minecraft/server").Player} player
+ * @param {() => void} onBack
+ */
+function openAbandonedVillageRulesetForceMenu(player, onBack) {
+    if (!player?.isValid) return;
+    const tiers = FORCE_PLACE_RULESET_TIERS;
+    const form = new ActionFormData()
+        .title("§6Force by biome style")
+        .body("§7Pick a ruleset, then hamlet / village / large.\n§7Works on any overworld block; materials match the style.")
+        .button(DEV_BTN_BACK);
+    for (const t of tiers) form.button(`${t.color}${t.label}`);
+
+    form.show(player).then((res) => {
+        if (!res || res.canceled || res.selection === 0) {
+            return openAbandonedVillageDebugMenu(player, onBack);
+        }
+        const pick = tiers[res.selection - 1];
+        if (!pick) return openAbandonedVillageDebugMenu(player, onBack);
+        return openAbandonedVillageRulesetTierMenu(player, onBack, pick.ruleset, pick.label);
+    }).catch(() => openAbandonedVillageDebugMenu(player, onBack));
+}
+
+/**
+ * Per-category Content Log toggles for abandoned villages.
+ * @param {import("@minecraft/server").Player} player
+ * @param {() => void} onBack
+ */
+function openAbandonedVillageLogCategoriesMenu(player, onBack) {
+    if (!player?.isValid) return;
+
+    const rows = [
+        { key: "Scans", cat: AV_DEBUG_LOG_CAT.SCANS },
+        { key: "Activation", cat: AV_DEBUG_LOG_CAT.ACTIVATION },
+        { key: "Build", cat: AV_DEBUG_LOG_CAT.BUILD },
+        { key: "Success", cat: AV_DEBUG_LOG_CAT.SUCCESS },
+        { key: "Failures", cat: AV_DEBUG_LOG_CAT.FAILURES },
+        { key: "Lamp cleanup", cat: AV_DEBUG_LOG_CAT.LAMP }
+    ];
+
+    const form = new ActionFormData()
+        .title("§6Content Log categories")
+        .body(
+            `${formatAbandonedVillageLogCategoriesReport()}\n\n§7Master switch on the previous menu. With master OFF, only §cFailures§7 still write to the log.\n§8New worlds: §7Scans default §7off§8 — turn on here for horizon Scan #N lines.`
+        );
+
+    for (const row of rows) {
+        const on = isAbandonedVillageLogCategoryEnabled(row.cat);
+        form.button(on ? `§c${row.key} OFF` : `§a${row.key} ON`);
+    }
+    form.button("§aAll categories ON");
+    form.button("§7All categories OFF");
+    form.button(DEV_BTN_BACK);
+
+    const backIndex = rows.length + 2;
+
+    form.show(player).then((res) => {
+        if (!res || res.canceled || res.selection === backIndex) {
+            return openAbandonedVillageDebugMenu(player, onBack);
+        }
+        if (res.selection === rows.length) {
+            setAbandonedVillageDebugLogMask(AV_DEBUG_LOG_ALL);
+        } else if (res.selection === rows.length + 1) {
+            setAbandonedVillageDebugLogMask(0);
+        } else if (res.selection >= 0 && res.selection < rows.length) {
+            const row = rows[res.selection];
+            setAbandonedVillageLogCategoryEnabled(row.cat, !isAbandonedVillageLogCategoryEnabled(row.cat));
+        }
+        try {
+            saveAllProperties();
+        } catch {
+            /* ignore */
+        }
+        try {
+            player.sendMessage(CHAT_INFO + "Abandoned village log categories updated.");
+        } catch {
+            /* ignore */
+        }
+        return openAbandonedVillageLogCategoriesMenu(player, onBack);
+    }).catch(() => openAbandonedVillageDebugMenu(player, onBack));
+}
+
+/**
+ * Abandoned village placement debug (journal).
+ * @param {import("@minecraft/server").Player} player
+ * @param {() => void} onBack
+ */
+export function openAbandonedVillageDebugMenu(player, onBack) {
+    if (!INCLUDE_FULL_DEVELOPER_TOOLS) {
+        try {
+            player.sendMessage(CHAT_WARNING + "Abandoned village debug is only in the dev behavior pack.");
+        } catch {
+            /* ignore */
+        }
+        if (typeof onBack === "function") onBack();
+        return;
+    }
+    if (!player?.isValid) return;
+
+    const chatOn = isAbandonedVillageDebugChatEnabled();
+    const logOn = isAbandonedVillageDebugLogEnabled();
+    const form = new ActionFormData()
+        .title("§6Abandoned villages")
+        .body(getAbandonedVillageDebugReport(player))
+        .button(`§aHamlet test${devBtnParen("at feet")}`)
+        .button(`§eVillage test${devBtnParen("at feet")}`)
+        .button(`§cLarge village${devBtnParen("at feet")}`)
+        .button(`§bStarter set for export${devBtnParen("Y200 · plains")}`)
+        .button("§fForce by biome style…")
+        .button("§fPlace building…")
+        .button("§fDump to Content Log")
+        .button(logOn ? "§cContent Log OFF" : "§aContent Log ON")
+        .button("§fContent Log categories…")
+        .button(chatOn ? "§cChat mirror OFF" : "§aChat mirror ON")
+        .button("§eClear chunk cache")
+        .button("§eReset site grid underfoot")
+        .button("§fReset my village title flags")
+        .button("§bRefresh")
+        .button(DEV_BTN_BACK);
+
+    form.show(player).then((res) => {
+        if (!res || res.canceled || res.selection === 14) {
+            if (typeof onBack === "function") onBack();
+            return;
+        }
+        if (res.selection === 0) {
+            const ok = forcePlaceAbandonedVillageAtPlayer(player, "hamlet");
+            if (!ok) {
+                logAbandonedVillageDiagnosticsToContentLog(player);
+            }
+            try {
+                player.sendMessage(
+                    CHAT_SUCCESS +
+                        (ok
+                            ? "Hamlet test queued at your feet — builds over a few seconds."
+                            : "Test place failed — see Content Log [ABANDONED VILLAGE].")
+                );
+            } catch {
+                /* ignore */
+            }
+            return openAbandonedVillageDebugMenu(player, onBack);
+        }
+        if (res.selection === 1) {
+            const ok = forcePlaceAbandonedVillageAtPlayer(player, "village");
+            if (!ok) {
+                logAbandonedVillageDiagnosticsToContentLog(player);
+            }
+            try {
+                player.sendMessage(
+                    CHAT_SUCCESS +
+                        (ok
+                            ? "Village test queued at your feet — phased build."
+                            : "Test place failed — see Content Log [ABANDONED VILLAGE].")
+                );
+            } catch {
+                /* ignore */
+            }
+            return openAbandonedVillageDebugMenu(player, onBack);
+        }
+        if (res.selection === 2) {
+            const ok = forcePlaceAbandonedVillageAtPlayer(player, "large");
+            if (!ok) {
+                logAbandonedVillageDiagnosticsToContentLog(player);
+            }
+            try {
+                player.sendMessage(
+                    CHAT_SUCCESS +
+                        (ok
+                            ? "Large village queued at your feet — 13 buildings, phased build."
+                            : "Test place failed — see Content Log [ABANDONED VILLAGE].")
+                );
+            } catch {
+                /* ignore */
+            }
+            return openAbandonedVillageDebugMenu(player, onBack);
+        }
+        if (res.selection === 3) {
+            const ok = placeStarterSetForExportAtPlayer(player);
+            if (!ok) logAbandonedVillageDiagnosticsToContentLog(player);
+            try {
+                player.sendMessage(
+                    CHAT_SUCCESS +
+                        (ok
+                            ? "Starter set for export queued — Y=200, one pad per building. Content Log has biome+variant filenames."
+                            : "Starter set failed — see Content Log [ABANDONED VILLAGE].")
+                );
+            } catch {
+                /* ignore */
+            }
+            return openAbandonedVillageDebugMenu(player, onBack);
+        }
+        if (res.selection === 4) {
+            return openAbandonedVillageRulesetForceMenu(player, onBack);
+        }
+        if (res.selection === 5) {
+            return openAbandonedVillageBuildingMenu(player, onBack);
+        }
+        if (res.selection === 6) {
+            logAbandonedVillageDiagnosticsToContentLog(player);
+            try {
+                player.sendMessage(CHAT_INFO + "Abandoned village snapshot written to Content Log.");
+            } catch {
+                /* ignore */
+            }
+            return openAbandonedVillageDebugMenu(player, onBack);
+        }
+        if (res.selection === 7) {
+            setAbandonedVillageDebugLogEnabled(!logOn);
+            try {
+                saveAllProperties();
+            } catch {
+                /* ignore */
+            }
+            try {
+                player.sendMessage(
+                    CHAT_INFO +
+                        (logOn
+                            ? "Abandoned village Content Log OFF (Failures category still logs)."
+                            : "Abandoned village Content Log ON — use Log categories for scans vs build, etc.")
+                );
+            } catch {
+                /* ignore */
+            }
+            return openAbandonedVillageDebugMenu(player, onBack);
+        }
+        if (res.selection === 8) {
+            return openAbandonedVillageLogCategoriesMenu(player, onBack);
+        }
+        if (res.selection === 9) {
+            setAbandonedVillageDebugChatEnabled(!chatOn);
+            try {
+                saveAllProperties();
+            } catch {
+                /* ignore */
+            }
+            try {
+                player.sendMessage(
+                    CHAT_INFO + (chatOn ? "Abandoned village chat mirror OFF." : "Abandoned village chat mirror ON.")
+                );
+            } catch {
+                /* ignore */
+            }
+            return openAbandonedVillageDebugMenu(player, onBack);
+        }
+        if (res.selection === 10) {
+            clearAbandonedVillageChunkCache();
+            try {
+                player.sendMessage(
+                    CHAT_INFO +
+                        "Abandoned village cache cleared — site registry + stuck build queue flushed."
+                );
+            } catch {
+                /* ignore */
+            }
+            return openAbandonedVillageDebugMenu(player, onBack);
+        }
+        if (res.selection === 11) {
+            const loc = player.location;
+            const { gx, gz } = resetAbandonedVillageSiteAtWorld(loc.x, loc.z);
+            try {
+                player.sendMessage(
+                    CHAT_INFO +
+                        `Site grid §f${gx}, ${gz}§7 reset — walk to the lamp again to trigger a fresh build.`
+                );
+            } catch {
+                /* ignore */
+            }
+            return openAbandonedVillageDebugMenu(player, onBack);
+        }
+        if (res.selection === 12) {
+            resetAbandonedVillageNotifyFlagsForPlayer(player);
+            try {
+                player.sendMessage(
+                    CHAT_INFO +
+                        "Your village title flags reset — next build shows Constructing… and first-complete flavor again."
+                );
+            } catch {
+                /* ignore */
+            }
+            return openAbandonedVillageDebugMenu(player, onBack);
+        }
+        if (res.selection === 13) {
+            return openAbandonedVillageDebugMenu(player, onBack);
+        }
+        if (typeof onBack === "function") onBack();
+    }).catch(() => {
+        if (typeof onBack === "function") onBack();
+    });
+}
+
 /**
  * Script villager suppression (eggs, despawn, purge) — dev/debug journal entry.
  * @param {import("@minecraft/server").Player} player
@@ -409,21 +943,24 @@ export function openVillagerSuppressionDevMenu(player, onBack) {
                 `§8Script despawn: §7${suppressOn ? "§aON" : "§cOFF"}\n` +
                 "§8• §7ON: block villager eggs, remove adults on spawn, periodic purge\n" +
                 "§8• §7OFF: villagers can exist for lag testing\n\n" +
-                "§8Does not change: §7spawn rules, biome no-village worldgen, wandering traders.\n" +
+                "§8Does not change: §7spawn rules, wandering traders.\n" +
+                "§8Abandoned villages: §7script-only placement, always zombie style (no vanilla 2% roll).\n" +
                 "§8With despawn OFF: §7entity-query / villager work-spread hooks run again."
         );
 
     form.button(
         suppressOn
-            ? "§cTurn OFF §7script despawn"
-            : "§aTurn ON §7script despawn"
+            ? "§cTurn OFF §fscript despawn"
+            : "§aTurn ON §fscript despawn"
     );
     if (INCLUDE_FULL_DEVELOPER_TOOLS) {
-        form.button("§bEntity query / village §8(perf HUD)");
+        form.button("§6Abandoned village debug");
+        form.button(`§6Place zombie village${devBtnParen("here")}`);
+        form.button(`§bEntity query / village${devBtnParen("perf HUD")}`);
     }
-    form.button("§8Back");
+    form.button(DEV_BTN_BACK);
 
-    const backIdx = INCLUDE_FULL_DEVELOPER_TOOLS ? 2 : 1;
+    const backIdx = INCLUDE_FULL_DEVELOPER_TOOLS ? 4 : 1;
 
     form.show(player).then((res) => {
         if (!res || res.canceled || res.selection === backIdx) {
@@ -450,6 +987,13 @@ export function openVillagerSuppressionDevMenu(player, onBack) {
             return openVillagerSuppressionDevMenu(player, onBack);
         }
         if (INCLUDE_FULL_DEVELOPER_TOOLS && res.selection === 1) {
+            return openAbandonedVillageDebugMenu(player, () => openVillagerSuppressionDevMenu(player, onBack));
+        }
+        if (INCLUDE_FULL_DEVELOPER_TOOLS && res.selection === 2) {
+            devPlaceAbandonedVillageAtPlayer(player);
+            return openVillagerSuppressionDevMenu(player, onBack);
+        }
+        if (INCLUDE_FULL_DEVELOPER_TOOLS && res.selection === 3) {
             return openEntityQueryDebugHub(player, () => openVillagerSuppressionDevMenu(player, onBack));
         }
         if (typeof onBack === "function") onBack();
@@ -493,12 +1037,12 @@ export function openEntityQueryDebugHub(player, onBack) {
     form.button("§aRefresh");
     form.button(hudToggleLabel(hudOn));
     form.button(logToggleLabel(logOn));
-    form.button("§eVillager suppress §8(script despawn)");
+    form.button(`§eVillager suppress${devBtnParen("script despawn")}`);
     form.button("§dLog snapshot now");
     form.button("§eLog entity trace");
     form.button("§cClear trace stats");
-    form.button("§6Day 0 bisect §8(find lag)");
-    form.button("§8Back");
+    form.button(`§6Day 0 bisect${devBtnParen("find lag")}`);
+    form.button(DEV_BTN_BACK);
 
     form.show(player).then((res) => {
         if (!res || res.canceled || res.selection === 8) {

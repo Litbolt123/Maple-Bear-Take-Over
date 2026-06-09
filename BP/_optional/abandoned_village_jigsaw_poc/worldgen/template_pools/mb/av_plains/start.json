@@ -1,0 +1,19 @@
+{
+	"format_version": "1.26.10",
+	"minecraft:template_pool": {
+		"description": {
+			"identifier": "mb:av_plains/start"
+		},
+		"elements": [
+			{
+				"element": {
+					"element_type": "minecraft:single_pool_element",
+					"location": "mb/av_plains/well_center",
+					"processors": "mb:av_empty",
+					"projection": "rigid"
+				},
+				"weight": 1
+			}
+		]
+	}
+}

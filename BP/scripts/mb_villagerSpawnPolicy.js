@@ -1,8 +1,8 @@
 /**
  * Maple Bear worlds: no employed villagers (abandoned / custom settlements only).
  * - Spawn rules: empty / impossible conditions (natural rules only; not structure villages).
- * - Biome overrides: no minecraft:village_type (see BP/biomes/worldgen_no_village/).
- * - Worldgen: mb:abandoned_settlement/* features (replaces village POIs over time in new terrain).
+ * - Vanilla village_type disabled (worldgen_no_village); mb_abandonedVillageWorldgen.js places 100% abandoned villages.
+ * - Living villagers removed; zombie villagers from abandoned villages are kept.
  * - Scripts: block spawn eggs (use + use-on-block); remove on entitySpawn; periodic purge.
  * Wandering traders are allowed.
  *
@@ -15,11 +15,10 @@ import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 
 export const SUPPRESS_VILLAGERS_PROP = "mb_suppress_villagers";
 
+/** Living villagers only — zombie villagers stay in abandoned / zombie villages. */
 export const SUPPRESSED_VILLAGER_ENTITY_TYPES = new Set([
     "minecraft:villager",
-    "minecraft:villager_v2",
-    "minecraft:zombie_villager",
-    "minecraft:zombie_villager_v2"
+    "minecraft:villager_v2"
 ]);
 
 export const BLOCKED_VILLAGER_SPAWN_EGG_TYPES = new Set([

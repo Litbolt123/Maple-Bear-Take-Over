@@ -1,0 +1,18 @@
+{
+	"format_version": "1.26.10",
+	"minecraft:processor_list": {
+		"description": {
+			"identifier": "mb:av_empty"
+		},
+		"processors": [
+			{
+				"processor_type": "minecraft:block_ignore",
+				"blocks": [
+					"minecraft:structure_block",
+					"minecraft:jigsaw",
+					"jigsaw"
+				]
+			}
+		]
+	}
+}

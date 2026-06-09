@@ -2,6 +2,7 @@ import { world, system, EntityTypes, Entity, Player, ItemStack } from "@minecraf
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import "./mb_buildConfig.js";
 import "./mb_villagerSpawnPolicy.js";
+import "./mb_abandonedVillageWorldgen.js";
 import {
     INCLUDE_FULL_DEVELOPER_TOOLS,
     isReleaseAdminBuild,
@@ -30,6 +31,7 @@ import { registerSpawnLoadProbes, initializeSpawnLoadScalerWatch } from "./mb_sp
 import { initializeBiomeCheckerHudWatch } from "./mb_biomeCheckerDev.js";
 import { initializeEntityQueryDebugHudWatch } from "./mb_entityQueryDebugDev.js";
 import { initializeBuffBearOverflowCull } from "./mb_buffCap.js";
+import { initializeMiningBearOverflowCull } from "./mb_miningCap.js";
 import { getActiveStormCount } from "./mb_snowStorm.js";
 import { isDustStormsEnabled, isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
 import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment, pushHudActionBarToast } from "./mb_actionBarHud.js";
@@ -8266,6 +8268,7 @@ function initializeDeferredPackServices() {
     try {
         initializeBearPopulationCull();
         initializeBuffBearOverflowCull();
+        initializeMiningBearOverflowCull();
     } catch {
         /* ignore */
     }

@@ -1,6 +1,7 @@
 /**
- * Fetch vanilla overworld biomes that define minecraft:village_type from Mojang
- * bedrock-samples and write overrides with that component removed.
+ * Strips minecraft:village_type from village biomes (disables vanilla village roll).
+ * Required for 100% abandoned villages: only mb_abandonedVillageWorldgen.js places them.
+ * Re-run after Mojang biome updates, then commit BP + BP - Dev overrides.
  *
  *   node tools/generateNoVillageBiomeOverrides.js
  *   node tools/generateNoVillageBiomeOverrides.js --dry-run

@@ -15,7 +15,8 @@
 			},
 			"minecraft:tags": {
 				"tags": [
-					"infected_biome"
+					"infected_biome",
+					"infected_biome_small"
 				]
 			},
 			"minecraft:replace_biomes": {

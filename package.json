@@ -23,13 +23,24 @@
     "release:package": "node tools/packageRelease.js",
     "sync:biome-registry": "node tools/syncBiomeReplaceRegistry.cjs",
     "sync:bp-from-dev": "node tools/syncBpFromDev.js",
-    "generate:no-village-biomes": "node tools/generateNoVillageBiomeOverrides.js"
+    "generate:no-village-biomes": "node tools/generateNoVillageBiomeOverrides.js",
+    "strip:mcstructures": "node tools/stripMcstructureArtifacts.js",
+    "strip:mcstructures:dry": "node tools/stripMcstructureArtifacts.js --dry-run",
+    "shift:mcstructures": "node tools/shiftMcstructureDown.js",
+    "shift:mcstructures:dry": "node tools/shiftMcstructureDown.js --dry-run",
+    "sync:av-plains-spawn-density": "node tools/syncAvPlainsSpawnDensity.js",
+    "sync:av-plains-export-pool": "node tools/syncAvPlainsExportPool.js",
+    "validate:mcstructures": "node tools/validateMcstructures.js"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Litbolt123/Maple-Bear-Apocalypse.git"
   },
-  "keywords": ["minecraft", "bedrock", "addon"],
+  "keywords": [
+    "minecraft",
+    "bedrock",
+    "addon"
+  ],
   "author": "Litbolt123 and Compoohter",
   "license": "ISC",
   "bugs": {
@@ -37,6 +48,7 @@
   },
   "homepage": "https://github.com/Litbolt123/Maple-Bear-Apocalypse#readme",
   "devDependencies": {
-    "eslint": "^10.0.3"
+    "eslint": "^10.0.3",
+    "prismarine-nbt": "^2.8.0"
   }
 }

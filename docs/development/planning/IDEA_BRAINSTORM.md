@@ -40,21 +40,23 @@ Based on existing lore: white powder/dust infection (mysterious white powdery su
 
 ## 🏗️ World Building & Structures (15 ideas)
 
-21. **Maple Bear Lairs** - Underground structures where bears spawn, filled with dust and corrupted materials
-22. **Infection Research Facilities** - Abandoned labs with notes about the infection, cure recipes
-23. **Cure Crafting Stations** - Special workbenches for advanced cure creation
-24. **Warning Signs** - Placeable signs that warn other players about infection zones
-25. **Emergency Shelters** - Structures that provide temporary safety from bears
-26. **Dust Accumulation Zones** - Areas where white dust builds up over time, creating hazards
-27. **Bear Nest Structures** - Above-ground structures where flying bears roost
-28. **Infection Monuments** - Structures built by bears from dust and corrupted blocks
-29. **Safe Zone Beacons** - Placeable items that create temporary safe areas
-30. **Dust Storm Events** - Weather events that spread infection and reduce visibility
-31. **Corrupted Villages** - Villages overrun by infection, with infected villagers
-32. **Bear Tunnels** - Underground networks created by mining bears
-33. **Dust Altars** - Mysterious structures where bears gather, possibly ritual sites
-34. **Infection Containment Chambers** - Player-built structures to quarantine infected areas
-35. **Memory Shrines** - Structures that "remember" player actions, referenced in World Memory lore
+21. **Maple Bear jigsaw abandoned villages** — Full hand-built hamlets/villages (Maple Bear co-creator); script block builder on hold. See `VILLAGE_STRUCTURE_COLLAB_GUIDE.md`.
+22. **Random lore bunkers (worldgen)** — Rare scattered hideouts: small `.mcstructure` bunker with trapdoor, sparse loot, written books/signs/maps with apocalypse lore; structure set or scatter; **not** the same as script village path hide bunkers (`hide_bunker` loot) — could merge designs later.
+23. **Maple Bear Lairs** - Underground structures where bears spawn, filled with dust and corrupted materials
+24. **Infection Research Facilities** - Abandoned labs with notes about the infection, cure recipes
+25. **Cure Crafting Stations** - Special workbenches for advanced cure creation
+26. **Warning Signs** - Placeable signs that warn other players about infection zones
+27. **Emergency Shelters** - Structures that provide temporary safety from bears
+28. **Dust Accumulation Zones** - Areas where white dust builds up over time, creating hazards
+29. **Bear Nest Structures** - Above-ground structures where flying bears roost
+30. **Infection Monuments** - Structures built by bears from dust and corrupted blocks
+31. **Safe Zone Beacons** - Placeable items that create temporary safe areas
+32. **Dust Storm Events** - Weather events that spread infection and reduce visibility
+33. **Corrupted Villages** - Villages overrun by infection, with infected villagers
+34. **Bear Tunnels** - Underground networks created by mining bears
+35. **Dust Altars** - Mysterious structures where bears gather, possibly ritual sites
+36. **Infection Containment Chambers** - Player-built structures to quarantine infected areas
+37. **Memory Shrines** - Structures that "remember" player actions, referenced in World Memory lore
 
 ---
 

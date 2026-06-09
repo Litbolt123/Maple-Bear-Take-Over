@@ -15,6 +15,7 @@ import { SPAWN_CONFIGS } from "./mb_spawnConfigs.js";
 import { getBearSnapshot, invalidateBearSnapshots, ALL_MB_BEAR_TYPES } from "./mb_bearSnapshot.js";
 import { isEntityValid } from "./mb_sharedCache.js";
 import { getInfectionDirectorSpawnModifiers } from "./mb_infectionDirector.js";
+import { getAbandonedVillageSelfTestLines } from "./mb_abandonedVillageWorldgen.js";
 
 /**
  * Every `mb_*.js` under `BP/scripts/` (same order as `npm run test:scripts` / filesystem).
@@ -22,6 +23,7 @@ import { getInfectionDirectorSpawnModifiers } from "./mb_infectionDirector.js";
  * When you add a new script file, append it here (keep sorted).
  */
 const SELF_TEST_MODULE_IMPORTS = [
+    "./mb_abandonedVillageWorldgen.js",
     "./mb_actionBarHud.js",
     "./mb_balance.js",
     "./mb_bearPopulationCull.js",
@@ -131,6 +133,14 @@ export async function runInGameScriptSelfTest(player) {
         const ids = Object.values(SCRIPT_IDS);
         const off = ids.filter((id) => !isScriptEnabled(id));
         push(`§7Script toggles OFF §8(${off.length})§7: §f${off.length ? off.join(", ") : "none"}`);
+
+        try {
+            for (const line of getAbandonedVillageSelfTestLines()) {
+                push(line);
+            }
+        } catch (e) {
+            push(`§cAbandoned village check: §f${e?.message || e}`);
+        }
 
         push(`§7§oSPAWN_CONFIGS §7entries: §f${SPAWN_CONFIGS.length} §7· §oENTITY_TYPE_CAPS §7families: §f${Object.keys(ENTITY_TYPE_CAPS).length}`);
 

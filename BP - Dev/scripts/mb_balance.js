@@ -14,7 +14,7 @@ export const TORPEDO_TYPE = "torpedo";
 export const ENTITY_TYPE_CAPS = {
     [TINY_TYPE]: 38,
     [INFECTED_TYPE]: 17,
-    [MINING_TYPE]: 3,
+    [MINING_TYPE]: 2,
     [FLYING_TYPE]: 20,
     [TORPEDO_TYPE]: 10
 };
@@ -46,6 +46,23 @@ export function getMaxBuffBearsNearPlayerCount(playerCount) {
     if (n <= 2) return 1;
     if (n <= 4) return 2;
     return 3;
+}
+
+/** Loaded mining bears allowed per player in a dimension (AI-heavy). */
+export const MINING_BEARS_MAX_PER_PLAYER = 2;
+
+/** Within spawn scan radius of one player — all mining variants share this cap. */
+export function getMaxMiningBearsNearPlayerCount() {
+    return MINING_BEARS_MAX_PER_PLAYER;
+}
+
+/**
+ * Max mining bears in the whole dimension (loaded).
+ * @param {number} playerCount players in the dimension
+ */
+export function getMaxMiningBearsDimensionWideCount(playerCount) {
+    const n = Math.max(1, playerCount);
+    return Math.min(12, n * MINING_BEARS_MAX_PER_PLAYER);
 }
 
 /**

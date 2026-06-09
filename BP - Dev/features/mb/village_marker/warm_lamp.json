@@ -1,0 +1,28 @@
+{
+	"format_version": "1.21.0",
+	"minecraft:structure_template_feature": {
+		"description": {
+			"identifier": "mb:village_marker/warm_lamp"
+		},
+		"structure_name": "mb:village_marker/warm_lamp_post",
+		"adjustment_radius": 6,
+		"facing_direction": "random",
+		"constraints": {
+			"grounded": {},
+			"unburied": {},
+			"block_intersection": {
+				"block_allowlist": [
+					"minecraft:air",
+					"minecraft:snow_layer",
+					"minecraft:short_grass",
+					"minecraft:tall_grass",
+					"mb:dusted_dirt",
+					"minecraft:grass_block",
+					"minecraft:dirt",
+					"minecraft:sand",
+					"minecraft:red_sand"
+				]
+			}
+		}
+	}
+}

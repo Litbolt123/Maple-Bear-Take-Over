@@ -1,0 +1,27 @@
+{
+	"format_version": "1.21.0",
+	"minecraft:feature_rules": {
+		"description": {
+			"identifier": "mb:village_marker_desert_slot0",
+			"places_feature": "mb:village_marker/scatter_hot_lamp_grid"
+		},
+		"conditions": {
+			"placement_pass": "surface_pass",
+			"minecraft:biome_filter": {
+				"any_of": [
+					{
+						"test": "has_biome_tag",
+						"operator": "==",
+						"value": "desert"
+					}
+				]
+			}
+		},
+		"distribution": {
+			"iterations": 1,
+			"x": 0,
+			"y": 0,
+			"z": 0
+		}
+	}
+}

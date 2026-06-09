@@ -1,6 +1,6 @@
 import { system, world, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData, FormCancelationReason } from "@minecraft/server-ui";
-import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getPlayerPropertyChunked, setPlayerPropertyChunked, getWorldPropertyChunked, setWorldPropertyChunked, saveAllProperties, ADDON_DIFFICULTY_PROPERTY, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
+import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getPlayerPropertyChunked, setPlayerPropertyChunked, getWorldPropertyChunked, setWorldPropertyChunked, saveAllProperties, ADDON_DIFFICULTY_PROPERTY, getAddonDifficultyState, getPlayerJournalSettingsChunked, setPlayerJournalSettingsChunked } from "./mb_dynamicPropertyHandler.js";
 import {
     areSimPlayersEnabled,
     areSimPlayerMarkersEnabled,
@@ -95,11 +95,13 @@ import {
     isBiomeCheckerHudEnabledForPlayer
 } from "./mb_biomeCheckerDev.js";
 import {
+    openAbandonedVillageDebugMenu,
     openEntityQueryDebugHub,
     openVillagerSuppressionDevMenu,
     isEntityQueryHudPersonalEnabled,
     setEntityQueryHudPersonalEnabled
 } from "./mb_entityQueryDebugDev.js";
+import { DEV_BTN_BACK, DEV_BTN_DOT, devBtnBackTo, devBtnParen } from "./mb_devFormUi.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
@@ -160,7 +162,7 @@ export function openJournalLagComfortWizard(player, goBack) {
         .title("§eHave lag?")
         .body("§7Tune spawn scanning, dust storms, and mining AI.\n\n§8Default §7(recommended) uses the §6Mid§7 tier — lighter scans like most playtests. §7Full auto is for max scaling.");
     form1.button("§6How much? §8(choose level)");
-    form1.button("§8Back");
+    form1.button(DEV_BTN_BACK);
     form1.show(player).then((res) => {
         if (!res || res.canceled || res.selection === 1) {
             const v = getPlayerSoundVolume(player);
@@ -176,7 +178,7 @@ export function openJournalLagComfortWizard(player, goBack) {
         form2.button("§eA little");
         form2.button("§7Full auto §8(advanced)");
         form2.button("§cLAGGY!");
-        form2.button("§8Back");
+        form2.button(DEV_BTN_BACK);
         form2.show(player).then((res2) => {
             const v = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v });
@@ -409,7 +411,7 @@ export function showEmulsifierMachineUI(player, block) {
             const costText = getFuelCostText(opt.key);
             form.button(`${opt.color}${opt.label} §8- §f${opt.desc}\n§fCost: §b${costText}`);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === options.length) return openMain();
             try { player.playSound("mb.codex_turn_page", { pitch: 1, volume: 0.8 * getPlayerSoundVolume(player) }); } catch { }
@@ -467,7 +469,7 @@ export function showEmulsifierMachineUI(player, block) {
                 `§fCost: §b${costText}`
             );
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === options.length) {
                 try {
@@ -720,8 +722,7 @@ export function saveCodex(player, codex) {
 export function getPlayerSoundVolume(player) {
     try {
         // Check Basic Journal settings first (world dynamic property)
-        const settingsKey = `mb_player_settings_${player.id}`;
-        const rawSettings = getWorldPropertyChunked(settingsKey);
+        const rawSettings = getPlayerJournalSettingsChunked(player);
         
         if (rawSettings) {
             let parsedSettings = rawSettings;
@@ -796,8 +797,7 @@ export function getPlayerSettings(player) {
         const showInfectionTimer = Boolean(s?.showInfectionTimer);
         /** Dawn / new-day one-liner on merged action bar (auto-clears after a few seconds). */
         const showDayNarrativeActionBar = s?.showDayNarrativeActionBar !== false;
-        const settingsKey = `mb_player_settings_${player.id}`;
-        const raw = getWorldPropertyChunked(settingsKey);
+        const raw = getPlayerJournalSettingsChunked(player);
         if (raw) {
             let parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
             if (parsed && typeof parsed === 'object') {
@@ -840,8 +840,7 @@ function getPlayerSettingsFull(player) {
     try {
         const codex = getCodex(player);
         const s = codex?.settings;
-        const settingsKey = `mb_player_settings_${player.id}`;
-        const raw = getWorldPropertyChunked(settingsKey);
+        const raw = getPlayerJournalSettingsChunked(player);
         let stormParticles = s?.stormParticles ?? 0;
         if (raw) {
             const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
@@ -1554,8 +1553,7 @@ export function showCodexBook(player, context) {
             }
             
             // Sync with Basic Journal settings if they exist (for backwards compatibility)
-            const basicSettingsKey = `mb_player_settings_${player.id}`;
-            const rawBasicSettings = getWorldPropertyChunked(basicSettingsKey);
+            const rawBasicSettings = getPlayerJournalSettingsChunked(player);
             if (rawBasicSettings) {
                 let parsedBasicSettings = rawBasicSettings;
                 if (typeof rawBasicSettings === 'string') {
@@ -2229,7 +2227,7 @@ export function showCodexBook(player, context) {
             lines.push("§e???");
         }
         
-        new ActionFormData().title("§6Infection").body(lines.join("\n")).button("§8Back").show(player).then(() => {
+        new ActionFormData().title("§6Infection").body(lines.join("\n")).button(DEV_BTN_BACK).show(player).then(() => {
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             openMain();
@@ -2271,7 +2269,7 @@ export function showCodexBook(player, context) {
         // Check if any content is available
         if (!showSnowTierAnalysis && !showInfectionSymptoms && !showSnowEffects && !showMinorInfectionAnalysis && !showInfectionBodySounds) {
             form.body("§7No symptoms have been experienced yet.\n§8You need to experience effects while infected to unlock symptom information.");
-            form.button("§8Back");
+            form.button(DEV_BTN_BACK);
         } else {
             form.body("§7Select a category to view:");
             
@@ -2306,7 +2304,7 @@ export function showCodexBook(player, context) {
                 buttonIndex++;
             }
             
-            form.button("§8Back");
+            form.button(DEV_BTN_BACK);
         }
         form.show(player).then((res) => {
             if (!res || res.canceled) return;
@@ -2376,7 +2374,7 @@ export function showCodexBook(player, context) {
         new ActionFormData()
             .title("§6Body sounds (infection)")
             .body(body)
-            .button("§8Back")
+            .button(DEV_BTN_BACK)
             .show(player)
             .then(() => {
                 const volumeMultiplier = getPlayerSoundVolume(player);
@@ -2403,7 +2401,7 @@ export function showCodexBook(player, context) {
         
         if (entries.length === 0) {
             form.body("§7No infection symptoms have been experienced yet.\n§8You need to experience negative effects while infected to unlock symptom information.");
-            form.button("§8Back");
+            form.button(DEV_BTN_BACK);
         } else {
             form.body("§7Select a symptom to view details:");
             
@@ -2417,7 +2415,7 @@ export function showCodexBook(player, context) {
                 form.button(label);
             }
             
-            form.button("§8Back");
+            form.button(DEV_BTN_BACK);
         }
         form.show(player).then((res) => {
             if (!res || res.canceled) return openSymptoms();
@@ -2457,7 +2455,7 @@ export function showCodexBook(player, context) {
                         body += `\n\n§8After more separate episodes, the journal will fill in durations, sources, and patterns.`;
                     }
                 }
-                new ActionFormData().title(`§6Infection Symptoms: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
+                new ActionFormData().title(`§6Infection Symptoms: ${known ? e.title : '???'}`).body(body).button(DEV_BTN_BACK).show(player).then(() => {
                     const volumeMultiplier = getPlayerSoundVolume(player);
                     player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                     openInfectionSymptoms();
@@ -2490,7 +2488,7 @@ export function showCodexBook(player, context) {
         
         if (entries.length === 0) {
             form.body("§7No \"snow\" effects have been experienced yet.\n§8You need to consume \"snow\" while infected to unlock effect information.");
-            form.button("§8Back");
+            form.button(DEV_BTN_BACK);
         } else {
             form.body("§7Select an effect to view details:");
             
@@ -2506,7 +2504,7 @@ export function showCodexBook(player, context) {
                 form.button(label);
             }
             
-            form.button("§8Back");
+            form.button(DEV_BTN_BACK);
         }
         form.show(player).then((res) => {
             if (!res || res.canceled) return openSymptoms();
@@ -2538,7 +2536,7 @@ export function showCodexBook(player, context) {
                         body += `\n\n§8More mechanics unlock as you map more powder effects or study powder longer.`;
                     }
                 }
-                new ActionFormData().title(`§6"Snow" Effects: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
+                new ActionFormData().title(`§6"Snow" Effects: ${known ? e.title : '???'}`).body(body).button(DEV_BTN_BACK).show(player).then(() => {
                     const volumeMultiplier = getPlayerSoundVolume(player);
                     player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                     openSnowEffects();
@@ -2631,7 +2629,7 @@ export function showCodexBook(player, context) {
         }
         
         form.body(body);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then(() => openSymptoms());
     }
 
@@ -2745,7 +2743,7 @@ export function showCodexBook(player, context) {
         }
         
         form.body(body);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then(() => {
             const volumeMultiplier = getPlayerSoundVolume(player);
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
@@ -2836,7 +2834,7 @@ export function showCodexBook(player, context) {
             if (known) form.button(label, e.icon);
             else form.button(label);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled) return openMain();
 
@@ -3037,7 +3035,7 @@ export function showCodexBook(player, context) {
                     }
                 }
 
-                new ActionFormData().title(`§6Mobs: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
+                new ActionFormData().title(`§6Mobs: ${known ? e.title : '???'}`).body(body).button(DEV_BTN_BACK).show(player).then(() => {
                     const volumeMultiplier = getPlayerSoundVolume(player);
                     player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                     openMobs();
@@ -3128,7 +3126,7 @@ export function showCodexBook(player, context) {
                 form.button(label);
             }
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled) {
                 // Play page turn sound when going back
@@ -3489,7 +3487,7 @@ export function showCodexBook(player, context) {
                         body = "§eBrewing Stand\n§7A specialized apparatus for creating alchemical concoctions. Essential for potion production.\n\n§7Function:\n§7• Allows creation of various potions\n§7• Can produce weakness potions\n§7• Essential for alchemical research\n\n§7Research Applications:\n§7• Weakness potions can be brewed here\n§7• Essential for cure research\n§7• Allows experimentation with different concoctions\n\n§eThis apparatus is crucial for developing treatments.";
                     }
                 }
-                new ActionFormData().title(`§6Items: ${known ? e.title : '???'}`).body(body).button("§8Back").show(player).then(() => {
+                new ActionFormData().title(`§6Items: ${known ? e.title : '???'}`).body(body).button(DEV_BTN_BACK).show(player).then(() => {
                     const volumeMultiplier = getPlayerSoundVolume(player);
                     player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                     openItems();
@@ -3513,7 +3511,7 @@ export function showCodexBook(player, context) {
         if (daysWithEvents.length === 0) {
             const form = new ActionFormData().title("§6Daily Log");
             form.body("§7No significant events recorded yet.\n\n§8Events are recorded one day after they occur, as you reflect on the previous day's discoveries.");
-            form.button("§8Back");
+            form.button(DEV_BTN_BACK);
             form.show(player).then((res) => {
                 if (!res || res.canceled) return openTimeline();
 
@@ -3552,7 +3550,7 @@ export function showCodexBook(player, context) {
             }
         }
         
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled) {
                 // Play page turn sound when going back
@@ -3617,7 +3615,7 @@ export function showCodexBook(player, context) {
                     body += "§7No significant events recorded for this day.";
                 }
 
-                new ActionFormData().title(`§6Daily Log: Day ${selectedDay}`).body(body).button("§8Back").show(player).then(() => {
+                new ActionFormData().title(`§6Daily Log: Day ${selectedDay}`).body(body).button(DEV_BTN_BACK).show(player).then(() => {
                     const volumeMultiplier = getPlayerSoundVolume(player);
                     player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
                     openDailyLog();
@@ -3764,7 +3762,7 @@ export function showCodexBook(player, context) {
         }
         
         form.body(body);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             // Play page turn sound when going back
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -3823,7 +3821,7 @@ export function showCodexBook(player, context) {
             }
             form.button(label);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === entries.length) {
@@ -3839,7 +3837,7 @@ export function showCodexBook(player, context) {
             new ActionFormData()
                 .title(`§6Late Lore: ${entry.title}`)
                 .body(`${entry.body}\n\n§8The journal records what we'd rather forget.`)
-                .button("§8Back")
+                .button(DEV_BTN_BACK)
                 .show(player)
                 .then(() => {
                     const volumeMultiplier = getPlayerSoundVolume(player);
@@ -3881,7 +3879,7 @@ export function showCodexBook(player, context) {
         for (const button of buttons) {
             form.button(button);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         
         form.show(player).then((res) => {
             if (!res || res.canceled) {
@@ -4068,7 +4066,7 @@ export function showCodexBook(player, context) {
             }
         }
         
-        const form = new ActionFormData().title("§6Days & Milestones").body(body).button("§8Back");
+        const form = new ActionFormData().title("§6Days & Milestones").body(body).button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4089,7 +4087,7 @@ export function showCodexBook(player, context) {
         // Achievements are earned in the background, but hidden until you have the Powdery Journal (inventory OR persisted unlocked state)
         if (!playerHasPowderyJournal(player) && !isPowderyJournalUnlocked(player)) {
             body += `§7Well that was something!\n\n§8Your deeds are being recorded... but you'll need the Powdery Journal to make sense of these notes.`;
-            const form = new ActionFormData().title("§6Achievements").body(body).button("§8Back");
+            const form = new ActionFormData().title("§6Achievements").body(body).button(DEV_BTN_BACK);
             form.show(player).then((res) => {
                 if (!res || res.canceled) {
                     const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4178,7 +4176,7 @@ export function showCodexBook(player, context) {
             }
         }
         
-        const form = new ActionFormData().title("§6Achievements").body(body).button("§8Back");
+        const form = new ActionFormData().title("§6Achievements").body(body).button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
@@ -4201,7 +4199,7 @@ export function showCodexBook(player, context) {
             if (p && p.id !== player.id) form.button("§f" + p.name);
         }
         form.button("§cClear §8(normal targeting)");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         const others = allPlayers.filter(p => p && p.id !== player.id);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 1 + others.length + 1) {
@@ -4227,7 +4225,7 @@ export function showCodexBook(player, context) {
         form.button("§e128 blocks §8(overworld)");
         form.button("§e128 blocks §8(nether)");
         form.button("§e128 blocks §8(end)");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 7) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -4256,7 +4254,7 @@ export function showCodexBook(player, context) {
             .body("§7Kill all Maple Bears (and infected mobs) within radius. §8(current dimension)");
         form.button("§f64 blocks");
         form.button("§c128 blocks");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 2) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -4308,9 +4306,9 @@ export function showCodexBook(player, context) {
             .title("§cKill Bears %")
             .body("§7Kill a percentage of bears within radius. §8Choose scope: all, by type, or by specific variant.");
         form.button("§fX% of All Bears");
-        form.button("§eBy Type §7(tiny, infected, buff, etc.)");
-        form.button("§bBy Variant §7(specific entity)");
-        form.button("§8Back");
+        form.button("§eBy Type §f(tiny, infected, buff, etc.)");
+        form.button("§bBy Variant §f(specific entity)");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 3) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -4329,7 +4327,7 @@ export function showCodexBook(player, context) {
             .title("§eKill Bears % — By Type")
             .body("§7Select bear type, then enter % and radius.");
         for (const t of KILL_BEARS_TYPES) form.button(t.label);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === KILL_BEARS_TYPES.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -4347,7 +4345,7 @@ export function showCodexBook(player, context) {
             .title("§bKill Bears % — By Variant")
             .body("§7Select exact entity variant, then enter % and radius.");
         for (const v of KILL_BEARS_VARIANTS) form.button(`§f${v.label} §8(${v.id})`);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === KILL_BEARS_VARIANTS.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -4399,7 +4397,7 @@ export function showCodexBook(player, context) {
             form.button("§fInfections");
             form.button("§fJournal");
             form.button("§cAll");
-            form.button("§8Back");
+            form.button(DEV_BTN_BACK);
             form.show(player).then((res) => {
                 if (!res || res.canceled || res.selection === 5) {
                     player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -4426,7 +4424,7 @@ export function showCodexBook(player, context) {
         for (const p of others) {
             form.button("§f" + p.name);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 1 + others.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -4456,7 +4454,7 @@ export function showCodexBook(player, context) {
         form.button("§fSnippet §8(truncated)");
         form.button("§eSummary §8(keys/counts)");
         form.button("§cFull §8(JSON, chunks + logs)");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 3) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -4529,7 +4527,7 @@ export function showCodexBook(player, context) {
             .body("§7§oQuick: §7imports, snapshot, world checks (read-only)\n\n§6§oFull: §7spawns one of each bear type, waits, removes, then starts + ends a §ominor dust storm §7(overworld, dust on)\n\n§8Wolf-collar etc. in log are resource warnings, not script.")
             .button("§aQuick (read-only)")
             .button("§6Full (spawns + storm + cleanup)")
-            .button("§8Back");
+            .button(DEV_BTN_BACK);
         picker.show(player).then((pRes) => {
             if (!pRes || pRes.canceled || pRes.selection === 2) {
                 try {
@@ -4555,7 +4553,7 @@ export function showCodexBook(player, context) {
                         .title(full ? "§6Full script self-test" : "§eScript self-test")
                         .body(body)
                         .button("§aRun again (menu)")
-                        .button("§8Back");
+                        .button(DEV_BTN_BACK);
                     form.show(player).then((res) => {
                         if (!res || res.canceled || res.selection === 1) {
                             try {
@@ -4673,6 +4671,19 @@ export function showCodexBook(player, context) {
             pinCategory: "systems",
             label: "Script self-test",
             action: () => pinDevShortcutFromMain(() => openScriptSelfTestDevMenu(() => openMain()))
+        },
+        {
+            id: "starter_set_export",
+            pinCategory: "systems",
+            label: "Starter set for export",
+            action: () =>
+                pinDevShortcutFromMain(() => openAbandonedVillageDebugMenu(player, () => openMain()))
+        },
+        {
+            id: "abandoned_villages",
+            pinCategory: "systems",
+            label: "Abandoned villages debug",
+            action: () => pinDevShortcutFromMain(() => openAbandonedVillageDebugMenu(player, () => openMain()))
         },
         {
             id: "sim_players",
@@ -4966,7 +4977,7 @@ export function showCodexBook(player, context) {
             const pinnedInCat = inCat.filter((i) => pinnedSet.has(i.id)).length;
             form.button(`${cat.title} §8(${pinnedInCat}/${inCat.length})`);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === visibleCats.length) {
@@ -4994,7 +5005,7 @@ export function showCodexBook(player, context) {
             const isPinned = pinned.has(item.id);
             form.button((isPinned ? "§a" : "§f") + item.label + (isPinned ? " §8(pinned)" : ""));
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === pinEligible.length) {
@@ -5027,7 +5038,7 @@ export function showCodexBook(player, context) {
         for (const p of others) {
             form.button("§f" + p.name);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 1 + others.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -5061,7 +5072,7 @@ export function showCodexBook(player, context) {
         for (const s of cat.sounds) {
             form.button(`§f${s.label} §8· ${s.soundId}`);
         }
-        form.button("§8Back to categories");
+        form.button(devBtnBackTo("categories"));
         form.show(player).then((res) => {
             if (!res || res.canceled) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -5085,7 +5096,7 @@ export function showCodexBook(player, context) {
         for (const c of DEV_SOUND_CATEGORIES) {
             form.button(`§f${c.title} §8(${c.sounds.length})`);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === DEV_SOUND_CATEGORIES.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -5184,13 +5195,13 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData()
             .title("§eCamp / mobility")
             .body(`§7Centroid camp (spawn pressure) + movement EMA (scan throttle).\n\n${short}`);
-        form.button(watchOn ? "§cStop camp HUD §8(action bar)" : "§aStart camp HUD §8(action bar)");
-        form.button("§fDump full details §8(chat)");
-        form.button("§eAnchor → my feet §8(dev)");
-        form.button("§e+half ramp sedentary §8(+6000 ticks)");
+        form.button(watchOn ? `§cStop camp HUD${devBtnParen("action bar")}` : `§aStart camp HUD${devBtnParen("action bar")}`);
+        form.button(`§fDump full details${devBtnParen("chat")}`);
+        form.button(`§eAnchor → my feet${devBtnParen("dev")}`);
+        form.button(`§e+half ramp sedentary${devBtnParen("+6000 ticks")}`);
         form.button("§eMax ramp sedentary");
-        form.button("§cClear camp state §8(this cluster)");
-        form.button("§8Back");
+        form.button(`§cClear camp state${devBtnParen("this cluster")}`);
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 6) {
@@ -5264,7 +5275,7 @@ export function showCodexBook(player, context) {
             .title(isReleaseAdminBuild() ? "§6Host tools" : "§6Admin tools")
             .body(noticeBody)
             .button("§aI understand — continue")
-            .button("§8Go back");
+            .button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 1) {
@@ -5305,7 +5316,7 @@ export function showCodexBook(player, context) {
             .button("§fPin / unpin journal main")
             .button("§cForce spawn bears")
             .button("§fList nearby bears")
-            .button("§8Back");
+            .button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 4) {
@@ -5347,7 +5358,7 @@ export function showCodexBook(player, context) {
             .button("§fSpawn a few bears §8(capped)")
             .button("§fList nearby bears §8(read-only)")
             .button("§fPin journal shortcuts")
-            .button("§8Back");
+            .button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 4) {
@@ -5388,11 +5399,11 @@ export function showCodexBook(player, context) {
             `§8Dust storms: §f${dustOn ? "ON" : "OFF"}`;
         const form = new ActionFormData().title("§6Storms").body(body);
         if (!dustOn) {
-            form.button("§aEnable dust storms §8(world)");
+            form.button(`§aEnable dust storms${devBtnParen("world")}`);
         }
-        form.button("§bSummon minor storm §8(near you, 20m)");
-        form.button(state.active ? "§4End all storms" : "§8End all §7(none)");
-        form.button("§8Back");
+        form.button(`§bSummon minor storm${devBtnParen("near you, 20m")}`);
+        form.button(state.active ? "§4End all storms" : "§fEnd all (none)");
+        form.button(DEV_BTN_BACK);
         const backIdx = dustOn ? 2 : 3;
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
@@ -5446,7 +5457,7 @@ export function showCodexBook(player, context) {
         for (const opt of RELEASE_FORCE_SPAWN_MENU_OPTIONS) {
             form.button(`§f${opt.label}`);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === RELEASE_FORCE_SPAWN_MENU_OPTIONS.length) {
@@ -5470,7 +5481,7 @@ export function showCodexBook(player, context) {
         for (const q of RELEASE_FORCE_SPAWN_COUNTS) {
             form.button(q.label);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === RELEASE_FORCE_SPAWN_COUNTS.length) {
@@ -5498,14 +5509,14 @@ export function showCodexBook(player, context) {
         const body = `§7Spawn scans get cheaper when addon bears, overworld item entities §8(sampled)§7, storms, tick stress, or heavy mob pressure rise. §8Does not remove entities.\n\n§8Addon mobs §7· §f${s.bears}§7 · §8OW items §7· §f${s.itemsOw}§7 · §8Storms §7· §f${s.storms}\n§8Model §7· §f${(s.load01 * 100).toFixed(0)}% §8load §7→ interval §f×${s.intervalMult.toFixed(2)}§7 blocks §f×${s.blockScale.toFixed(2)}§7 scan CD §f×${s.scanCooldownMult.toFixed(2)}\n§8Auto §7· §f${s.auto ? "ON" : "OFF"}§7 · §8Thrift bias §7· §f${s.bias} §8(0–4)\n§8Heavy systems adaptive §7· §f×${p.adaptiveAddon.toFixed(2)}`;
         const form = new ActionFormData().title("§bSpawn load & efficiency").body(body);
         form.button(s.auto ? "§cTurn auto spawn load scaling OFF" : "§aTurn auto spawn load scaling ON");
-        form.button("§fBias 0 §8· Default");
-        form.button("§eBias 1 §8· Light thrift");
-        form.button("§6Bias 2 §8· Mid thrift");
-        form.button("§cBias 3 §8· Strong thrift");
-        form.button("§4Bias 4 §8· Max thrift");
-        form.button("§fDump snapshot §8(chat)");
-        form.button("§6Heavy perf presets §8(storm / mining / spatial)");
-        form.button("§8Back");
+        form.button(`§fBias 0${DEV_BTN_DOT}Default`);
+        form.button(`§eBias 1${DEV_BTN_DOT}Light thrift`);
+        form.button(`§6Bias 2${DEV_BTN_DOT}Mid thrift`);
+        form.button(`§cBias 3${DEV_BTN_DOT}Strong thrift`);
+        form.button(`§4Bias 4${DEV_BTN_DOT}Max thrift`);
+        form.button(`§fDump snapshot${devBtnParen("chat")}`);
+        form.button(`§6Heavy perf presets${devBtnParen("storm / mining / spatial")}`);
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 8) {
@@ -5543,15 +5554,15 @@ export function showCodexBook(player, context) {
                     "§7Heavy presets §8(storm/mining/spatial)§7, camp HUD, AI throttle.\n" +
                     "§8Manual spawn presets §7stick unless §dspawn+scan AUTO §7is ON §8(see hub)§7."
             );
-        form.button("§aSpawn AUTO & presets hub §8(full spawn UI)");
-        form.button("§bSpawn load & efficiency §8(auto scaling)");
-        form.button("§6Heavy perf §8(storm, mining, spatial)");
+        form.button(`§aSpawn AUTO & presets hub${devBtnParen("full spawn UI")}`);
+        form.button(`§bSpawn load & efficiency${devBtnParen("auto scaling")}`);
+        form.button(`§6Heavy perf${devBtnParen("storm, mining, spatial")}`);
         form.button("§eCamp / mobility debug");
         form.button("§eAI throttle & speed");
         if (INCLUDE_FULL_DEVELOPER_TOOLS) {
-            form.button("§cBear cull tuning §8(dev)");
+            form.button(`§cBear cull tuning${devBtnParen("dev")}`);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         const perfMenuBackIdx = INCLUDE_FULL_DEVELOPER_TOOLS ? 6 : 5;
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
@@ -5579,22 +5590,24 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData()
             .title("§aSystems")
             .body(
-                "§7Script toggles §8(all systems)§7, spawn hub, biome checker, self-test.\n\n" +
+                "§7Script toggles §8(all systems)§7, spawn hub, biome checker, abandoned villages, self-test.\n\n" +
                     `§8Script toggles: §7${areAllScriptTogglesOff() ? "§cALL OFF" : "§amixed/on"}\n` +
-                    `§8Biome HUD: §7${biomeHudOn ? "§aON" : "§7OFF"} §8· Entity-query HUD: §7${entityQueryHudOn ? "§aON" : "§7OFF"}`
+                    `§8Biome HUD: §7${biomeHudOn ? "§aON" : "§7OFF"} §8· Entity-query HUD: §7${entityQueryHudOn ? "§aON" : "§7OFF"}\n` +
+                    "§8Abandoned villages: §7hamlet/village test · §bStarter set for export§7 in that menu · pin §fabandoned_villages§7"
             );
-        form.button("§fScript toggles §8(AI, storms, infection audio…)");
+        form.button(`§fScript toggles${devBtnParen("AI, storms, infection audio…")}`);
         form.button("§fSpawn controller");
-        form.button(biomeHudOn ? "§cTurn off §2§lmy§r §7biome HUD" : "§aTurn on §2§lmy§r §7biome HUD");
-        form.button("§2Biome checker §8(replace list)");
-        form.button("§eVillager suppress §8(script despawn)");
-        form.button("§bEntity query / village §8(perf HUD)");
-        form.button("§eScript self-test §8(in-game)");
-        form.button("§bSimulated players §8(dev)");
-        form.button("§8Back");
+        form.button(biomeHudOn ? "§cTurn off §2§lmy§r §fbiome HUD" : "§aTurn on §2§lmy§r §fbiome HUD");
+        form.button(`§2Biome checker${devBtnParen("replace list")}`);
+        form.button(`§eVillager suppress${devBtnParen("script despawn")}`);
+        form.button(`§6Abandoned villages${devBtnParen("debug + export")}`);
+        form.button(`§bEntity query / village${devBtnParen("perf HUD")}`);
+        form.button(`§eScript self-test${devBtnParen("in-game")}`);
+        form.button(`§bSimulated players${devBtnParen("dev")}`);
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
-            if (!res || res.canceled || res.selection === 8) {
+            if (!res || res.canceled || res.selection === 9) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
                 return openDeveloperTools();
             }
@@ -5611,8 +5624,10 @@ export function showCodexBook(player, context) {
             else if (res.selection === 4) {
                 openVillagerSuppressionDevMenu(player, () => openDeveloperToolsSystemsMenu());
             } else if (res.selection === 5) {
+                openAbandonedVillageDebugMenu(player, () => openDeveloperToolsSystemsMenu());
+            } else if (res.selection === 6) {
                 openEntityQueryDebugHub(player, () => openDeveloperToolsSystemsMenu());
-            } else if (res.selection === 6) openScriptSelfTestDevMenu(() => openDeveloperToolsSystemsMenu());
+            } else if (res.selection === 7) openScriptSelfTestDevMenu(() => openDeveloperToolsSystemsMenu());
             else system.run(() => openSimulatedPlayersMenu());
         }).catch(() => openDeveloperTools());
     }
@@ -5627,7 +5642,7 @@ export function showCodexBook(player, context) {
         form.button("§fReset my codex");
         form.button("§fReset codex section");
         form.button("§fDump codex state");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 5) {
@@ -5658,7 +5673,7 @@ export function showCodexBook(player, context) {
         form.button("§fSet day…");
         form.button("§fSimulate next day");
         form.button("§fReset intro");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 4) {
@@ -5678,13 +5693,13 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData()
             .title("§6Bears")
             .body("§7Clear, cull, list, inspect, force spawn, and force AI targeting.");
-        form.button("§fClear bears §8(radius)");
-        form.button("§fKill bears % §7(all / type / variant)");
+        form.button(`§fClear bears${devBtnParen("radius")}`);
+        form.button("§fKill bears % §f(all / type / variant)");
         form.button("§fBears target player");
         form.button("§fList nearby bears");
         form.button("§fInspect nearest bear");
-        form.button("§eForce spawn bears §8(by category)");
-        form.button("§8Back");
+        form.button(`§eForce spawn bears${devBtnParen("by category")}`);
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 6) {
@@ -5712,7 +5727,7 @@ export function showCodexBook(player, context) {
             .title("§3Storm")
             .body("§7Summon, list, overrides, and snow-storm debug §8(full hub)§7.");
         form.button("§bOpen storm hub");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 1) {
@@ -5733,7 +5748,7 @@ export function showCodexBook(player, context) {
         form.button("§fClear / set infection");
         form.button("§fGrant / remove immunity");
         form.button("§fSet kill counts");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 3) {
@@ -5753,9 +5768,9 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData()
             .title("§5Audio & debug")
             .body("§7Sound catalog and per-subsystem debug logging toggles.");
-        form.button("§dPlay sound §8(catalog)");
-        form.button("§fDebug menu §8(logging categories)");
-        form.button("§8Back");
+        form.button(`§dPlay sound${devBtnParen("catalog")}`);
+        form.button(`§fDebug menu${devBtnParen("logging categories")}`);
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 2) {
@@ -5788,6 +5803,12 @@ export function showCodexBook(player, context) {
         const presetSee = isSpawnPresetHudEnabledForPlayer(player);
         const biomeHudSee = isBiomeCheckerHudEnabledForPlayer(player);
         const legacyScanWorld = isSpawnScanPerfOverlayEnabled();
+        const seesExtraHud =
+            (scanSee && !scanPersonal) ||
+            (presetSee && !presetPersonal) ||
+            (biomeHudSee && !biomeHudPersonal) ||
+            broadcastHud ||
+            legacyScanWorld;
         const form = new ActionFormData()
             .title("§fHUD & action bar")
             .body(
@@ -5796,21 +5817,24 @@ export function showCodexBook(player, context) {
                     `§8Your toggles §7scan ${scanPersonal ? "§aON" : "§7OFF"} §8preset ${presetPersonal ? "§aON" : "§7OFF"} §8sim ${simHudPersonal ? "§aON" : "§7OFF"} §8biome ${biomeHudPersonal ? "§aON" : "§7OFF"} §8| §8Broadcast §7(world) ${broadcastHud ? "§aON" : "§7OFF"}\n` +
                     `§8You see §7scan ${scanSee ? "§aON" : "§7OFF"} §8preset ${presetSee ? "§aON" : "§7OFF"} §8biome ${biomeHudSee ? "§aON" : "§7OFF"} §8§o(includes legacy world scan if ever ON)` +
                     (legacyScanWorld ? "\n§8Legacy world scan HUD §7was ON §8— toggle scan to migrate to per-player." : "") +
+                    (seesExtraHud
+                        ? "\n\n§e§lNote:§r §7If §8You see §7differs from §8Your toggles§7, another player or §fbroadcast§7 is driving your bar. Turn §fbroadcast OFF§7 and each use §2my§7 toggles."
+                        : "") +
                     `\n\n§8Live §7(${dbg.count} seg): §r${preview}`
             );
         const campWatch = player.hasTag("mb_dev_camp_watch");
-        form.button(scanPersonal ? "§cTurn off §e§lmy§r §7scan perf HUD" : "§aTurn on §e§lmy§r §7scan perf HUD");
-        form.button(presetPersonal ? "§cTurn off §6§lmy§r §7preset hint HUD" : "§aTurn on §6§lmy§r §7preset hint HUD");
-        form.button(simHudPersonal ? "§cTurn off §b§lmy§r §7sim players HUD" : "§aTurn on §b§lmy§r §7sim players HUD");
-        form.button(biomeHudPersonal ? "§cTurn off §2§lmy§r §7biome checker HUD" : "§aTurn on §2§lmy§r §7biome checker HUD");
-        form.button(broadcastHud ? "§cBroadcast spawn HUDs §8→ OFF §7(all players)" : "§aBroadcast spawn HUDs §8→ ON §7(all players)");
-        form.button(campWatch ? "§cRemove §bcamp watch §7tag" : "§aAdd §bcamp watch §7tag");
-        form.button("§eClear all merged segments §8(your line)");
-        form.button("§6Clear day / ambient §8(narrative slot only)");
-        form.button("§fTest toast §8(~3s, merged)");
-        form.button("§aSpawn AUTO hub §8(preset+scan+load)…");
-        form.button("§bSpawn — World tuning §8(presets & combos)…");
-        form.button("§8Back");
+        form.button(scanPersonal ? "§cTurn off §e§lmy§r §fscan perf HUD" : "§aTurn on §e§lmy§r §fscan perf HUD");
+        form.button(presetPersonal ? "§cTurn off §6§lmy§r §fpreset hint HUD" : "§aTurn on §6§lmy§r §fpreset hint HUD");
+        form.button(simHudPersonal ? "§cTurn off §b§lmy§r §fsim players HUD" : "§aTurn on §b§lmy§r §fsim players HUD");
+        form.button(biomeHudPersonal ? "§cTurn off §2§lmy§r §fbiome checker HUD" : "§aTurn on §2§lmy§r §fbiome checker HUD");
+        form.button(broadcastHud ? "§cBroadcast spawn HUDs §f→ OFF (all players)" : "§aBroadcast spawn HUDs §f→ ON (all players)");
+        form.button(campWatch ? "§cRemove §bcamp watch §ftag" : "§aAdd §bcamp watch §ftag");
+        form.button(`§eClear all merged segments${devBtnParen("your line")}`);
+        form.button(`§6Clear day / ambient${devBtnParen("narrative slot only")}`);
+        form.button(`§fTest toast${devBtnParen("~3s, merged")}`);
+        form.button(`§aSpawn AUTO hub${devBtnParen("preset+scan+load")}…`);
+        form.button(`§bSpawn — World tuning${devBtnParen("presets & combos")}…`);
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 11) {
@@ -5845,7 +5869,11 @@ export function showCodexBook(player, context) {
             if (res.selection === 4) {
                 setSpawnHudBroadcastEnabled(!broadcastHud);
                 try { saveAllProperties(); } catch { /* ignore */ }
-                player.sendMessage(CHAT_INFO + "Spawn HUD broadcast to all players: " + (!broadcastHud ? "ON." : "OFF."));
+                player.sendMessage(
+                    CHAT_INFO +
+                        "Spawn HUD broadcast (world): " +
+                        (!broadcastHud ? "ON — everyone's bar can mirror dev spawn HUDs." : "OFF — only §2my§r toggles per player.")
+                );
                 return openDeveloperToolsHudMenu(onBack);
             }
             if (res.selection === 5) {
@@ -5888,9 +5916,9 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData()
             .title("§7Public release preview")
             .body("§7Match journal + admin flow closer to the public pack.");
-        form.button(previewOn ? "§cHide §6Admin tools §7on journal main" : "§aShow §6Admin tools §7on journal main");
-        form.button("§fOpen admin panel §7(public disclaimer flow)");
-        form.button("§8Back");
+        form.button(previewOn ? "§cHide §6Admin tools §fon journal main" : "§aShow §6Admin tools §fon journal main");
+        form.button("§fOpen admin panel §f(public disclaimer flow)");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 2) {
@@ -5918,7 +5946,7 @@ export function showCodexBook(player, context) {
             .title("§cDeveloper Tools")
             .body("§7Pick a category. §8Performance §7= §aSpawn AUTO hub§7, load scaling, heavy presets, camp, mining.");
         form.button("§b■ Performance");
-        form.button("§a■ Systems §8(scripts, spawn)");
+        form.button(`§a■ Systems${devBtnParen("scripts, spawn")}`);
         form.button("§d■ Codex");
         form.button("§e■ World & day");
         form.button("§6■ Bears");
@@ -5926,8 +5954,8 @@ export function showCodexBook(player, context) {
         form.button("§c■ Infection & players");
         form.button("§5■ Audio & debug");
         form.button("§f■ HUD & action bar");
-        if (hasPreview) form.button("§7■ Public preview");
-        form.button("§8Back");
+        if (hasPreview) form.button("§f■ Public preview");
+        form.button(DEV_BTN_BACK);
         const backIdx = hasPreview ? 10 : 9;
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
@@ -5971,7 +5999,7 @@ export function showCodexBook(player, context) {
             .title("§cDeveloper tools")
             .body(`§c§lRisk warning§r\n\n§7These tools can corrupt saves, break progression, unbalance worlds, or cause crashes. Only continue if you accept that risk.\n\n§7Version: §f${getAddonVersionDisplayString()}\n\n§7Continuing means you acknowledge this.`)
             .button("§aI understand — continue")
-            .button("§8Go back");
+            .button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 1) {
@@ -5999,9 +6027,9 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title(group.title).body(`§7Tap to flip one system.\n\n${body}`);
         for (const id of group.ids) {
             const on = toggles[id];
-            form.button(on ? `§a${SCRIPT_TOGGLE_LABELS[id]} §8(ON)` : `§c${SCRIPT_TOGGLE_LABELS[id]} §8(OFF)`);
+            form.button(on ? `§a${SCRIPT_TOGGLE_LABELS[id]} §f(ON)` : `§c${SCRIPT_TOGGLE_LABELS[id]} §f(OFF)`);
         }
-        form.button("§8Back to script toggles");
+        form.button(devBtnBackTo("script toggles"));
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === group.ids.length) {
@@ -6043,7 +6071,7 @@ export function showCodexBook(player, context) {
         form.button(SCRIPT_TOGGLE_GROUPS.spawn.title);
         form.button(SCRIPT_TOGGLE_GROUPS.infection.title);
         form.button(SCRIPT_TOGGLE_GROUPS.perf.title);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 6) {
@@ -6105,11 +6133,11 @@ export function showCodexBook(player, context) {
                     "§7§lStorm & mining§7: §aAuto§7 clears manual multipliers so §eHave lag?§7 tiers + probes drive cadence.\n\n" +
                     `§8Preset+scan AUTO: §7${presetAuto ? "§aON" : "§7OFF"}\n§8Load AUTO: §7${loadAuto ? "§aON" : "§7OFF"}\n§8Storm: §7${stormLine} §8· §8Mining: §7${minLine}`
             );
-        form.button(presetAuto ? "§cTurn OFF §dspawn+scan §7AUTO" : "§aTurn ON §dspawn+scan §7AUTO");
-        form.button(loadAuto ? "§cTurn OFF §bspawn load §7AUTO" : "§aTurn ON §bspawn load §7AUTO");
-        form.button("§aStorm & mining → §7Auto §8(clear manuals)");
-        form.button("§fSpawn load details & bias §8(intervals, snapshot)…");
-        form.button("§8Back");
+        form.button(presetAuto ? "§cTurn OFF §dspawn+scan §fAUTO" : "§aTurn ON §dspawn+scan §fAUTO");
+        form.button(loadAuto ? "§cTurn OFF §bspawn load §fAUTO" : "§aTurn ON §bspawn load §fAUTO");
+        form.button(`§aStorm & mining → §fAuto${devBtnParen("clear manuals")}`);
+        form.button(`§fSpawn load details & bias${devBtnParen("intervals, snapshot")}…`);
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
@@ -6191,12 +6219,12 @@ export function showCodexBook(player, context) {
             );
 
         form.button(spawnEnabled ? "§cSpawn Controller OFF" : "§aSpawn Controller ON");
-        form.button("§a§lAuto modes §r§8(preset+scan, load, storm/mining)");
-        form.button("§6Manual world tuning §8(intensity, combos, scan)");
-        form.button("§bHUD & spatial §8(overlays, clusters)");
-        form.button("§fCore rules §8(difficulty, speed, types)");
+        form.button(`§a§lAuto modes §r${devBtnParen("preset+scan, load, storm/mining")}`);
+        form.button(`§6Manual world tuning${devBtnParen("intensity, combos, scan")}`);
+        form.button(`§bHUD & spatial${devBtnParen("overlays, clusters")}`);
+        form.button(`§fCore rules${devBtnParen("difficulty, speed, types")}`);
         form.button("§dEmulsifier");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 6) {
@@ -6232,7 +6260,7 @@ export function showCodexBook(player, context) {
         form.button("§fSpawn Difficulty");
         form.button("§fSpawn Speed");
         form.button("§fSpawn Type Toggles");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 3) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -6272,13 +6300,13 @@ export function showCodexBook(player, context) {
                     `§8You see §7scan ${scanSee ? "§aON" : "§7OFF"} §8preset ${presetSee ? "§aON" : "§7OFF"} §8§o(not only broadcast; legacy world scan still shows)\n` +
                     `§8Spatial groups: §7${spatialOn ? "ON" : "OFF"}`
             );
-        form.button(scanPersonal ? "§cTurn off §e§lmy§r §7scan perf HUD" : "§aTurn on §e§lmy§r §7scan perf HUD");
-        form.button(presetPersonal ? "§cTurn off §6§lmy§r §7preset match HUD" : "§aTurn on §6§lmy§r §7preset match HUD §8(~nearest tier)");
-        form.button(broadcastHud ? "§cBroadcast spawn HUDs §8→ OFF" : "§aBroadcast spawn HUDs §8→ ON");
-        form.button(spatialOn ? "§6Spatial groups §aON §8→ OFF" : "§eSpatial groups §cOFF §8→ ON");
-        form.button("§a§lAuto modes hub §r§8(preset+scan, load, storm/mining)…");
-        form.button("§fSpawn load details & bias §8(intervals, snapshot)…");
-        form.button("§8Back");
+        form.button(scanPersonal ? "§cTurn off §e§lmy§r §fscan perf HUD" : "§aTurn on §e§lmy§r §fscan perf HUD");
+        form.button(presetPersonal ? "§cTurn off §6§lmy§r §fpreset match HUD" : `§aTurn on §6§lmy§r §fpreset match HUD${devBtnParen("~nearest tier")}`);
+        form.button(broadcastHud ? "§cBroadcast spawn HUDs §f→ OFF" : "§aBroadcast spawn HUDs §f→ ON");
+        form.button(spatialOn ? "§6Spatial groups §aON §f→ OFF" : "§eSpatial groups §cOFF §f→ ON");
+        form.button(`§a§lAuto modes hub §r${devBtnParen("preset+scan, load, storm/mining")}…`);
+        form.button(`§fSpawn load details & bias${devBtnParen("intervals, snapshot")}…`);
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 6) {
@@ -6330,11 +6358,11 @@ export function showCodexBook(player, context) {
                     `${tuneActive.menuBody}`
             );
         form.button("§fSpawn intensity presets");
-        form.button("§eQuick combos §8(spawn + scan only)");
-        form.button("§dWorld perf combos §8(+ storm + mining)");
+        form.button(`§eQuick combos${devBtnParen("spawn + scan only")}`);
+        form.button(`§dWorld perf combos${devBtnParen("+ storm + mining")}`);
         form.button("§6Advanced options");
         form.button("§bScan scheduler");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 5) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -6374,10 +6402,10 @@ export function showCodexBook(player, context) {
                     `§8Mining load: §7${minM ? `${minM}× manual` : "auto (lag + players + bears + tick probe)"}\n` +
                     `§8Spatial spawn groups: §7${spatial ? "ON" : "OFF"}${adaptHint}`
             );
-        form.button("§bDust storm cadence §8(preset)");
-        form.button("§bMining AI cadence §8(preset)");
-        form.button(spatial ? "§6Spatial spawn groups §aON §8→ OFF" : "§eSpatial spawn groups §cOFF §8→ ON");
-        form.button("§8Back");
+        form.button(`§bDust storm cadence${devBtnParen("preset")}`);
+        form.button(`§bMining AI cadence${devBtnParen("preset")}`);
+        form.button(spatial ? "§6Spatial spawn groups §aON §f→ OFF" : "§eSpatial spawn groups §cOFF §f→ ON");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 3) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -6398,30 +6426,30 @@ export function showCodexBook(player, context) {
 
     /** Storm work interval multiplier presets (higher = less work per tick). `mult` undefined = clear manual. */
     const STORM_WORK_PRESET_ROWS = [
-        { label: "§aAuto §8(lag tier + players)", mult: undefined },
-        { label: "§fBase §8(1.0× fixed)", mult: 1 },
-        { label: "§eLite §8(1.12×)", mult: 1.12 },
-        { label: "§2Low §8(1.25×)", mult: 1.25 },
-        { label: "§3Med-Low §8(1.38×)", mult: 1.38 },
-        { label: "§6Med §8(1.55×)", mult: 1.55 },
-        { label: "§6Med-High §8(1.72×)", mult: 1.72 },
-        { label: "§cHeavy §8(1.95×)", mult: 1.95 },
-        { label: "§4Extreme §8(2.4×)", mult: 2.4 },
-        { label: "§8Ultra §8(4× cap)", mult: 4 }
+        { label: `§aAuto${devBtnParen("lag tier + players")}`, mult: undefined },
+        { label: `§fBase${devBtnParen("1.0× fixed")}`, mult: 1 },
+        { label: `§eLite${devBtnParen("1.12×")}`, mult: 1.12 },
+        { label: `§2Low${devBtnParen("1.25×")}`, mult: 1.25 },
+        { label: `§3Med-Low${devBtnParen("1.38×")}`, mult: 1.38 },
+        { label: `§6Med${devBtnParen("1.55×")}`, mult: 1.55 },
+        { label: `§6Med-High${devBtnParen("1.72×")}`, mult: 1.72 },
+        { label: `§cHeavy${devBtnParen("1.95×")}`, mult: 1.95 },
+        { label: `§4Extreme${devBtnParen("2.4×")}`, mult: 2.4 },
+        { label: `§fUltra${devBtnParen("4× cap")}`, mult: 4 }
     ];
 
     /** Mining AI batch interval multiplier (higher = less often). Max 3. */
     const MINING_WORK_PRESET_ROWS = [
-        { label: "§aAuto §8(lag tier + players)", mult: undefined },
-        { label: "§fBase §8(1.0× fixed)", mult: 1 },
-        { label: "§eLite §8(1.1×)", mult: 1.1 },
-        { label: "§2Low §8(1.2×)", mult: 1.2 },
-        { label: "§3Med-Low §8(1.32×)", mult: 1.32 },
-        { label: "§6Med §8(1.45×)", mult: 1.45 },
-        { label: "§6Med-High §8(1.6×)", mult: 1.6 },
-        { label: "§cHeavy §8(1.85×)", mult: 1.85 },
-        { label: "§4Extreme §8(2.2×)", mult: 2.2 },
-        { label: "§8Ultra §8(3× cap)", mult: 3 }
+        { label: `§aAuto${devBtnParen("lag tier + players")}`, mult: undefined },
+        { label: `§fBase${devBtnParen("1.0× fixed")}`, mult: 1 },
+        { label: `§eLite${devBtnParen("1.1×")}`, mult: 1.1 },
+        { label: `§2Low${devBtnParen("1.2×")}`, mult: 1.2 },
+        { label: `§3Med-Low${devBtnParen("1.32×")}`, mult: 1.32 },
+        { label: `§6Med${devBtnParen("1.45×")}`, mult: 1.45 },
+        { label: `§6Med-High${devBtnParen("1.6×")}`, mult: 1.6 },
+        { label: `§cHeavy${devBtnParen("1.85×")}`, mult: 1.85 },
+        { label: `§4Extreme${devBtnParen("2.2×")}`, mult: 2.2 },
+        { label: `§fUltra${devBtnParen("3× cap")}`, mult: 3 }
     ];
 
     function openStormWorkPresetMenu() {
@@ -6431,7 +6459,7 @@ export function showCodexBook(player, context) {
         for (const row of STORM_WORK_PRESET_ROWS) {
             form.button(row.label);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         const backIdx = STORM_WORK_PRESET_ROWS.length;
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === backIdx) return openHeavyPerfPresetsMenu();
@@ -6452,7 +6480,7 @@ export function showCodexBook(player, context) {
         for (const row of MINING_WORK_PRESET_ROWS) {
             form.button(row.label);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         const backIdx = MINING_WORK_PRESET_ROWS.length;
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === backIdx) return openHeavyPerfPresetsMenu();
@@ -6469,7 +6497,7 @@ export function showCodexBook(player, context) {
     /** One-tap: spawn intensity preset + scan scheduler preset (see SPAWN_SCAN_PRESETS in mb_spawnController). */
     const SPAWN_COMBO_PRESETS = [
         { spawnKey: "low", scanKey: "lowLag", label: "§aLow + Low Lag scan", desc: "Default lagfight" },
-        { spawnKey: "ultraLow", scanKey: "minimal", label: "§8Ultra + Minimal scan", desc: "Worst TPS / many players" },
+        { spawnKey: "ultraLow", scanKey: "minimal", label: "§fUltra + Minimal scan", desc: "Worst TPS / many players" },
         { spawnKey: "medLow", scanKey: "multiplayerSpread", label: "§3Med-Low + MP Spread scan", desc: "6–8 players spread out" },
         { spawnKey: "med", scanKey: "soloHost", label: "§fMed + Solo-host scan", desc: "Mostly solo on a server world" },
         { spawnKey: "med", scanKey: "balanced", label: "§fMed + Balanced scan", desc: "Vanilla-like pacing" }
@@ -6503,11 +6531,11 @@ export function showCodexBook(player, context) {
 
     /** Aligns with Quick combos + named storm/mining preset tiers (Heavy perf menus). */
     const WORLD_PERF_COMBO_PRESETS = [
-        { spawnKey: "low", scanKey: "lowLag", stormWorkMult: 1.25, miningWorkMult: 1.2, label: "§aLow §8(all systems)", desc: "Low spawn + Low Lag scan + Low storm (1.25×) + Low mining (1.2×)" },
-        { spawnKey: "ultraLow", scanKey: "minimal", stormWorkMult: 2.4, miningWorkMult: 2.2, label: "§8Ultra-light §8(all)", desc: "Ultra spawn + Minimal scan + Extreme storm/mining cadence" },
-        { spawnKey: "medLow", scanKey: "multiplayerSpread", stormWorkMult: 1.38, miningWorkMult: 1.32, label: "§3Med-low MP §8(+ storm/mining)", desc: "Med-Low spawn + MP Spread + Med-Low heavy presets" },
-        { spawnKey: "med", scanKey: "balanced", stormWorkMult: 1, miningWorkMult: 1, label: "§fMed §8(1× storm & mining fixed)", desc: "Balanced spawn/scan; minimum heavy-system multipliers" },
-        { spawnKey: "med", scanKey: "balanced", clearHeavyManuals: true, label: "§aMed + Balanced §8+ auto storm/mining", desc: "Same spawn/scan as above; clears manual storm & mining (journal lag applies)" }
+        { spawnKey: "low", scanKey: "lowLag", stormWorkMult: 1.25, miningWorkMult: 1.2, label: `§aLow${devBtnParen("all systems")}`, desc: "Low spawn + Low Lag scan + Low storm (1.25×) + Low mining (1.2×)" },
+        { spawnKey: "ultraLow", scanKey: "minimal", stormWorkMult: 2.4, miningWorkMult: 2.2, label: `§fUltra-light${devBtnParen("all")}`, desc: "Ultra spawn + Minimal scan + Extreme storm/mining cadence" },
+        { spawnKey: "medLow", scanKey: "multiplayerSpread", stormWorkMult: 1.38, miningWorkMult: 1.32, label: `§3Med-low MP${devBtnParen("+ storm/mining")}`, desc: "Med-Low spawn + MP Spread + Med-Low heavy presets" },
+        { spawnKey: "med", scanKey: "balanced", stormWorkMult: 1, miningWorkMult: 1, label: `§fMed${devBtnParen("1× storm & mining fixed")}`, desc: "Balanced spawn/scan; minimum heavy-system multipliers" },
+        { spawnKey: "med", scanKey: "balanced", clearHeavyManuals: true, label: `§aMed + Balanced${devBtnParen("+ auto storm/mining")}`, desc: "Same spawn/scan as above; clears manual storm & mining (journal lag applies)" }
     ];
 
     function openWorldPerfComboMenu() {
@@ -6517,7 +6545,7 @@ export function showCodexBook(player, context) {
             .title("§dWorld perf combos")
             .body(`§7One tap: spawn intensity + scan scheduler + §bstorm §7and §bmining §7work multipliers §8(see Heavy perf presets for individual steps).\n\n${tuneNow.menuBody}\n\n${body}`);
         WORLD_PERF_COMBO_PRESETS.forEach((c) => form.button(c.label));
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === WORLD_PERF_COMBO_PRESETS.length) return openSpawnPerformanceHub();
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
@@ -6539,7 +6567,7 @@ export function showCodexBook(player, context) {
             .title("§eSpawn + scan combos")
             .body(`§7Applies both spawn intensity and scan scheduler presets.\n\n${tuneNow.menuBody}\n\n${body}`);
         SPAWN_COMBO_PRESETS.forEach((c) => form.button(c.label));
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === SPAWN_COMBO_PRESETS.length) return openSpawnPerformanceHub();
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
@@ -6575,9 +6603,9 @@ export function showCodexBook(player, context) {
 
         presetKeys.forEach((k) => {
             const v = SPAWN_PRESETS[k];
-            form.button(`${v.label} §8(${k})`);
+            form.button(`${v.label}${devBtnParen(k)}`);
         });
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         const onBack = () => fromAdvanced ? openSpawnAdvancedMenu() : openSpawnPerformanceHub();
         form.show(player).then((res) => {
@@ -6597,14 +6625,14 @@ export function showCodexBook(player, context) {
             .title("§cSpawn Advanced Options")
             .body("§7Performance and spawn range tuning.\n§8Block Query: fewer = less lag. Max Spawns: cap per tick. Range: spawn distance. Tile/BlocksTick: scan intensity.");
 
-        form.button("§f§lPresets §8(Low / Med / High)");
+        form.button(`§f§lPresets${devBtnParen("Low / Med / High")}`);
         form.button("§fBlock Query Budget");
         form.button("§fMax Spawns Per Tick");
         form.button("§fSpawn Range");
         form.button("§fTile Scan Intensity");
         form.button("§fBlocks Per Tick Budget");
         form.button("§cReset All Advanced");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 7) return openSpawnPerformanceHub();
@@ -6630,8 +6658,8 @@ export function showCodexBook(player, context) {
     function openSpawnBlockQueryMenu() {
         const cur = getBlockQueryMultiplier();
         const form = new ActionFormData().title("§cBlock Query Budget").body(`§7Reduce block scans when laggy.\n§8Current: §f${(cur * 100).toFixed(0)}%`);
-        form.button("§aLow §7(25%)"); form.button("§2Medium §7(50%)"); form.button("§fNormal §7(100%)");
-        form.button("§6High §7(150%)"); form.button("§8Back");
+        form.button("§aLow §f(25%)"); form.button("§2Medium §f(50%)"); form.button("§fNormal §f(100%)");
+        form.button("§6High §f(150%)"); form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 4) return openSpawnAdvancedMenu();
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
@@ -6647,7 +6675,7 @@ export function showCodexBook(player, context) {
     function openSpawnMaxGlobalMenu() {
         const cur = getMaxGlobalSpawnsPerTick();
         const form = new ActionFormData().title("§cMax Spawns Per Tick").body(`§7Cap total spawns across all players per tick.\n§8Current: §f${cur}`);
-        form.button("§a12"); form.button("§218"); form.button("§f24 §7(default)"); form.button("§636"); form.button("§c48"); form.button("§8Back");
+        form.button("§a12"); form.button("§218"); form.button("§f24 §f(default)"); form.button("§636"); form.button("§c48"); form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 5) return openSpawnAdvancedMenu();
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
@@ -6664,7 +6692,7 @@ export function showCodexBook(player, context) {
         const r = getSpawnDistanceRange();
         const label = r.min === 20 ? "Close (20-35)" : r.max === 55 ? "Far (10-55)" : "Normal (15-45)";
         const form = new ActionFormData().title("§cSpawn Range").body(`§7Distance from player for spawns.\n§8Current: §f${label}`);
-        form.button("§aClose §7(20-35)"); form.button("§fNormal §7(15-45)"); form.button("§cFar §7(10-55)"); form.button("§8Back");
+        form.button("§aClose §f(20-35)"); form.button("§fNormal §f(15-45)"); form.button("§cFar §f(10-55)"); form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 3) return openSpawnAdvancedMenu();
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
@@ -6680,8 +6708,8 @@ export function showCodexBook(player, context) {
     function openSpawnTileIntensityMenu() {
         const cur = getTileIntensityMultiplier();
         const form = new ActionFormData().title("§cTile Scan Intensity").body(`§7Tiles scanned per cycle.\n§8Current: §f${(cur * 100).toFixed(0)}%`);
-        form.button("§aLow §7(60%)"); form.button("§2Medium §7(75%)"); form.button("§fNormal §7(100%)");
-        form.button("§6High §7(125%)"); form.button("§8Back");
+        form.button("§aLow §f(60%)"); form.button("§2Medium §f(75%)"); form.button("§fNormal §f(100%)");
+        form.button("§6High §f(125%)"); form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 4) return openSpawnAdvancedMenu();
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
@@ -6698,7 +6726,7 @@ export function showCodexBook(player, context) {
         const cur = getBlocksPerTickMultiplier();
         const form = new ActionFormData().title("§cBlocks Per Tick").body(`§7Block scan spread. Lower = fewer blocks/tick (less lag).\n§8Current: §f${(cur * 100).toFixed(0)}%`);
         form.button("§aLow §7(60%)"); form.button("§2Medium §7(80%)"); form.button("§fNormal §7(100%)");
-        form.button("§6High §7(150%)"); form.button("§8Back");
+        form.button("§6High §7(150%)"); form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 4) return openSpawnAdvancedMenu();
             player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * getPlayerSoundVolume(player) });
@@ -6738,7 +6766,7 @@ export function showCodexBook(player, context) {
         form.button("§fSet Stagger Ticks");
         form.button("§fSet Chunk Load Delay");
         form.button("§cReset Scan Settings");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 9) return openSpawnPerformanceHub();
@@ -6772,9 +6800,9 @@ export function showCodexBook(player, context) {
             .body(`§7Apply a coordinated scan profile.\n\n${scanAutoWarn}${tuneNow.menuBody}`);
         keys.forEach((k) => {
             const p = SPAWN_SCAN_PRESETS[k];
-            form.button(`§f${p.label} §8(R${p.discoveryRadius}/Min${p.minDiscoveryRadius})`);
+            form.button(`§f${p.label}${devBtnParen(`R${p.discoveryRadius}/Min${p.minDiscoveryRadius}`)}`);
         });
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === keys.length) return openScanSchedulerMenu();
             const key = keys[res.selection];
@@ -6790,7 +6818,7 @@ export function showCodexBook(player, context) {
         const cur = getSpawnScanSettingsForDevTools().discoveryRadius;
         const form = new ActionFormData().title("§bDiscovery Radius").body(`§7How wide discovery scans search for dusted blocks.\n§8Current: §f${cur}`);
         vals.forEach(v => form.button(`§f${v}`));
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === vals.length) return openScanSchedulerMenu();
             setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.discoveryRadius, vals[res.selection]);
@@ -6803,7 +6831,7 @@ export function showCodexBook(player, context) {
         const cur = getSpawnScanSettingsForDevTools().minDiscoveryRadius;
         const form = new ActionFormData().title("§bMinimum Radius").body(`§7Lower bound for adaptive scan shrinking.\n§8Current: §f${cur}`);
         vals.forEach(v => form.button(`§f${v}`));
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === vals.length) return openScanSchedulerMenu();
             setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.minDiscoveryRadius, vals[res.selection]);
@@ -6816,7 +6844,7 @@ export function showCodexBook(player, context) {
         const cur = getSpawnScanSettingsForDevTools().perPlayerRadiusDrop;
         const form = new ActionFormData().title("§bPer-Player Radius Drop").body(`§7Radius reduction per extra player.\n§8Current: §f${(cur * 100).toFixed(0)}%`);
         vals.forEach(v => form.button(`§f${(v * 100).toFixed(0)}%`));
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === vals.length) return openScanSchedulerMenu();
             setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.perPlayerRadiusDrop, vals[res.selection]);
@@ -6829,7 +6857,7 @@ export function showCodexBook(player, context) {
         const cur = getSpawnScanSettingsForDevTools().tightGroupRadiusPenalty;
         const form = new ActionFormData().title("§bTight Group Penalty").body(`§7Extra radius reduction for tightly grouped players.\n§8Current: §f${(cur * 100).toFixed(0)}%`);
         vals.forEach(v => form.button(`§f${(v * 100).toFixed(0)}%`));
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === vals.length) return openScanSchedulerMenu();
             setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.tightGroupRadiusPenalty, vals[res.selection]);
@@ -6842,7 +6870,7 @@ export function showCodexBook(player, context) {
         const cur = getSpawnScanSettingsForDevTools().barrenCooldownMult;
         const form = new ActionFormData().title("§bBarren Cooldown Mult").body(`§7Delay before rescanning chunks that found 0 target blocks.\n§8Current: §f${cur.toFixed(2)}x`);
         vals.forEach(v => form.button(`§f${v.toFixed(2)}x`));
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === vals.length) return openScanSchedulerMenu();
             setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.barrenCooldownMult, vals[res.selection]);
@@ -6855,7 +6883,7 @@ export function showCodexBook(player, context) {
         const cur = getSpawnScanSettingsForDevTools().staggerTicks;
         const form = new ActionFormData().title("§bScan Stagger Ticks").body(`§7Ticks between queued chunk scans.\n§8Current: §f${cur}`);
         vals.forEach(v => form.button(`§f${v} ticks`));
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === vals.length) return openScanSchedulerMenu();
             setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.staggerTicks, vals[res.selection]);
@@ -6868,7 +6896,7 @@ export function showCodexBook(player, context) {
         const cur = getSpawnScanSettingsForDevTools().chunkLoadDelay;
         const form = new ActionFormData().title("§bChunk Load Delay").body(`§7Delay before scanning newly entered chunks.\n§8Current: §f${cur} ticks`);
         vals.forEach(v => form.button(`§f${v} ticks`));
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === vals.length) return openScanSchedulerMenu();
             setWorldProperty(SPAWN_SCAN_OVERRIDE_PROPERTIES.chunkLoadDelay, vals[res.selection]);
@@ -6890,7 +6918,7 @@ export function showCodexBook(player, context) {
         form.button("§aCreate Zone Here", "textures/blocks/emulsifier_machine");
         form.button("§fRefuel Nearest", "textures/items/emulsifier_machine");
         form.button("§cRemove Nearest", "textures/ui/cancel");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 3) return openSpawnControllerMenu();
             if (res.selection === 0) {
@@ -6926,7 +6954,7 @@ export function showCodexBook(player, context) {
             const availability = getFuelCostAvailabilityLine(player, o.key);
             form.button(`§f${o.label}\n${availability}`, o.key === "netherite" ? "textures/items/netherite_ingot" : "textures/items/emulsifier_machine");
         });
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === options.length) return openEmulsifierMenu();
             const selected = options[res.selection];
@@ -6973,7 +7001,7 @@ export function showCodexBook(player, context) {
         form.button("§fNormal (0)");
         form.button("§cHard (+1)");
         form.button("§eCustom Value");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 4) {
@@ -7038,7 +7066,7 @@ export function showCodexBook(player, context) {
         form.button("§6Fast §7(2×)");
         form.button("§cVery Fast §7(3×)");
         form.button("§eCustom §7(0.25–4)");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 6) {
@@ -7127,7 +7155,7 @@ export function showCodexBook(player, context) {
         form.button("§cClear Infection");
         form.button("§eSet Minor Infection");
         form.button("§4Set Major Infection");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         const infectArgs = (extra) => (targetName ? [...extra, targetName] : extra);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 6) {
@@ -7156,7 +7184,7 @@ export function showCodexBook(player, context) {
                 ? `§f${target.name} §7infection status:\n§8• Type: §f${inf.infectionType || "?"}\n§8• Ticks left: §e${inf.ticksLeft ?? "?"}\n§8• Current snow (severity): §d${inf.snowCount ?? 0}\n§8• Max snow level achieved: §d${maxSnow.maxLevel ?? 0}`
                 : `§f${target.name} §7has §8no active infection.\n§8• Max snow level achieved: §d${maxSnow.maxLevel ?? 0}`
         ) : "§8No target.";
-        const form = new ActionFormData().title("§bInfection Status").body(display).button("§8Back");
+        const form = new ActionFormData().title("§bInfection Status").body(display).button(DEV_BTN_BACK);
         form.show(player).then((r) => {
             if (r?.canceled !== true) player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
             onBack();
@@ -7211,7 +7239,7 @@ export function showCodexBook(player, context) {
         form.button("§aGrant Permanent Immunity");
         form.button("§bGrant Temporary Immunity (5 min)");
         form.button("§cRemove Immunity");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         const immunArgs = (extra) => (targetName ? [...extra, targetName] : extra);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 3) {
@@ -7270,7 +7298,7 @@ export function showCodexBook(player, context) {
         for (const cat of FORCE_SPAWN_CATEGORIES) {
             form.button(cat.label);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === FORCE_SPAWN_CATEGORIES.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -7292,7 +7320,7 @@ export function showCodexBook(player, context) {
         for (const opt of opts) {
             form.button(`§f${opt.label} §8(${opt.id})`);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === opts.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -7324,7 +7352,7 @@ export function showCodexBook(player, context) {
         for (const p of otherPlayers) {
             form.button(`§f${p.name}`);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         const totalOptions = 1 + otherPlayers.length;
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === totalOptions) {
@@ -7351,7 +7379,7 @@ export function showCodexBook(player, context) {
         for (const d of FORCE_SPAWN_DISTANCES) {
             form.button(`§f${d.label}`);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === FORCE_SPAWN_DISTANCES.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -7371,7 +7399,7 @@ export function showCodexBook(player, context) {
         for (const q of FORCE_SPAWN_QUANTITIES) {
             form.button(`§f${q.label}`);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === FORCE_SPAWN_QUANTITIES.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -7410,7 +7438,7 @@ export function showCodexBook(player, context) {
             const current = codex.mobs?.[opt.key] ?? 0;
             form.button(`§f${opt.label} §8(current: ${current})`);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === KILL_COUNT_KEYS.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -7467,7 +7495,7 @@ export function showCodexBook(player, context) {
         form.button("§eStorm Override §7(duration, cooldown)");
         form.button("§eStorm Control Settings §7(intensity, max storms)");
         form.button("§8Snow Storm Debug");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 9) {
@@ -7525,7 +7553,7 @@ export function showCodexBook(player, context) {
             const boostStr = s.intersectionBoost > 0.01 ? ` §8+${(s.intersectionBoost * 100).toFixed(0)}%` : "";
             form.button(`${status}#${s.id} ${s.type} §7(${Math.floor(s.centerX)},${Math.floor(s.centerZ)}) §8${Math.floor(s.ticksLeft / 20)}s${boostStr}`);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === stormList.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -7546,7 +7574,7 @@ export function showCodexBook(player, context) {
             .body(`§7Type: §f${s.type} §7| Center: §f(${Math.floor(s.centerX)}, ${Math.floor(s.centerZ)}) §7| Intensity: §f${s.intensity.toFixed(2)} §7| Ends in: §f${Math.floor(s.ticksLeft / 20)}s\n§7Enabled: §f${s.enabled ? "Yes" : "No"}`);
         form.button(s.enabled ? "§cDisable Storm" : "§aEnable Storm");
         form.button("§4End This Storm");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 2) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -7574,7 +7602,7 @@ export function showCodexBook(player, context) {
         for (const p of otherPlayers) {
             form.button(`§f${p.name}`);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         const totalOptions = 1 + otherPlayers.length;
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === totalOptions) {
@@ -7606,7 +7634,7 @@ export function showCodexBook(player, context) {
         for (const d of STORM_DISTANCES) {
             form.button(`§f${d.label}`);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === STORM_DISTANCES.length) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -7639,7 +7667,7 @@ export function showCodexBook(player, context) {
             const form = new ActionFormData()
                 .title("§cStorm State")
                 .body(`§7Current storm status:\n\n§7Active: ${activeStatus}\n§7Ends in: ${endTime}\n§7Cooldown: ${cooldownTime}\n§7Players in storm: §f${state.playersInStorm}\n§7Override: ${overrideStatus}`);
-            form.button("§8Back");
+            form.button(DEV_BTN_BACK);
             form.show(player).then((res) => {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
                 journalPowerToolsBack();
@@ -7657,7 +7685,7 @@ export function showCodexBook(player, context) {
             .body("§7Manually override storm settings or reset to day-based.");
         form.button("§cReset Override");
         form.button("§eSet Override (Advanced)");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 2) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * getPlayerSoundVolume(player) });
@@ -7773,8 +7801,8 @@ export function showCodexBook(player, context) {
             );
         form.button("§eEdit numeric values…");
         form.button("§ePer-type eligibility…");
-        form.button(ov ? "§cReset to pack defaults" : "§8Reset §7(already default)");
-        form.button("§8Back");
+        form.button(ov ? "§cReset to pack defaults" : "§fReset (already default)");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             if (!res || res.canceled || res.selection === 3) {
@@ -7806,9 +7834,9 @@ export function showCodexBook(player, context) {
             );
         for (const g of BEAR_CULL_TYPE_GROUPS) {
             const onInGroup = g.typeIds.filter((t) => enabled.has(t)).length;
-            form.button(`§f${g.label} §8(${onInGroup}/${g.typeIds.length})`);
+            form.button(`§f${g.label}${devBtnParen(`${onInGroup}/${g.typeIds.length}`)}`);
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
             const backIdx = BEAR_CULL_TYPE_GROUPS.length;
@@ -7937,7 +7965,7 @@ export function showCodexBook(player, context) {
         form.button("§fMining: Min Interval (ticks)");
         form.button("§fMining: Force Interval Override");
         form.button("§cReset All Overrides");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 4) {
@@ -7971,7 +7999,7 @@ export function showCodexBook(player, context) {
         form.button("§f2 §8(half)");
         form.button("§e3 §8(third)");
         form.button("§7Auto §8(remove override)");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 4) return openAIThrottleMenu();
@@ -8195,7 +8223,7 @@ export function showCodexBook(player, context) {
         form.button("§fSimulated players");
         form.button("§fVillager suppress §8(script despawn)");
         form.button("§fEntity query / village §8(perf)");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled) {
@@ -8245,7 +8273,7 @@ export function showCodexBook(player, context) {
             `§7Ghost sim clients for stress testing (Developer Tools).\n\n§8Current:\n§7• Sims system: ${simOn ? "§aON" : "§cOFF"}\n§7• Full stress: ${fullStress ? "§aON" : "§cOFF"}\n§7• Content log §8([SIM PLAYERS])§7: ${dbgOn ? "§aON" : "§cOFF"} §8(~100t)\n\n§8Toggle mirrors Journal → Simulated players → Content log debug.`
         );
         form.button(`§${dbgOn ? "a" : "c"}Toggle Content log debug`);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 1) {
@@ -8283,7 +8311,7 @@ export function showCodexBook(player, context) {
         form.button(`§${mining.movement ? "a" : "c"}Movement`);
         form.button(`§${mining.stairCreation ? "a" : "c"}Stair Creation`);
         form.button(`§${mining.all ? "a" : "c"}Toggle All`);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 9) {
@@ -8315,7 +8343,7 @@ export function showCodexBook(player, context) {
         form.button(`§${infected.pathfinding ? "a" : "c"}Pathfinding`);
         form.button(`§${infected.gapJump ? "a" : "c"}Gap Jump`);
         form.button(`§${infected.all ? "a" : "c"}Toggle All`);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 4) {
@@ -8349,7 +8377,7 @@ export function showCodexBook(player, context) {
         form.button(`§${torpedo.blockBreaking ? "a" : "c"}Block Breaking`);
         form.button(`§${torpedo.blockPlacement ? "a" : "c"}Block Placement`);
         form.button(`§${torpedo.all ? "a" : "c"}Toggle All`);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 6) {
@@ -8382,7 +8410,7 @@ export function showCodexBook(player, context) {
         form.button(`§${flying.targeting ? "a" : "c"}Targeting`);
         form.button(`§${flying.pathfinding ? "a" : "c"}Pathfinding`);
         form.button(`§${flying.all ? "a" : "c"}Toggle All`);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 4) {
@@ -8462,7 +8490,7 @@ export function showCodexBook(player, context) {
         form.button(`§${buff.blockBreaking ? "a" : "c"}Block Breaking`);
         form.button(`§${buff.all ? "a" : "c"}Toggle All`);
         form.button("§eRefresh countdown");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 4) {
@@ -8513,7 +8541,7 @@ export function showCodexBook(player, context) {
         form.button(`§${spawn.isolated ? "a" : "c"}Isolated Players`);
         form.button(`§${spawn.bearTelemetry ? "a" : "c"}Bear telemetry §7(log)`);
         form.button(`§${spawn.all ? "a" : "c"}Toggle All`);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 10) {
@@ -8548,7 +8576,7 @@ export function showCodexBook(player, context) {
         form.button(`§${main.infection ? "a" : "c"}Infection`);
         form.button(`§${main.minorInfection ? "a" : "c"}Minor Infection`);
         form.button(`§${main.all ? "a" : "c"}Toggle All`);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 6) {
@@ -8584,7 +8612,7 @@ export function showCodexBook(player, context) {
         form.button(`§${biome.cleanup ? "a" : "c"}Cleanup`);
         form.button(`§${biome.errors ? "a" : "c"}Errors`);
         form.button(`§${biome.all ? "a" : "c"}Toggle All`);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 8) {
@@ -8619,7 +8647,7 @@ export function showCodexBook(player, context) {
         form.button(`§${dp.writes ? "a" : "c"}Writes`);
         form.button(`§${dp.errors ? "a" : "c"}Errors`);
         form.button(`§${dp.all ? "a" : "c"}Toggle All`);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled) {
@@ -8660,7 +8688,7 @@ export function showCodexBook(player, context) {
         form.button(`§${codex.chunking ? "a" : "c"}Chunking`);
         form.button(`§${codex.saving ? "a" : "c"}Saving`);
         form.button(`§${codex.all ? "a" : "c"}Toggle All`);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled) {
@@ -8702,7 +8730,7 @@ export function showCodexBook(player, context) {
         form.button(`§${ground.decay ? "a" : "c"}Decay Logic`);
         form.button(`§${ground.warnings ? "a" : "c"}Warning Messages`);
         form.button(`§${ground.all ? "a" : "c"}Toggle All`);
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled) {
@@ -8777,7 +8805,7 @@ export function showCodexBook(player, context) {
             form.button(`§${stormSettings.particles ? "a" : "c"}Particles`);
             form.button(`§${stormSettings.all ? "a" : "c"}Toggle All`);
             form.button("§eRefresh");
-            form.button("§8Back");
+            form.button(DEV_BTN_BACK);
 
             form.show(player).then((res) => {
                 if (!res || res.canceled || res.selection === 6) {
@@ -8818,7 +8846,7 @@ export function showCodexBook(player, context) {
         form.button(`§${emulsifier.all ? "a" : "c"}Toggle All`);
         form.button("§eRun diagnostics (chat)");
         form.button("§6Force reload from world");
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 7) {
@@ -8886,7 +8914,7 @@ export function showCodexBook(player, context) {
         if (canSee) {
             form.button("§dBeta Features §8(experimental)");
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled) {
@@ -8928,7 +8956,7 @@ export function showCodexBook(player, context) {
             form.button(infectedOn ? "§aInfected AI §8(ON) → OFF" : "§cInfected AI §8(OFF) → ON");
             form.button(visibleToAll ? "§aVisible to others §8(ON) → OFF" : "§cVisible to others §8(OFF) → ON");
         }
-        form.button("§8Back");
+        form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === (canEdit ? 2 : 0)) {
@@ -9032,7 +9060,6 @@ export function showCodexBook(player, context) {
                     Object.assign(codexToSave.settings, settings);
                     saveCodex(player, codexToSave);
                     
-                    const basicSettingsKey = `mb_player_settings_${player.id}`;
                     const basicSettings = {
                         soundVolume: normalizedVolume,
                         showTips: settings.showTips,
@@ -9043,10 +9070,10 @@ export function showCodexBook(player, context) {
                         showDayNarrativeActionBar: settings.showDayNarrativeActionBar
                     };
                     try {
-                        setWorldPropertyChunked(basicSettingsKey, JSON.stringify(basicSettings));
+                        setPlayerJournalSettingsChunked(player, JSON.stringify(basicSettings));
                         saveAllProperties();
                     } catch (error) {
-                        console.warn(`[SETTINGS] Error saving Basic Journal settings:`, error);
+                        console.warn(`[SETTINGS] Error saving journal settings:`, error);
                     }
                     
                     // Send confirmation message (consistent with Basic Journal)
@@ -9142,7 +9169,7 @@ export function showCodexBook(player, context) {
                 const form = new ActionFormData()
                     .title("§bSearch Results")
                     .body(`§7No results found for: §f"${searchTerm}"\n\n§8Try a different search term.`);
-                form.button("§8Back");
+                form.button(DEV_BTN_BACK);
                 form.show(player).then(() => openSearch());
                 return;
             }
@@ -9154,7 +9181,7 @@ export function showCodexBook(player, context) {
             for (const result of results) {
                 form.button(`§f${result.title}\n§8${result.section}`);
             }
-            form.button("§8Back");
+            form.button(DEV_BTN_BACK);
             
             form.show(player).then((res) => {
                 if (!res || res.canceled || res.selection === results.length) {
@@ -9584,8 +9611,7 @@ export function showFirstTimeWelcomeScreen(player) {
 
 function playJournalIntroAudio(player) {
     // Check if audio messages are enabled
-    const settingsKey = `mb_player_settings_${player.id}`;
-    let rawSettings = getWorldPropertyChunked(settingsKey);
+    let rawSettings = getPlayerJournalSettingsChunked(player);
     
     // Parse settings if it's a JSON string
     let settings = null;
@@ -9634,7 +9660,7 @@ function playJournalIntroAudio(player) {
 function showGoalScreen(player) {
     const form = new ActionFormData().title("§6Your Goal");
     form.body(`§eThe Infection\n\n§7Your world has been infected by a mysterious white powder. Strange creatures called "Maple Bears" are spreading this infection.\n\n§eYour Objectives:\n§7• Survive the infection.\n§7• Discover how to cure yourself.\n§7• Learn about the bears and their behavior.\n§7• Upgrade this journal to track your progress and find the cure.\n§7• Find a way to cure your infection before you degrade and it worsens.\n\n§eInfection time: §7This book does not show time left while infected. §fPowdery Journal §7(§aRecipe §7on the main screen) does.\n\n§cIMPORTANT: §7Upgrading your journal is essential for discovering cures and tracking your infection status. Without the upgraded journal, you won't be able to learn crucial information about infections, cures, and treatments.\n\n§7The infection gets worse over time. Stay alert!`);
-    form.button("§8Back");
+    form.button(DEV_BTN_BACK);
     form.show(player).then((res) => {
         if (res.canceled) {
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -9654,7 +9680,7 @@ function showSettingsChooserBasic(player) {
     form.body("§7Choose a section:");
     form.button("§fGeneral §8(Sound, Tips, Messages)");
     form.button("§eHave lag? §8(performance)");
-    form.button("§8Back");
+    form.button(DEV_BTN_BACK);
 
     form.show(player).then((res) => {
         if (!res || res.canceled) {
@@ -9676,8 +9702,7 @@ function showSettingsChooserBasic(player) {
 
 function showGeneralSettingsBasic(player) {
     // Get or create settings
-    const settingsKey = `mb_player_settings_${player.id}`;
-    let rawSettings = getWorldPropertyChunked(settingsKey);
+    let rawSettings = getPlayerJournalSettingsChunked(player);
     
     // Ensure we have a valid settings object
     let settings = {};
@@ -9782,8 +9807,7 @@ function showGeneralSettingsBasic(player) {
             };
             
             try {
-                // Stringify the object for storage (like other dynamic properties in the codebase)
-                setWorldPropertyChunked(settingsKey, JSON.stringify(newSettings));
+                setPlayerJournalSettingsChunked(player, JSON.stringify(newSettings));
                 saveAllProperties();
                 player.sendMessage(CHAT_INFO + "Settings saved!");
             } catch (error) {
@@ -9798,7 +9822,7 @@ function showGeneralSettingsBasic(player) {
 function showRecipeScreen(player) {
     const form = new ActionFormData().title("§aRecipe: Powdery Journal");
     form.body(`§ePowdery Journal Recipe\n\n§7Upgrade your Basic Journal to a Powdery Journal:\n\n§7Crafting Pattern:\n§7  S S S\n§7  S J S\n§7  S S S\n\n§7S = "snow"\n§7J = Basic Journal\n\n§7The Powdery Journal will automatically track your infection status, discoveries, and bear encounters.`);
-    form.button("§8Back");
+    form.button(DEV_BTN_BACK);
     form.show(player).then((res) => {
         if (res.canceled) {
             const volumeMultiplier = getPlayerSoundVolume(player);
@@ -9816,7 +9840,7 @@ function showRecipeScreen(player) {
 function showTipsScreen(player) {
     const form = new ActionFormData().title("§7Tips");
     form.body(`§eSurvival Tips\n\n§7• Break "dusted dirt" blocks to collect "snow"\n§7• Eating "snow" gives temporary effects but increases infection\n§7• Maple Bears spread infection when they hit you\n§7• Explore infected biomes to learn more\n§7• Upgrade to Powdery Journal for detailed tracking\n\n§7Good luck, survivor!`);
-    form.button("§8Back");
+    form.button(DEV_BTN_BACK);
     form.show(player).then((res) => {
         if (res.canceled) {
             const volumeMultiplier = getPlayerSoundVolume(player);

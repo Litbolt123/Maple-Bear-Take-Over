@@ -1,0 +1,50 @@
+{
+	"format_version": "1.21.0",
+	"minecraft:structure_template_feature": {
+		"description": {
+			"identifier": "mb:av_plains/place_house_3"
+		},
+		"structure_name": "mb:av_plains/plains_house_3",
+		"adjustment_radius": 0,
+		"facing_direction": "random",
+		"constraints": {
+			"block_intersection": {
+				"block_allowlist": [
+					"minecraft:air",
+					"minecraft:grass_block",
+					"minecraft:dirt",
+					"minecraft:coarse_dirt",
+					"minecraft:podzol",
+					"minecraft:dirt_with_roots",
+					"minecraft:moss_block",
+					"minecraft:mud",
+					"minecraft:sand",
+					"minecraft:red_sand",
+					"minecraft:gravel",
+					"minecraft:stone",
+					"minecraft:snow",
+					"minecraft:snow_layer",
+					"minecraft:short_grass",
+					"minecraft:tall_grass",
+					"minecraft:fern",
+					"minecraft:large_fern",
+					"minecraft:deadbush",
+					"minecraft:dandelion",
+					"minecraft:poppy",
+					"minecraft:oxeye_daisy",
+					"minecraft:azure_bluet",
+					"minecraft:cornflower",
+					"minecraft:allium",
+					"minecraft:blue_orchid",
+					"minecraft:lily_of_the_valley",
+					"minecraft:sunflower",
+					"minecraft:orange_tulip",
+					"minecraft:pink_tulip",
+					"minecraft:red_tulip",
+					"minecraft:white_tulip",
+					"mb:dusted_dirt"
+				]
+			}
+		}
+	}
+}

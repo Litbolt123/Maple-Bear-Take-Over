@@ -103,7 +103,15 @@ function loadPlayerProperties(player) {
             "mb_minor_reinfected",
             "mb_world_intro_seen", // legacy; intro is now per-player (mb_intro_seen)
             "mb_admin_tools_disclaimer_v1",
-            "mb_dev_tools_disclaimer_v1"
+            "mb_dev_tools_disclaimer_v1",
+            "mb_journal_settings",
+            "mb_dev_hud_scan_perf",
+            "mb_dev_hud_spawn_preset",
+            "mb_dev_hud_sim_players",
+            "mb_dev_hud_biome_checker",
+            "mb_dev_hud_entity_query",
+            "mb_av_settlements_discovered",
+            "mb_av_construction_witnessed"
         ];
         
         for (const key of playerProps) {
@@ -154,20 +162,32 @@ function savePlayerProperties(player) {
 export function getPlayerProperty(player, key) {
     try {
         const playerId = player.id;
-        const cache = playerPropertyCache.get(playerId);
-        
+        let cache = playerPropertyCache.get(playerId);
+
         if (!cache) {
-            // Cache doesn't exist, load it
             loadPlayerProperties(player);
-            const newCache = playerPropertyCache.get(playerId);
-            if (newCache) {
-                return newCache.get(key);
-            }
-            // Fallback to direct read
-            return player.getDynamicProperty(key);
+            cache = playerPropertyCache.get(playerId);
         }
-        
-        return cache.get(key);
+        if (!cache) {
+            cache = new Map();
+            playerPropertyCache.set(playerId, cache);
+            if (!playerDirtyFlags.has(playerId)) {
+                playerDirtyFlags.set(playerId, new Set());
+            }
+        }
+        if (cache.has(key)) {
+            return cache.get(key);
+        }
+        try {
+            const direct = player.getDynamicProperty(key);
+            if (direct !== undefined) {
+                cache.set(key, direct);
+                return direct;
+            }
+        } catch {
+            /* ignore */
+        }
+        return undefined;
     } catch (error) {
         console.warn(`[PropertyHandler] Error getting player property ${key}:`, error);
         // Fallback to direct read
@@ -268,6 +288,24 @@ export function setWorldProperty(key, value) {
         } catch (e) {
             console.warn(`[PropertyHandler] Fallback write also failed:`, e);
         }
+    }
+}
+
+/** Drop cached world value so the next read loads from disk (e.g. after /reload). */
+export function invalidateWorldPropertyCache(key) {
+    worldPropertyCache.delete(key);
+}
+
+/** Write one world key immediately (used for village site registry so rejoin does not rebuild). */
+export function flushWorldPropertyToDisk(key) {
+    try {
+        const value = worldPropertyCache.get(key);
+        if (typeof world.setDynamicProperty === "function") {
+            world.setDynamicProperty(key, value);
+        }
+        worldDirtyFlags.delete(key);
+    } catch (error) {
+        console.warn(`[PropertyHandler] Error flushing world property ${key}:`, error);
     }
 }
 
@@ -517,6 +555,58 @@ function saveAllDirtyProperties() {
  */
 export function saveAllProperties() {
     saveAllDirtyProperties();
+}
+
+/** Per-player Basic/Powdery journal settings (sound, infection timer HUD, etc.). */
+export const MB_PLAYER_JOURNAL_SETTINGS_KEY = "mb_journal_settings";
+
+function legacyWorldJournalSettingsKey(player) {
+    return `mb_player_settings_${player.id}`;
+}
+
+/**
+ * Read journal UI settings for this player. Migrates legacy world keys `mb_player_settings_<id>`.
+ * @param {import("@minecraft/server").Player} player
+ * @returns {string|undefined}
+ */
+export function getPlayerJournalSettingsChunked(player) {
+    let raw = getPlayerPropertyChunked(player, MB_PLAYER_JOURNAL_SETTINGS_KEY);
+    if (raw !== undefined && raw !== null) return raw;
+    const legacyKey = legacyWorldJournalSettingsKey(player);
+    raw = getWorldPropertyChunked(legacyKey);
+    if (raw === undefined || raw === null) return undefined;
+    try {
+        setPlayerPropertyChunked(player, MB_PLAYER_JOURNAL_SETTINGS_KEY, raw);
+    } catch { /* ignore */ }
+    return raw;
+}
+
+/**
+ * @param {import("@minecraft/server").Player} player
+ * @param {string|object} value JSON string or object (chunked if large)
+ */
+export function setPlayerJournalSettingsChunked(player, value) {
+    setPlayerPropertyChunked(player, MB_PLAYER_JOURNAL_SETTINGS_KEY, value);
+}
+
+/**
+ * Write one player dynamic property immediately (multiplayer-safe HUD toggles).
+ * @param {import("@minecraft/server").Player} player
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function flushPlayerPropertyToDisk(player, key) {
+    try {
+        if (!player?.isValid || typeof player.setDynamicProperty !== "function") return false;
+        const value = getPlayerProperty(player, key);
+        player.setDynamicProperty(key, value === undefined || value === null ? undefined : value);
+        const dirtySet = playerDirtyFlags.get(player.id);
+        dirtySet?.delete(key);
+        return true;
+    } catch (e) {
+        console.warn(`[PropertyHandler] flushPlayerPropertyToDisk ${key}:`, e);
+        return false;
+    }
 }
 
 /**

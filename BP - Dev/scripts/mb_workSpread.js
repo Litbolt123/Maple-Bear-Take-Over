@@ -888,6 +888,23 @@ export function shouldDeferVillageBurst(_category) {
 }
 
 /**
+ * Defer heavy abandoned-village horizon scans only — NOT chunk-edge defer (players walk to lamps
+ * across chunks) and NOT lamp artifact cleanup / lamp-arrival activation.
+ * @param {string} [_category]
+ */
+export function shouldDeferAbandonedVillageHorizonScan(_category) {
+    return (
+        shouldPauseDayZeroAddonLoops() ||
+        isEngineBacklogQuietActive() ||
+        isVillagerEntityQueryMuteActive() ||
+        isVillagerBurstDeferActive() ||
+        isVillagerPressureActive() ||
+        isVillagerSpawnWorkSpreading() ||
+        isVillagerAddonSessionActive()
+    );
+}
+
+/**
  * Call from a light interval (e.g. 20t) — extends defer when players cross 16-block chunks.
  */
 export function tickPlayerChunkEdgeWatch() {

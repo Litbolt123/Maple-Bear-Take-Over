@@ -33,6 +33,7 @@ export const SCRIPT_IDS = {
     dimensionAdaptation: "dimension_adaptation",
     bearCull: "bear_population_cull",
     buffOverflowCull: "buff_overflow_cull",
+    miningOverflowCull: "mining_overflow_cull",
     infectionSystem: "infection_system",
     groundInfection: "ground_infection",
     mobConversion: "mob_conversion",
@@ -46,7 +47,8 @@ export const SCRIPT_IDS = {
     chunkEdgeWatch: "chunk_edge_watch",
     playerDiscovery: "player_discovery",
     dustedDirtCleanup: "dusted_dirt_cleanup",
-    workSpread: "work_spread"
+    workSpread: "work_spread",
+    abandonedVillageWorldgen: "abandoned_village_worldgen"
 };
 
 /** Menu order (all toggles). */
@@ -58,6 +60,7 @@ export const SCRIPT_TOGGLE_ORDER = [
     SCRIPT_IDS.buff,
     SCRIPT_IDS.bearCull,
     SCRIPT_IDS.buffOverflowCull,
+    SCRIPT_IDS.miningOverflowCull,
     SCRIPT_IDS.spawnController,
     SCRIPT_IDS.snowStorm,
     SCRIPT_IDS.emulsifier,
@@ -73,6 +76,7 @@ export const SCRIPT_TOGGLE_ORDER = [
     SCRIPT_IDS.actionBarHud,
     SCRIPT_IDS.workSpread,
     SCRIPT_IDS.villagerSuppress,
+    SCRIPT_IDS.abandonedVillageWorldgen,
     SCRIPT_IDS.snowTrail,
     SCRIPT_IDS.chunkEdgeWatch,
     SCRIPT_IDS.playerDiscovery,
@@ -93,6 +97,7 @@ export const SCRIPT_TOGGLE_LABELS = {
     [SCRIPT_IDS.dimensionAdaptation]: "Dimension adaptation",
     [SCRIPT_IDS.bearCull]: "Bear population cull",
     [SCRIPT_IDS.buffOverflowCull]: "Buff overflow cull",
+    [SCRIPT_IDS.miningOverflowCull]: "Mining overflow cull",
     [SCRIPT_IDS.infectionSystem]: "Player infection timers",
     [SCRIPT_IDS.groundInfection]: "Ground / biome exposure",
     [SCRIPT_IDS.mobConversion]: "Mob conversion (hurt/die)",
@@ -102,6 +107,7 @@ export const SCRIPT_TOGGLE_LABELS = {
     [SCRIPT_IDS.actionBarHud]: "Action bar HUD merge",
     [SCRIPT_IDS.emulsifier]: "Emulsifier machine loops",
     [SCRIPT_IDS.villagerSuppress]: "Villager script despawn",
+    [SCRIPT_IDS.abandonedVillageWorldgen]: "Abandoned village placement",
     [SCRIPT_IDS.snowTrail]: "Snow trail placement",
     [SCRIPT_IDS.chunkEdgeWatch]: "Chunk-edge defer watch",
     [SCRIPT_IDS.playerDiscovery]: "Biome + inventory discovery",
@@ -120,7 +126,8 @@ export const SCRIPT_TOGGLE_GROUPS = {
             SCRIPT_IDS.torpedo,
             SCRIPT_IDS.buff,
             SCRIPT_IDS.bearCull,
-            SCRIPT_IDS.buffOverflowCull
+            SCRIPT_IDS.buffOverflowCull,
+            SCRIPT_IDS.miningOverflowCull
         ]
     },
     spawn: {
@@ -143,6 +150,7 @@ export const SCRIPT_TOGGLE_GROUPS = {
             SCRIPT_IDS.biomeAmbience,
             SCRIPT_IDS.dimensionAdaptation,
             SCRIPT_IDS.villagerSuppress,
+            SCRIPT_IDS.abandonedVillageWorldgen,
             SCRIPT_IDS.snowTrail,
             SCRIPT_IDS.dustedDirtCleanup
         ]

@@ -1,0 +1,45 @@
+{
+	"format_version": "1.26.10",
+	"minecraft:jigsaw": {
+		"description": {
+			"identifier": "mb:abandoned_village_plains"
+		},
+		"step": "surface_structures",
+		"terrain_adaptation": "none",
+		"liquid_settings": "apply_waterlogging",
+		"start_pool": "mb:av_plains/start",
+		"max_depth": 1,
+		"max_distance_from_center": {
+			"horizontal": 64,
+			"vertical": 48
+		},
+		"heightmap_projection": "ocean_floor",
+		"start_height": {
+			"type": "constant",
+			"value": {
+				"absolute": 0
+			}
+		},
+		"biome_filters": [
+			{
+				"any_of": [
+					{
+						"test": "has_biome_tag",
+						"operator": "==",
+						"value": "plains"
+					},
+					{
+						"test": "has_biome_tag",
+						"operator": "==",
+						"value": "meadow"
+					},
+					{
+						"test": "has_biome_tag",
+						"operator": "==",
+						"value": "sunflower_plains"
+					}
+				]
+			}
+		]
+	}
+}

@@ -6,6 +6,1486 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+## 2026-06-09 — Dev Beta 4.1 tagged (Patreon dev drop)
+
+- Version **`v0.9.0-beta.4.1`** on **`BP - Dev/`** only; public **`BP/`** stays **`beta.4`** until next store release.
+- **`docs/development/releases/DEV_BETA_4.1.md`** — install + scope notes.
+
+---
+
+## 2026-06-02 — Lamp detection: horizontal search (grove / hills)
+
+- **Symptom:** Grove/cold biomes — post visible, script still NO / no activation.
+- **Cause:** `structure_template` **`adjustment_radius: 6`** shifts the lamp off the exact grid snap; script only probed one column. Hills/snow also needed wider vertical scan + snow_layer footing pass-through.
+- **Fix:** `findWorldgenLampMarkerNear` (±8 blocks), player-feet shortcut in `collectLampArrivalSitesNearPlayer`, debug shows **Post at your feet** + Δ offset from snap. Cold lamp allowlist + feature rule tags for grove/snowy slopes/taiga.
+
+---
+
+## 2026-06-02 — Fix lamp post detection (script sees post: NO)
+
+- **Symptom:** Walk to worldgen lamp → scans run but no village activation; debug never showed lamp arrivals.
+- **Cause:** `hasWorldgenLampMarkerAt` assumed fences start at `surfaceY`; exported lamps have **cobble/sandstone base** below fences. Desert posts use **`sandstone_wall`**, not `fence`.
+- **Fix:** Vertical band scan (hintY ± margin) for fence/wall/barrel/lantern column (≥2 blocks) + footing below. Debug menu now shows **script sees post: YES/NO** per slot and **lamp-arrival sites ready** count.
+
+---
+
+## 2026-06-02 — Commit prep: archive plains export worldgen test
+
+- **Kept:** lamp post markers (`village_marker_*`), script procedural villages (`mb_abandonedVillageWorldgen.js` + `mb_abandonedSettlementBuilder.js`), `.mcstructure` assets under `structures/mb/av_plains/` for Maple Bear collab.
+- **Archived:** single-building jigsaw/scatter test → `BP - Dev/_archived/av_plains_export_worldgen_test/` (worldgen JSON + `features/mb/av_plains/` + tool config snapshots).
+- **`JIGSAW_SCRIPT_VILLAGES_ENABLED = false`** (dev + release); dev menu **Jigsaw export @ feet** removed.
+- **`tools/mbAvPlainsSpawnDensity.json`** → `"active": "off"`; **`syncAvPlainsSpawnDensity.js`** removes active jigsaw/scatter paths when off.
+- Docs: `ABANDONED_VILLAGE_STRUCTURES.md`, `structures/mb/av_plains/README.txt`.
+
+---
+
+## 2026-06-05 — Collab guide: full jigsaw villages + bunker backlog
+
+- **`VILLAGE_STRUCTURE_COLLAB_GUIDE.md`** rewritten — **Maple Bear** builds **full jigsaw villages**; **script structure spawning on hold**. Milestones: well + paths → hamlet → village pools.
+- **Future:** random **lore bunkers** (worldgen) added to `TODO.md` + `IDEA_BRAINSTORM.md` — separate from village work and legacy script hide bunkers.
+
+---
+
+- **`docs/development/VILLAGE_STRUCTURE_COLLAB_GUIDE.md`** — handoff for co-creator building abandoned jigsaw/Structure Block pieces: per-biome counts (~4 houses), art rules, export checklist, loot vs script split, MS Learn + Creator Camp watch list, delivery options, milestones. Indexed in `docs/README.md` + `docs/collaborators/`.
+
+---
+
+## 2026-06-05 — Export floor alignment (ocean_floor + ignore grass_block)
+
+- **Symptom:** `plains_house_2_tall` jigsaw spawn — grass/dirt rim, floor floating ~1 block (Y=0 in file = grass_block pad; real floor at Y=1).
+- **Fix:** `heightmap_projection: ocean_floor`; processor **`block_ignore`** adds **`minecraft:grass_block`**. User confirmed improvement after reload.
+- **Re-export tip:** floor at structure **Y=0** (cobble/plank) or void — never save ground grass as Y=0.
+
+---
+
+- User re-exported **`plains_house_2_tall.mcstructure`** (9×12×10, validate ok). Pool + jigsaw synced to **this file only**; spawn profile **`house_2_tall_test`** (spacing 2 chunks, jigsaw-only).
+- Palette check: **no `structure_void`** in file yet (93 air); dirt/grass blocks present in export — will place as solids.
+
+---
+
+**Goal:** Match vanilla structure placement habits for export buildings.
+
+**Shipped:**
+- **`mb_catalogExportVoid.js`** + **`catalog_void`** build phase — after starter-set build, fills export-box air with **`structure_void`** (open floors/margins preserve terrain; room air stays air). Jigsaw **`av_empty`** processor ignores void blocks.
+- **`tools/mbAvPlainsSpawnDensity.json`** — `scatter.enabled: false` (release + test); **`terrain_adaptation`** per profile (`none` default; set `beard_thin` to experiment). **`syncAvPlainsSpawnDensity.js`** removes scatter feature rules when disabled, writes jigsaw structure + structure set.
+- Export pool still **3 valid** structures until user re-exports broken files.
+
+**User:** Reload dev pack → **new chunks**. Re-run **Starter set for export** (void fill runs automatically) → Structure Block save → strip → validate → add back to export pool when all pass.
+
+---
+
+**User report:** huge oak plank boxes; buildings carving into hills.
+
+**Root cause:** `npm run validate:mcstructures` on `BP - Dev/structures/mb/av_plains/`:
+- **`plains_church_cathedral_ruin`** — 21×12×23 volume **100% solid `oak_planks`** (no air) → the “plank boxes” in world.
+- **`plains_house_1`, `house_3`, `bakery`, `farmhouse`** — **100% air** (empty/broken exports; likely corrupted by an unsafe Y-shift).
+- **OK:** `plains_house_2_tall`, `librarian_study`, `smithy`.
+
+**Fix shipped:**
+- **`tools/mbAvPlainsExportPool.json`** + **`npm run sync:av-plains-export-pool`** — worldgen scatter + jigsaw pool restricted to the **3 valid** structures until re-export.
+- **`npm run validate:mcstructures`** added; **`shiftMcstructureDown.js`** refuses shifts that would leave &lt;2% solids.
+- README: no solid filler boxes; validate before re-enabling pool entries.
+
+**Terrain carving:** any non-air block in the save volume replaces world blocks (including dirt/stone under oversized boxes). Tight export boxes + air inside footprint reduce carving. Procedural script villages (`mb_abandonedSettlementBuilder.js`) also clear obstructions separately.
+
+**User action:** re-export broken 5 files (Journal → Starter set for export, tight box, Offset 0,0,0), strip + validate, re-add to export pool. Reload dev pack + **new chunks** (old chunks keep broken placements). Set spawn density back to `release` when done testing.
+
+---
+
+## 2026-06-05 — Test spawn density profile (32-grid, 2 slots)
+
+- **`tools/mbAvPlainsSpawnDensity.json`** — `active: test` (32-block scatter grid, 2 anchors, jigsaw spacing 4) vs `release` (128-grid, 1 anchor, spacing 28).
+- **`npm run sync:av-plains-spawn-density`** regenerates scatter features, feature rules, structure set.
+
+---
+
+## 2026-06-05 — Float on slopes: adjustment_radius 0
+
+- **High float** (whole building above beach/slope): `adjustment_radius: 4` moved placement up to a nearby higher column; set to **0** (grid-locked XZ).
+- Scatter Y hint back to **motion_blocking** + dry-land gate; snap **vertical_search_range 24**.
+
+---
+
+## 2026-06-05 — Fix Bedrock block IDs in export allowlists
+
+- **Json errors:** `minecraft:rooted_dirt` → **`minecraft:dirt_with_roots`**, `minecraft:dead_bush` → **`minecraft:deadbush`** in snap + place block_intersection (see `data/bedrock_blocks.json`).
+- **`applyAvPlainsPlaceConstraints.js`** now reads **`tools/mbAvPlainsSurfaceBlocks.json`** (single source for all 8 place + snap files).
+
+---
+
+## 2026-06-05 — Structure world placement pass (snap, shift, constraints)
+
+- **`shiftMcstructureDown.js`** — shifts export voxels down 1 when Y=0 is thin trim only; ran on 5/8 `.mcstructure` files (user re-exports in folder).
+- **All `place_*.json`:** `adjustment_radius: 4` + **`block_intersection`** surface allowlist (skips cliff/tree overlap; searches nearby column).
+- **`snap_export_building`:** `vertical_search_range: 48`, **`allowed_surface_blocks`** land list.
+- **Jigsaw:** `world_surface` + `max_distance_from_center`; **`liquid_settings`** kept; structure set **spacing 28 / separation 10** (scatter remains primary).
+- **Processor:** ignore **`structure_void`** for future exports.
+- npm: **`shift:mcstructures`**, **`shift:mcstructures:dry`**.
+
+---
+
+## 2026-06-05 — snap_to_surface wrapper on export scatter chain
+
+- Added **`features/mb/av_plains/snap_export_building.json`** — `surface: floor`, `vertical_search_range: 32`, `allow_underwater_placement: false`.
+- Scatter grid now places snap → weighted random → structure_template; removed manual dry-land + motion_blocking molang from scatter.
+
+---
+
+## 2026-06-05 — Features + structure block docs mapped to scatter path
+
+- **Structure Block default Offset Y=-1** ([intro](https://learn.microsoft.com/en-us/minecraft/creator/documents/structures/introductiontostructureblocks)) explains export air at Y=0 / floor at Y=1; README re-export step added.
+- **Feature chain** matches MS pattern: feature_rule → scatter → weighted_random → structure_template ([features intro](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/featuresreference/examples/featuresintroduction)).
+- **`snap_to_surface_feature`** + `allow_underwater_placement: false` documented as future cleaner alternative to dry-land molang.
+
+---
+
+## 2026-06-05 — Jigsaw aligned with MS Learn (placement + water)
+
+- **Docs:** [Jigsaw intro](https://learn.microsoft.com/en-us/minecraft/creator/documents/structures/introductiontojigsawstructures), [tutorial](https://learn.microsoft.com/en-us/minecraft/creator/documents/structures/jigsawtutorial), [terrain FAQ](https://learn.microsoft.com/en-us/minecraft/creator/documents/structures/terrainmatchingtips).
+- **`mb:abandoned_village_plains`:** `heightmap_projection` **world_surface → ocean_floor** (top solid, matches scatter motion_blocking); **`liquid_settings: apply_waterlogging`** per terrain FAQ for water overlap.
+- **Keep `projection: rigid`** on pool — terrain_matching is for multi-piece chains on slopes, not single export buildings.
+- **Scatter path** still has dry-land molang gate; jigsaw has no equivalent — shore/river edge spawns may still occur via structure set.
+
+---
+
+## 2026-06-05 — Export placement: motion_blocking anchor + skip water
+
+- **1-block gap persisted:** `.mcstructure` files have **air at Y=0**, walls/floor at **Y=1**; `grounded` + `world_surface` heightmap stacked another block on top.
+- **Fix:** Removed `grounded` from all `place_*.json`; scatter **y = motion_blocking_no_leaves** so structure Y=1 meets grass; **dry-land gate** skips fluid columns (`motion_blocking + 1 >= world_surface`).
+- **Water render bugs:** buildings no longer scatter over rivers/ocean columns.
+- **No grass under footprint:** expected — floor is cobble/dirt, not grass; flush placement, not a void.
+
+---
+
+## 2026-06-05 — Export float gap, hill clip, false lamp arrival
+
+- **1-block air gap:** `unburied` lifted whole structure on slopes; scatter features back to **`grounded`** only (surface exports, no basement).
+- **Hill clipping:** same — `unburied` raised anchor on high corner while low corner floated; grounded seats lowest block on terrain.
+- **False lamp @ grid 0,-1,0:** lamp-arrival used math grid only; now requires **`hasWorldgenLampMarkerAt`** (fence post column at lamp snap).
+
+---
+
+## 2026-06-05 — structure_block in export spawns in world
+
+- **Cause:** Structure Block was inside the save volume when exporting smaller boxes; scatter features bake all blocks into the template (no processor pass).
+- **Fix:** Jigsaw processor `block_ignore` for structure_block/jigsaw; `npm run strip:mcstructures` tool; export tip — place Structure Block outside save box.
+
+---
+
+- **Cause:** Oversized Structure Block save boxes (side/bottom margin in old manifest) + `grounded` anchoring to the lowest block in the file — not necessarily basement (church was exported surface-only per author). Large footprints made the extra margin more visible as a dirt/stone pit.
+- **Fix:** Catalog builds skip basement; export box is tight (floor = structure Y=0); removed `grounded` from scatter features; scatter y = raw heightmap. **Re-export all 8 `.mcstructure` files** via Starter set for export.
+
+---
+
+- **Sunk 1 block:** catalog exports anchor at walkable Y (floor + 1); scatter used raw `q.heightmap` (grass top). Scatter `y` now `heightmap + 1`; jigsaw `start_height.absolute` → **1**.
+- **Dirt pad around buildings:** scatter `adjustment_radius` **0** (was 4–6); jigsaw `terrain_adaptation` **none** (was `beard_thin`).
+
+---
+
+- **Template pool `location`:** `mb/av_plains/plains_house_1` (slash) — colon form caused `Invalid asset path av_plains/...` in Content Log.
+- **`structure_template_feature.structure_name`:** `mb:av_plains/plains_house_1` (colon) — slash form caused “must be prefixed by a namespace”.
+- Structure set: spacing **4**, separation **1** (valid).
+
+---
+
+- **Why nothing spawned:** jigsaw `biome_filters` listed plains/meadow/sunflower as separate entries (AND) — no biome matched. Fixed with `any_of`.
+- **Not like lamps:** lamps = small posts on 384-block grid + script build. Export buildings = full `.mcstructure` on terrain via scatter (128-block grid) or jigsaw structure set — **new chunks only**.
+- **Instant test:** Journal → Abandoned villages → **Jigsaw export @ feet** (works in existing world).
+- **`feature_rules/av_plains_export_building_slot0.json`** + `features/mb/av_plains/*` weighted random of 8 pieces.
+
+---
+
+## 2026-06-04 — Plains jigsaw spawn density cranked up
+
+- Structure set **spacing 8 → 2** (separation 1) — ~4× more sites; near the engine minimum (`spacing` must stay > `separation`).
+- **`BP - Dev/worldgen/structure_sets/mb/abandoned_village_plains.json`**
+
+---
+
+## 2026-06-04 — Plains jigsaw worldgen (dev test frequency)
+
+- **8 exported pieces** wired in `BP - Dev/worldgen/` — start pool picks one random building per site (`plains_house_1`, `plains_house_2_tall`, `plains_house_3`, smithy, bakery, librarian, church, farmhouse).
+- **High spawn rate for testing:** structure set spacing **2**, separation **1** (plains/meadow/sunflower_plains).
+- **Dev only:** `JIGSAW_SCRIPT_VILLAGES_ENABLED` = true when `INCLUDE_FULL_DEVELOPER_TOOLS`; public `BP/` unchanged.
+- Multi-building hamlets still need a hub `.mcstructure` with jigsaw connectors — current exports are single-piece spawns.
+
+---
+
+## 2026-06-04 — Catalog export: no grass pads; church with cellar
+
+- **Grass pads removed:** `layStructureCatalogPlatform` only places the gold yard marker; manifest no longer lists pad bounds; catalog signs use smooth stone.
+- **Church cellar:** starter set uses **`churchRoll: 4`** (`cathedral_ruin` with `basementDepth` + crypt storage). Catalog mode now **runs basement carve** but still skips **cellar bury** (no fake earth berm in sky yard). Export box extends below floor by basement depth.
+- **`BP/`** + **`BP - Dev/`** — `mb_abandonedStructureCatalog.js`, `mb_abandonedSettlementBuilder.js`.
+
+---
+
+## 2026-06-04 — Catalog export: no cobble pillars, full footprints, aligned pads
+
+- **Symptom:** Starter set at Y=200 — missing grass pads (6–8), cobblestone pillars from sky pads down to terrain, stained-glass building (librarian) only half built.
+- **Pillars:** Normal village **pad leveling** scanned air columns down to ground and filled ~130-block columns; `ensureStructureColumnFoundation` added cobble under pads. Catalog mode now **skips pad/basement/cellar** phases and uses flat `platformY` only.
+- **Partial building:** Layout used generic `footprintForStructure` (9×8) while runtime salt picked **librarian_study** (10×8) — west wall never built. Build now **syncs w/d/wallH from resolved floor plan**; catalog layout uses **`catalogFootprintForSlot`** + shared **`catalogStructureSalt(index)`** with runtime build.
+- **`BP/`** + **`BP - Dev/`** — `mb_abandonedSettlementBuilder.js`, `mb_abandonedStructureCatalog.js`.
+
+---
+
+## 2026-06-04 — Catalog export build: fix watchdog hang on structure 6+
+
+- **Symptom:** Starter set for export built 5/8, then `Structure SKIP footing` on librarian/church → `findRelocatedStructureOffset` / `analyzeColumn` ran thousands of column scans → `InternalError: interrupted` + ~10s watchdog hang → server shutdown.
+- **Cause:** Sky pads at Y=200 still used normal village footing checks and relocation ring search when footing failed.
+- **Fix (`structureCatalogMode`):** skip `structureFootprintIsBuildable`, settlement-evidence check, and relocation; trust pre-laid pads and use `job.y` as `platformY`; advance to `catalog_signs` when all slots processed; hold/retry paths route to catalog signs not well.
+- **Naming:** church export name no longer doubles biome prefix (`plains_church_chapel_small` not `plains_church_plains_chapel_small`).
+- **`BP/`** + **`BP - Dev/`** — `mb_abandonedSettlementBuilder.js`, `mb_abandonedStructureCatalog.js`.
+
+---
+
+## 2026-06-04 — Playtest: leave/return resume OK; some houses look incomplete
+
+- **Validated:** player can leave construction band and return; village build continues and finishes (wake/slot-index fix).
+- **Open:** some structure slots may look visually unfinished — likely skip-footing, relocate, `EXISTING`/partial registry vs blocks, or chunk edge; not blocking resume flow.
+- **`BP - Dev/`** playtest feedback (user).
+
+---
+
+## 2026-06-04 — Wake HUD no longer jumps structure slot to 5/5
+
+- **Symptom:** after leave/return during `WAIT chunks`, `Build wake` showed `slot=5/5` with `structures=2/5`, heartbeats frozen (`edits` stuck), no `RESUME chunks`.
+- **Cause:** `seedStructureSlotsFromWorld` / wake set `job.structureIndex = slots.length` while `activeStructure` was still on slot 3 — chunk retry and HUD used the wrong index.
+- **Fix:** `activeStructureSlotIndex` + `setActiveStructureForSlot`; wake uses `refreshAllStructureSlotsFromWorld` only (no index bump); structures phase resets index via `findFirstStructureSlotNeedingWork` when needed; DONE advances `structureIndex = idx + 1`.
+- **`BP/`** + **`BP - Dev/`** — `mb_abandonedSettlementBuilder.js`.
+
+---
+
+## 2026-06-04 — WAIT chunks resume + incomplete reload continues pending slots
+
+- **Stuck at `Structure WAIT chunks`:** main `structures` phase never retried `beginStructureBuild` when chunks loaded (retry existed only in `structure_retry`). Now retries each tick → `Structure RESUME chunks` then builds.
+- **Reload resume skipped pending houses:** `resumeIncomplete` jumped to well/bunkers when tier minimum met even if slots were still `pending` — now resumes at first pending/skipped/ladder slot.
+- **HUD return:** `tryWakeSettlementBuildAtCenter` on enter construction HUD / return to build band.
+- **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-04 — HUD vs done village, per-structure build logs
+
+- **False “Generating” after leave:** `phase=done` jobs waiting for witness were still in `listActiveSettlementBuildCenters` — HUD showed active build while logs said `Build completion FINAL`. HUD now ignores witness-pending jobs; log says `Build finished off-site` (throttled, not “still generating”).
+- **Per-structure Content Log:** `Structure START/DONE/WAIT chunks/EXISTING/SKIP` with slot index and world coords (Build category).
+- **Re-enter logging:** presence state resets on village switch; ~10s HUD heartbeat with phase/edits/structure progress while in band.
+- **`getActiveSettlementBuildJobForSite`** — lamp activation no longer blocked by a finished-but-not-finalized queue entry.
+- **`BP/`** + **`BP - Dev/`** — `mb_abandonedSettlementBuilder.js`, `mb_abandonedVillageNotify.js`, `mb_abandonedVillageWorldgen.js`.
+
+---
+
+## 2026-06-04 — Village return: fix structures crash, resume after reload
+
+- **Root cause:** `ensureStructureSlotReadyForBuild` used undefined `fp` → thrown every tick (swallowed) → HUD “Generating” but `edits=0` forever and “build already in queue” spam.
+- **Fix:** define footprint `fp`; `wakeSettlementBuildJob` on lamp/horizon when job exists; throttle activation log; persist incomplete + manifest on player leave; resume incomplete sites on spawn/reload; dev site reset drops in-memory queue jobs.
+- **`BP/`** + **`BP - Dev/`** — `mb_abandonedSettlementBuilder.js`, `mb_abandonedVillageWorldgen.js`.
+
+---
+
+## 2026-06-04 — Fix AV_DEBUG_LOG_ALL load error (circular import)
+
+- **`mb_entityQueryDebugDev.js`** imports `AV_DEBUG_LOG_ALL` / `AV_DEBUG_LOG_CAT` from **`mb_avDebugLog.js`** (not worldgen) so `main.js` → `codex` → entityQuery no longer loads worldgen before its exports exist.
+- **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-04 — Abandoned village log defaults + leave/return presence
+
+- **Horizon scans off by default** on new worlds (`AV_DEBUG_LOG_DEFAULT` = all categories except Scans). Enable **Journal → Developer Tools → Abandoned villages → Content Log categories → Scans ON**.
+- **`avLogBuildLine`** now respects master switch + **Build** category (join/leave/pause lines were bypassing the mask).
+- **Presence logging** in `mb_abandonedVillageNotify.js` mirrors the construction HUD: entered/left HUD band (96ch center), left/returned build band (192ch pause) — same transitions the action bar uses.
+- **`BP/`** + **`BP - Dev/`** — `mb_avDebugLog.js`, `mb_abandonedVillageWorldgen.js`, `mb_abandonedVillageNotify.js`, `mb_entityQueryDebugDev.js` (dev menu hint).
+
+---
+
+## 2026-06-04 — Per-structure registry (position, status, ladders)
+
+- **`mb_abandonedSettlementStructureRegistry.js`:** each building slot tracks `ox/oz`, status (`pending` | `complete` | `existing` | `skipped`), and ladders (`none` | `needed` | `pending` | `placed`). Resume loads saved manifest from world property `structureManifests` (schema v2); incomplete builds persist manifest so rejoin knows what not to rebuild.
+- **No item entity scans** — ladder state uses block probes + pending ladder queue only (cheap).
+- **Content log:** build manifest includes `structure registry:` lines per slot.
+- **`BP/`** + **`BP - Dev/`** — registry, `mb_abandonedSettlementBuilder.js`, `mb_abandonedVillageSites.js`, `mb_abandonedVillageWorldgen.js`.
+
+---
+
+## 2026-06-04 — Structure relocate to outer ring + resume skip overlay
+
+- **Stacking on resume:** incomplete resume no longer replays the full `structures` phase over existing houses; goes to `structure_hold` / retry only. Blocked slots **relocate** to a free offset outside the hamlet/village ring, with a **Manhattan approach path** from the plaza.
+- **Retry spam:** log key no longer cleared every pass; `tryAdvancePastStructuresPhase` skips re-entry while already in `structure_retry`.
+- **`BP/`** + **`BP - Dev/`** — `mb_abandonedSettlementBuilder.js`.
+
+---
+
+## 2026-06-04 — Structure retry loop fix (7/8 placed, resume)
+
+- **Infinite retry log:** `prepareStructureRetry` filtered `builtStructures` and lost slot indices; retries re-hit footprints that already had buildings → SKIPPED forever. Slot-indexed `structureSlotRecords`, world seed on resume (`structureSlotHasSettlementEvidence`), treat existing footprints as placed in `beginStructureBuild`.
+- **Stuck at 7/8:** after 3 retry passes with no new placements, abandon remaining slots and accept tier floor (village ≥6) so well/zombies can finish.
+- **`BP/`** + **`BP - Dev/`** — `mb_abandonedSettlementBuilder.js`, `mb_abandonedVillageSites.js`.
+
+---
+
+## 2026-06-04 — Abandoned village: resume claim bug, HUD at lamp, stall in band
+
+- **Resume never started:** incomplete lamp path called `markSitePending` before placement, so `tryClaimSiteForBuild` always failed → stuck `pending`, only `→ lamp arrival` spam. Resume queue no longer pre-marks pending; stale pending cleared before claim.
+- **HUD followed lamp:** action bar used min(dist to center, dist to lamp) within 192ch — standing at the lamp kept “Generating…” after leaving the built area. HUD now uses **96ch from settlement center only** (`SETTLEMENT_HUD_CENTER_DIST`); build pause still uses center+lamp at 192ch.
+- **BUILD_STALL while nearby:** stall timer disabled while you are in the build band or before minimum structures are placed; stalled jobs finalize immediately (no defer).
+- **`BP/`** + **`BP - Dev/`** — `mb_abandonedVillageConstants.js`, `mb_abandonedSettlementBuilder.js`, `mb_abandonedVillageWorldgen.js`, `mb_abandonedVillageNotify.js`.
+
+---
+
+## 2026-06-04 — Journal: Starter set for export (sky pads, biome+variant names)
+
+- **Journal → Developer Tools → Systems → Starter set for export** (pin `starter_set_export`); same in Abandoned villages debug.
+- **Y=200:** one **isolated pad per building** (gaps = air) — structures only, no paths/well/ruin. **Gold block** = yard corner.
+- **Filenames:** `{biome}_{type}_{variantId}_planNN.mcstructure` e.g. `plains_house_small_1_plan00`, `plains_church_chapel_stone`, `plains_weaponsmith`.
+- Content Log lists pad bounds + Structure Block box per piece → `BP/structures/mb/av_plains/`.
+
+---
+
+## 2026-06-04 — Dev sky structure catalog (plains starter, Y=200)
+
+- **`mb_abandonedStructureCatalog.js`:** 8-piece plains starter grid (3 houses + smithy, bakery, librarian, church, farm) on a stone/grass platform at **Y=200** with gold-block origin marker.
+- **Journal → Abandoned villages debug → Sky catalog (plains Y200):** lays yard, teleports you above center, logs full Structure Block export manifest (box corners + filenames) to Content Log; oak signs label each cell when build finishes. No ruin processor / paths / well.
+- **`BP - Dev/`** — `mb_abandonedStructureCatalog.js`, `mb_abandonedSettlementBuilder.js`, `mb_abandonedVillageWorldgen.js`, `mb_entityQueryDebugDev.js`.
+
+---
+
+## 2026-06-04 — Hide bunkers: ~1/5 ruined + mixed lantern/torch lighting
+
+- **Ruined bunkers (~20%):** partial cobble/sandstone shell, cobwebs, broken floor patches, ~50% chance no trapdoor (path cap instead), ~44% sparse chest (`hide_bunker_ruined`), ~42% chance no ladder (collapsed entrance).
+- **Intact bunkers:** loot table restored **torch + lantern** in chest; in-world light roll — none / lantern at (2,1) / torch at (0,2) / both (torches do not spread fire; plaza campfire+hay fix unchanged).
+- **`BP/`** + **`BP - Dev/`** — `mb_abandonedSettlementBuilder.js`, `mb_villageChestLoot.js`.
+
+---
+
+## 2026-06-04 — Settlement build watchdog hang when leaving village
+
+- **Cause:** walking away unloaded chunks while `tickStructureBuild` kept calling `getBlock` on distant cells (10s+ watchdog). Structure phase could also run multiple heavy sub-ticks per game tick.
+- **Fix:** distance-only pause (no chunk scan on leave); `trySetBlock` / `analyzeColumn` skip unloaded chunks; one structure sub-tick per game tick; lower structure guard cap.
+- **`BP/`** + **`BP - Dev/`** (`mb_abandonedSettlementBuilder.js`).
+
+---
+
+## 2026-06-04 — PropertyHandler `mb_intro_seen` cache fix
+
+- **`getPlayerProperty`:** lazy load used `const cache` then reassigned it → Bedrock `TypeError: 'cache' is read-only` on spawn. Now `let cache` + empty `Map` fallback if load fails.
+- **`BP/`** + **`BP - Dev/`** (`mb_dynamicPropertyHandler.js`).
+
+---
+
+## 2026-06-04 — Village HUD + build-near-lamp (in-band chunk bypass)
+
+- **HUD:** “Paused until you return…” only during the **~10s linger after you leave** the village band — not when approaching a lamp or when `job.paused` (chunk/distance). In range → always “Generating village…”.
+- **Chunks:** no chunk-load stall while **inside the 192ch village band**; chunk checks only apply when you are away (completion defer).
+- **Build order:** paths, structures, ground/snow, and structure retries sorted **nearest lamp first**.
+- **`mb_abandonedVillageNotify.js`**, **`mb_abandonedSettlementBuilder.js`** — **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-04 — Settlement build: sim distance / false “finished” while nearby
+
+- **`Build completion FINAL` while &lt;192ch** was usually **incomplete pipeline end**, not failed leave-band pause. Log now notes `incomplete (player Nch from site — not a leave-world pause)`.
+- Unloaded footprint chunks → **`waiting_chunks`** per structure (in addition to global chunk pause above).
+
+---
+
+## 2026-06-04 — Abandoned village: structure retry, incomplete sites, reconcile fix
+
+- **Root cause (12:02 log):** build ran paths/well/zombies and hit `phase=done` with only **4/9** structures (`BUILD_INCOMPLETE`), so construction stopped; partial mossy paths then **reconciled** as “already built” after grid reset.
+- **Builder:** do not advance past **structures** until `minimumStructuresRequired` (hamlet 4/5, village 6/9, etc.); **`structure_retry`** re-attempts SKIPPED footing slots when player is in range; **`structure_hold`** when no slots left to retry. Snow/zombies/`done` only after enough buildings. Pause distance uses **min(dist to center, dist to lamp)**.
+- **Sites:** persisted **`incomplete`** slot flag + center; blocks reconcile-from-world without a saved **built** center; incomplete sites are **not** skipped on lamp arrival (retry allowed). **`markSiteIncomplete`** on `placed=false` completion.
+- **`BP/`** + **`BP - Dev/`** — `mb_abandonedSettlementBuilder.js`, `mb_abandonedVillageSites.js`, `mb_abandonedVillageWorldgen.js`.
+
+---
+
+## 2026-06-04 — Structure footprint clears trees / snow / ice (water kept)
+
+- **Column scan** passes through **tree logs/wood/stems** to find real ground under spruce (etc.), not the trunk surface.
+- **`sweepStructureFootprintObstructions`** runs at structure start — clears logs, leaves, snow layers, loose ice above walk level in the full footprint; **water untouched** (flooded bunkers / river edges stay).
+- **Pad leveling** uses `SETTLEMENT_REPLACE_ANY` so fill/cap replaces logs and ice; foundations fill through obstructions.
+- **`BP/`** + **`BP - Dev/`** (`mb_abandonedSettlementBuilder.js`).
+
+---
+
+## 2026-06-04 — Settlement fire spread (campfire plaza + bunkers)
+
+- **Campfire plaza:** center fire placed **extinguished** (`trySetExtinguishedCampfire`) — lit campfires on Bedrock ignite adjacent **hay** / **log** ring blocks. Fits abandoned-village look.
+- **Ruin processor:** any remaining lit `campfire` / `soul_campfire` in the processor volume forced extinguished.
+- **Hide bunkers:** removed random **wall torch** in pit; bunker loot **torch → lantern** (chest only, no open flame in confined space).
+- **`BP/`** + **`BP - Dev/`** (`mb_abandonedSettlementBuilder.js`, `mb_abandonedVillageWorldgen.js`, `mb_villageChestLoot.js`).
+
+---
+
+## 2026-06-04 — Hide bunker build order + deferred ladders + surface rim
+
+- **Build order:** paths → structures → pen/well → **bunkers** → snow/zombies. Bunkers no longer run before houses — structure roofs/overhangs were overwriting bunker caps and ladder columns mid-build.
+- **Ladders + trapdoor:** deferred to `pendingLadderColumns` (placed after ruin processor via `/setblock`, same as cellar/multi-story shafts).
+- **Shell “roof”:** cobble/sandstone rim now includes **surface layer** (`y = sy`) on the 5×5 outer ring.
+- **Placement:** overlap check uses full 5×5 shell + 2-block overhang margin vs structure footprints. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-04 — Hide bunker cobble/sandstone shell + ladder exit
+
+- After the 3×3 pit is carved, **`enqueueHideBunkerFinish`** builds a **5×5 perimeter shell** (floor through headroom) using ruleset **`mat.wall`** — **cobblestone** most biomes, **sandstone** in desert.
+- **Ladder** in the SE corner `(2,2)` opposite the NW chest, backed by the east shell wall; climb to the center **trapdoor hatch** on paths.
+- Finish work drains via **`bunkerFinishQueue`** across ticks (same budget as cell carve). **`BP/`** + **`BP - Dev/`** (`mb_abandonedSettlementBuilder.js`).
+
+---
+
+## 2026-06-04 — Workstations off walls, librarian loot, food → floor pantries
+
+- **Workstations** (lectern, loom, brewing stand, enchanting table, etc.) blocked on **mask edge / outer-wall-adjacent** cells — no more lecterns in walls on L-wings and irregular footprints.
+- **Librarian:** chests **`primary` / librarian loot only** (script table — no vanilla plains food). **Enchanting tables restored** on librarian / manor library upper floors; food/library mash-up fix kept.
+- **Food storage:** default house interiors no longer spawn **pantry barrels** in-room; **`stripHousePantryStorageFromPlan`** on all houses. Floor trapdoor pantry rate **78%** (6×6+) / **62%** (5×5). Minimum-furnishing fallback adds **one primary chest** only (never pantry food). Work-building pantry slots resolve to **primary** themed loot, not house food.
+- **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-04 — Floor trapdoor pantries (1-block pit)
+
+- **`floorPantry`** on house plans: ~**52%** of houses ≥6×6 ( **38%** if 5×5+) without a full cellar get a **trapdoor in the floor** + **food chest one block below**. `appendFloorPantryToPlan` picks a free interior cell, drops one redundant pantry barrel when present.
+- Builder: skip floor plank at pantry cell; `placeFloorPantry` during furnishings (dig pit, chest + pantry loot, upside-down trapdoor). Reserved like cellar hatch for furnishings/shaft picks.
+- **`BP/`** + **`BP - Dev/`** (`mb_villageChestLoot.js`, `mb_abandonedSettlementBuilder.js`, `mb_settlementStructures.js`).
+
+---
+
+## 2026-06-04 — Roof eaves variety + vanilla framed gable roofs
+
+- **Eave overhangs:** no longer always upside-down stairs + slab below. Lip rolls **38% slab**, **40% right-side-up stair**, **22% upside-down stair**; under-slab only **~6%** (when upside-down eave). Non-framed peaked caps mix upside-down / right-side-up / full block instead of always inverted stair.
+- **Framed gable roofs:** `placeFramedPeakedRoofColumn` — stair run from eave to ridge on **both long faces** (vanilla village style). ~**62%** of peaked houses (span ≥5) or explicit `roofFramed: true` on shell. Gable-end triangles keep block fill.
+- **`roofFramed`** plan flag on 14 peaked house shells (wide, manor, plains_gabled_el, etc.). **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-04 — Ladder no-drop + chest loot theming (pantry vs gear)
+
+- **Cellar/shaft ladders:** single placement pass (2 only in debug force mode); **10-tick settle** after ruin processor before placing; skip rungs that already have `minecraft:ladder`; **`/setblock` only** for ladder blocks (no `trySetBlock` fallback that drops items); skip re-placing backing when rung exists.
+- **Chest loot:** `lootSlot` (`pantry` | `primary` | …) passed from interior specs through `fillVillageStorageAt` → fallback/augment. **Pantry** chests get food only; **primary/work/gear** strip food from fallback and skip house clutter augment. **Work-building** tables skip food mixing and `LIVED_IN_CLUTTER` / compass-map profiles. House augment is light valuables/torch only (no paper/compass sprinkle on gear chests).
+- **`BP/`** + **`BP - Dev/`** (`mb_abandonedSettlementBuilder.js`, `mb_villageChestLoot.js`).
+
+---
+
+## 2026-06-04 — Village build defer fix + join/leave debug
+
+- **Bug:** `tickBuildJob` returned early when `phase===done`, so deferred completion never ran after leaving; empty world (`dist=Infinity`) did not defer → instant **Village Complete** + `markSiteBuilt`. Queue dropped jobs on `phase=done` before `finished`.
+- **Fix:** `finalizeSettlementBuildJob` at start of tick when done; defer when no players or >192ch; queue shifts only when `finished`; **Village Complete** via `deliverSettlementCompleteNotify` (witness ~160ch, queued until return). Content Log: **Build PAUSED/RESUMED/WAITING/FINAL**, **Player LEFT/JOIN**. **`mb_abandonedSettlementBuilder.js`**, **`mb_abandonedVillageNotify.js`**, **`mb_avDebugLog.js`** — **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-04 — World load crash: SETTLEMENT_BUILD_PAUSE_DIST circular import
+
+- **Log @ reload:** `ReferenceError: SETTLEMENT_BUILD_PAUSE_DIST is not initialized` in `mb_abandonedVillageNotify.js` → `main.js` failed; cascade `DAY_COUNT_KEY` / `BISECT_MODE_PROP` not initialized.
+- **Fix:** distances in **`mb_abandonedVillageConstants.js`** (no imports); builder re-exports; notify imports constants only. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-04 — Village pause at 192 + no complete while away / partial hamlet
+
+- **Pause band = HUD band (192 ch):** build **pauses** when you leave the village UI range (was ~238). **Village Complete** and `markSiteBuilt` wait until you are back — `phase=done` defers `onComplete` while all players are far.
+- **Placed threshold:** only non-**SKIPPED** buildings count (hamlet needs **4/5**, ~80% for larger tiers). Your ice/taiga logs with 3/5 built + 2 skipped no longer fire **Village Complete** or lock the site as built.
+- **`mb_abandonedSettlementBuilder.js`**, **`mb_abandonedVillageNotify.js`** — **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-04 — Village build HUD linger + no false “Village Complete”
+
+- **HUD:** only within **~192** blocks while generating; leaving shows **`Paused until you return…`** for **~3s** then clears (no long-range follow).
+- **Build:** leaving pauses work and **resumes** when you return — no **5s abort** on paused cleanup; incomplete builds no longer count as placed (need real structures), so no premature **Village Complete** / `markSiteBuilt`. Incomplete drops clear pending without `markSiteFailed`. **`mb_abandonedVillageNotify.js`**, **`mb_abandonedSettlementBuilder.js`**, **`mb_abandonedVillageWorldgen.js`** — **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-04 — Abandoned village Content Log categories (debug)
+
+- **Journal → Abandoned villages:** master **Content Log** switch plus **Content Log categories…** submenu — toggle **Scans**, **Activation**, **Build**, **Success**, **Failures**, **Lamp cleanup** (bitmask `mb_av_debug_log_mask`). Master OFF still logs **Failures** only.
+- **`mb_abandonedVillageWorldgen.js`:** `AV_DEBUG_LOG_CAT`, `avLogScan` / `avLogActivation` / `avLogBuild` / `avLogSuccess` / `avLogLamp`; debug report lists category ON/OFF. **`mb_entityQueryDebugDev.js`:** category menu. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-04 — Library / librarian ladder vs loot + spoiled pantry
+
+- **Librarian work buildings** (`librarian`, `librarian_study`): removed plan `minecraft:ladder` specs (multi-story uses shaft ladders); moved chests/barrels to back corners (`lz≈6`); shaft candidates prefer `[1,3]` not center bookshelf stack.
+- **Manor library (house plan 39):** storage at side walls (`lx 1` / `w-2`, `lz≈5`); dedicated shaft candidates away from center.
+- **Ladder vs loot (all buildings):** 2×2 shaft is carved for climbing; only **`ladderFootLx/Lz`** (one cell) is reserved for rungs. Chests/barrels may use the other shaft cells. `commitAccessShaft` + `isLadderFootCell` / `canPlaceStorageFurnishing`; deferred ladder pass uses the same foot.
+- **U-plan manor (variant 38):** Chest/barrel on interior wings; door/perimeter rules unchanged.
+- **`mb_villageChestLoot.js`:** ~70% spoilage / ~30% fresh food; cellar + snowy ice pantry preserved. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-03 — Village build speed / HUD vs pause (log review)
+
+- **Logs:** Not mining bears — repeated `Horizon/large-infected scan deferred (villager load)`; build queue `PAUSED` at distant world coords while player at another slot in same cell; HUD only at enqueue (~140 blocks). Successful infected build: `center=40014,63,40385 chunk=2500,2524`.
+- **Fix:** Build pause/resume ~**238/206** blocks (half site cell); abort paused cleanup with **0 edits** after ~5s; queue prefers **nearest** build to player; construction HUD **syncs** to active `buildQueue` within **192** blocks; debug queue lines label **world** vs **chunk**. **`mb_abandonedSettlementBuilder.js`**, **`mb_abandonedVillageNotify.js`**, **`mb_abandonedVillageWorldgen.js`** — **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-03 — Infected pads: dusted dirt top only
+
+- **Building pads:** `mb:dusted_dirt` only on the **top** surface block; fill is mossy cobble / cobble / dirt mix. Ground prep limited to **structure footprints** (not whole village disk). Cellar bury uses stone, not dusted. **`mb_abandonedSettlementBuilder.js`** — **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-03 — Abandoned village construction HUD (action bar)
+
+- **While building:** nearby players get merged action bar **`§e§lGenerating abandoned village…`** for **~5s** (`CONSTRUCTION_HUD_BOOST_TICKS`), then **`§7Generating village…`** until ladders/complete; cleared on complete, failed build, or leaving range. Slot **`ACTION_BAR_SLOT.SETTLEMENT_BUILD`** in **`mb_actionBarHud.js`**. **`Village Complete`** title unchanged. **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-03 — Large infected: lamp-relative footing (log review)
+
+- **Logs (`ContentLog2026-06-03_20-18-29_1.txt`):** Slot **0** at lamp arrival built at **y≈63** (`dustedGround=737`); slots **1–2** failed **`BAD_FOOTING`** at **grid anchors** (`center too deep for pier poles`, `center=invalid`) — not missing dusted dirt.
+- **Fix:** All **`infected`** placements use **`resolveSettlementCenterNearLamp`** (same as lamp arrival), not only when `lampArrival` is set; infected activations **do not** `markSiteFailed` on footing miss (retry while exploring); **`clearSiteFailedForLampArrival`** + lamp artifact cleanup on infected activate. **`mb_abandonedVillageWorldgen.js`** — **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-03 — Village loot tables: variety, lived-in houses, enchanted rewards
+
+- **`mb_villageChestLoot.js`:** Expanded all script fallback pools (food, profession, biome pantries). **Pantry** barrels use `house_pantry_*` script tables (food-heavy); chests keep biome + themed rolls + `house_lived_clutter` / `house_lived_treasure` sprinkles.
+- **Augments after fill:** Smith — enchanted iron sword/pick, enchanted books, diamond tools; armorer — enchanted iron armor; fletcher — bow (10%), enchanted bow (~4.5%), enchanted crossbow rare; librarian — enchanted books; fisherman — enchanted rod; houses — profile-based clutter + rare sword/apple.
+- Vanilla `/loot` still runs first when available; script tables fill or top up. Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-03 — Settlement interiors: smithy loot + house detail
+
+- **Smithy / work buildings:** `canPlacePlannedFurnishing` allowed beds on mask edges but **rejected chests, barrels, and workstations** on those cells (most smith plans place storage on walls). Fixtures may use mask-edge cells; beds still need valid orientation.
+- **Guarantee pass:** `ensureStructureMinimumFurnishings` after decor — houses get ≥1 bed + ≥1 loot container; work sites get ≥2 filled chests/barrels. `smithy_workshop` loot slot order added.
+- **Houses:** Bumped **small_1**, **cottage_hermit**, **courtyard** footprints; richer default `interiorForVariant` base; fixed **courtyard (15)** `lz: w-2` typo; expanded `generateHouseDecor` (carpet, lantern, bookshelf, extra barrel by floor area). Weaponsmith plans: inner-room stations + blast furnace.
+
+---
+
+## 2026-06-03 — Manor H beds + unified Place building dev menu
+
+- **manor_h (plan 37):** Shell **11×11**; H-plan wings use **`hPlanWingWidth`** (w/3, min 3 blocks) for more interior; beds in wings at **lz 3**; center partition only on the connector bar. **`canPlacePlannedFurnishing`** allows beds on mask edge cells when **`resolveBedPlacement`** succeeds (wing bedrooms were skipped as “edge”).
+- **Dev menu:** **Place building…** merges single + compare — top toggle **+ Random neighbor ON/OFF**, then presets + **House plan index** (white button labels, no §7/§8 on buttons). Removed duplicate **Compare buildings** entry on main abandoned-village menu.
+
+---
+
+## 2026-06-03 — Dev: compare building + random neighbor
+
+- **API:** `layoutForceStructureComparePair`, `forcePlaceAbandonedVillageCompareAtPlayer`, `forcePlaceHousePlanAtPlayer` (`compare: true`). `listHouseShellSummaries()` for paged plan picker. Mirrored **`BP - Dev/`** + **`BP/scripts/`**.
+
+---
+
+## 2026-06-03 — Abandoned village footing: `mb:dusted_dirt`
+
+- **Footing:** Column scans pass through `mb:snow_layer` to reach dusted dirt below; infected sites use **surface Y at the lamp** (not fixed 88) for footing probes; pad foundation keeps existing dusted dirt at foot level. Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-03 — Abandoned villages: `minecraft:grove` → snowy ruleset
+
+- **Grove** is a cold mountain biome (snow surface, spruce) but has the **`grove`** tag, not **`taiga`** — it was not in `rulesetForBiome` and cold lamp feature rules only matched cold+taiga. Now **`minecraft:grove`** uses **snowy** villages, **cold lamp** posts, and `isColdLampMarkerBiome`. Exact ID only (not `cherry_grove`). Mirrored **`BP/`** + **`BP - Dev/`** scripts + feature rule.
+
+---
+
+## 2026-06-03 — Village Complete waits for deferred ladders
+
+- **Village Complete** title fires after `runSettlementLadderPlacements` finishes all passes (post–ruin-processor), not when the phased build queue ends. Villages with no ladder payloads still notify immediately. Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-03 — Abandoned village debug: per-site + title-flag reset
+
+- **Dev journal** → Abandoned villages: **Reset site grid underfoot** (`resetAbandonedVillageSiteAtWorld`) — one grid cell only; **Reset my village title flags** — `mb_av_settlements_discovered` + `mb_av_construction_witnessed`. **Clear chunk cache** still wipes all sites worldwide.
+
+---
+
+## 2026-06-03 — Abandoned village: false “built” on lamp + notify UX
+
+- **Savanna `3,2,0` bug (Content Log):** `tryClaimSiteForBuild` set **pending**, then `enqueueSettlementBuild` treated **pending** as already built → sync `onComplete({ placed: true, script:already_built })` → `finishSettlementPlacement` marked site built with **0 edits** and showed **Village Complete** with no hamlet.
+- **Fix:** Drop `isSitePending` guard in enqueue; `already_built` uses `placed: false`; `beginSettlementPlacement` returns `{ placed: queued }` from enqueue return; skip `markSiteFailed` on `already_built`.
+- **UI:** Completion — large title **Village Complete**; short flavor on **action bar** (hotbar). First construction witness — title **Constructing abandoned village...** once per player (`mb_av_construction_witnessed`). Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-02 — Abandoned village: multiplayer hardening
+
+- **Shared world state:** Site registry (`mb_av_village_sites`) stays on **world** property — one built/pending truth for all players.
+- **Duplicate activation:** `tryClaimSiteForBuild` before `beginSettlementPlacement`; `tryActivate` / `enqueueSettlementBuild` skip when `isSitePending` or already built; activation queue dedupe unchanged.
+- **Pause/resume:** Nearest-player distance uses `world.getAllPlayers()` (not 2-tick player cache) — build pauses only when **everyone** in the job dimension is beyond 140 blocks; anyone within 120 resumes.
+- **Completion titles:** `mb_abandonedVillageNotify.js` — per-player `mb_av_settlements_discovered`; all players within 140 blocks get titles independently. Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-02 — Dev Tools: readable button labels (no grey §7/§8 on buttons)
+
+- **Symptom:** Developer Tools → **Performance**, **Systems**, spawn/HUD submenus, biome checker, and entity-query debug used **§7/§8** (grey) on ActionForm **buttons** — hard to read on Bedrock button chrome.
+- **Fix:** New **`BP - Dev/scripts/mb_devFormUi.js`** — `DEV_BTN_BACK` (`§f← Back`), `devBtnParen()`, `DEV_BTN_DOT`, `devBtnBackTo()`. Wired through **`mb_codex.js`** (dev root, Performance, Systems, spawn controller chain, heavy perf presets, HUD, camp, script toggles) and **`mb_entityQueryDebugDev.js`** / **`mb_biomeCheckerDev.js`**. Body text still uses grey for secondary info; buttons use white hints or colored labels only.
+
+---
+
+## 2026-06-02 — Abandoned village: paths skip lamp post column
+
+- **Symptom:** Mossy path footing placed on desert (and other) worldgen lamp posts, breaking the barrel.
+- **Fix:** `pathCellOverlapsLampMarker` (4-block Chebyshev around lamp) filters `planSettlementPaths`, infected dusted ground, and runtime path/ground placement. Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-02 — Abandoned village: pause when leaving + completion titles
+
+- **Pause/unpause:** Phased `enqueueSettlementBuild` jobs pause when no overworld player is within **140** blocks of the hub (resume at **120**). Stall timer does not tick while paused. Action bar: paused / resumed hints. Debug queue shows `PAUSED`.
+- **Completion UI:** `mb_abandonedVillageNotify.js` — title **Village Complete**; first discovery subtitle *You found your first village...*; later *Another one found and another one gone...* (per-player `mb_av_settlements_discovered`). Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-02 — Abandoned village: strict reconcile (no false “built” skips)
+
+- **Symptom:** New desert lamp site `2,3,0` logged `already built/reconciled` with `built=3` but no hamlet placed (Content Log 21:21–21:24).
+- **Cause:** Loose reconcile counted smooth_sandstone / hay / 2 generic “strong” blocks (desert temples, etc.) and persisted `markSiteBuilt` without mossy path footprint.
+- **Fix:** Reconcile requires **mossy cobble path cluster** (`scriptSettlementEvidenceIsConvincing`); verify saved center before skip; **reset stale** registry slots with no footprint; overlap link only when center verifies. Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-02 — Abandoned village: no rebuild on world rejoin
+
+- **Symptom:** Rejoining near an existing script hamlet (e.g. desert site `0,3,0`) queued a full **Settlement built** again.
+- **Cause:** (1) `mb_av_village_sites` was only in the property-handler dirty cache until the 30s autosave — leaving before flush lost “built” keys. (2) Registry could load empty if the module imported before the world was ready (`sitesLoaded` stuck). (3) **Lamp arrival** skipped block reconcile, so a missing registry always re-built.
+- **Fix:** `flushWorldPropertyToDisk` on site persist; `reloadAbandonedVillageSiteRegistry` on worldgen init (+ 1-tick retry); `shouldSkipSiteActivationForExistingSettlement` for all activations including lamp arrival; stronger desert reconcile blocks + 56-block probe. Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-02 — Tower house: chest loot no longer scattered during build
+
+- **Symptom:** `desert_tower_house` (and other multi-story / roof-deck houses) dropped items on the ground mid-build — upper-floor chests/barrels broken when the rooftop balcony deck was sealed.
+- **Cause:** Phased build placed plan **interior** (chests on `floor: 2+`) during **`interior`**, then **`placeRooftopLookout`** cleared air and laid deck planks over the footprint.
+- **Fix:** New **`furnishings`** phase after **`roofAccess`** (partitions still in **`interior`**). `structureNeedsDeferredFurnishings` defers plan interior, beds, house/church decor, and doorway clears until the deck is finished. Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-02 — Desert abandoned villages: footing + reconcile fixes
+
+- **Symptom:** Desert lamp sites on sand/sandstone never built; biome was valid but footing failed or site marked “already built” without a script village.
+- **Cause:** `classifySurfaceColumn` / `analyzeColumn` did not treat **sandstone** (common on desert surface) as land → `BAD_FOOTING`. Reconcile counted natural **sandstone** as weak ruin evidence and skipped activation. Dune height used y≈64 hint instead of surface at lamp.
+- **Fix:** Sandstone variants (+ cactus pass-through) in `BUILDABLE_GROUND_IDS` / pier anchors; `footingHintYForSite` for desert/savanna from `surfaceY` at lamp; lamp arrival tries `resolveSettlementCenterNearLamp` before grid spiral; desert reconcile ignores natural sandstone weak counts. Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-02 — Abandoned village: building list in Content Log on build complete
+
+- **`mb_abandonedSettlementBuilder.js`:** Tracks each finished structure slot (`formatSettlementStructureLabel` — type, plan id, variant#, world offset, door, SKIPPED footing). `buildSettlementCompletionManifest` adds tier, layout, plaza, paths/pen/snow/zombies, edit count.
+- **`mb_abandonedVillageWorldgen.js`:** On successful placement, **`[ABANDONED VILLAGE] Settlement built @ …`** logs full manifest (`always`). Failures include partial manifest. Debug report shows last build lines (up to 8). Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-02 — Multiplayer journal HUD settings + dev HUD toggles
+
+- **Symptom:** Guest with `mb_cheats` could use dev menus (e.g. single village house place) but Powdery/Basic **Settings** (infection timer, etc.) and **Developer Tools → HUD & action bar** looked toggled in the journal while only the host’s bar/world behavior changed.
+- **Cause:** Journal UI settings were stored on **world** dynamic props (`mb_player_settings_<playerId>`) instead of the player; dev HUD keys were not in the property preload list and cache could miss disk values. **Broadcast** / legacy world scan HUD can show on a guest’s screen when the **host** has HUD on even if the guest’s **my** toggles are off (menu already had “You see” vs “Your toggles”).
+- **Fix (`mb_dynamicPropertyHandler.js`, `mb_codex.js`, spawn/biome/sim/entity-query HUD setters):** `mb_journal_settings` on **player** with migration from legacy world keys; `getPlayerProperty` falls back to `player.getDynamicProperty`; preload `mb_dev_hud_*` keys; `flushPlayerPropertyToDisk` on HUD toggles; clearer HUD menu note when broadcast/legacy affects “You see”. Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+## 2026-06-03 — H-plan manor beds sticking out (plains)
+
+- **Bug:** `manor_h` / H-plan houses placed beds at `(2,2)` and `(w-3,2)` — courtyard gaps in `hPlanMask`, so bed heads sat outside the shell.
+- **Fix:** `isValidBedFootprintCell` requires `structureCellOccupied`; wing bed coords via `hPlanWingBedLx`; interior templates updated for plans 33, 37, 66/68. **`BP - Dev/`** + **`BP/`**.
+
+---
+
+## 2026-06-02 — Mining bear cap: 2 per player (dimension)
+
+- **Balance:** `MINING_BEARS_MAX_PER_PLAYER = 2` — max **2** loaded mining bears per player in a dimension (4 for 2-player co-op), **2** within spawn scan radius. `ENTITY_TYPE_CAPS` mining family **3 → 2**.
+- **`mb_miningCap.js`:** Near + dimension checks on natural spawn (like buff); overflow cull removes farthest miners over cap every 40t. Dev toggle **Mining overflow cull**.
+- **Spawn configs:** `maxCountCap` 2, day-20 late ramp no longer spikes to 10; **1** mining spawn attempt per tick max.
+
+---
+
+## 2026-06-02 — MP spawn: spread stagger + co-located duo pacing
+
+- **Spread-apart bug:** Tile scans used `system.currentTick % staggerInterval` while the spawn loop runs ~every 60t → one player could never scan. **Fix:** `spawnControllerInvocationCount` + round-robin on spread runs.
+- **Nearby duo (tight group):** Within 32 blocks, the game treated 2 players like a heavy MP stack: only **1/5** of spawn-loop runs, **8×** group rescan cooldown, forced **duo** block-query tier (half budget), **50%** spawn attempts, **1–2** attempts/tick. Felt “super slow” vs solo.
+- **Co-located fix:** ≤2 players or one spatial cluster → run every spawn loop; solo scan cooldown/query budget; full spawn attempts; optional 1.25× chance like solo. Large tight stacks (3+ clusters) keep old throttles. **`BP - Dev/`** + **`BP/`**.
+
+---
+
+## 2026-06-04 — Weaponsmith loot dedupe (no spear stacks)
+
+- **`applyLootPoolToContainer`:** **Category dedupe** — max one spear, saddle, horse armor, sword, etc. per chest roll.
+- **Weaponsmith pool:** Spears/mount gear removed from static table; **one weighted spear** + optional **one** saddle *or* horse armor in `buildSmithFallbackPool`.
+- **Augment:** Runs **once** per chest (fill retries no longer stack bonuses); weaponsmith augment is **one** optional extra (skips if type already present).
+- Synced **`BP/`**.
+
+---
+
+## 2026-06-04 — Weaponsmith / smithy blacksmith loot
+
+- **`mb_villageChestLoot.js`:** Expanded **`house_weaponsmith`** fallback — spears (copper/stone/iron + rare gold/diamond rolls), **saddle**, **horse armor** (leather→diamond), chain/iron pieces, obsidian, diamond, bread/apple, bucket. Script fallback + **`maybeAugmentWeaponsmithStorage`** bonus pass on top of vanilla `/loot`.
+- Synced **`BP/`**.
+
+---
+
+## 2026-06-04 — Villager hide bunkers (pre-structure) + tanner note
+
+- **Hide bunkers:** **`bunkers`** phase after paths, before structures. **3×3** pit (trapdoor center, chest NW corner, 2-block headroom). Count: hamlet **2**, village **3**, large **5**. Sites chosen from **path cells** (trapdoor on path); ring fallback if needed. **`hide_bunker`** loot. Dev log: `pathBunkers=N`. Not placed for **`singleStructureOnly`** dev builds.
+- **Tanner:** Work building **`leatherworker`** (cauldron + barrel + tannery chest loot) — rolls on **large** settlements; not a fixed slot on hamlet/village tiers yet.
+- Synced **`BP/`**.
+
+---
+
+## 2026-06-04 — Roof eave overhangs + functional upper floors
+
+- **Roof overhangs:** New `roofOverhang` build phase — upside-down stair + optional slab eave **1 block beyond** occupied perimeter on all rulesets **except desert** (mask-aware; skips door openings). Flat roofs get a slab lip.
+- **Second stories:** Multi-story interiors use **flat ceiling** at wall height (peaked/shed slope on **perimeter only**). `clearMultiStoryInteriorAir` after mid-floor pass; rooftop deck seal raised to `sy + wallH` so deck flattening no longer fills living volumes. Re-clear after optional rooftop lookout on 2-story shells.
+- Synced **`BP/`**.
+
+---
+
+## 2026-06-02 — Cellar ladder deferral + smithy build hang fix
+
+- **Cellar hatch ladders:** Rungs + trapdoor now deferred like multi-story shafts (`captureBasementLadderPayload` → `pendingLadderColumns` → `runSettlementLadderPlacements` after ruin pass). Basement phase only carves air in the shaft; no early ladder/trapdoor placement that bury/repair/grid passes overwrote.
+- **Smithy watchdog crash:** Cached `st.floorPlan` once in `beginStructureBuild` (avoids re-running `applyStructureLootToPlan` every tick). Interior **partition** pass always advances `interiorI` even when beams fail to place (fixed infinite loop on smithy workshop partition at lx=7).
+- **Verified in-game:** cellar hatch ladder + trapdoor survive full build; settlements look good for current pass.
+- Synced **`BP/`**.
+
+---
+
+## 2026-06-02 — Librarian, smithy, church & cathedral overhaul
+
+- **Librarian:** 9×8 / 10×8 footprints; **14+ bookshelves** per variant (ground + gallery), partitions, ladder to enchant floor.
+- **Smithy:** Removed narrow T-shape `smithy_large`; new **10×7 workshop** (full interior, forge patio, blast furnace); weaponsmith pool prefers full footprints; default smithy 7×6.
+- **Churches:** New **`churchLMask`** (standing L nave + transept); **solid stone floors** (removed random skip → no more foundation-only shells); enlarged all variants (parish 10×13, stone chapel 11×15, cross 14×17, belltower 12×15, **cathedral 16×20**); partitions, gallery bookshelves, ladders, richer interiors.
+- Synced **`BP/`**.
+
+---
+
+- **Cellars:** `cellarBury` phase berm-fills dirt/grass around footprint so rooms sit below grade; cellar buildings use **lowest** column for platform Y; hatch ladders use backed `placeStructureLadder`; shaft cells skipped in wall/repair passes.
+- **Dogtrot:** Wing doors on **west/east exteriors** plus front/back pair per pen; door approach paths use per-door exterior offset (fixes missing door on chest/bed wing).
+- **L-wing:** Rooftop lookout shaft must fit fully inside occupied interior (candidates in wide bar); skips invalid 2×2 that punched void corners.
+- Synced **`BP/`**.
+
+---
+
+- **`mb_settlementStructures.js`:** `cellarDepthForVariant()` — all cellars carve **3–5** blocks deep (split-level, cellar cottage, crypt, taiga smoke cabin, cathedral crypt). Shells use `hasCellar: true` instead of fixed depth 2/3.
+- **`mb_villageChestLoot.js`:** `appendBasementCellarStorage` tiers — ~22% bare, sparse barrels (mix of **empty** and cold-storage loot), furnished adds chest + lantern/bookshelf in deeper cellars.
+- Synced **`BP/`**.
+
+---
+
+- **Dogtrot (plan 32):** Shell **13×8**; wing doors on each pen (inset from breezeway center, not the open passage); **fence gates** at front/back breezeway mouths (biome wood gate id). Builder: `computeDogtrotDoorCells`, `computeDogtrotGateCells`, `placeDogtrotFenceGates`, gate-aware wall/repair passes.
+- **L-wing house (plan 11):** Replaced tiny **8×5** `corner_1` with **12×10** `l_wing_house` using `lWingHouseMask` (wide front bar + tall left stem); partitions/interior refreshed; door on wide bar away from re-entrant corner (`computeLWingDoorCells`).
+- **`mb_settlementStructures.js`:** Plan flags `dogtrot`, `lWingWide`; removed duplicate `case 41` in `occupiedForVariant`.
+- Synced **`BP/`**.
+
+---
+
+- **`mb_villageChestLoot.js`:** `house_cellar` cold-storage fallback (honey bottles, meat/fish, crops, ice, pie); `appendBasementCellarStorage` on house plans with `basementDepth`; cellar skips vanilla `/loot` (fallback only). Smith tables: iron-heavy fallback, rare diamond tools (~4% fallback / ~3.5% augment), obsidian rolls; `maybeAugmentSmithStorage` after fill.
+- **`mb_abandonedSettlementBuilder.js`:** `zone: "basement"` furnishings placed at cellar floor Y.
+- Synced **`BP/`**.
+
+---
+
+## 2026-06-02 — Settlement loot full remap
+
+- **`mb_villageChestLoot.js`:** Central **`WORK_LOOT_PROFILES`**, per-plan storage slot order (`market_bazaar`, `trading_post`, churches, …), **`houseStorageLootForVariant`** (70 variants + infected sprinkle), expanded fallbacks for every profession table, **`applyStructureLootToPlan`**, **`lootForMarketStallBarrel`** (butcher). Librarian uses plains + book fallback; trading post remapped off cartographer-only.
+- **`mb_settlementStructures.js`:** Work/church plans stripped of inline loot; loot applied at plan fetch. Houses pass **ruleset** into variant storage resolution.
+- **`mb_abandonedSettlementBuilder.js`:** Farmer → butcher context; market stalls + fill pass **ruleset**; loot ctx includes `planId` / `ruleset`.
+- **Docs:** [`docs/development/ABANDONED_SETTLEMENTS.md`](development/ABANDONED_SETTLEMENTS.md) loot table section. Synced **`BP/`**.
+
+---
+
+## 2026-06-02 — Wider paths, 5 plaza/layout variants, bigger hub, door approach pads
+
+- **Paths:** 3-block-wide spokes/plaza ring; **11×11** central plaza pad (`SETTLEMENT_PLAZA_RADIUS = 5`); larger path radius per tier.
+- **Hub:** **5 meeting variants** (well, fountain, market, campfire, **shrine**); enlarged well (5×5 pool + corner posts), market stalls, shrine lectern plaza.
+- **Layout:** **5 structure layouts** (ring, cross, arc, double ring, square corners) via `pickSettlementLayoutVariant` / `settlementLayoutOffset`.
+- **Access:** 2–3-wide mask-aware doors; exterior **path pad + air** in front of every door after build.
+
+---
+
+## 2026-06-02 — Fletcher loot / door / interior fixes
+
+- **`mb_abandonedSettlementBuilder.js`:** Furnishings must sit on **occupied interior** cells (not mask voids or walls). **Mask-aware door cells** — 2-wide openings on real perimeter edges; paths aim at resolved door; post-interior **doorway carve** pass.
+- **`mb_settlementStructures.js`:** Fletcher, toolsmith, leatherworker → full rectangular shells + porch (removed broken L/C masks on small footprints); butcher L-wing and brewery enlarged with corrected interior coords.
+
+---
+
+## 2026-06-02 — Biome-exclusive house shapes + shaped work buildings
+
+- **`mb_settlementStructures.js`:** `HOUSE_VARIANT_COUNT = 70` (50 universal + 20 biome-exclusive indices **50–69**). New masks: C-shape, longhouse, arcade, stilt bay, plus, octagon. **`pickHouseVariantIndex(ruleset, cx, cz, salt)`** — ~45% biome pool, ~33% shaped universal, else random universal. Work buildings upgraded with non-rect **`occupied`** masks and appendages (forge patio, smoke chimney, mill wheel, dock porch); **`farmer_desert_yard`** for desert/savanna; butcher L-wing variant.
+- **`mb_abandonedSettlementBuilder.js`:** Layout uses **`pickHouseVariantIndex`**; appendage phase handles **stilt_deck**, **dock_porch**, **forge_patio**, **mill_wheel**, **smoke/oven chimney** stacks.
+- **Dev menu:** Single-build entries for desert riad (52), jungle stilt (57), taiga longhouse (61), infected spire (67); random house label → **70 plans**.
+
+---
+
+## 2026-06-02 — Lamp arrival villages failing (reconcile + artifact gate)
+
+- **Logs:** `Site reconciled from world blocks — skip activation` with no village; desert lamp structure block visible, `built=0`, no `Lamp approach build queued`.
+- **Cause:** Reload reconcile treated natural **sandstone** as a finished village; lamp activation required `artifact count === 0` before queueing build.
+- **Fix:** Stricter ruin evidence (`strong` planks/path/mossy + weak stone); **no reconcile on lamp arrival**; retry artifact clear + **always queue** build at lamp; `lampArtifactScanVerticalBounds` works when player Y mismatches surface; **mesa/badlands → desert** ruleset.
+
+---
+
+## 2026-06-02 — Snow sprinkle vs snowy loot (taiga safe / snowy themed)
+
+- **`settlementRollsMbSnowSprinkle(ruleset, …)`** — **taiga** + **ice** never get `mb:snow_layer` (mega / redwood taiga safe zones). **snowy** ruleset always sprinkles when day factor allows. Other rulesets keep optional ~34% infection sprinkle.
+- **TAIGA_BIOME_IDS** — `redwood_taiga_mutated`, `redwood_taiga_hills_mutated`, `mega_taiga_hills`.
+- **Snowy chests** — `FALLBACK_SNOWY_SUPPLIES` + `maybeAugmentSnowyStorage` (snowballs, snow blocks, ice, powder snow, boots) on all snowy-ruleset storage.
+
+---
+
+## 2026-06-02 — Smithy chest/barrel placement fix
+
+- **Cause:** Planned chests in weaponsmith/armorer/toolsmith layouts often sat in the **door-approach** clearance zone; `canPlacePlannedFurnishing` skipped them while grindstone/anvil still placed.
+- **Fix:** Allow chests/barrels in approach tiles; moved storage to safer coords; **chest + barrel** per smith building with `lootSlot` primary/pantry and vanilla `village_weaponsmith` / armorer / toolsmith tables (`BP` + `BP - Dev`).
+
+---
+
+## 2026-06-02 — Duplicate village fix, desert hot lamp, force-by-biome debug
+
+- **Reload / resync duplicate hubs:** `mb_abandonedVillageSites.js` — `probeSettlementCenterNearWorld`, `reconcileBuiltSiteFromWorldNearLamp`, `findBuiltSiteNearWorld` / `linkSiteToExistingSettlement` (~88 block overlap). `tryActivateAbandonedVillageSite` + `runAbandonedVillagePlacementWork` skip or link before queueing a second build.
+- **Desert lamp worldgen:** `BP/structures/mb/village_marker/hot_lamp_post.mcstructure`, `hot_lamp.json`, `scatter_hot_lamp_grid.json`, `village_marker_desert_slot0.json` (mirrored to `BP - Dev/`). Debug report shows **hot (desert)** vs cold vs warm/oak/rain.
+- **Dev menus:** Journal → Abandoned village debug → **Force by biome style…** (ruleset × hamlet/village/large); **Single building** list driven by `FORCE_SINGLE_BUILDING_MENU` in `mb_abandonedVillageWorldgen.js` (optional ruleset from biome-force submenu).
+
+---
+
+## NEW CHAT HANDOFF — Abandoned villages (2026-06-02, updated)
+
+**Design note (user):** Cold biomes (`taiga` / `ice` / `snowy`) are **not** `mb:snow_layer` themed — they are spruce/cobble (ice = packed ice paths). Colder areas = **less infection/mob pressure** in pack design. **`mb:snow_layer`** sprinkle (~34% seed roll per site, any ruleset) is optional ruin flavor, applied **last** after structures — see `settlementRollsMbSnowSprinkle` in `mb_abandonedSettlementBuilder.js`.
+
+---
+
+## NEW CHAT HANDOFF — Abandoned villages (2026-06-02)
+
+**Paste this block into a new Cursor chat** when continuing abandoned-village / cold-biome / lamp work. Prior transcript (if needed): agent transcript `c3cc7275-3a33-4227-90bf-cddd2936ce4c`.
+
+### Project slice
+
+Maple Bear TakeOver — Bedrock addon. **Script-built abandoned villages** at worldgen **lamp markers** (spruce fence posts). Public pack: `BP/` + `RP/`. Dev/testing: `BP - Dev/` + `RP - Dev/` (Bridge → dev trees). Entry: `BP/scripts/main.js`. Design doc: [`docs/development/ABANDONED_SETTLEMENTS.md`](development/ABANDONED_SETTLEMENTS.md).
+
+### User goals this thread (done unless noted)
+
+| Topic | Status |
+|--------|--------|
+| Ladders in normal lamp villages (not just ladder test) | **Done** — `scheduleSettlementLadderPlacementsAfterRuin` after processor drain |
+| Cold biome lamps (`ice_plains`, cold taiga) | **Done** — `BP/feature_rules/village_marker_cold_overworld_slot0.json` (new chunks) |
+| Day ~20 lag from village scripts | **Mitigated** — `mb_abandonedVillagePerf.js`, smaller ruin radius, deferred horizon scan, MP rotate-one-player scan |
+| Logs: endless `Scan skipped — village burst defer`, structure_block on lamp | **Done** — `shouldDeferAbandonedVillageHorizonScan()`; lamp cleanup/arrival not deferred; arrival ≤56 blocks incl. on post |
+| Cold village: no dusted dirt on house pads | **Done** — `settlementUsesDustedGround(ruleset)` → infected only |
+| Cold village: `mb:snow_layer` not vanilla snow; snow **last**, covering roofs | **Done** — `settlementUsesSnowCap`, `tickSettlementSnowPhase` (paths then roof overlay) after well |
+| House floating over water | **Mitigated** — `structureFootprintIsBuildable` skips bad footprints (≤20% water, ≥55% land, center land) |
+
+**Not committed** unless user asked — check `git status` before release.
+
+### Build pipeline order (`mb_abandonedSettlementBuilder.js`)
+
+`cleanup` → `ground` (infected dusted only) → `paths` → `structures` → `pen` → `well` → **`snow`** (`mb:snow_layer`) → `zombies` → `done`.
+
+Exports/helpers: `MAPLE_BEAR_SNOW_LAYER`, `settlementUsesDustedGround`, `settlementUsesSnowCap`, `enqueueSettlementBuild`, `hashChunkRoll`.
+
+### Key files
+
+| File | Role |
+|------|------|
+| `mb_abandonedSettlementBuilder.js` | Phased settlement build, pads, snow, materials, structure skip on bad footing |
+| `mb_abandonedVillageWorldgen.js` | Scan, lamp activation, processor queue, cleanup |
+| `mb_abandonedVillageSites.js` | Grid, lamp positions, `lampArrivalCandidateAtGrid` |
+| `mb_abandonedVillagePerf.js` | Adaptive budgets (thrift tier, scan interval, ruin radius) |
+| `mb_workSpread.js` | `shouldDeferVillageBurst`, `shouldDeferAbandonedVillageHorizonScan` |
+| `mb_settlementStructures.js` | 50 house plans, churches, work buildings |
+| `village_marker_cold_overworld_slot0.json` | Cold lamp worldgen feature rule |
+
+### Rulesets (materials)
+
+`plains` / `desert` / `savanna` / `jungle` / **`taiga`** / **`snowy`** / **`ice`** (packed ice paths) / **`infected`** (dusted pads + snow cap). Cold = taiga + ice + snowy for snow overlay; infected for dusted ground.
+
+### How to test in-game
+
+1. `/reload` — use **`BP - Dev/`** in Bridge for full journal tools.
+2. **New chunks** for cold worldgen lamps (existing chunks won’t retro-spawn cold posts).
+3. Walk to lamp: Content Log should show cleanup + build queue, **not** endless full-scan defer.
+4. Journal → **Abandoned village debug** for perf budget line.
+5. Cold village: cobble pads, **`mb:snow_layer`** on paths/roofs after houses exist, no dusted house pads.
+
+### Validation on PC
+
+`npm run check` (or `node --check BP/scripts/mb_abandonedSettlementBuilder.js`). ESLint ~220 pre-existing `no-unused-vars` warnings OK.
+
+### Likely follow-ups (user may ask)
+
+- Tune roof snow density (`tickSettlementSnowPhase` thresholds 78 / 42 edge vs interior).
+- If a structure slot is skipped for water, layout may look sparse — could re-roll placement in `layoutStructures` instead of silent skip.
+- Confirm cold lamp spawns in target biomes after feature-rule edit.
+- Merge `BP - Dev/` → `BP/` for store release per `AGENTS.md` checklist.
+
+### Related log the user shared
+
+`Minecraft Logs/logs/ContentLog2026-06-02_12-04-35_1.txt` (~L22681+) — defer spam + lamp artifacts before scan/lamp fixes; re-test after reload.
+
+---
+
+**Date:** 2026-06-02 (Ladder timing — early + post-ruin pass)
+
+- **`scheduleSettlementLadderPlacementsAfterRuin`:** first ladder wave ~8t after build; second when ruin processor queue is empty (was: wait up to 30s only). Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Lake pier villages + lamp retry)
+
+- **Pier hubs:** `scoreSettlementFootprint` allows **water** center (up to ~94% water in ring); `settlementCenterFromFootprintScore` + `placeSupportPoles` (ruleset log). Structures/paths use `resolveColumnFloorY` on water cells.
+- **Lamp:** try pier at post, then shore; `clearSiteFailedForLampArrival` on approach; lamp BAD_FOOTING does not permanently mark failed.
+- Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Day-gated snow + lamp lake lag fix)
+
+- **`mb:snow_layer` sprinkle:** `settlementRollsMbSnowSprinkle` × `settlementMbSnowSprinkleDayFactor(day)` from `getCurrentDay()` (0 before day 5 → full ~day 28).
+- **Lamp lag loop:** BAD_FOOTING on lake lamp cleared `failed` every tick → endless activate + spiral logs. Now **`markSiteFailed`** always; skip re-activate if failed; no `clearSiteFailedForLampArrival` on approach. **`resolveSettlementCenterNearLamp`** searches dry shore up to 56 blocks from post.
+- Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Mb snow sprinkle — not cold-themed)
+
+- **`settlementRollsMbSnowSprinkle(cx, cz, siteSub)`** — ~34% of sites (any ruleset) get **`mb:snow_layer`** after build; **not** auto on taiga/ice/snowy.
+- Cold rulesets stay spruce/cobble/ice paths only (design: cold = less infection, not mb-snow décor).
+
+---
+
+**Date:** 2026-06-02 (Cold village snow + pads + footing)
+
+- **Cold rulesets** (`taiga`, `ice`, `snowy`): house pads use **cobblestone**, not `mb:dusted_dirt` (dusted ground is **infected ruleset only**).
+- **Snow:** **`mb:snow_layer`** only when sprinkle roll hits; runs **after** paths, structures, pen, well (paths then roof overlay).
+- **Footing:** Per-structure footprint must be **≥55% land**, **≤20% water**, center column on land — skips floating pier houses (village hub still allows shoreline piers).
+- **`settlementUsesSnowCap`**, **`MAPLE_BEAR_SNOW_LAYER`**. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Roof planks/stairs + deck seal — fix floating rails)
+
+- **Roofs:** Flat/peaked/shed use **full blocks** (planks/cobble), not slab caps; peaked/steeple fill the **entire** footprint with a sloped volume (stairs on slope faces). Taller peaks (2–3 blocks on medium/large shells). Work buildings default to **peaked** unless plan says otherwise.
+- **Floating deck fix:** `sealRoofVolumeToDeck` fills air between local roof height and uniform deck; perimeter fence at **one** `deckWalkY + 1` (not per-cell crown).
+- **Processor:** Lower chance stairs → cobweb (0.03). Mirrored **`BP/`**.
+
+---
+
+**Date:** 2026-06-02 (Gabled roofs + roof deck access)
+
+- **Roofs:** Dedicated **`roof`** build phase after walls — `peaked`/`steeple` inverted-V (oriented upside-down stairs + log ridge), `shed` mono-pitch, `flat` slab cap without random roof stairs. Resolver fallbacks for houses; work buildings default flat where appropriate (`toolsmith`, `farmer`, `market_hall` + `roofDeck`).
+- **Deck access:** `placeRooftopLookout` uses **crown Y** from roof geometry; **`roofAccess`** phase adds exterior supported stairs (deck or multi-story) + back-wall ladder on 1-story decks. Ladder payload **`ladderTopDy`** reaches deck after ruin processor.
+- **Dev:** Single-build **Gable house** (plan 14), **Roof deck** (forced lookout). Docs: [`ABANDONED_SETTLEMENTS.md`](development/ABANDONED_SETTLEMENTS.md) roofs section. Synced **`BP/`**.
+
+---
+
+**Date:** 2026-06-02 (Abandoned village floor plan expansion — 50 houses, ornate churches)
+
+- **Catalog:** `mb_settlementStructures.js` — **50** house variants (0–19 refreshed, 20–49 new: cottages, row, dogtrot, manor, 3-story, cellars); **25+** work footprints (10 new kinds: bakery, brewery, schoolhouse, town_hall, etc.); **6** church variants via `getChurchPlan()` (cross nave, bell tower, cathedral crypt).
+- **Builder engine:** `occupied` cell masks, `appendages` (porch/bell_tower), `basement` phase, `roofStyle` extras, `facade` arches/columns, `wallHAt`, multi `midFloorLevels`, horizontal partitions, `placeChurchDecor()`.
+- **Tier layouts:** Village slots 3/5/7 → fisherman/fletcher/shepherd; large **2** unique extra professions; hamlet 10% cartographer/shepherd.
+- **Dev:** Expanded single-build menu (courtyard, cellar, dogtrot, cathedral, town hall, …); loot keys for new work kinds.
+- **Docs:** [`ABANDONED_SETTLEMENTS.md`](development/ABANDONED_SETTLEMENTS.md) floor plan catalog + engine table. Mirrored **`BP/`** + **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Settlement floor plan expansion — structures catalog)
+
+- **`mb_settlementStructures.js`:** Replaced with **50 house variants** (`HOUSE_VARIANT_COUNT = 50`); extended `HousePlan` (`occupied`, `appendages`, `basementDepth`/`basementFloor`/`basementHatch`, `roofStyle`, `facade`, `wallHAt`, stories up to 3, `midFloorLevels`). Mask helpers for **L-wing (11)**, **courtyard (15)**, **dogtrot (32)**, **T-shape (33)**, **H-plan (37)**, **U-plan (38)**; **`getChurchPlan(ruleset, roll)`** — 6 church variants including cross mask. **25 work/special plans** (upgraded smith/farm/lib/market + bakery, brewery, apiary, hunter lodge, mill, school, town hall, prison, greenhouse, trading post). **`getWorkBuildingPlan(kind, cx?, cz?, salt?, ruleset?)`** variant rolls; **`structureKindForSlot`** — village slots 3/5/7 = fisherman/fletcher/shepherd, hamlet 10% cartographer/shepherd, large expanded extra pool. Mirrored **`BP/scripts/`**. Builder engine still needs Phase 0 hooks to consume new fields.
+
+---
+
+**Date:** 2026-06-02 (Lamp at post → village must spawn)
+
+- **Intent:** Find lamp → clean structure_block → script village if you are there.
+- **Bug:** Lamp “arrival” required **6–56** blocks from the post, so standing on the lamp (0–5 blocks) hit a dead zone — cleanup could run but no activation.
+- **Fix:** Arrival is **≤56** blocks (including on the post). After cleanup, **`tryActivateLampSiteWhenPlayerPresent`** queues build when artifacts are clear and player is in range (skip seed roll). Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Village scan defer fix — lamps always run)
+
+- **Bug:** `shouldDeferVillageBurst` includes **chunk-edge defer** (~6s per chunk crossed). Walking to a lamp kept defer true → entire scan returned early (“Scan skipped”) and **lamp cleanup never ran** — structure_block stayed visible.
+- **Fix:** `shouldDeferAbandonedVillageHorizonScan()` (no chunk-edge) only gates horizon + large-infected scans. **Lamp arrivals**, **lamp artifact cleanup**, and **clear on arrival** always run. Verbose defer log throttled to ~10s. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Abandoned village adaptive perf — spawn/mining parity)
+
+- **Was not** tied to pack auto-throttle before (fixed scan every 20t, full horizon scan **per player**, no `shouldDeferVillageBurst`).
+- **`mb_abandonedVillagePerf.js`:** uses `getPlayerThriftTier`, `getAiIntervalStretch`, `getSpawnBlockBudgetScale`, wall/mob probes, `shouldDeferVillageBurst`. Scales scan interval, activations, ruin processor blocks, build blocks/tick, scan radius. **Multiplayer:** horizon ring scan **rotates one player per tick**; lamp arrivals still per player; shared activation cap.
+- Debug report + self-test show live budget line. Docs: `ABANDONED_SETTLEMENTS.md`. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Cold lamp markers, village worldgen perf)
+
+- **Cold villages:** Added `village_marker_cold_overworld_slot0.json` so **cold spruce lamp posts** worldgen in `ice_plains` (+ spikes) and **cold taiga** (tag `cold`+`taiga`). Script rulesets already mapped (`ice` / `taiga`); lamps were only on infected biomes before — walk to lamp still activates via `collectLampArrivalSitesNearPlayer`.
+- **Debug:** `isColdLampMarkerBiome`, journal report shows nearest lamp coords + cold-post expectation.
+- **Perf (day 20 load):** Ruin processor default radius **34–48** by tier (was **80** ≈ millions of block reads/village). Coarser infected-proximity scan, fewer `getBiome` heights, shared activation budget per tick, skip every other idle horizon scan, lamp cleanup **40t**. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Ladders never placed in normal villages — scheduling fix)
+
+- **Cause:** Ladders were only triggered when a **processor job** finished with `pendingLadderColumns` attached. If the processor queue was full, the job never carried ladders, or the **ladders** build phase did not run before the tick budget expired, normal lamp villages never called placement (ladder test still worked via `skipProcessor`).
+- **Fix:** Always collect ladder payloads on the build job; **`scheduleSettlementLadderPlacementsAfterRuin`** in `finishSettlementPlacement` waits until `processorQueue` is empty (or ~30s timeout) then runs the existing multi-pass `/setblock` placement. Ladders phase no longer consumes block budget (`if (phase === "ladders")` not gated on `!over()`). Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Ladders after ruin processor — fix lamp village breaks)
+
+- **Cause:** Ladder test uses `skipProcessor: true`; real villages run the **ruin processor** after build, which randomizes logs/planks to cobwebs and breaks ladder backing. Ladders were placed *before* that pass.
+- **Fix:** Queue 2-story ladder columns on the build job; place with `/setblock` **after** processor finishes (or immediately when processor skipped). Processor never modifies ladder/vine/chain blocks.
+- Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Market wall fix, ladder debug, single-build menu)
+
+- **Missing wall center:** `marketFrontIsOpen` no longer skips the whole wall column — only a **3-wide × 2-tall** door gap; walls build above. Market porch planks unchanged.
+- **Ladders:** Deferred **3** placement passes on later ticks; **Ladder test** single-build runs librarian + **5** passes with `/setblock` ladder commands.
+- **Dev menu:** Single building adds **Librarian**, **Butcher**, **2-story house**, **Ladder test**; labels updated. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Ladders last, market wall face, shaft carve order)
+
+- **Ladders breaking:** `placeRooftopLookout` was re-carving the 2-story shaft after ladders were placed, dropping them as items. New build order: **repair → shaft carve → perimeter re-seal → rooftop decor → ladders last** (`phase: "ladders"`).
+- **Missing wall (lectern/barrel 2-story):** In **hamlet** the last building is **`market`**, not librarian — `marketFrontIsOpen` left the **entire door face** open. Now only a **3-wide door opening** (like other shells).
+- **Shaft placement:** Access shaft candidates must stay **2+ blocks** from outer walls so carve cannot clip the perimeter. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Door clearance, center persistence, stairs/ladder policy)
+
+- **Offset villages:** World property now stores **`centers`** per built site key; **`markSiteBuilt` only on successful placement** (removed early mark at queue start). Retries reuse saved center when present.
+- **Stairs:** No decor stairs in houses; roof ruin stairs disabled for work buildings and all 2-story shells; no stacked roof stairs; door-adjacent roof uses slabs only.
+- **Door zone:** `isDoorApproachCell` blocks workstations, cobwebs, decor, and roof stairs within 1 block of the door opening.
+- **Walls:** `platformY` fallback from `job.y` when footprint slope probe fails; **3 repair passes** over the perimeter.
+- **Ladders:** `placeSupportedLadderAt` (log backing, no chain fallback) for 2-story shaft + lookout. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Persist built sites, ladders, walls, market loot)
+
+- **Persistence:** World property `mb_av_village_sites` stores built/failed site keys + schema; **built sites never rebuild** after addon reload (use Abandoned village debug → clear registry to regen). `siteGenerationIsComplete()` exported.
+- **2-story:** Ladder-only shaft through mid-floor + roof; no interior stairs into walls; stronger perimeter seal (replaces stray planks/stairs on edges).
+- **Market plaza:** Stall barrels get loot in the same step (cartographer table); pad pass clears logs/leaves in footprint (hill pads kept). Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Beds in walls fix)
+
+- **Cause:** Bed head was always placed at `z-1`, so beds at `lz=1` put the head on the wall row (`lz=0`). Default house plan used `lz:1` beds.
+- **Fix:** `resolveBedPlacement` orients both halves inside the interior ring; perimeter repair replaces stray bed blocks with wall; default plan beds at `lz:2`. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Wall seal, weaponsmith loot, ladder/lookout)
+
+- **Weaponsmith empty chest:** Chest was at `lz = d-1` (outside interior bounds) — never placed. Moved inward; `canPlacePlannedFurnishing` allows outer-ring (non-corner) plan slots.
+- **Missing walls:** `structureSurfaceY` falls back to `platformY`; new **`repair`** phase seals air gaps on the perimeter after furnishings.
+- **2-story:** Shaft carves through roof for lookout; **ladder** (chain fallback) instead of stacked stairs; diagonal stair in shaft corner; librarian barrel + no plan ladder.
+- **Rooftop lookout:** Log + fence mast (not stair pole); ladder through roof hole from access shaft. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Ravine foundations, house loot, roof/stairs perf)
+
+- **Ravine / cliff:** After leveling, **cobble pillars** fill air up to 14 blocks below each floor cell; deep columns still level to `platformY` (fill up to 12). Slope allowance widened (10–14 blocks).
+- **Loot:** House chests/barrels use **biome house tables only** (no random butcher/toolsmith variant rolls).
+- **Roofs:** Fewer decorative roof stairs / holes (less floating junk); **rooftop lookouts** on ~24% of 1-story and ~48% of 2-story houses.
+- **2-story:** Straight interior stair column; **auto-facing ladders**; removed broken exterior stair runs.
+- **Perf:** Lamp cleanup **20t**, approach-range only, removed duplicate clear from main scan; cleanup grid range = `LAMP_APPROACH_DIST_MAX` (not +96). Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (2-story shaft, lamp cleanup, 20 house variants)
+
+- **2-story access:** 2×2 **shaft** carved through mid-floor and roof; mid-floor planks skipped in shaft; interior ladders via numeric `facing_direction` + backing wall; interior stairs in shaft; exterior stairs only when ground supports each step; optional **rooftop lookout** (stairs + fence, ~42% roll).
+- **Hills:** Pad fill max **8**; after pad, all footprint columns forced to **platformY** in floor cache.
+- **Houses:** **20** variants (`wide_3`, `courtyard`, `shed`, `long_hall`, `two_story_c/d`); weaponsmith props spread; duplicate plan ladders removed.
+- **Lamp:** Dedicated cleanup every **10t** while player in overworld; approach range **LAMP_APPROACH_DIST_MAX**; retry while within **80** blocks if artifacts remain. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Level pads, beds, ladders, stairs)
+
+- **Hills:** Platform at **maxY**; fill up to 6 blocks; **trim** hillside cells into footprint (air above platform).
+- **Beds:** `/setblock` bed pairs + floor under mattress; dedicated post-interior pass; skip cobwebs on bed cells.
+- **2-story:** Ladder column on wall, interior stair run, exterior stairs at door. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (House decor, ruined farms, stone churches)
+
+- **Houses:** Random carpets (biome-colored), stair bedside tables, flower pots / decorated pots after furnishings.
+- **Farms:** `placeRuinedVillageFarmland` — log+fence border, `farmland`, cross irrigation water, wheat/carrot/potato mix, optional corner pond (all rulesets).
+- **Church:** `buildStyle: stone` — cobble/mossy walls & floors, cobble roof slabs (sandstone in desert). Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Village loot, beds, 2-story, well seal)
+
+- **Loot:** Librarian → books/cartographer table; market/lectern → cartographer (not butcher); farmer → biome house crops; chests prefer `spec.loot` / work table over workstation heuristics.
+- **Beds:** `placeStructureBed` (both halves via `BlockPermutation`).
+- **2-story:** House variants 12–13; librarian, market, church (`midfloor` phase + upper furnishings).
+- **Wells:** `sealWellPerimeter` — 5×5 cobble collar around 3×3 pool. Lamp clear confirmed working. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Savanna lamp structure_block — scan fix)
+
+- **Root cause:** `findBuildSurfaceY` treated an exported **structure_block** atop the warm lamp as an invalid column, so lamp cleanup never ran (`!lamp=0` in logs was unrelated). **Fix:** `surfaceY`-based vertical band, **±8** XZ (worldgen `adjustment_radius` 6), verify-clear via **`setblock air destroy`**. Distant clear passes **player Y** as hint. Fallback loot picks **without replacement** (no triple shears). Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Lamp unload false-done fix, wide loot spread)
+
+- **Lamp:** `lampArtifactDone` no longer true when chunk unloaded (`LAMP_ARTIFACT_COUNT_UNKNOWN`); `setblock air destroy` fallback; 7×7 scan; distant scan re-tries until clear.
+- **Loot:** Spread slots evenly across chest; split large stacks into separate piles. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Lamp clear every tick, loot defer+fallback, center bell/well)
+
+- **Lamp:** `clearLampColumnArtifacts` 5×5×44 scan; runs on enqueue + every build tick until gone; stores `lampWorldX/Z`.
+- **Loot:** Fill at 2/8/20t after block place; `/loot` path variants; script fallback + scatter only when items exist.
+- **Bell:** Removed from market hall building; only village meeting center on **cobble** (not fence).
+- **Well:** 3×3 water pool (4 deep), cobble canopy ring, open center. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (No double-build, pad cap, well bell, loot fix, lamp artifacts)
+
+- **Reload:** Site marked built when build starts; skip if already built — stops villages stacking on reload.
+- **Hills:** Pad only when slope ≤3 and raise ≤2 blocks (no dirt stilts); steep sites follow terrain.
+- **Well:** 4-block shaft, mossy bottom; bell on post beside well (solid footing, not in water).
+- **Loot:** Scatter no longer wipes chests when ≤1 stack; retry scatter after 2 ticks.
+- **Lamp:** Taller column scan for structure_block; retries until clear. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Loot scatter + building-type tables, hillside pads)
+
+- **Loot:** After `/loot` fill, **scatter** chest/barrel slots via inventory API (fixes slot 0–2 clumping); workstation + work-building loot maps; house variants use one table per layout (loom→shepherd, etc.); farmer barrel fixed to butcher.
+- **Terrain:** Each structure **pads** low columns to a shared platform Y (dirt/cobble fill) before walls — buildings stay whole on hills. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Lamp preserved, loot replace, paths, market meeting, 12 house variants)
+
+- **Lamp:** Stopped stripping fence post — only `structure_block`/`jigsaw` removed; full worldgen lamp stays.
+- **Loot:** `loot replace block` for random container slots; barrels + chests; **loom → shepherd** table (wool).
+- **Paths:** Plains/savanna mix **dirt**, mossy cobble, cobble; walls 50/50 cobble + mossy.
+- **Villages:** Larger radius (12/22/32), more buildings, wider ring; **12** house layouts.
+- **Meeting:** Well + bell, fountain + bell, **market** (wool stalls + barrels), campfire + bell. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-02 (Lamp pole overlap, barrel loot, wood stair roofs)
+
+- **Pole build bug:** Village center no longer seeds on the lamp (`avoidLamp` 14+ blocks); structure layout excludes 10-block pad around lamp; build clears fence/log pole (keeps **barrel** on lamp).
+- **Loot:** `fillVillageStorageAt` — `loot insert` on **chests and barrels** (vanilla village tables, random slots).
+- **Roofs:** Higher **stair** rate on plains/savanna/jungle (52%) with optional second stair layer on edges. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-01 (Settlement roofs, 8 house variants, workstations, meeting points, chest loot)
+
+- **Roofs:** Full footprint slab cap with ~10% edge / ~8% interior holes; removed double-layer slabs that read as “collapsed in.”
+- **`mb_settlementStructures.js`:** 8 house layouts per ruleset; workstation buildings (weaponsmith, armorer, farmer, librarian, butcher, …) with correct job blocks; village/large slot layout.
+- **Meeting points:** Per ruleset roll among **well**, **fountain** (5×5 plaza + bell), **campfire** (log/hay ring).
+- **`mb_villageChestLoot.js`:** `loot insert` with vanilla `chests/village/village_*` tables on chest placement. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-01 (Lamp arrival activation — savanna-at-lamp fix)
+
+- **Log (`ContentLog2026-06-01_21-44-18_1.txt`):** Jungle at **41 blocks** from lamp built; savanna at lamp had `close=1`, `ok=0`, `!load=8` — never activated. Second jungle/infected try: `BAD_FOOTING` at grid 134,124,2 then `failed=1` blocked retries; lamp cleanup sometimes skipped structure blocks.
+- **Causes:** (1) Player **&lt; 40 blocks** from lamp counted as “too close” for horizon scan. (2) **Anchor chunk** unloaded while lamp chunk loaded (`!load`). (3) Failed sites stuck without retry at lamp. (4) Cleanup marked lamp “done” after **0** clears when artifact was above surface scan.
+- **Fix:** **`LAMP_ARRIVAL_DIST`** 6–56 — `collectLampArrivalSitesNearPlayer` runs first (skip seed roll, biome at lamp, anchor chunk optional). **`isSiteChunksReadyForActivation`** requires lamp chunk; **`clearSiteFailedForLampArrival`** on arrival. Placement retries center at **lamp** when `lampArrival`; no `markSiteFailed` on arrival footing miss. Artifact scan **y−4…y+40**, `countWorldgenArtifactsAt` — only mark cleared when none remain. Duplicate activation queue guard. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-01 (Village structures replace leaves/vines)
+
+- **User:** Structures stopped at leaves/vines; want mining-style replace (not bedrock/lava/water).
+- **`mb_miningBlockList.js`:** `isSettlementReplaceableBlockId` — inverse of `UNBREAKABLE_BLOCKS` + fluids.
+- **`mb_abandonedSettlementBuilder.js`:** `SETTLEMENT_REPLACE_ANY` for walls/roofs/paths; column scan passes through leaves/vines. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-01 (Lamp approach activation + artifact cleanup)
+
+- **Log/session:** Lamps visible from distance; structure blocks until close; `ok=0 far=15` — no villages built walking in.
+- **Cause:** Activation max distance (~240) &lt; site grid (384); walking toward lamp loaded chunk inside “too close” before horizon fired.
+- **Fix:** Lamp-centric distances — **approach band** 40–224 blocks + max horizon `scanR×16+384`; `clearWorldgenArtifactsAt` within 128 blocks of lamp; docs note for user’s **sandstone desert** lamp. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-01 (Village marker Molang — v.worldx fix)
+
+- **Log:** `[Molang][error] … unknown variable 'variable.worldx'` on all `village_marker_*` feature rules — lamps never placed.
+- **Fix:** Grid math moved into **`minecraft:scatter_feature`** wrappers using **`v.originx` / `v.originz`** (chunk origin); feature rules only scatter once per chunk. `q.heightmap(v.worldx, v.worldz)` runs after x/z in scatter. Mirrored **`BP - Dev/`**.
+- **Follow-up:** FeatureRegistry required **`"y": 0`** on feature_rule `distribution` (height still from scatter).
+
+---
+
+**Date:** 2026-06-01 (Village placement failure debug)
+
+- **`recordPlacementFailure`** — coded failures (`BAD_FOOTING`, `QUEUE_FULL`, `BUILD_STALL`, `WRONG_BIOME`, …) with multi-line Content Log detail; journal shows last code + snippet.
+- **`diagnoseSettlementCenter`** / **`diagnoseForcePlaceCenter`** — per-seed/spiral footing probes (water %, center column, closest partial fix). Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-01 (Ruin scatter off, lamp cleanup, beach footing)
+
+- **User:** Fresh world — barrel/cobweb/mossy cobble ruins everywhere; lamp still had structure block; village failed at lamp on sand/water shore (`Site bad footing` in Content Log).
+- **Worldgen:** Archived all **`abandoned_settlement_*.json`** ruin feature rules → `BP/_archived/feature_rules/abandoned_settlement_worldgen_ruins/` (14 BP + 17 Dev). Active worldgen: **`village_marker_*.json`** only.
+- **Scripts:** Build starts with **`cleanup`** phase — strips `minecraft:structure_block` / jigsaw in 5×5×28 around village center; relaxed footprint water ratio for beach/shore/sand/infected; `rulesetForBiome` maps beach/stony_shore → plains. Mirrored **`BP - Dev/`**; **`ABANDONED_SETTLEMENTS.md`** updated.
+
+---
+
+**Date:** 2026-06-01 (Force place — stuck build queue + river biome)
+
+- **Logs:** `Build queue: 2` · `pending 2` · `failed 2` · force place “queue full”; user on `minecraft:river` (no village ruleset).
+- **Fix:** `abortAllSettlementBuilds()` + `prepareForcePlaceAt()` before force place; force runs **immediate** (not fake queued success); `markSitePending` only after build enqueued; stall watchdog (~800 ticks); **Clear chunk cache** flushes queue; clearer errors for river/water footing. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-01 (Lamp biomes — oak plains, warm savanna, rain jungle)
+
+- **User:** Oak = plains, warm = savanna, rain = jungle villages (not “future only”).
+- **Worldgen:** `village_marker_plains_slot0` (oak), `savanna_slot0` (warm), `jungle_slot0` (rain) on 384-grid; infected still cold ×3/×1.
+- **Scripts:** `jungle` ruleset + `rulesetForBiome` / scatter / structure candidates. README + **`ABANDONED_SETTLEMENTS.md`** table. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-06-01 (Village search / footing performance)
+
+- **User:** Optimize village structure searching.
+- **`mb_abandonedSettlementBuilder.js`:** `hintY` narrows column scans; footprint + placement share a **column cache**; `resolveSettlementCenter` tries lamp + anchor seeds before spiral; reuse center `analyzeColumn` for Y.
+- **`mb_abandonedVillageWorldgen.js`:** **Per-scan** `getInfectedProximityTier` cache; infected `hintY` + `lampMarkerWorldPosition` seeds for footing.
+- **`mb_abandonedVillageSites.js`:** Tighter site grid iteration; per-collect **prox cache**; skip large sub-slots 1–2 when player cell is not large infected. Mirrored **`BP - Dev/`**; **`ABANDONED_SETTLEMENTS.md`** performance table.
+
+---
+
+**Date:** 2026-06-01 (Village lamp post worldgen markers)
+
+- **User:** Exported 4 lamp posts (3×3, 23y): oak, warm/acacia, rain/jungle, cold/spruce — visible at chunk gen before script village sim range.
+- **Assets:** `BP/structures/mb/village_marker/{oak,warm,rain,cold}_lamp_post.mcstructure` (from `mb_village_*_lamp_post_mark` in dev).
+- **Worldgen:** `mb:village_marker/cold_lamp` + `feature_rules/village_marker_infected_large_slot{0,1,2}` (always) and `village_marker_infected_medium_slot0` (50% scatter). Grid snap 384 / offsets 64+slot×128 on X.
+- **`mb_abandonedVillageSites.js`:** `lampMarkerWorldPosition()` documents lamp vs jittered `siteWorldAnchorForSlot`. Mirrored **`BP - Dev/`**; **`ABANDONED_SETTLEMENTS.md`**.
+
+---
+
+**Date:** 2026-05-19 (Infected footing, snow, one job-site, force-place menu)
+
+- **User:** Villages on `mb:dusted_dirt` (force place too), snow layers around/on them, one workstation per building (vanilla), large force place, per-building force list.
+- **`mb_abandonedSettlementBuilder.js`:** `mb:dusted_dirt` buildable/replaceable; infected **ground** + **snow** phases before paths; `settlementUsesDustedGround`; trimmed house/smithy/farm/market/church to one job block each; `layoutForceStructure` for single-building tests.
+- **`mb_abandonedVillageWorldgen.js`:** Force modes `hamlet` / `village` / `large` / `house` / `smithy` / `farm` / `market` / `church` / `pen`; custom structures passed into `enqueueSettlementBuild`.
+- **`mb_entityQueryDebugDev.js`:** Large village button; **Single building…** submenu. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (Church, animal pen, biome floor beams)
+
+- **Church** (`CHURCH_PLAN` 7×9, 5-high): bookshelves, lectern, nave floors — village/large only (slot before market).
+- **Animal pen** 5×5 fence + hay beside **farm**; path spoke to gate; cow/pig/sheep spawn (village/large).
+- **`resolveFloorBlockId`:** ruleset `mat.log` = structural beam (oak / acacia / sandstone desert / spruce taiga). Hamlet count unchanged (4). Village 8 / large 13 structures. Mirrored **`BP - Dev/`**; **`ABANDONED_SETTLEMENTS.md`**.
+
+---
+
+**Date:** 2026-05-19 (Workstations interior-only enforcement)
+
+- **User:** Job-site blocks must stay inside houses/work buildings only.
+- **`placeInteriorBlock`** + `isStructureInteriorCell`; smithy uses fixed `SMITHY_INTERIOR` (removed random ±1 offset that placed anvils outdoors); farm `FARM_WORKSTATIONS`; house/market furnishings gated. Open-air prop phase already removed. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (House floor plans — log frames, varied interiors)
+
+- **User:** Houses should feel like vanilla villages — different floor plans, logs not only planks.
+- **`HOUSE_PLANS` (5):** cottage (cross beam), weaver (loom room + log partition), cabin (log ring + tall walls), forester (smithing tools), mason (checker floor + stonecutter). Per-plan footprint, floor fn, interiors, cobwebs. Seed-stable `housePlan` on each house slot. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (Settlement village layout — paths, well, interiors, market)
+
+- **User:** Hamlet/village force place works; workstations were random in open; want real village feel (paths, well, beds inside houses, market not bell hall).
+- **`mb_abandonedSettlementBuilder.js`:** Spoke paths + plaza (`planSettlementPaths`); **well** (3×3 ring + water + fence posts); doors face center; **house interiors** (beds, barrel, chest, furnace, table); **market** replaces hall (open front, stalls, campfire); removed open-air prop scatter. Hamlet = 3 houses + market; village = +smithy + farm. Mirrored **`BP - Dev/`**; **`ABANDONED_SETTLEMENTS.md`** tier table.
+
+---
+
+**Date:** 2026-05-19 (Settlement structure layout — no overlaps)
+
+- **User:** Ruin buildings sometimes stacked on the same footprint.
+- **`layoutStructures`:** AABB checks with **2-block gap**, center plaza exclusion (well), up to 28 seeded retries + even ring fallback + last-resort offset. Min ring distance raised (hamlet 6+). Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (Hamlet zombies phase infinite loop)
+
+- **Log (`ContentLog2026-06-01`):** Build placed terrain/structures ~13s then watchdog at `tickBuildJob` line 1263 (`hashChunkRoll` / `cachedFloorY`) — **zombies** phase used `if (sy === undefined) continue` without incrementing tick budget → infinite loop in one game tick.
+- **Fix:** Always `spent++` per zombie attempt; fallback Y at village center; skip slot after 6 bad columns / 4 failed spawns; structure grid guard cap. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (Hamlet build watchdog — incremental structures)
+
+- **Crash log (`ContentLog2026-05-31_22-25-15`):** Hamlet at feet started, then ~13s later `InternalError: interrupted at analyzeColumn` in `tickBuildJob` / `placeStructureStub` — whole houses built in one tick despite phased queue.
+- **Fix (`mb_abandonedSettlementBuilder.js`):** `tickStructureBuild` incremental grid/walls/roof; floor-Y cache; `analyzeColumn` bounded by `hintY`; budget **12 blocks/tick**; dedicated **`runInterval(1)`** build loop (decoupled from 20-tick scan). Removed duplicate “Settlement build started” log from `beginSettlementPlacement`. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (AV debug — build at feet, village test, codex pin)
+
+- **Hamlet test failed:** `Site bad footing @ grid 133,136` — force place used **grid anchor** far from player, not feet. **`resolveForcePlaceCenter`** builds underfoot; **`usePlayerCenter`** on force queue.
+- **Village test** button (tier `village`, phased, no processor). Codex pin **`abandoned_villages`** → Systems. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (AV watchdog hang — defer activate, skip jigsaw, slower build)
+
+- **Crash log:** `Activate site … FORCE` then `Watchdog 10002 ms hang` — synchronous `placeJigsawStructure` (missing assets) and/or heavy `resolveSettlementCenter` footprint scans.
+- **Fix:** `JIGSAW_SCRIPT_VILLAGES_ENABLED = false`; activation queued to next tick (`pendingActivations`); footprint/column scans capped; `SETTLEMENT_BLOCKS_PER_TICK` 35 (~2–4s hamlet); processor 200 blocks/tick. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (AV fixes — biome sampling, ruin worldgen off, safe force place)
+
+- **Logs:** Player on `infected_biome_large` but `Large infected underfoot — 0 local slot(s)` — anchor biomes sampled at y=64 read `meadow`; slots rejected.
+- **Fix:** `getBiomeIdAt` multi-height + prefers infected; `effectiveBiomeForSlot` uses player large-infected cell; wider ring when player on large; force place = hamlet only, no 80-block processor, queue cap.
+- **Barrel/cobweb:** Moved active `abandoned_settlement_infected_*.json` feature rules to **`BP/_archived/feature_rules/abandoned_settlement_infected_ruins/`** (worldgen scatter). Script village props unchanged (inside built hamlets only). Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (Large infected — 3 guaranteed villages per grid cell)
+
+- **User:** In a large infected biome, want **multiple** script villages, **at least 3 guaranteed**.
+- **`mb_abandonedVillageSites.js`:** `SITES_PER_LARGE_INFECTED_CELL = 3` — three jittered anchors per ~384-block cell (slots 0/1/2); registry keys `gx,gz` or `gx,gz,1`, `gx,gz,2`; `findLargeInfectedSitesNeedingVillage` + `largeInfectedSlotsNearPlayer`; horizon scan iterates all slots.
+- **`mb_abandonedVillageWorldgen.js`:** Up to **3 large-infected activations per scan tick** (`skipSeedRoll`); `subIndex` on pending/built/failed; debug report + Content Log slot ids. Mirrored **`BP - Dev/`**; **`ABANDONED_SETTLEMENTS.md`** updated.
+
+---
+
+**Date:** 2026-05-19 (Infected villages — no barrel ruins, rolls, verbose log)
+
+- **User:** Remove tiny barrel worldgen ruins near small infected; more Content Log spam when ON; large infected = guaranteed script village, medium 50%, small ~1%.
+- **Archived** `feature_rules/abandoned_settlement_infected_*.json` (worldgen ruin/barrel scatter). Villages in infected biomes are **script-only**.
+- **`mb_abandonedVillageSites.js`:** `sitePassesSeedRoll` uses biome tier; `findLargeInfectedSiteNeedingVillage` for guaranteed large; `describeSiteRollChance` for debug.
+- **`mb_abandonedVillageWorldgen.js`:** Verbose scan logging when Content Log ON; guaranteed large pass before horizon sites. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (Jigsaw POC — disable until .mcstructure exists)
+
+- **User log:** `[Json][error] Invalid asset path mb/av_plains/well_center` on world load.
+- **Cause:** Template pool referenced `well_center.mcstructure` that was never exported.
+- **Fix:** Removed active `BP/worldgen/` jigsaw JSON; copies live in **`BP/_optional/abandoned_village_jigsaw_poc/`** (enable after export). Script villages unchanged. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (Abandoned villages — hybrid site grid)
+
+- **User:** Hybrid pre-planned villages + horizon activation (not per-chunk endless rolls).
+- **`mb_abandonedVillageSites.js` (new):** ~384-block seed grid, jittered anchors, 1/N site roll (denser near infected), `mb_av_village_sites` persistence (built/failed).
+- **`mb_abandonedVillageWorldgen.js`:** Scans activatable sites in outer ring; `tryActivateAbandonedVillageSite` with live biome + `resolveSettlementCenter`; marks site on successful build. Clear cache wipes site registry. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (Abandoned settlements — piers on water, ice centers OK)
+
+- **User:** May build over water with support poles; village **center** must not be open water; **ice** is fine for center.
+- **`mb_abandonedSettlementBuilder.js`:** `resolveColumnFloorY` + log poles to anchor; paths/structures on piers; `isValidVillageCenterColumn` rejects water-only hub (ice = land). Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (Abandoned settlements — river avoidance + savanna irrigation)
+
+- **User:** No building on rivers; water only where it makes sense; savanna/acacia farms need more water.
+- **`mb_abandonedSettlementBuilder.js`:** `classifySurfaceColumn` / `findBuildSurfaceY` skip open water; `resolveSettlementCenter` nudges site off rivers (~14% max water in footprint); paths/structures/props skip water columns. **Savanna:** farm irrigation channel + optional pond; well center = water.
+- **`mb_abandonedVillageWorldgen.js`:** Uses `resolveSettlementCenter` before placement; logs skip when debug ON. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (Abandoned jigsaw worldgen — fix 1.26 load parse error)
+
+- **User log:** `[Structure][error] unsupported version: no parser available for version 1.21.0` on `worldgen/template_pools/mb/av_plains/start.json`.
+- **Fix:** `format_version` → **1.26.10** (matches `min_engine_version` 1.26.10); jigsaw definition moved to **`worldgen/structures/`** (not `jigsaw_structures/`); template `location` → `mb/av_plains/well_center` (no `structures/` prefix); added **`worldgen/processors/mb/av_empty.json`**; `biome_filters` as array. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (Abandoned village expansion — tiers, horizon scan, ice ruleset, jigsaw POC)
+
+- **Plan:** Abandoned village expansion (Track A script + Track B jigsaw POC); do not edit plan file.
+- **`mb_abandonedSettlementBuilder.js` (new):** Seed-stable tiers (hamlet/village/large); ruleset materials including **ice** (packed ice paths); structure stubs (house, smithy, farm, hall + job-site props); phased build queue (~100 blocks/tick); `tryPlaceAddonJigsaw` → `mb:abandoned_village_<ruleset>`.
+- **`mb_abandonedVillageWorldgen.js`:** Scan radius default **12** (`mb_av_scan_radius` 4–16); **outer shell** placement at `scanR−1` from player; wires builder + processor + zombify; roll-miss logs only when Content Log debug ON; success logs tier/ruleset.
+- **Feature rules:** `abandoned_settlement_ice.json`, `abandoned_settlement_force_ice.json`.
+- **Worldgen POC:** `BP/worldgen/jigsaw_structures/mb/abandoned_village_plains.json`, template pool `mb:av_plains/start` → `structures/mb/av_plains/well_center.mcstructure` (export in Creative; README in folder).
+- **Docs:** `ABANDONED_SETTLEMENTS.md` updated; new `ABANDONED_VILLAGE_STRUCTURES.md`. Mirrored **`BP - Dev/`** scripts + worldgen + ice feature rules.
+
+---
+
+**Date:** 2026-05-19 (Abandoned villages — sparse plains, infected clusters, roofs, biome fix)
+
+- **User:** More roof with holes; spruce hamlet in plains; too frequent spawns — want vanilla-sparse except near medium/large infected biomes.
+- **Fix:** Full roof pass (~36% holes + second slab layer); **`rulesetForBiome`** exact IDs (plains before broad `snow`/`grove` matches); **`infected`** ruleset; **`scatterDenominatorForChunk`** + 14-chunk infected proximity (large ~1/7, medium ~1/12, far plains ~1/80); scan budget 3/tick; mark radius 6. Feature rule denominators aligned.
+
+---
+
+**Date:** 2026-05-19 (Abandoned villages — explore-ahead placement, seed-stable rolls)
+
+- **User:** Wants settlements visible from farther away (like vanilla / Raboy-style), not pop-in at feet.
+- **`mb_abandonedVillageWorldgen.js`:** Scans **loaded chunks** in 8-chunk ring; places only **≥2 chunks** from player; **deterministic** `hashChunkRoll` per chunk; up to 8 attempts/tick. **`ABANDONED_SETTLEMENTS.md`** — vanilla worldgen vs script vs feature_rules.
+
+---
+
+**Date:** 2026-05-19 (Abandoned villages — larger script ruin settlement)
+
+- **User:** Script placement worked but too small (barrel + mossy patch only); asked for more.
+- **`tryPlaceRuinPatchScripted`:** Expanded to ~22-block-radius paths, **4 house stubs** (walls, logs, slabs, brown glass, cobwebs), central well ring, props (barrels, hay, composter, cauldron, fences, ladders), **3 zombie villagers**, biome **`ruleset`** materials. Removed duplicate small implementation. Dropped broken `place feature` runCommand (slash parse error).
+
+---
+
+**Date:** 2026-05-19 (Abandoned villages — quoted place feature + script ruin fallback)
+
+- **User log:** `place featurerule` → `status failed`; `place feature mb:abandoned_settlement/ruin` → parse error (slash split args).
+- **Fix:** Quote feature id in command; add **`mb:abandoned_settlement_force_*`** feature rules (no scatter_chance); try execute-positioned featurerule; **`tryPlaceRuinPatchScripted`** (mossy floor + cobwebs + barrel) when commands fail; skip jigsaw spam unless **`INCLUDE_FULL_DEVELOPER_TOOLS`**. Mirrored **`BP - Dev/`**.
+
+---
+
+**Date:** 2026-05-19 (Abandoned villages — featurerule placement; jigsaw blocked)
+
+- **User log:** `placeJigsawStructure` failed for all vanilla village ids (`Invalid structure name`) at plains chunk 17,72; 0 placed / 1 failed.
+- **Cause:** Legacy vanilla villages are not data-driven jigsaws on Bedrock; script API cannot place them.
+- **Fix:** **`mb_abandonedVillageWorldgen.js`** tries **`/place featurerule mb:abandoned_settlement_*`** then **`/place feature mb:abandoned_settlement/ruin`** before jigsaw fallback. Restored **`BP/feature_rules/abandoned_settlement_*.json`** (9 files). Debug report + self-test text updated. Mirrored **`BP - Dev/`**.
+- **Docs:** **`ABANDONED_SETTLEMENTS.md`** — honest limits (ruin patches vs full villages), troubleshooting for Force place + cheats.
+
+---
+
+**Date:** 2026-05-19 (100% abandoned villages — no vanilla 2% roll)
+
+- **User:** All villages should be vanilla-style abandoned (zombie) villages, not a mix.
+- **Limit:** Bedrock cannot force abandoned jigsaw via JSON; pack disables vanilla villages (`worldgen_no_village` restored via `generateNoVillageBiomeOverrides.js`) and places villages only in script.
+- **`mb_abandonedVillageWorldgen.js`:** After each `placeJigsawStructure`, applies Java-style abandoned block processors (mossy cobble, cobwebs, doors/torches removed, brown glass) + zombify pass. Tries abandoned structure ids first when engine supports them.
+- **Docs/tool:** **`ABANDONED_SETTLEMENTS.md`** explains 100% design; biome generator comment updated.
+
+---
+
+**Date:** 2026-05-19 (Full zombie villages + higher density)
+
+- **User:** More abandoned settlements; full zombie villages (not mossy ruin patches).
+- **Worldgen:** Removed `worldgen_no_village` biome overrides and `abandoned_settlement_*` feature rules — vanilla villages generate again.
+- **Scripts:** **`mb_abandonedVillageWorldgen.js`** — `placeJigsawStructure` + zombify pass (living villagers → zombie villagers, golems removed). Denser rolls in snow/infected biomes. **`mb_villagerSpawnPolicy`** — purge/spawn hook only **living** villagers; zombie villagers kept. Script toggle **`abandoned_village_worldgen`**. Dev: **Place zombie village here** in Villager suppress menu.
+- **Docs:** **`ABANDONED_SETTLEMENTS.md`** — locate, frequency table, dev test. **`generateNoVillageBiomeOverrides.js`** marked legacy.
+
+---
+
+**Date:** 2026-05-19 (Abandoned settlements — snow / infected patch density)
+
+- **User:** More abandoned ruins in or near large and medium Maple Bear snow (infected) biomes.
+- **Biomes:** `mb_infected_biome_large` / `_medium` / `_small` — added `infected_biome_large|medium|small` tags for feature filters.
+- **Feature rules:** `abandoned_settlement_snowy` — broader filter (`ice_plains`, `ice`, `frozen`≠ocean, `cold`≠ocean) at **1/20** (was `ice_plains` only 1/32). New **1/14** large, **1/18** medium, **1/26** small infected rules. Mirrored **`BP - Dev/`**. **`ABANDONED_SETTLEMENTS.md`** table updated.
+
+---
+
+**Date:** 2026-05-19 (Abandoned settlements — vanilla village spawn density per biome)
+
+- **User / Compoother:** Spawn abandoned sites as often as normal villages in each former village biome (not one rare 1/48 rule).
+- **BP:** Replaced `abandoned_settlement_overworld.json` with six rules: plains (1/34), desert/savanna/taiga/snowy (1/32), meadow (1/34). Biome tags cover all 10 `worldgen_no_village` biomes. Docs table in **`ABANDONED_SETTLEMENTS.md`**. Mirrored **`BP - Dev/feature_rules/`**.
+
+---
+
 **Date:** 2026-05-19 (ABANDONED_SETTLEMENTS — vanilla egg lag note)
 
 - **Finding:** Removing all BP scripts still leaves villager egg/dispenser hitch — stall is mostly vanilla spawn cost, not JS.

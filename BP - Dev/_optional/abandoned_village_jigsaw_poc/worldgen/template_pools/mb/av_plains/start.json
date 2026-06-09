@@ -1,0 +1,82 @@
+{
+	"format_version": "1.26.10",
+	"minecraft:template_pool": {
+		"description": {
+			"identifier": "mb:av_plains/start"
+		},
+		"elements": [
+			{
+				"element": {
+					"element_type": "minecraft:single_pool_element",
+					"location": "mb/av_plains/plains_house_1",
+					"processors": "mb:av_empty",
+					"projection": "rigid"
+				},
+				"weight": 1
+			},
+			{
+				"element": {
+					"element_type": "minecraft:single_pool_element",
+					"location": "mb/av_plains/plains_house_2_tall",
+					"processors": "mb:av_empty",
+					"projection": "rigid"
+				},
+				"weight": 1
+			},
+			{
+				"element": {
+					"element_type": "minecraft:single_pool_element",
+					"location": "mb/av_plains/plains_house_3",
+					"processors": "mb:av_empty",
+					"projection": "rigid"
+				},
+				"weight": 1
+			},
+			{
+				"element": {
+					"element_type": "minecraft:single_pool_element",
+					"location": "mb/av_plains/plains_smithy",
+					"processors": "mb:av_empty",
+					"projection": "rigid"
+				},
+				"weight": 1
+			},
+			{
+				"element": {
+					"element_type": "minecraft:single_pool_element",
+					"location": "mb/av_plains/plains_bakery",
+					"processors": "mb:av_empty",
+					"projection": "rigid"
+				},
+				"weight": 1
+			},
+			{
+				"element": {
+					"element_type": "minecraft:single_pool_element",
+					"location": "mb/av_plains/plains_librarian_study",
+					"processors": "mb:av_empty",
+					"projection": "rigid"
+				},
+				"weight": 1
+			},
+			{
+				"element": {
+					"element_type": "minecraft:single_pool_element",
+					"location": "mb/av_plains/plains_church_cathedral_ruin",
+					"processors": "mb:av_empty",
+					"projection": "rigid"
+				},
+				"weight": 1
+			},
+			{
+				"element": {
+					"element_type": "minecraft:single_pool_element",
+					"location": "mb/av_plains/plains_farmhouse",
+					"processors": "mb:av_empty",
+					"projection": "rigid"
+				},
+				"weight": 1
+			}
+		]
+	}
+}

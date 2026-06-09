@@ -1,0 +1,14 @@
+{
+	"format_version": "1.21.0",
+	"minecraft:scatter_feature": {
+		"description": {
+			"identifier": "mb:village_marker/scatter_cold_lamp_grid_x320"
+		},
+		"iterations": "math.floor(v.originx / 384) * 384 + 320 >= v.originx && math.floor(v.originx / 384) * 384 + 320 < v.originx + 16 && math.floor(v.originz / 384) * 384 + 64 >= v.originz && math.floor(v.originz / 384) * 384 + 64 < v.originz + 16 ? 1 : 0",
+		"coordinate_eval_order": "xzy",
+		"x": "(math.floor(v.originx / 384) * 384 + 320) - v.originx",
+		"z": "(math.floor(v.originz / 384) * 384 + 64) - v.originz",
+		"y": "q.heightmap(v.worldx, v.worldz)",
+		"places_feature": "mb:village_marker/cold_lamp"
+	}
+}

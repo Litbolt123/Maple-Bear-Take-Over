@@ -1,0 +1,29 @@
+{
+	"format_version": "1.21.0",
+	"minecraft:snap_to_surface_feature": {
+		"description": {
+			"identifier": "mb:av_plains/snap_export_building"
+		},
+		"feature_to_snap": "mb:av_plains/random_export_building",
+		"vertical_search_range": 24,
+		"surface": "floor",
+		"allow_air_placement": true,
+		"allow_underwater_placement": false,
+		"allowed_surface_blocks": [
+			"minecraft:grass_block",
+			"minecraft:dirt",
+			"minecraft:coarse_dirt",
+			"minecraft:podzol",
+			"minecraft:dirt_with_roots",
+			"minecraft:moss_block",
+			"minecraft:mud",
+			"minecraft:sand",
+			"minecraft:red_sand",
+			"minecraft:gravel",
+			"minecraft:stone",
+			"minecraft:snow",
+			"minecraft:snow_layer",
+			"mb:dusted_dirt"
+		]
+	}
+}

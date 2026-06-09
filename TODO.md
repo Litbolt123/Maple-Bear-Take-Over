@@ -74,6 +74,8 @@ Playbook (MSBuild/.NET oriented; **reuse the workflow ideas** for this repo): [`
 - [ ] Prevention items and clearer onboarding tutorial flow  
 
 ### World building
+- [ ] Maple Bear **jigsaw abandoned villages** (hand-built `.mcstructure` — see [`VILLAGE_STRUCTURE_COLLAB_GUIDE.md`](development/VILLAGE_STRUCTURE_COLLAB_GUIDE.md); script block-placed villages on hold)
+- [ ] **Random lore bunkers** — rare worldgen hideouts (`.mcstructure` or jigsaw single-piece): trapdoor pit or buried room, sparse survival loot, **written books / signs / maps** with Maple Bear apocalypse lore; separate from village pools and from script `hide_bunker` path bunkers until unified
 - [ ] Maple Bear structures / lairs  
 - [ ] Labs, medical stations, warning props, shelters (environmental storytelling)  
 

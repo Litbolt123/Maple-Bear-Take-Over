@@ -111,6 +111,14 @@ Start here to navigate the repo. **Session log:** [context summary.md](context%2
 | [INFECTION_MOD_PHASE3_DIRECTOR_SPEC.md](development/planning/INFECTION_MOD_PHASE3_DIRECTOR_SPEC.md) | Phase 3: infection director tiers + spawn-load escalation (implementation spec) |
 | [INFECTION_MOD_PHASE4_SHIP_SPEC.md](development/planning/INFECTION_MOD_PHASE4_SHIP_SPEC.md) | Phase 4: ship checklist — codex copy, changelog, balance/perf pointers |
 
+### Villages & structures
+
+| File | Purpose |
+|------|---------|
+| [ABANDONED_SETTLEMENTS.md](development/ABANDONED_SETTLEMENTS.md) | Script villages, tiers, loot, rulesets |
+| [ABANDONED_VILLAGE_STRUCTURES.md](development/ABANDONED_VILLAGE_STRUCTURES.md) | Jigsaw worldgen + Structure Block export |
+| [VILLAGE_STRUCTURE_COLLAB_GUIDE.md](development/VILLAGE_STRUCTURE_COLLAB_GUIDE.md) | **Maple Bear** — full **jigsaw** abandoned villages (script structure spawning on hold) |
+
 ### `development/tracking/` — Changelogs & sessions
 
 | File | Purpose |
@@ -160,6 +168,7 @@ Start here to navigate the repo. **Session log:** [context summary.md](context%2
 | File | Purpose |
 |------|---------|
 | [TASKS_FOR_CO_CREATOR.md](collaborators/TASKS_FOR_CO_CREATOR.md) | Texture / lore tasks |
+| [VILLAGE_STRUCTURE_COLLAB_GUIDE.md](development/VILLAGE_STRUCTURE_COLLAB_GUIDE.md) | **Hand-built village `.mcstructure` pieces** (jigsaw / Structure Block) |
 | [UI_CREATION_GUIDE.md](collaborators/UI_CREATION_GUIDE.md) | UI for collaborators |
 | [NEXT_SESSION_TASKS.md](collaborators/NEXT_SESSION_TASKS.md) | Next session ideas |
 | [CODEX_TEXT_SIMPLIFY_CANDIDATES.md](collaborators/CODEX_TEXT_SIMPLIFY_CANDIDATES.md) | Codex copy simplification |

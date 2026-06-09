@@ -25,7 +25,7 @@
  */
 
 import { system, world, ItemStack, EquipmentSlot } from "@minecraft/server";
-import { getWorldProperty, getPlayerProperty, setPlayerProperty } from "./mb_dynamicPropertyHandler.js";
+import { getWorldProperty, getPlayerProperty, setPlayerProperty, flushPlayerPropertyToDisk } from "./mb_dynamicPropertyHandler.js";
 import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
 import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment } from "./mb_actionBarHud.js";
 
@@ -66,6 +66,7 @@ export function setSimPlayersHudPersonalEnabled(player, enabled) {
     try {
         if (!player?.isValid) return;
         setPlayerProperty(player, MB_DEV_HUD_SIM_PLAYERS, enabled ? 1 : 0);
+        flushPlayerPropertyToDisk(player, MB_DEV_HUD_SIM_PLAYERS);
     } catch { /* ignore */ }
 }
 

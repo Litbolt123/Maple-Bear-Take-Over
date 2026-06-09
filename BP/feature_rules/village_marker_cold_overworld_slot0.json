@@ -1,0 +1,46 @@
+{
+	"format_version": "1.21.0",
+	"minecraft:feature_rules": {
+		"description": {
+			"identifier": "mb:village_marker_cold_overworld_slot0",
+			"places_feature": "mb:village_marker/scatter_cold_lamp_grid_x64"
+		},
+		"conditions": {
+			"placement_pass": "surface_pass",
+			"minecraft:biome_filter": {
+				"any_of": [
+					{
+						"test": "has_biome_tag",
+						"operator": "==",
+						"value": "ice_plains"
+					},
+					{
+						"all_of": [
+							{
+								"test": "has_biome_tag",
+								"operator": "==",
+								"value": "cold"
+							},
+							{
+								"test": "has_biome_tag",
+								"operator": "==",
+								"value": "taiga"
+							}
+						]
+					},
+					{
+						"test": "has_biome_tag",
+						"operator": "==",
+						"value": "grove"
+					}
+				]
+			}
+		},
+		"distribution": {
+			"iterations": 1,
+			"x": 0,
+			"y": 0,
+			"z": 0
+		}
+	}
+}

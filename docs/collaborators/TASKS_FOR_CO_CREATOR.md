@@ -1,5 +1,7 @@
 # Tasks for Co-Creator (Textures, Lore, & Brainstorming)
 
+**Village structures (full jigsaw villages — Maple Bear):** see **[VILLAGE_STRUCTURE_COLLAB_GUIDE.md](../development/VILLAGE_STRUCTURE_COLLAB_GUIDE.md)** — not the script block builder path.
+
 This document contains tasks specifically for team members who work on **textures**, **lore/content writing**, and **brainstorming/design** (not scripting).
 
 ---

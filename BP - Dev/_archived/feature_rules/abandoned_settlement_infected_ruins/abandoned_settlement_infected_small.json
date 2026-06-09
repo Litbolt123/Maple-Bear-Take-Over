@@ -2,7 +2,7 @@
 	"format_version": "1.21.0",
 	"minecraft:feature_rules": {
 		"description": {
-			"identifier": "mb:abandoned_settlement_overworld",
+			"identifier": "mb:abandoned_settlement_infected_small",
 			"places_feature": "mb:abandoned_settlement/ruin"
 		},
 		"conditions": {
@@ -12,27 +12,7 @@
 					{
 						"test": "has_biome_tag",
 						"operator": "==",
-						"value": "plains"
-					},
-					{
-						"test": "has_biome_tag",
-						"operator": "==",
-						"value": "savanna"
-					},
-					{
-						"test": "has_biome_tag",
-						"operator": "==",
-						"value": "taiga"
-					},
-					{
-						"test": "has_biome_tag",
-						"operator": "==",
-						"value": "meadow"
-					},
-					{
-						"test": "has_biome_tag",
-						"operator": "==",
-						"value": "desert"
+						"value": "infected_biome_small"
 					}
 				]
 			}
@@ -41,7 +21,7 @@
 			"iterations": 1,
 			"scatter_chance": {
 				"numerator": 1,
-				"denominator": 48
+				"denominator": 28
 			},
 			"x": 0,
 			"z": 0,

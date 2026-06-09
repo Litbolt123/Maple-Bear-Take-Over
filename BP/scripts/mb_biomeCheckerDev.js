@@ -7,7 +7,7 @@ import { world, system } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
 import { CHAT_INFO, CHAT_SUCCESS, CHAT_WARNING } from "./mb_chatColors.js";
-import { getPlayerProperty, setPlayerProperty, saveAllProperties } from "./mb_dynamicPropertyHandler.js";
+import { getPlayerProperty, setPlayerProperty, saveAllProperties, flushPlayerPropertyToDisk } from "./mb_dynamicPropertyHandler.js";
 import {
     ACTION_BAR_SLOT,
     setHudActionBarSegment,
@@ -64,6 +64,7 @@ export function setBiomeCheckerHudPersonalEnabled(enabled, togglingPlayer) {
     if (!togglingPlayer?.isValid) return;
     try {
         setPlayerProperty(togglingPlayer, MB_DEV_HUD_BIOME_CHECKER_PLAYER, enabled ? 1 : 0);
+        flushPlayerPropertyToDisk(togglingPlayer, MB_DEV_HUD_BIOME_CHECKER_PLAYER);
     } catch { /* ignore */ }
     if (!enabled) {
         try {

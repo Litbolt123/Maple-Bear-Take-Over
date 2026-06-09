@@ -1,0 +1,15 @@
+{
+	"comment": "Single-structure test: plains_house_2_tall only (re-exported with structure_void). Restore 3-piece pool when other exports pass validate.",
+	"active": [
+		{ "structure": "plains_house_2_tall", "place": "place_house_2_tall", "weight": 1 }
+	],
+	"disabled_pending_reexport": [
+		{ "structure": "plains_librarian_study", "place": "place_librarian_study", "reason": "paused while testing house_2_tall" },
+		{ "structure": "plains_smithy", "place": "place_smithy", "reason": "paused while testing house_2_tall" },
+		{ "structure": "plains_church_cathedral_ruin", "place": "place_church_cathedral_ruin", "reason": "solid oak_planks box" },
+		{ "structure": "plains_house_1", "place": "place_house_1", "reason": "empty export" },
+		{ "structure": "plains_house_3", "place": "place_house_3", "reason": "empty export" },
+		{ "structure": "plains_bakery", "place": "place_bakery", "reason": "empty export" },
+		{ "structure": "plains_farmhouse", "place": "place_farmhouse", "reason": "empty export" }
+	]
+}

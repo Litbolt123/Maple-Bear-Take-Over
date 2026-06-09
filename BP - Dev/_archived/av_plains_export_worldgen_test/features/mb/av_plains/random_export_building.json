@@ -1,0 +1,14 @@
+{
+	"format_version": "1.21.0",
+	"minecraft:weighted_random_feature": {
+		"description": {
+			"identifier": "mb:av_plains/random_export_building"
+		},
+		"features": [
+			[
+				"mb:av_plains/place_house_2_tall",
+				1
+			]
+		]
+	}
+}

@@ -6,7 +6,7 @@
 // ============================================================================
 
 import { system, world, BlockPermutation } from "@minecraft/server";
-import { getWorldProperty, setWorldProperty, getWorldPropertyChunked, setWorldPropertyChunked, getAddonDifficultyState, saveAllProperties, getPlayerProperty, setPlayerProperty } from "./mb_dynamicPropertyHandler.js";
+import { getWorldProperty, setWorldProperty, getWorldPropertyChunked, setWorldPropertyChunked, getAddonDifficultyState, saveAllProperties, getPlayerProperty, setPlayerProperty, flushPlayerPropertyToDisk } from "./mb_dynamicPropertyHandler.js";
 import { getCurrentDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { isDebugEnabled, getPlayerSoundVolume, getStormParticleDensity } from "./mb_codex.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
@@ -62,6 +62,9 @@ import {
     NATURAL_BUFF_SPAWN_COOLDOWN_TICKS,
 } from "./mb_balance.js";
 import { isBuffBearSpawnBlocked } from "./mb_buffCap.js";
+import { isMiningBearSpawnBlocked } from "./mb_miningCap.js";
+import { getMaxMiningBearsNearPlayerCount, getMaxMiningBearsDimensionWideCount } from "./mb_balance.js";
+import { getPlayerCountInDimension } from "./mb_buffCap.js";
 import {
     TINY_BEAR_ID,
     DAY4_BEAR_ID,
@@ -919,6 +922,7 @@ function getDiscoveryBudgetPlayerCount(totalPlayerCount, scanLoadCount) {
 function getQueryBudgetPlayerCount(totalPlayerCount, scanLoadCount) {
     if (totalPlayerCount <= 1) return 1;
     const c = scanLoadCount != null && scanLoadCount >= 1 ? scanLoadCount : totalPlayerCount;
+    if (c <= 1) return 1;
     return Math.max(2, Math.min(totalPlayerCount, c));
 }
 
@@ -982,7 +986,7 @@ function getSpreadPlayerStaggerInterval(playerCount) {
 
 /** Tight group: still one representative per tick, but rotate less often when many players stack. */
 function getTightGroupStaggerInterval(playerCount) {
-    if (playerCount <= 2) return 5;
+    if (playerCount <= 2) return 1;
     if (playerCount === 3) return 8;
     if (playerCount === 4) return 11;
     if (playerCount === 5) return 15;
@@ -1803,6 +1807,7 @@ export function setSpawnScanPerfOverlayEnabled(enabled, togglingPlayer) {
     if (togglingPlayer?.isValid) {
         try {
             setPlayerProperty(togglingPlayer, MB_DEV_HUD_SCAN_PERF_PLAYER, enabled ? 1 : 0);
+            flushPlayerPropertyToDisk(togglingPlayer, MB_DEV_HUD_SCAN_PERF_PLAYER);
         } catch { /* ignore */ }
     }
     setWorldProperty(SPAWN_SCAN_PERF_DEBUG_PROPERTY, 0);
@@ -1816,6 +1821,7 @@ export function setSpawnPresetHudEnabled(enabled, togglingPlayer) {
     if (togglingPlayer?.isValid) {
         try {
             setPlayerProperty(togglingPlayer, MB_DEV_HUD_PRESET_PLAYER, enabled ? 1 : 0);
+            flushPlayerPropertyToDisk(togglingPlayer, MB_DEV_HUD_PRESET_PLAYER);
         } catch { /* ignore */ }
     }
     setWorldProperty(SPAWN_PRESET_HUD_PROPERTY, 0);
@@ -2676,12 +2682,13 @@ function getBlockScanCooldownThriftMult() {
         default: return 1;
     }
 }
-function getBlockScanCooldown(totalPlayerCount) {
+function getBlockScanCooldown(totalPlayerCount, scanLoadCount = null) {
     const cd = getSpawnScanCooldownMultiplier();
     const thrift = getBlockScanCooldownThriftMult();
-    if (totalPlayerCount === 1) return Math.round(SCAN_INTERVAL * 2 * cd * thrift);
-    if (totalPlayerCount === 2) return Math.round(SCAN_INTERVAL * 3 * cd * thrift);
-    if (totalPlayerCount === 3) return Math.round(SCAN_INTERVAL * 4 * cd * thrift);
+    const pc = getQueryBudgetPlayerCount(totalPlayerCount, scanLoadCount);
+    if (pc === 1) return Math.round(SCAN_INTERVAL * 2 * cd * thrift);
+    if (pc === 2) return Math.round(SCAN_INTERVAL * 3 * cd * thrift);
+    if (pc === 3) return Math.round(SCAN_INTERVAL * 4 * cd * thrift);
     return Math.round(SCAN_INTERVAL * 6 * cd * thrift);
 }
 const BLOCK_SCAN_COOLDOWN = SCAN_INTERVAL * 2; // Default (single player) - use getBlockScanCooldown() for multiplayer
@@ -2830,6 +2837,10 @@ let lastProcessedDay = 0;
 let sunriseBoostTicks = 0;
 /** Last tick the main spawn loop ran (for spawn speed override). -1 = not yet run. */
 let lastSpawnControllerRunTick = -1;
+/** Main spawn loop executions (not every 20t callback). MP stagger uses this — not world tick — so interval gating (e.g. 60t) cannot alias with stagger mod (e.g. 4). */
+let spawnControllerInvocationCount = 0;
+/** Round-robin index for spread-apart players in a dimension (one scan target per eligible invocation). */
+const dimensionSpreadPlayerRotate = new Map();
 const playerTileCache = new Map();
 const entityCountCache = new Map(); // Cache entity counts per player
 // Dynamic entity count cache TTL based on player count (longer for multiplayer to reduce queries)
@@ -6459,8 +6470,9 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
     const playerId = player.id;
     const now = system.currentTick;
     
-    // Detect if single player (no group cache or only one player in dimension)
-    const isSinglePlayer = isSinglePlayerMode(useGroupCache, groupPlayers);
+    // Detect if single player (no group cache or only one player in dimension), or co-located duo (one spatial cluster).
+    const isSinglePlayer = isSinglePlayerMode(useGroupCache, groupPlayers)
+        || (scanLoadCount != null && scanLoadCount <= 1 && totalPlayerCount <= 2);
     
     // Try to use group cache if available and enabled
     let cache = null;
@@ -6493,7 +6505,10 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
                         const groupPlayerCount = groupPlayers ? groupPlayers.length : 1;
                         // Check if group is tight: use parameter if provided, otherwise check using function
                         const isGroupTight = isTightGroupParam || (groupPlayers && groupPlayers.length > 1 && isTightGroup(groupPlayers));
-                        const scanCooldown = isGroupTight ? SCAN_INTERVAL * 8 : getBlockScanCooldown(groupPlayerCount);
+                        const groupLoadPc = getQueryBudgetPlayerCount(groupPlayerCount, scanLoadCount);
+                        const scanCooldown = isGroupTight && groupLoadPc > 1
+                            ? SCAN_INTERVAL * 8
+                            : getBlockScanCooldown(groupPlayerCount, scanLoadCount);
                         
                         // Use group cache if it's recent and group hasn't moved much
                         if (now - groupCache.tick < CACHE_TICK_TTL && timeSinceLastScan < scanCooldown) {
@@ -6554,7 +6569,7 @@ function getTilesForPlayer(player, dimension, playerPos, currentDay, useGroupCac
             const dz = playerPos.z - cache.center.z;
             movedSq = dx * dx + dz * dz;
             const timeSinceLastScan = now - lastBlockScanTick;
-                const scanCooldown = getBlockScanCooldown(totalPlayerCount);
+                const scanCooldown = getBlockScanCooldown(totalPlayerCount, scanLoadCount);
                 const cacheAge = now - cache.tick;
                 
                 // Mark as stale instead of deleting if player moved significantly
@@ -7115,6 +7130,13 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
             return false;
         }
     }
+
+    if (config.id === MINING_BEAR_ID || config.id === MINING_BEAR_DAY20_ID) {
+        if (isMiningBearSpawnBlocked({ dimension, entityCounts })) {
+            debugLog('spawn', `${config.id}: Mining cap reached (near ≤${getMaxMiningBearsNearPlayerCount()}, dim ≤${getMaxMiningBearsDimensionWideCount(getPlayerCountInDimension(dimension))}) — blocking spawn`);
+            return false;
+        }
+    }
     
     // Check type-based spawn caps (all variants of a type count toward the same cap)
     const entityType = getEntityType(config.id);
@@ -7203,11 +7225,14 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     // Performance optimization: Reduce attempts when multiple players are present
     // This spreads spawn load across players and prevents lag spikes
     const isTightGroup = modifiers.isTightGroup || false;
+    const spawnLoadPc = modifiers.scanLoadCount != null
+        ? getQueryBudgetPlayerCount(totalPlayerCountInDimension, modifiers.scanLoadCount)
+        : totalPlayerCountInDimension;
     let multiplayerAttemptReduction = 1.0;
     if (totalPlayerCountInDimension > 1) {
         if (isTightGroup) {
-            // Tight group: More aggressive reduction (50% of normal attempts since it's one check for group)
-            multiplayerAttemptReduction = 0.5;
+            // Co-located duo/squad (one cluster): same anchor as solo — no 50% cut. Large stacked groups only.
+            multiplayerAttemptReduction = spawnLoadPc <= 1 ? 1.0 : 0.5;
         } else {
             // Spread group: Normal reduction, but reduce by 30% since they share area
             // 2 players: 0.9x * 0.7 = 0.63x, 3 players: 0.8x * 0.7 = 0.56x, 4+ players: 0.7x * 0.7 = 0.49x
@@ -7222,10 +7247,11 @@ function attemptSpawnType(player, dimension, playerPos, tiles, config, modifiers
     // Spread spawn attempts across multiple ticks to prevent lag spikes
     // Limit spawn attempts per tick per player based on player count
     let maxAttemptsPerTick;
-    if (isTightGroup) {
-        // Tight group: Distribute attempts across players in group
-        // Allow 1-2 attempts per tick (rotating through players over time)
-        // This gives better spawn distribution while keeping load manageable
+    if (isTightGroup && spawnLoadPc <= 1) {
+        maxAttemptsPerTick = totalPlayerCountInDimension === 2
+            ? Math.max(3, Math.floor(attempts * 0.6))
+            : attempts;
+    } else if (isTightGroup) {
         maxAttemptsPerTick = Math.min(2, Math.max(1, Math.floor(attempts / totalPlayerCountInDimension)));
     } else {
         maxAttemptsPerTick = totalPlayerCountInDimension === 1 ? attempts : 
@@ -7568,11 +7594,11 @@ function getPerTypeSpawnLimit(day, config) {
         return 3;
     }
     
-    if (config.id === MINING_BEAR_ID) {
-        return 2;
+    if (config.id === MINING_BEAR_ID || config.id === MINING_BEAR_DAY20_ID) {
+        return 1;
     }
     
-    if (config.id === FLYING_BEAR_DAY20_ID || config.id === MINING_BEAR_DAY20_ID) {
+    if (config.id === FLYING_BEAR_DAY20_ID) {
         if (day < 25) return 3;
         if (day < 30) return 4;
         return 5;
@@ -7804,6 +7830,7 @@ system.runInterval(() => {
             return;
         }
         lastSpawnControllerRunTick = now;
+        spawnControllerInvocationCount++;
         
         // Reset global spawn counter each tick
         globalSpawnCount = 0;
@@ -7976,54 +8003,49 @@ system.runInterval(() => {
     
     // Check if players form a tight group (all within 32 blocks)
     const isTightGroupMode = dimensionPlayers.length > 1 && isTightGroup(dimensionPlayers);
+    let earlyClusterCount = dimensionPlayers.length;
+    try {
+        earlyClusterCount = Math.max(1, computeSpatialClusterMeta(dimensionPlayers).count);
+        if (!isSpatialSpawnTuningEnabled()) {
+            earlyClusterCount = Math.max(1, dimensionPlayers.length);
+        }
+    } catch { /* keep length */ }
     
-    // Enhanced time-based spreading: Each player gets a unique timing offset based on their ID
-    // This ensures spawn checks are spread out evenly, not bunched together
     const playerCount = dimensionPlayers.length;
     const playersToProcess = [];
     
     if (isTightGroupMode) {
-        // Tight Group Mode: Process group as single unit (only one player representative)
-        // Calculate base spread interval - more aggressive for tight groups
-        const baseSpreadInterval = getTightGroupStaggerInterval(playerCount);
-        
-        // Use group center player (first player) as representative
-        // Process only one player per tight group, but spread groups across ticks
-        let groupHash = 0;
-        for (const player of dimensionPlayers) {
-            for (let j = 0; j < player.id.length; j++) {
-                groupHash = ((groupHash << 5) - groupHash) + player.id.charCodeAt(j);
-                groupHash = groupHash & groupHash;
-            }
-        }
-        const groupOffset = Math.abs(groupHash) % baseSpreadInterval;
-        const tickOffset = system.currentTick % baseSpreadInterval;
-        
-        if (tickOffset === groupOffset) {
-            // Process only the first player as representative of the tight group
+        // Co-located party (≤2 players or one spatial cluster): every spawn-loop run. Large stacks stagger.
+        const coLocatedParty = playerCount <= 2 || earlyClusterCount <= 1;
+        if (coLocatedParty) {
             playersToProcess.push(dimensionPlayers[0]);
+        } else {
+            const baseSpreadInterval = getTightGroupStaggerInterval(playerCount);
+            let groupHash = 0;
+            for (const player of dimensionPlayers) {
+                for (let j = 0; j < player.id.length; j++) {
+                    groupHash = ((groupHash << 5) - groupHash) + player.id.charCodeAt(j);
+                    groupHash = groupHash & groupHash;
+                }
+            }
+            const groupOffset = Math.abs(groupHash) % baseSpreadInterval;
+            const tickOffset = spawnControllerInvocationCount % baseSpreadInterval;
+            if (tickOffset === groupOffset) {
+                playersToProcess.push(dimensionPlayers[0]);
+            }
         }
     } else {
-        // Spread Group Mode or Solo Mode: Individual processing with shared cache
-        // CRITICAL: Process only ONE player per tick when spread - prevents lag from multiple
-        // simultaneous getTilesForPlayer + block scans when players are far apart
+        // Spread Group Mode or Solo Mode: one player per spawn-controller run when due.
+        // Phase on spawnControllerInvocationCount (not system.currentTick): the loop often runs every
+        // ~60t, so tick % stagger can stay on one residue forever (e.g. 60 % 4 === 0 → only offset-0 players scan).
         const baseSpreadInterval = getSpreadPlayerStaggerInterval(playerCount);
-        
-        for (let i = 0; i < dimensionPlayers.length; i++) {
-            const player = dimensionPlayers[i];
-            if (!player) continue;
-            
-            let playerHash = 0;
-            for (let j = 0; j < player.id.length; j++) {
-                playerHash = ((playerHash << 5) - playerHash) + player.id.charCodeAt(j);
-                playerHash = playerHash & playerHash; // Convert to 32-bit integer
-            }
-            const playerOffset = Math.abs(playerHash) % baseSpreadInterval;
-            const tickOffset = system.currentTick % baseSpreadInterval;
-            if (tickOffset === playerOffset) {
-                playersToProcess.push(player);
-                // Only process ONE spread player per tick to prevent lag spike
-                break;
+        const phase = spawnControllerInvocationCount % baseSpreadInterval;
+        if (phase === 0) {
+            const sorted = dimensionPlayers.filter((p) => p?.id).slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
+            if (sorted.length > 0) {
+                const rot = dimensionSpreadPlayerRotate.get(dimensionId) ?? 0;
+                playersToProcess.push(sorted[rot % sorted.length]);
+                dimensionSpreadPlayerRotate.set(dimensionId, (rot + 1) % sorted.length);
             }
         }
     }
@@ -8205,7 +8227,9 @@ system.runInterval(() => {
                          (entityCounts[BUFF_BEAR_DAY13_ID] || 0) +
                          (entityCounts[BUFF_BEAR_DAY20_ID] || 0);
         
-        debugLog('spawn', `${player.name}: ${totalNearbyBears} total bears nearby (Tiny: ${tinyCount}/${ENTITY_TYPE_CAPS[TINY_TYPE]}, Infected: ${infectedCount}/${ENTITY_TYPE_CAPS[INFECTED_TYPE]}, Mining: ${miningCount}/3, Flying: ${flyingCount}/30, Torpedo: ${torpedoCount}/10, Buff: ${buffCount}/dynamic), ${spacedTiles.length} spawn tiles available`);
+        const miningNearCap = getMaxMiningBearsNearPlayerCount();
+        const miningDimCap = getMaxMiningBearsDimensionWideCount(dimensionPlayerCount);
+        debugLog('spawn', `${player.name}: ${totalNearbyBears} total bears nearby (Tiny: ${tinyCount}/${ENTITY_TYPE_CAPS[TINY_TYPE]}, Infected: ${infectedCount}/${ENTITY_TYPE_CAPS[INFECTED_TYPE]}, Mining: ${miningCount}/${miningNearCap}, Flying: ${flyingCount}/30, Torpedo: ${torpedoCount}/10, Buff: ${buffCount}/dynamic, dim mining ≤${miningDimCap}), ${spacedTiles.length} spawn tiles available`);
 
         const idealNearbyBearTarget = getIdealNearbyBearTarget(currentDay, dimensionPlayerCount, dimension.id);
         const idealBearPressure = getIdealBearPressureFactors(totalNearbyBears, idealNearbyBearTarget);
@@ -8330,8 +8354,8 @@ system.runInterval(() => {
         // Note: Removed the 30-bear global cap check - type-based caps now handle all spawn limiting
             // Type caps: ENTITY_TYPE_CAPS (buff bears have dynamic cap)
 
-        // Check if single player (no group cache benefit)
-        const isSinglePlayer = !useGroupCache || (dimensionPlayers && dimensionPlayers.length === 1);
+        const isCoLocatedParty = isTightGroupMode && dimensionSpatialClusterCount <= 1;
+        const isSinglePlayer = !useGroupCache || (dimensionPlayers && dimensionPlayers.length === 1) || isCoLocatedParty;
         
         // Update weather cache periodically (async, won't block)
         updateWeatherCache(dimension);
@@ -8418,6 +8442,7 @@ system.runInterval(() => {
             extraCount,
             isGroupCache: useGroupCache && dimensionPlayers && dimensionPlayers.length > 1,
             isTightGroup: isTightGroupMode,
+            scanLoadCount: dimensionSpatialClusterCount,
             scanYieldBalanceMult: getScanYieldBalanceMultiplier(isSinglePlayer, dimensionPlayerCount, dimensionSpatialClusterCount),
             idealBearPressureChanceMult: idealBearPressure.chanceMult,
             idealBearSpawnRateMult: idealBearPressure.spawnRateMult

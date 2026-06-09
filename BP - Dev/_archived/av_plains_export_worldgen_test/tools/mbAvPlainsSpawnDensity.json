@@ -1,0 +1,45 @@
+{
+	"description": "Export building worldgen density. Run: npm run sync:av-plains-spawn-density",
+	"active": "house_2_tall_test",
+	"profiles": {
+		"house_2_tall_test": {
+			"scatter": {
+				"enabled": false,
+				"grid": 32,
+				"window": 10,
+				"anchors": [8]
+			},
+			"jigsaw": {
+				"spacing": 2,
+				"separation": 0,
+				"terrain_adaptation": "none"
+			}
+		},
+		"release": {
+			"scatter": {
+				"enabled": false,
+				"grid": 128,
+				"window": 16,
+				"anchors": [56]
+			},
+			"jigsaw": {
+				"spacing": 28,
+				"separation": 10,
+				"terrain_adaptation": "none"
+			}
+		},
+		"test": {
+			"scatter": {
+				"enabled": false,
+				"grid": 32,
+				"window": 10,
+				"anchors": [8, 24]
+			},
+			"jigsaw": {
+				"spacing": 4,
+				"separation": 1,
+				"terrain_adaptation": "none"
+			}
+		}
+	}
+}

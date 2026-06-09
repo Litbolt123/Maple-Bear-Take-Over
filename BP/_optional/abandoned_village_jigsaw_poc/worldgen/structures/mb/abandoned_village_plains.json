@@ -1,0 +1,26 @@
+{
+	"format_version": "1.26.10",
+	"minecraft:jigsaw": {
+		"description": {
+			"identifier": "mb:abandoned_village_plains"
+		},
+		"step": "surface_structures",
+		"terrain_adaptation": "beard_box",
+		"start_pool": "mb:av_plains/start",
+		"max_depth": 2,
+		"heightmap_projection": "world_surface",
+		"start_height": {
+			"type": "constant",
+			"value": {
+				"absolute": 0
+			}
+		},
+		"biome_filters": [
+			{
+				"test": "has_biome_tag",
+				"operator": "==",
+				"value": "plains"
+			}
+		]
+	}
+}
