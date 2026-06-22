@@ -27,3 +27,9 @@ export const SETTLEMENT_HUD_CENTER_DIST = 96;
  * (not the whole large-tier footprint — matches simulation distance).
  */
 export const SETTLEMENT_CHUNK_SIM_CHECK_DIST = 80;
+
+/**
+ * Clean .mcstructure exports (saved without structure_block in the volume).
+ * Skips runtime lamp-column scans and build cleanup phases that stripped export artifacts.
+ */
+export const SKIP_WORLDGEN_ARTIFACT_CLEANUP = true;

@@ -145,7 +145,7 @@ Exporting **one house with no jigsaw** (like early `plains_house_2_tall` tests) 
 
 ---
 
-## 6. Structure Block export checklist
+## 6. Structure export checklist
 
 - [Introduction to Structure Blocks](https://learn.microsoft.com/en-us/minecraft/creator/documents/structures/introductiontostructureblocks)  
 - [Structure command tutorial](https://learn.microsoft.com/en-us/minecraft/creator/documents/structures/structureblockscommandtutorial)  
@@ -154,7 +154,7 @@ Exporting **one house with no jigsaw** (like early `plains_house_2_tall` tests) 
 - [Terrain FAQ — structure_void](https://learn.microsoft.com/en-us/minecraft/creator/documents/structures/terrainmatchingtips)  
 
 1. **Tight box** — no filler cubes, no huge air margins  
-2. **Structure Block outside** the save volume  
+2. **Save without baking a structure block into the file** — you can export clean `.mcstructure` files that never place `minecraft:structure_block` in the world (preferred; no runtime cleanup needed)  
 3. **Offset `0, 0, 0`** — floor at structure **Y=0**  
 4. **Y=0** = floor blocks or **`structure_void`** — **never `grass_block`** from the ground you built on  
 5. **Rooms** = air; **courtyards / preserve terrain** = `structure_void`  
@@ -163,9 +163,10 @@ Exporting **one house with no jigsaw** (like early `plains_house_2_tall` tests) 
 After save (Litbolt can run):
 
 ```bash
-npm run strip:mcstructures
 npm run validate:mcstructures
 ```
+
+Legacy exports that still contain `structure_block` / jigsaw voxels: `npm run strip:mcstructures` (only if validate reports artifacts).
 
 Path: `BP - Dev/structures/mb/av_{biome}/`
 

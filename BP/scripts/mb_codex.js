@@ -784,6 +784,20 @@ export function getInfectionCueHearOthersTier(player) {
 }
 
 /**
+ * Infection camera shake (worsens as timer runs down). Default on.
+ * @param {import("@minecraft/server").Player} player
+ * @returns {boolean}
+ */
+export function getInfectionCameraShakeEnabled(player) {
+    try {
+        const codex = getCodex(player);
+        return codex.settings?.infectionCameraShake !== false;
+    } catch {
+        return true;
+    }
+}
+
+/**
  * Get player settings used by main/dayTracker (infection timer, critical warnings only).
  * Infection timer is **Dusted / Powdery Journal only** (not in Basic); critical warnings can come from Basic or codex.
  * @param {Player} player
@@ -1512,6 +1526,7 @@ export function showCodexBook(player, context) {
                     blockBreakVolume: 2, // 0=off, 1=low, 2=high
                     infectionCueEmitterVolume: 2,
                     infectionCueHearOthersVolume: 2,
+                    infectionCameraShake: true,
                     soundVolume: 1.0,
                     showTips: true,
                     audioMessages: true,
@@ -1549,6 +1564,9 @@ export function showCodexBook(player, context) {
                 }
                 if (codex.settings.infectionCueHearOthersVolume === undefined) {
                     codex.settings.infectionCueHearOthersVolume = 2;
+                }
+                if (codex.settings.infectionCameraShake === undefined) {
+                    codex.settings.infectionCameraShake = true;
                 }
             }
             
@@ -1645,7 +1663,7 @@ export function showCodexBook(player, context) {
                     if (ticks > 24000) {
                         summary.push(`§eTime: §c${formatTicksDuration(ticks)} (§f~${days} day${days !== 1 ? 's' : ''}§c)`);
                     } else if (ticks > 0) {
-                        summary.push(`§eTime: §c${formatTicksDuration(ticks)} §7| ${formatInfectionHudTimeRemaining(ticks, infectionType)}`);
+                        summary.push(`§eTime: §c${formatInfectionHudTimeRemaining(ticks, infectionType)}`);
                     } else {
                         summary.push(`§eTime: §c—`);
                     }
@@ -6063,6 +6081,7 @@ export function showCodexBook(player, context) {
             .body(
                 "§7Turn addon systems on/off. §8Journal + day counter always run.\n\n" +
                     `§8Active: §7${onCount}/${total} §8· §7${areAllScriptTogglesOff() ? "§c§lALL OFF" : "mixed"}\n\n` +
+                    "§8Script villages (WIP): §7Settings → Dev world features §8(off by default; laggy interim — goal is natural worldgen).\n\n" +
                     "§8Use §4All OFF§8 for a bare world, then enable one category at a time."
             );
         form.button("§4All systems OFF");
@@ -8907,13 +8926,21 @@ export function showCodexBook(player, context) {
     function openSettings() {
         // Show settings chooser: General vs Beta Features
         const canSee = canSeeBeta(player);
+        const devPack = INCLUDE_FULL_DEVELOPER_TOOLS;
         const form = new ActionFormData().title("§eSettings");
         form.body(`§7Choose a section:\n\n§8${getAddonVersionDisplayString()}`);
         form.button("§fGeneral §8(Sound, Tips, Search)");
         form.button("§eHave lag? §8(performance)");
+        let nextIdx = 2;
         if (canSee) {
             form.button("§dBeta Features §8(experimental)");
+            nextIdx++;
         }
+        if (devPack) {
+            form.button("§6Dev world features §8(internal)");
+            nextIdx++;
+        }
+        const backIdx = nextIdx;
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8928,10 +8955,19 @@ export function showCodexBook(player, context) {
             if (res.selection === 1) {
                 return openJournalLagComfortWizard(player, () => openSettings());
             }
-            if (canSee && res.selection === 2) {
-                return openBetaSettingsMenu();
+            let idx = 2;
+            if (canSee) {
+                if (res.selection === idx) {
+                    return openBetaSettingsMenu();
+                }
+                idx++;
             }
-            const backIdx = canSee ? 3 : 2;
+            if (devPack) {
+                if (res.selection === idx) {
+                    return openDevWorldFeaturesMenu();
+                }
+                idx++;
+            }
             if (res.selection === backIdx) {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
@@ -8941,6 +8977,49 @@ export function showCodexBook(player, context) {
             player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
             openMain();
         }).catch(() => openMain());
+    }
+
+    function openDevWorldFeaturesMenu() {
+        const villagesOn = isScriptEnabled(SCRIPT_IDS.abandonedVillageWorldgen);
+        const form = new ActionFormData()
+            .title("§6Dev world features")
+            .body(
+                "§7Work-in-progress dev systems. §8Default §cOFF§8 on join — enable only when testing.\n\n" +
+                    `§7Script village placement §8(WIP): §${villagesOn ? "aON" : "cOFF"}\n` +
+                    "§8Laggy + buggy interim path: lamp posts, horizon scans, block-by-block builds.\n" +
+                    "§8Ship goal: §7natural jigsaw worldgen §8(see structure collab guide).\n\n" +
+                    "§8Debug: §7Developer Tools → Abandoned villages."
+            );
+        form.button(
+            villagesOn
+                ? "§aScript villages §8(WIP ON) → OFF"
+                : "§cScript villages §8(WIP OFF) → ON"
+        );
+        form.button(DEV_BTN_BACK);
+
+        form.show(player).then((res) => {
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            if (!res || res.canceled || res.selection === 1) {
+                player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * volumeMultiplier });
+                return openSettings();
+            }
+            if (res.selection === 0) {
+                const next = !villagesOn;
+                setScriptEnabled(SCRIPT_IDS.abandonedVillageWorldgen, next);
+                try {
+                    saveAllProperties();
+                } catch {
+                    /* ignore */
+                }
+                player.sendMessage(
+                    CHAT_INFO +
+                        "Script village placement (WIP): " +
+                        (next ? CHAT_SUCCESS + "ON" : CHAT_DANGER + "OFF")
+                );
+            }
+            player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * volumeMultiplier });
+            openDevWorldFeaturesMenu();
+        }).catch(() => openSettings());
     }
 
     function openBetaSettingsMenu() {
@@ -9020,6 +9099,7 @@ export function showCodexBook(player, context) {
                 .dropdown("Block Break Volume", volumeOptions, { defaultValueIndex: breakVolIndex })
                 .dropdown("Infection sounds you make §8(cough, hiccup, cure sigh)", volumeOptions, { defaultValueIndex: infectionEmitterIndex })
                 .dropdown("Hearing others' infection sounds", volumeOptions, { defaultValueIndex: infectionHearOthersIndex })
+                .toggle("Infection camera shake §8(worsens near death)", { defaultValue: settings.infectionCameraShake !== false })
                 .dropdown("Storm Particles §8(Less = better performance)", particleOptions, { defaultValueIndex: stormParticlesIndex })
                 .toggle("Show Search Button", { defaultValue: settings.showSearchButton !== false })
                 .toggle("Infection timer on screen (action bar)", { defaultValue: showInfectionTimer })
@@ -9030,7 +9110,7 @@ export function showCodexBook(player, context) {
             form.show(player).then((res) => {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 
-                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 13) {
+                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 14) {
                     const sliderValue = typeof res.formValues[0] === 'number' 
                         ? Math.max(0, Math.min(10, Math.round(Number(res.formValues[0]))))
                         : volumeSliderValue;
@@ -9043,14 +9123,15 @@ export function showCodexBook(player, context) {
                     settings.blockBreakVolume = typeof res.formValues[4] === 'number' ? Math.max(0, Math.min(2, res.formValues[4])) : breakVolIndex;
                     settings.infectionCueEmitterVolume = typeof res.formValues[5] === 'number' ? Math.max(0, Math.min(2, res.formValues[5])) : infectionEmitterIndex;
                     settings.infectionCueHearOthersVolume = typeof res.formValues[6] === 'number' ? Math.max(0, Math.min(2, res.formValues[6])) : infectionHearOthersIndex;
-                    settings.stormParticles = typeof res.formValues[7] === 'number' ? Math.max(0, Math.min(2, Math.floor(res.formValues[7]))) : stormParticlesIndex;
-                    settings.showSearchButton = Boolean(res.formValues[8]);
-                    settings.showInfectionTimer = Boolean(res.formValues[9]);
-                    settings.criticalWarningsOnly = Boolean(res.formValues[10]);
-                    settings.showDayNarrativeActionBar = Boolean(res.formValues[11]);
+                    settings.infectionCameraShake = Boolean(res.formValues[7]);
+                    settings.stormParticles = typeof res.formValues[8] === 'number' ? Math.max(0, Math.min(2, Math.floor(res.formValues[8]))) : stormParticlesIndex;
+                    settings.showSearchButton = Boolean(res.formValues[9]);
+                    settings.showInfectionTimer = Boolean(res.formValues[10]);
+                    settings.criticalWarningsOnly = Boolean(res.formValues[11]);
+                    settings.showDayNarrativeActionBar = Boolean(res.formValues[12]);
                     
-                    if (canEditDifficulty && typeof res.formValues[12] === 'number') {
-                        const selectedIndex = Math.max(0, Math.min(2, Math.floor(res.formValues[12])));
+                    if (canEditDifficulty && typeof res.formValues[13] === 'number') {
+                        const selectedIndex = Math.max(0, Math.min(2, Math.floor(res.formValues[13])));
                         const newAddonValue = selectedIndex === 0 ? -1 : selectedIndex === 1 ? 0 : 1;
                         setWorldProperty(ADDON_DIFFICULTY_PROPERTY, newAddonValue);
                         setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, newAddonValue);
@@ -9394,10 +9475,36 @@ export function saveDebugSettings(player, settings) {
     }
 }
 
+/** Turn off camera-shake Content Log and ground-infection timer debug for one player. */
+export function clearInfectionDevDebugForPlayer(player) {
+    if (!INCLUDE_FULL_DEVELOPER_TOOLS || !player) return;
+    try {
+        setWorldProperty("mb_infection_shake_debug", 0);
+    } catch {
+        /* ignore */
+    }
+    try {
+        const settings = getDebugSettings(player);
+        if (!settings.ground_infection) settings.ground_infection = {};
+        const groundDefaults = getDefaultDebugSettings().ground_infection;
+        for (const flag of Object.keys(groundDefaults)) {
+            settings.ground_infection[flag] = false;
+        }
+        if (!settings.main) settings.main = {};
+        settings.main.infection = false;
+        settings.main.minorInfection = false;
+        saveDebugSettings(player, settings);
+        debugStateCache = null;
+    } catch {
+        /* ignore */
+    }
+}
+
 // Helper function to check if any player has a specific debug flag enabled
 // Performance: Uses caching to avoid iterating all players on every call
 // Wrapped in try-catch: can be called during module load before debugStateCache is initialized
 export function isDebugEnabled(category, flag) {
+    if (!INCLUDE_FULL_DEVELOPER_TOOLS) return false;
     try {
         // Initialize cache if needed (may throw if called before codex finished loading - TDZ)
         if (typeof debugStateCache === 'undefined') {

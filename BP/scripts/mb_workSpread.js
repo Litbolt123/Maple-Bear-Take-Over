@@ -871,20 +871,26 @@ export function isPlayerChunkEdgeDeferActive(playerId) {
 }
 
 /**
+ * @returns {string|null} Why burst defer is active, or null if not deferring.
+ */
+export function getVillageBurstDeferReason() {
+    if (shouldPauseDayZeroAddonLoops()) return "addon_loops_paused";
+    if (isEngineBacklogQuietActive()) return "engine_backlog";
+    if (isVillagerEntityQueryMuteActive()) return "villager_query_mute";
+    if (isAnyChunkEdgeDeferActive()) return "chunk_edge";
+    if (isVillagerBurstDeferActive()) return "villager_burst";
+    if (isVillagerPressureActive()) return "villager_pressure";
+    if (isVillagerSpawnWorkSpreading()) return "villager_spawn_spread";
+    if (isVillagerAddonSessionActive()) return "villager_session";
+    return null;
+}
+
+/**
  * Skip non-critical polls right after crossing a chunk boundary (village approach).
  * @param {string} [_category]
  */
 export function shouldDeferVillageBurst(_category) {
-    return (
-        shouldPauseDayZeroAddonLoops() ||
-        isEngineBacklogQuietActive() ||
-        isVillagerEntityQueryMuteActive() ||
-        isAnyChunkEdgeDeferActive() ||
-        isVillagerBurstDeferActive() ||
-        isVillagerPressureActive() ||
-        isVillagerSpawnWorkSpreading() ||
-        isVillagerAddonSessionActive()
-    );
+    return getVillageBurstDeferReason() != null;
 }
 
 /**

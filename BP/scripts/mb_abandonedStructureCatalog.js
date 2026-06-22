@@ -31,11 +31,11 @@ const CATALOG_PAD_MARGIN = 4;
 /** Extra blocks above wall height for suggested export box top. */
 const CATALOG_BOX_HEADROOM = 8;
 
-/** Blocks below floor in suggested export box. */
-const CATALOG_BOX_FLOOR_PAD = 1;
+/** Blocks below floor in suggested export box (surface export — floor is Y=0 in file). */
+const CATALOG_BOX_FLOOR_PAD = 0;
 
-/** Suggested Structure Block padding outside each footprint. */
-const CATALOG_BOX_SIDE_PAD = 2;
+/** Suggested Structure Block padding outside footprint — 0 = tight export for worldgen. */
+const CATALOG_BOX_SIDE_PAD = 0;
 
 /**
  * @typedef {{
@@ -114,13 +114,12 @@ function catalogResolvedPlan(entry, slot, ruleset, cx, cz, index) {
  * @param {import("./mb_settlementStructures.js").HousePlan|null|undefined} plan
  * @param {{ wallH: number }} fp
  */
-function catalogExportBoxVertical(plan, fp) {
-    const basementDepth = plan?.basementDepth ?? 0;
+function catalogExportBoxVertical(_plan, fp) {
     const extraHead =
-        plan?.appendages?.some((a) => (a.wallH ?? 0) > fp.wallH) || plan?.wallHAt != null ? 4 : 0;
+        _plan?.appendages?.some((a) => (a.wallH ?? 0) > fp.wallH) || _plan?.wallHAt != null ? 4 : 0;
     return {
-        boxMinY: -(CATALOG_BOX_FLOOR_PAD + basementDepth),
-        boxMaxY: fp.wallH + CATALOG_BOX_HEADROOM + extraHead
+        boxMinY: 0,
+        boxMaxY: fp.wallH + CATALOG_BOX_HEADROOM + extraHead + 1
     };
 }
 
@@ -337,8 +336,11 @@ export function formatStructureCatalogManifest(centerX, centerZ, floorY, manifes
     const lines = [
         "=== M.B.A starter set for export (Structure Block) ===",
         `biome/ruleset: ${ruleset} · entries=${meta.entryCount ?? manifest.length} · cols=${meta.cols ?? 2}`,
-        `yard origin (gold block): ${centerX}, ${floorY}, ${centerZ}`,
-        `floor Y=${floorY} · isolated air cells (no ground pads) · gaps are air`,
+        `yard origin (gold block): ${centerX}, ${floorY + 1}, ${centerZ}`,
+        `floor block Y=${floorY - 1} · export surface-only (no basement, no dirt margin)`,
+        `After build: open floors / margins are filled with structure_void (vanilla terrain preserve on jigsaw place).`,
+        `Structure Block: place ONE BLOCK OUTSIDE the SW bottom of each save box (not inside the volume).`,
+        `After Save: npm run strip:mcstructures → npm run validate:mcstructures`,
         `save each to BP/${folder}/<exportName>.mcstructure`,
         ""
     ];
@@ -349,13 +351,14 @@ export function formatStructureCatalogManifest(centerX, centerZ, floorY, manifes
         const bx1 = centerX + m.boxMaxX;
         const bz0 = centerZ + m.boxMinZ;
         const bz1 = centerZ + m.boxMaxZ;
-        const by0 = floorY + m.boxMinY;
-        const by1 = floorY + m.boxMaxY;
+        const floorBlockY = floorY - 1;
+        const by0 = floorBlockY + m.boxMinY;
+        const by1 = floorBlockY + m.boxMaxY;
         lines.push(
             `[${m.index}] ${m.exportName}.mcstructure`,
             `  variant=${m.variantId} · kind=${m.kind} · type=${m.type}${m.housePlan != null ? ` · plan=${m.housePlan}` : ""}`,
-            `  footprint ${m.w}x${m.d} wallH=${m.wallH} · origin ${ox}, ${floorY}, ${oz}`,
-            `  suggested export box: (${bx0}, ${by0}, ${bz0}) → (${bx1}, ${by1}, ${bz1})`,
+            `  footprint ${m.w}x${m.d} wallH=${m.wallH} · floor origin ${ox}, ${floorY - 1}, ${oz}`,
+            `  suggested export box: (${bx0}, ${by0}, ${bz0}) → (${bx1}, ${by1}, ${bz1})  §8(tight — no extra margin)`,
             ""
         );
     }

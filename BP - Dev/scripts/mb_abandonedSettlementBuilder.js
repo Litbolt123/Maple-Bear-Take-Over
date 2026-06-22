@@ -16,12 +16,17 @@ import {
     VILLAGE_LOOT
 } from "./mb_villageChestLoot.js";
 import {
+    allResolvableStructureSlotsFinished,
     applyStructureManifestToJob,
     countStructuresBuiltFromStates,
     exportJobStructureManifest,
+    footprintHasCompleteStructureEvidence,
+    footprintHasPartialStructureEvidence,
+    footprintHasSubstantialShellEvidence,
     formatStructureRegistrySummary,
     getStructureSlotState,
     recordStructureSlotOutcome,
+    reconcileStructureSlotStatesBeforeResume,
     refreshAllStructureSlotsFromWorld,
     structureSlotCountsAsBuilt,
     structureSlotShouldSkipBuild
@@ -40,10 +45,11 @@ import {
 import {
     SETTLEMENT_BUILD_PAUSE_DIST,
     SETTLEMENT_BUILD_RESUME_DIST,
-    SETTLEMENT_CHUNK_SIM_CHECK_DIST
+    SETTLEMENT_CHUNK_SIM_CHECK_DIST,
+    SKIP_WORLDGEN_ARTIFACT_CLEANUP
 } from "./mb_abandonedVillageConstants.js";
 import { avLogBuildLine } from "./mb_avDebugLog.js";
-import { getSettlementBuildBlocksPerTick } from "./mb_abandonedVillagePerf.js";
+import { getSettlementBuildBlocksPerTick, resolveSettlementBuildBudget } from "./mb_abandonedVillagePerf.js";
 import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
 import { tickCatalogExportVoidFill } from "./mb_catalogExportVoid.js";
 
@@ -2256,6 +2262,16 @@ function structureHasCellar(st) {
     return (getStructureFloorPlan(st)?.basementDepth ?? 0) > 0;
 }
 
+/** Trapdoor pit pantry — food chest one block below the hatch. */
+function structureHasFloorPantry(st) {
+    return !!getStructureFloorPlan(st)?.floorPantry;
+}
+
+/** Food lives in cellar or floor pantry, not scattered on the main floor. */
+function structureFoodStoredBelowFloor(st) {
+    return structureHasCellar(st) || structureHasFloorPantry(st);
+}
+
 /**
  * @param {StructureBuildState} st
  * @param {number} lx
@@ -2984,18 +3000,18 @@ function sortPathCellsNearLampFirst(pathCells, lampRelDx, lampRelDz) {
 }
 
 /**
+ * Build order around the plaza — clockwise by angle so work spreads evenly, not lamp-side first.
  * @param {StructureSlot[]} structures
- * @param {number} lampRelDx
- * @param {number} lampRelDz
  */
-function sortStructuresNearLampFirst(structures, lampRelDx, lampRelDz) {
-    return structures
-        .slice()
-        .sort(
-            (a, b) =>
-                chebyshevFromLampOffset(a.ox, a.oz, lampRelDx, lampRelDz) -
-                chebyshevFromLampOffset(b.ox, b.oz, lampRelDx, lampRelDz)
-        );
+function sortStructuresAroundCenter(structures) {
+    return structures.slice().sort((a, b) => {
+        const angleA = Math.atan2(a.oz, a.ox);
+        const angleB = Math.atan2(b.oz, b.ox);
+        if (angleA !== angleB) return angleA - angleB;
+        const distA = a.ox * a.ox + a.oz * a.oz;
+        const distB = b.ox * b.ox + b.oz * b.oz;
+        return distA - distB;
+    });
 }
 
 function computeSettlementWorkChunkBounds(job) {
@@ -3594,6 +3610,13 @@ function layoutStructures(cx, cz, tier, ruleset, lampRelDx, lampRelDz) {
 /** Horizontal dig size and headroom below the trapdoor hatch. */
 const BUNKER_FOOTPRINT = 3;
 const BUNKER_HEADROOM = 2;
+/** Hatch on the east interior edge; ladder climbs the east shell wall. */
+const BUNKER_TRAP_DLX = 2;
+const BUNKER_TRAP_DLZ = 1;
+const BUNKER_LADDER_DLX = 1;
+const BUNKER_LADDER_DLZ = 1;
+const BUNKER_CHEST_DLX = 0;
+const BUNKER_CHEST_DLZ = 0;
 
 /**
  * @typedef {{ ox: number, oz: number, ruined?: boolean, lightMode?: "none"|"lantern"|"torch"|"both" }} BunkerSite
@@ -3724,18 +3747,158 @@ function hideBunkerShellWallId(mat) {
     return mat.wall;
 }
 
+/** @param {import("@minecraft/server").Dimension} dimension */
+function blockSupportsLadderBack(dimension, x, y, z) {
+    try {
+        const id = dimension.getBlock({ x, y, z })?.typeId;
+        return !!id && id !== "minecraft:air";
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Place one ladder rung only when backing wall exists and the cell is open — never force-place.
+ * @param {import("@minecraft/server").Dimension} dimension
+ * @param {number} wx
+ * @param {number} y
+ * @param {number} wz
+ * @param {number} face Bedrock facing_direction
+ * @param {number} backWx
+ * @param {number} backWz
+ */
+function trySetLadderRung(dimension, wx, y, wz, face, backWx, backWz) {
+    if (!blockSupportsLadderBack(dimension, backWx, y, backWz)) return false;
+    if (!settlementAttachmentCellOpen(dimension, wx, y, wz)) return false;
+    try {
+        const perm = BlockPermutation.resolve("minecraft:ladder", { facing_direction: face });
+        dimension.getBlock({ x: wx, y, z: wz })?.setPermutation(perm);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/** @param {import("@minecraft/server").Dimension} dimension */
+function blockSupportsTopAttachment(dimension, x, y, z) {
+    try {
+        const below = dimension.getBlock({ x, y: y - 1, z })?.typeId;
+        if (!below || below === "minecraft:air") return false;
+        if (
+            below.includes("fence") ||
+            below.includes("trapdoor") ||
+            below.includes("ladder") ||
+            below.includes("torch") ||
+            below.includes("lantern")
+        ) {
+            return false;
+        }
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/** @param {import("@minecraft/server").Dimension} dimension */
+function settlementAttachmentCellOpen(dimension, x, y, z) {
+    try {
+        const id = dimension.getBlock({ x, y, z })?.typeId;
+        return !id || id === "minecraft:air" || isSettlementReplaceableBlockId(id);
+    } catch {
+        return false;
+    }
+}
+
+/** @param {import("@minecraft/server").Dimension} dimension */
+function trySetSettlementLantern(dimension, x, y, z) {
+    if (!blockSupportsTopAttachment(dimension, x, y, z)) return false;
+    if (!settlementAttachmentCellOpen(dimension, x, y, z)) return false;
+    return trySetBlock(dimension, x, y, z, "minecraft:lantern", SETTLEMENT_REPLACE_ANY);
+}
+
+/** @param {import("@minecraft/server").Dimension} dimension */
+function trySetSettlementTorch(dimension, x, y, z) {
+    if (!blockSupportsTopAttachment(dimension, x, y, z)) return false;
+    if (!settlementAttachmentCellOpen(dimension, x, y, z)) return false;
+    return trySetBlock(dimension, x, y, z, "minecraft:torch", SETTLEMENT_REPLACE_ANY);
+}
+
+/**
+ * Uniform cap height for a hide bunker — highest surface across shell footprint so the hatch stays flush.
+ * @param {BuildJob} job
+ * @param {import("@minecraft/server").Dimension} dimension
+ * @param {typeof RUIN_MATERIALS_BY_RULESET.plains} mat
+ * @param {BunkerSite} site
+ */
+function resolveHideBunkerReferenceY(job, dimension, mat, site) {
+    const baseOx = job.centerX + site.ox;
+    const baseOz = job.centerZ + site.oz;
+    let maxSy;
+    for (let dlx = -1; dlx <= BUNKER_FOOTPRINT; dlx++) {
+        for (let dlz = -1; dlz <= BUNKER_FOOTPRINT; dlz++) {
+            const wx = baseOx + dlx;
+            const wz = baseOz + dlz;
+            const sy = cachedFloorY(job.floorYCache, dimension, wx, wz, mat.log, job.y);
+            if (sy === undefined) continue;
+            if (maxSy === undefined || sy > maxSy) maxSy = sy;
+        }
+    }
+    return maxSy;
+}
+
+/**
+ * Carve one column of the uniform underground box (interior floor + air, or shell wall).
+ * @param {BuildJob} job
+ * @param {import("@minecraft/server").Dimension} dimension
+ * @param {typeof RUIN_MATERIALS_BY_RULESET.plains} mat
+ * @param {BunkerSite} site
+ * @param {number} refSy
+ * @param {number} prepIdx
+ */
+function tickHideBunkerVolumeColumn(job, dimension, mat, site, refSy, prepIdx) {
+    const span = BUNKER_FOOTPRINT + 2;
+    const dlx = (prepIdx % span) - 1;
+    const dlz = Math.floor(prepIdx / span) - 1;
+    const wx = job.centerX + site.ox + dlx;
+    const wz = job.centerZ + site.oz + dlz;
+    const floorY = refSy - BUNKER_HEADROOM - 1;
+    const interior = dlx >= 0 && dlx < BUNKER_FOOTPRINT && dlz >= 0 && dlz < BUNKER_FOOTPRINT;
+    const wallId = hideBunkerShellWallId(mat);
+    let placed = 0;
+    if (interior) {
+        const skipFloor =
+            site.ruined &&
+            hashChunkRoll(job.centerX, job.centerZ, site.ox * 7 + site.oz * 11 + prepIdx, 100) < 32;
+        if (!skipFloor && trySetBlock(dimension, wx, floorY, wz, mat.plank, SETTLEMENT_REPLACE_ANY)) {
+            placed++;
+        }
+        for (let y = floorY + 1; y < refSy; y++) {
+            if (trySetBlock(dimension, wx, y, wz, "minecraft:air", SETTLEMENT_REPLACE_ANY)) placed++;
+        }
+    } else if (
+        !site.ruined ||
+        hashChunkRoll(job.centerX, job.centerZ, wx * 17 + wz * 23 + site.ox, 100) >= 38
+    ) {
+        for (let y = floorY; y <= refSy; y++) {
+            if (trySetBlock(dimension, wx, y, wz, wallId, SETTLEMENT_REPLACE_ANY)) placed++;
+        }
+    }
+    if (placed > 0) job.totalEdits += placed;
+    return 1;
+}
+
 /**
  * @param {BuildJob} job
  * @param {import("@minecraft/server").Dimension} dimension
  * @param {typeof RUIN_MATERIALS_BY_RULESET.plains} mat
  * @param {BunkerSite} site
- * @param {number} sy
+ * @param {number} refSy
  */
-function applyHideBunkerInteriorFinish(job, dimension, mat, site, sy) {
+function applyHideBunkerInteriorFinish(job, dimension, mat, site, refSy) {
+    const ox = job.centerX + site.ox;
+    const oz = job.centerZ + site.oz;
+    const floorY = refSy - BUNKER_HEADROOM - 1;
     if (site.ruined) {
-        const ox = job.centerX + site.ox;
-        const oz = job.centerZ + site.oz;
-        const floorY = sy - BUNKER_HEADROOM - 1;
         for (let dlx = 0; dlx < BUNKER_FOOTPRINT; dlx++) {
             for (let dlz = 0; dlz < BUNKER_FOOTPRINT; dlz++) {
                 const roll = hashChunkRoll(job.centerX, job.centerZ, site.ox * 13 + site.oz * 19 + dlx * 7 + dlz * 11, 100);
@@ -3749,14 +3912,12 @@ function applyHideBunkerInteriorFinish(job, dimension, mat, site, sy) {
         return;
     }
     if (!site.lightMode || site.lightMode === "none") return;
-    const ox = job.centerX + site.ox;
-    const oz = job.centerZ + site.oz;
-    const ly = sy - 1;
+    const lightY = floorY + 1;
     if (site.lightMode === "lantern" || site.lightMode === "both") {
-        trySetBlock(dimension, ox + 2, ly, oz + 1, "minecraft:lantern", SETTLEMENT_REPLACE_ANY);
+        trySetSettlementLantern(dimension, ox + 2, lightY, oz + 1);
     }
     if (site.lightMode === "torch" || site.lightMode === "both") {
-        trySetBlock(dimension, ox, ly, oz + 2, "minecraft:torch", SETTLEMENT_REPLACE_ANY);
+        trySetSettlementTorch(dimension, ox, lightY, oz + 2);
     }
 }
 
@@ -3799,52 +3960,34 @@ function enqueueHideBunkerFinish(job, dimension, mat, site) {
 }
 
 /**
- * Ladders + trapdoor hatch deferred until after ruin processor (structure build must not overwrite them).
+ * Ladders last — east wall shaft beside the hatch (no trapdoor re-place here).
  * @param {BuildJob} job
  * @param {import("@minecraft/server").Dimension} dimension
  * @param {typeof RUIN_MATERIALS_BY_RULESET.plains} mat
  * @param {BunkerSite} site
- * @returns {SettlementLadderColumnPayload|undefined}
+ * @param {number} refSy
  */
-function captureHideBunkerLadderPayload(job, dimension, mat, site) {
+function placeHideBunkerLadders(job, dimension, mat, site, refSy) {
     if (
         site.ruined &&
         hashChunkRoll(job.centerX, job.centerZ, site.ox * 19 + site.oz * 29 + 5400, 100) >= 42
     ) {
-        return undefined;
+        return;
     }
     const ox = job.centerX + site.ox;
     const oz = job.centerZ + site.oz;
-    const trapWx = ox + 1;
-    const trapWz = oz + 1;
-    const sy = cachedFloorY(job.floorYCache, dimension, trapWx, trapWz, mat.log, job.y);
-    if (sy === undefined) return undefined;
-    const floorY = sy - BUNKER_HEADROOM - 1;
-    const ladderX = ox + 2;
-    const ladderZ = oz + 2;
-    return {
-        dimensionId: dimension.id,
-        ruleset: job.ruleset,
-        originX: ox,
-        originZ: oz,
-        accessLx: 2,
-        accessLz: 2,
-        ladderFootLx: 2,
-        ladderFootLz: 2,
-        wx: ladderX,
-        wz: ladderZ,
-        backWx: ladderX + 1,
-        backWz: ladderZ,
-        baseSy: floorY + 1,
-        ladderTopDy: BUNKER_HEADROOM - 1,
-        wallH: 0,
-        basementShaft: true,
-        hideBunkerShaft: true,
-        ladderFace: LADDER_FACING.east,
-        trapdoorY: sy,
-        trapdoorWx: trapWx,
-        trapdoorWz: trapWz
-    };
+    const floorY = refSy - BUNKER_HEADROOM - 1;
+    const ladderWx = ox + BUNKER_LADDER_DLX;
+    const ladderWz = oz + BUNKER_LADDER_DLZ;
+    const backWx = ox + BUNKER_FOOTPRINT;
+    const backWz = ladderWz;
+    const wallId = hideBunkerShellWallId(mat);
+    const face = LADDER_FACING.west;
+    for (let dy = 0; dy <= BUNKER_HEADROOM - 1; dy++) {
+        const y = floorY + 1 + dy;
+        trySetBlock(dimension, backWx, y, backWz, wallId, SETTLEMENT_REPLACE_ANY);
+        trySetLadderRung(dimension, ladderWx, y, ladderWz, face, backWx, backWz);
+    }
 }
 
 /**
@@ -3879,39 +4022,44 @@ function tickSettlementBunkers(job, dimension, mat, budget) {
     const pathSet = new Set((job.pathCells ?? []).map((c) => `${c.dx},${c.dz}`));
     let spent = 0;
     const cellTotal = BUNKER_FOOTPRINT * BUNKER_FOOTPRINT;
+    const prepTotal = (BUNKER_FOOTPRINT + 2) * (BUNKER_FOOTPRINT + 2);
+    const finishBunkerSite = (site, refSy) => {
+        job.bunkerIndex = (job.bunkerIndex ?? 0) + 1;
+        job.bunkerCellIndex = 0;
+        delete job.bunkerActiveRefSy;
+        delete job.bunkerPrepIndex;
+        delete job.bunkerAwaitingLadders;
+    };
     while (spent < budget && (job.bunkerIndex ?? 0) < bunkers.length) {
         const site = bunkers[job.bunkerIndex ?? 0];
-        if (job.bunkerFinishQueue?.length) {
-            spent += tickHideBunkerFinishQueue(job, dimension, mat);
-            if (!job.bunkerFinishQueue?.length) {
-                const sy = job.bunkerFinishSy;
-                if (sy !== undefined) applyHideBunkerInteriorFinish(job, dimension, mat, site, sy);
-                delete job.bunkerFinishSy;
-                const payload = captureHideBunkerLadderPayload(job, dimension, mat, site);
-                if (payload) {
-                    if (!job.pendingLadderColumns) job.pendingLadderColumns = [];
-                    job.pendingLadderColumns.push(payload);
-                }
-                job.bunkerIndex = (job.bunkerIndex ?? 0) + 1;
-                job.bunkerCellIndex = 0;
-            }
+        if (job.bunkerActiveRefSy === undefined) {
+            job.bunkerActiveRefSy = resolveHideBunkerReferenceY(job, dimension, mat, site);
+        }
+        const refSy = job.bunkerActiveRefSy;
+        if (refSy === undefined) {
+            job.bunkerIndex = (job.bunkerIndex ?? 0) + 1;
+            job.bunkerCellIndex = 0;
+            delete job.bunkerActiveRefSy;
+            delete job.bunkerPrepIndex;
+            delete job.bunkerAwaitingLadders;
+            continue;
+        }
+        const prepIdx = job.bunkerPrepIndex ?? 0;
+        if (prepIdx < prepTotal) {
+            spent += tickHideBunkerVolumeColumn(job, dimension, mat, site, refSy, prepIdx);
+            job.bunkerPrepIndex = prepIdx + 1;
+            continue;
+        }
+        if (job.bunkerAwaitingLadders) {
+            spent++;
+            applyHideBunkerInteriorFinish(job, dimension, mat, site, refSy);
+            placeHideBunkerLadders(job, dimension, mat, site, refSy);
+            finishBunkerSite(site, refSy);
             continue;
         }
         const cellIdx = job.bunkerCellIndex ?? 0;
         if (cellIdx >= cellTotal) {
-            enqueueHideBunkerFinish(job, dimension, mat, site);
-            if (!job.bunkerFinishQueue?.length) {
-                const sy = job.bunkerFinishSy;
-                if (sy !== undefined) applyHideBunkerInteriorFinish(job, dimension, mat, site, sy);
-                delete job.bunkerFinishSy;
-                const payload = captureHideBunkerLadderPayload(job, dimension, mat, site);
-                if (payload) {
-                    if (!job.pendingLadderColumns) job.pendingLadderColumns = [];
-                    job.pendingLadderColumns.push(payload);
-                }
-                job.bunkerIndex = (job.bunkerIndex ?? 0) + 1;
-                job.bunkerCellIndex = 0;
-            }
+            job.bunkerAwaitingLadders = true;
             continue;
         }
         const dlx = cellIdx % BUNKER_FOOTPRINT;
@@ -3923,31 +4071,18 @@ function tickSettlementBunkers(job, dimension, mat, budget) {
         const relDx = wx - job.centerX;
         const relDz = wz - job.centerZ;
         const onPath = pathSet.has(`${relDx},${relDz}`);
-        const sy = cachedFloorY(job.floorYCache, dimension, wx, wz, mat.log, job.y);
-        if (sy === undefined) continue;
-        const isTrap = dlx === 1 && dlz === 1;
-        const isChest = dlx === 0 && dlz === 0;
+        const sy = refSy;
+        const isTrap = dlx === BUNKER_TRAP_DLX && dlz === BUNKER_TRAP_DLZ;
+        const isChest = dlx === BUNKER_CHEST_DLX && dlz === BUNKER_CHEST_DLZ;
         const capId = onPath
             ? pickSettlementPathBlock(mat, job.ruleset, wx, wz, relDx * 13 + relDz * 29 + 89)
             : cellarSurfaceCapId(job.ruleset, mat);
         let placed = 0;
-        const skipFloor =
-            site.ruined &&
-            hashChunkRoll(job.centerX, job.centerZ, site.ox * 7 + site.oz * 11 + cellIdx, 100) < 32;
-        if (
-            !skipFloor &&
-            trySetBlock(dimension, wx, sy - BUNKER_HEADROOM - 1, wz, mat.plank, SETTLEMENT_REPLACE_ANY)
-        ) {
-            placed++;
-        }
-        for (let dy = 1; dy <= BUNKER_HEADROOM; dy++) {
-            if (trySetBlock(dimension, wx, sy - dy, wz, "minecraft:air", SETTLEMENT_REPLACE_ANY)) placed++;
-        }
         if (isTrap) {
             const placeTrap =
                 !site.ruined ||
                 hashChunkRoll(job.centerX, job.centerZ, site.ox * 3 + site.oz * 5 + 5500, 100) < 52;
-            if (placeTrap && trySetBlock(dimension, wx, sy, wz, settlementTrapdoorId(mat), SETTLEMENT_REPLACE_ANY)) {
+            if (placeTrap && trySetFloorTrapdoor(dimension, wx, sy, wz, mat)) {
                 placed++;
             } else if (trySetBlock(dimension, wx, sy, wz, capId, SETTLEMENT_REPLACE_ANY)) {
                 placed++;
@@ -3956,15 +4091,21 @@ function tickSettlementBunkers(job, dimension, mat, budget) {
             placed++;
         }
         if (isChest) {
+            const chestY = sy - 2;
             const placeChest =
                 !site.ruined ||
                 hashChunkRoll(job.centerX, job.centerZ, site.ox * 11 + site.oz * 13 + 5600, 100) < 44;
-            if (placeChest && trySetBlock(dimension, wx, sy - 2, wz, "minecraft:chest", SETTLEMENT_REPLACE_ANY)) {
+            if (
+                placeChest &&
+                blockSupportsTopAttachment(dimension, wx, chestY, wz) &&
+                settlementAttachmentCellOpen(dimension, wx, chestY, wz) &&
+                trySetBlock(dimension, wx, chestY, wz, "minecraft:chest", SETTLEMENT_REPLACE_ANY)
+            ) {
                 placed++;
                 fillVillageStorageAt(
                     dimension,
                     wx,
-                    sy - 2,
+                    chestY,
                     wz,
                     site.ruined ? VILLAGE_LOOT.hide_bunker_ruined : VILLAGE_LOOT.hide_bunker,
                     "minecraft:chest",
@@ -3983,6 +4124,10 @@ function tickSettlementBunkers(job, dimension, mat, budget) {
  * @param {import("@minecraft/server").Dimension} dim
  */
 function clearLampWorldgenArtifactsOnly(job, dim) {
+    if (SKIP_WORLDGEN_ARTIFACT_CLEANUP) {
+        job.lampArtifactDone = true;
+        return;
+    }
     const lx = job.lampWorldX ?? (job.lampRelDx !== undefined ? job.centerX + job.lampRelDx : undefined);
     const lz = job.lampWorldZ ?? (job.lampRelDz !== undefined ? job.centerZ + job.lampRelDz : undefined);
     if (lx === undefined || lz === undefined) return;
@@ -4040,7 +4185,7 @@ function placeStructureStub(dimension, originX, originZ, mat, doorFace, variant,
                 if (isDoor && h <= 2) continue;
                 const wallType = corner && h <= wallH ? mat.log : pickSettlementWallBlock(mat, wx, wz, salt + h);
                 if (trySetBlock(dimension, wx, baseY + h - 1, wz, wallType, SETTLEMENT_REPLACE_ANY)) changed++;
-                if (h === 2 && !isDoor && hashChunkRoll(wx, wz, salt + 2, 100) < 45) {
+                if (h === 2 && !isDoor && !corner && hashChunkRoll(wx, wz, salt + 2, 100) < 45) {
                     trySetBlock(
                         dimension,
                         wx,
@@ -5078,21 +5223,15 @@ function placeLadderColumnFromPayload(payload, dimension) {
         } catch {
             /* ignore */
         }
-        trySetBlock(dimension, foot.backWx, y, foot.wz, backingId, SETTLEMENT_REPLACE_ANY);
-        try {
-            dimension.runCommand(
-                `setblock ${foot.wx} ${y} ${foot.wz} ladder ["facing_direction"=${face}]`
-            );
-        } catch {
-            try {
-                const perm = BlockPermutation.resolve("minecraft:ladder", { facing_direction: face });
-                dimension.getBlock({ x: foot.wx, y, z: foot.wz })?.setPermutation(perm);
-            } catch {
-                /* ignore */
-            }
+        if (
+            !trySetBlock(dimension, foot.backWx, y, foot.wz, backingId, SETTLEMENT_REPLACE_ANY) &&
+            !blockSupportsLadderBack(dimension, foot.backWx, y, foot.wz)
+        ) {
+            continue;
         }
+        trySetLadderRung(dimension, foot.wx, y, foot.wz, face, foot.backWx, foot.wz);
     }
-    if (payload.basementShaft && payload.trapdoorY != null) {
+    if (payload.basementShaft && !payload.hideBunkerShaft && payload.trapdoorY != null) {
         const tx = payload.trapdoorWx ?? payload.wx;
         const tz = payload.trapdoorWz ?? payload.wz;
         trySetBlock(
@@ -5331,7 +5470,7 @@ function trySetFloorTrapdoor(dimension, x, y, z, mat) {
 }
 
 /**
- * Trapdoor in the floor + chest one block below (food pantry).
+ * Trapdoor in the floor + chest one block below — the house's food pantry (not cellar houses).
  * @param {StructureBuildState} st
  * @param {import("@minecraft/server").Dimension} dimension
  * @param {Map<string, number|undefined>} floorCache
@@ -5339,6 +5478,7 @@ function trySetFloorTrapdoor(dimension, x, y, z, mat) {
  * @param {number} hintY
  */
 function placeFloorPantry(st, dimension, floorCache, mat, hintY) {
+    if (structureHasCellar(st)) return 0;
     const fp = getStructureFloorPlan(st)?.floorPantry;
     if (!fp || st.variant !== "house") return 0;
     const wx = st.originX + fp.lx;
@@ -5609,7 +5749,9 @@ function ensureStructureMinimumFurnishings(st, dimension, floorCache, mat, hintY
             const sy = structureFloorYAt(st, dimension, floorCache, hintY, mat, lx, lz);
             if (sy === undefined) continue;
             const blockId =
-                preferBarrel && storagePlaced > 0 ? "minecraft:barrel" : "minecraft:chest";
+                structureFoodStoredBelowFloor(st) || !(preferBarrel && storagePlaced > 0)
+                    ? "minecraft:chest"
+                    : "minecraft:barrel";
             const spec = {
                 id: blockId,
                 lootSlot: "primary"
@@ -5736,6 +5878,13 @@ function isDoorApproachCell(st, lx, lz) {
 function placeInteriorFurnishing(st, dimension, floorCache, hintY, mat, spec, lootTable, lootCtx) {
     const { lx, lz, id: blockId } = spec;
     const inBasement = spec.zone === "basement";
+    if (
+        !inBasement &&
+        structureFoodStoredBelowFloor(st) &&
+        (blockId === "minecraft:barrel" || spec.lootSlot === "pantry")
+    ) {
+        return false;
+    }
     if (inBasement) {
         if (
             !structureCellOccupied(st, lx, lz) ||
@@ -6802,11 +6951,37 @@ function beginStructureBuild(slot, job, salt, dimension, mat) {
             waitingChunks: true
         };
     }
+    const slotIdx = job.activeStructureSlotIndex ?? job.structureIndex ?? 0;
+    const regState = getStructureSlotState(job, slotIdx);
+    if (regState && structureSlotBlocksRebuild(regState)) {
+        return {
+            originX,
+            originZ,
+            doorFace: slot.door,
+            variant: slot.type,
+            housePlan: slot.housePlan,
+            cx: job.cx,
+            cz: job.cz,
+            salt,
+            ruleset: job.ruleset,
+            w,
+            d,
+            wallH,
+            lx: 0,
+            lz: 0,
+            phase: "done",
+            subPhase: "foot",
+            platformY: undefined,
+            padLx: 0,
+            padLz: 0,
+            alreadyPresent: true
+        };
+    }
     const midX = originX + Math.floor(w / 2);
     const midZ = originZ + Math.floor(d / 2);
     if (
         !job.structureCatalogMode &&
-        structureSlotHasSettlementEvidence(dimension, midX, midZ, job.y, 5)
+        footprintHasCompleteStructureEvidence(dimension, originX, originZ, w, d, job.y) === true
     ) {
         return {
             originX,
@@ -6831,7 +7006,42 @@ function beginStructureBuild(slot, job, salt, dimension, mat) {
             alreadyPresent: true
         };
     }
-    sweepStructureFootprintObstructions(dimension, originX, originZ, w, d, wallH, mat, job.y);
+    const resumePartialBuild =
+        !job.structureCatalogMode &&
+        footprintHasPartialStructureEvidence(dimension, originX, originZ, w, d, job.y) === true;
+    if (
+        !job.structureCatalogMode &&
+        footprintHasSubstantialShellEvidence(dimension, originX, originZ, w, d, job.y) === true
+    ) {
+        return {
+            originX,
+            originZ,
+            doorFace: slot.door,
+            variant: slot.type,
+            housePlan: slot.housePlan,
+            cx: job.cx,
+            cz: job.cz,
+            salt,
+            ruleset: job.ruleset,
+            w,
+            d,
+            wallH,
+            lx: 0,
+            lz: 0,
+            phase: "done",
+            subPhase: "foot",
+            platformY: undefined,
+            padLx: 0,
+            padLz: 0,
+            alreadyPresent: true
+        };
+    }
+    const completeProbe =
+        !job.structureCatalogMode &&
+        footprintHasCompleteStructureEvidence(dimension, originX, originZ, w, d, job.y);
+    if (!job.structureCatalogMode && completeProbe === false && !resumePartialBuild) {
+        sweepStructureFootprintObstructions(dimension, originX, originZ, w, d, wallH, mat, job.y);
+    }
     const catalogPad = job.structureCatalogMode === true;
     if (!catalogPad && !structureFootprintIsBuildable(dimension, originX, originZ, w, d, job.y)) {
         return {
@@ -6884,10 +7094,11 @@ function beginStructureBuild(slot, job, salt, dimension, mat) {
         wallH,
         lx: 0,
         lz: 0,
-        phase: catalogPad ? catalogStartPhase : platformY !== undefined ? "pad" : "grid",
+        phase: catalogPad ? catalogStartPhase : resumePartialBuild ? "grid" : platformY !== undefined ? "pad" : "grid",
         subPhase: "foot",
         wallHProgress: 0,
         platformY,
+        skipPadCarve: resumePartialBuild,
         catalogExport: catalogPad,
         catalogFloorSeeded: false,
         basementLx: catalogPad && previewPlan?.basementDepth ? 0 : undefined,
@@ -6977,6 +7188,26 @@ function tickStructureBuild(st, dimension, mat, floorCache, hintY, maxOps, job) 
     }
 
     while (!over() && !guardHit() && st.phase === "pad") {
+        if (st.skipPadCarve && st.platformY !== undefined) {
+            for (let px = 0; px < st.w; px++) {
+                for (let pz = 0; pz < st.d; pz++) {
+                    if (!structureCellOccupied(st, px, pz)) continue;
+                    floorCache.set(`${st.originX + px},${st.originZ + pz}`, st.platformY);
+                }
+            }
+            const padPlan = getStructureFloorPlan(st);
+            if (padPlan?.basementDepth) {
+                st.phase = "basement";
+                st.basementLx = 0;
+                st.basementLz = 0;
+            } else {
+                st.phase = "grid";
+                st.lx = 0;
+                st.lz = 0;
+                st.subPhase = "foot";
+            }
+            break;
+        }
         if (st.catalogExport) {
             seedCatalogFloorCache(st, floorCache);
             const padPlan = getStructureFloorPlan(st);
@@ -7239,7 +7470,7 @@ function tickStructureBuild(st, dimension, mat, floorCache, hintY, maxOps, job) 
                 const fp = getStructureFloorPlan(st);
                 let glassChance = fp ? fp.glassChance : 45;
                 if (fp?.stories && fp.stories >= 2) glassChance = Math.min(glassChance, 22);
-                if (h === 2 && !isDoor && hashChunkRoll(wx, wz, st.salt + 2, 100) < glassChance) {
+                if (h === 2 && !isDoor && !corner && hashChunkRoll(wx, wz, st.salt + 2, 100) < glassChance) {
                     if (trySetBlock(dimension, wx, baseY + h - 1, wz, "minecraft:brown_stained_glass_pane", SETTLEMENT_REPLACE_ANY)) {
                         spend(1);
                     }
@@ -7755,7 +7986,7 @@ export function ensureSettlementBuildTickLoop() {
     settlementBuildIntervalId = system.runInterval(() => {
         if (buildQueue.length === 0) return;
         try {
-            tickSettlementBuildQueue(getSettlementBuildBlocksPerTick());
+            tickSettlementBuildQueue();
         } catch {
             /* ignore */
         }
@@ -7841,7 +8072,28 @@ function beginSnowOverlayPhase(job) {
 }
 
 /**
- * After paths / pen / well — hide bunkers (paths only), then maple snow, then optional zombies.
+ * After hide bunkers (post-paths) — structures ring next.
+ * @param {BuildJob} job
+ */
+function enterPhaseAfterPathBunkers(job) {
+    job.phase = "structures";
+    job.structureIndex = job.structureIndex ?? 0;
+}
+
+/** @param {BuildJob} job */
+function shouldBuildPathBunkers(job) {
+    return (job.bunkers?.length ?? 0) > 0 && !job.singleStructureOnly && !job.structureCatalogMode;
+}
+
+/** @param {BuildJob} job */
+function beginBunkerPhase(job) {
+    job.phase = "bunkers";
+    job.bunkerIndex = job.bunkerIndex ?? 0;
+    job.bunkerCellIndex = job.bunkerCellIndex ?? 0;
+}
+
+/**
+ * After well / pen — maple snow, then optional zombies.
  * @param {BuildJob} job
  */
 function enterPhaseAfterBunkers(job) {
@@ -7939,16 +8191,10 @@ function tickStructureCatalogSigns(job, budget) {
 }
 
 /**
- * After paths / pen / well — hide bunkers on paths first when present, else snow / zombies.
+ * After well / pen — snow caps or zombies (bunkers already built post-paths).
  * @param {BuildJob} job
  */
 function enterPhaseAfterSettlementFeatures(job) {
-    if ((job.bunkers?.length ?? 0) > 0 && !job.singleStructureOnly) {
-        job.phase = "bunkers";
-        job.bunkerIndex = job.bunkerIndex ?? 0;
-        job.bunkerCellIndex = job.bunkerCellIndex ?? 0;
-        return;
-    }
     enterPhaseAfterBunkers(job);
 }
 
@@ -8494,6 +8740,10 @@ function buildVillageShrineCenter(dimension, centerX, centerZ, surfaceY, mat) {
  * @returns {number}
  */
 function tickMarkerCleanup(job, budget) {
+    if (SKIP_WORLDGEN_ARTIFACT_CLEANUP) {
+        job.phase = phaseAfterMarkerCleanup(job);
+        return 0;
+    }
     const dim = job.dimension;
     const side = MARKER_CLEANUP_HALF_W * 2 + 1;
     let spent = 0;
@@ -8634,17 +8884,22 @@ function settlementStructureTierFloor(job) {
 }
 
 /**
- * After resume or before retry, mark slots that already exist in the world.
+ * After resume or before retry, mark slots that already exist in the world (promote only).
  * @param {BuildJob} job
  * @param {import("@minecraft/server").Dimension} dimension
+ * @param {{ allowDemote?: boolean }} [opts]
  */
-function seedStructureSlotsFromWorld(job, dimension) {
+function seedStructureSlotsFromWorld(job, dimension, opts = {}) {
     const slots = job.structures ?? [];
     if (!slots.length || !dimension) return;
+    let demoted = 0;
+    if (opts.allowDemote === true) {
+        demoted = reconcileStructureSlotStatesBeforeResume(job, dimension, footprintForStructure);
+    }
     const seeded = refreshAllStructureSlotsFromWorld(job, footprintForStructure);
-    if (seeded > 0) {
+    if (demoted > 0 || seeded > 0) {
         avLogBuildLine(
-            `Build resume — ${seeded} structure slot(s) tracked in world (${countSettlementStructuresBuilt(job)} toward minimum) site=${job.siteGx},${job.siteGz},${job.siteSub ?? 0}\n${formatStructureRegistrySummary(job)}`
+            `Build resume — ${demoted > 0 ? `${demoted} slot(s) demoted (partial), ` : ""}${seeded} structure slot(s) tracked in world (${countSettlementStructuresBuilt(job)} toward minimum) site=${job.siteGx},${job.siteGz},${job.siteSub ?? 0}\n${formatStructureRegistrySummary(job)}`
         );
     }
 }
@@ -8778,11 +9033,18 @@ function tryRelocateStructureSlot(job, dim, slotIndex) {
     if (job.structureSlotRelocated?.has(slotIndex)) return false;
     const slot = job.structures[slotIndex];
     if (!slot) return false;
+    const fp = footprintForStructure(slot.type, slot.housePlan, job.ruleset);
+    const originX = job.centerX + slot.ox;
+    const originZ = job.centerZ + slot.oz;
+    if (
+        footprintHasCompleteStructureEvidence(dim, originX, originZ, fp.w, fp.d, job.y) === true
+    ) {
+        return false;
+    }
     const alt = findRelocatedStructureOffset(job, slotIndex);
     if (!alt) return false;
     if (!job.structureSlotRelocated) job.structureSlotRelocated = new Set();
     job.structureSlotRelocated.add(slotIndex);
-    const fp = footprintForStructure(slot.type, slot.housePlan, job.ruleset);
     slot.ox = alt.ox;
     slot.oz = alt.oz;
     slot.door = doorFacingPlaza(slot.ox, slot.oz, fp.w, fp.d);
@@ -8819,6 +9081,7 @@ function ensureStructureSlotReadyForBuild(job, dim, idx) {
     if (
         !job.structureCatalogMode &&
         !job.structureSlotRelocated?.has(idx) &&
+        footprintHasCompleteStructureEvidence(dim, originX, originZ, fp.w, fp.d, job.y) !== true &&
         !structureFootprintIsBuildable(dim, originX, originZ, fp.w, fp.d, job.y)
     ) {
         tryRelocateStructureSlot(job, dim, idx);
@@ -8853,7 +9116,6 @@ function findFirstStructureSlotNeedingWork(job) {
         const state = getStructureSlotState(job, i);
         if (!state || state.status === "pending") return i;
         if (state.status === "skipped") return i;
-        if (state.ladders === "needed" || state.ladders === "pending") return i;
     }
     return n;
 }
@@ -8864,14 +9126,10 @@ function hasMinimumStructuresBuilt(job) {
         if (n === 0) return false;
         if ((job.structureIndex ?? 0) >= n && !job.activeStructure) return true;
     }
+    if (!allResolvableStructureSlotsFinished(job)) return false;
     const placed = countSettlementStructuresBuilt(job);
     const need = minimumStructuresRequired(job);
-    if (placed >= need) return true;
-    if (job.structureRetryRelaxed === true) {
-        const floor = settlementStructureTierFloor(job);
-        return placed >= Math.min(job.structures?.length ?? 0, floor);
-    }
-    return false;
+    return placed >= need;
 }
 
 /**
@@ -8895,10 +9153,10 @@ function prepareStructureRetry(job) {
         const sa = job.structures[ia];
         const sb = job.structures[ib];
         if (!sa || !sb) return 0;
-        return (
-            chebyshevFromLampOffset(sa.ox, sa.oz, job.lampRelDx, job.lampRelDz) -
-            chebyshevFromLampOffset(sb.ox, sb.oz, job.lampRelDx, job.lampRelDz)
-        );
+        const angleA = Math.atan2(sa.oz, sa.ox);
+        const angleB = Math.atan2(sb.oz, sb.ox);
+        if (angleA !== angleB) return angleA - angleB;
+        return sa.ox * sa.ox + sa.oz * sa.oz - (sb.ox * sb.ox + sb.oz * sb.oz);
     });
     job.structureRetryIndices = retry;
     job.structureRetryCursor = 0;
@@ -9179,6 +9437,7 @@ function logStructureBuildProgressOnce(job, idx, kind) {
 function settlementBuildCountsAsPlaced(job) {
     if (job.stallAborted) return false;
     if ((job.totalEdits ?? 0) < 12) return false;
+    if (!allResolvableStructureSlotsFinished(job)) return false;
     const planned = job.structures?.length ?? 0;
     const placed = countSettlementStructuresBuilt(job);
     if (job.singleStructureOnly) return placed >= 1;
@@ -9292,14 +9551,12 @@ export function wakeSettlementBuildJob(job) {
             job.phase === "structure_hold" ||
             job.phase === "structure_retry")
     ) {
-        refreshAllStructureSlotsFromWorld(job, footprintForStructure);
         const next = findFirstStructureSlotNeedingWork(job);
         if (job.activeStructure) {
             job.activeStructureSlotIndex = activeStructureSlotIndex(job);
         } else if (next < (job.structures?.length ?? 0)) {
             job.structureIndex = next;
         }
-        tryAdvanceStuckStructuresPhase(job);
     }
     avLogBuildLine(
         `Build wake site=${job.siteGx},${job.siteGz},${job.siteSub ?? 0} phase=${job.phase} slot=${activeStructureSlotIndex(job) + 1}/${job.structures?.length ?? 0} structures=${countSettlementStructuresBuilt(job)}/${job.structures?.length ?? 0} edits=${job.totalEdits ?? 0}${wasPaused ? " (was paused)" : ""}`
@@ -9442,7 +9699,10 @@ function finalizeSettlementBuildJob(job) {
     }
     job.finished = true;
     job.paused = false;
-    const placed = settlementBuildCountsAsPlaced(job);
+    let placed = settlementBuildCountsAsPlaced(job);
+    if (placed && !allResolvableStructureSlotsFinished(job)) {
+        placed = false;
+    }
     const built = countSettlementStructuresBuilt(job);
     const planned = job.structures?.length ?? 0;
     const dist = nearestPlayerDistToSettlement(job);
@@ -9452,6 +9712,19 @@ function finalizeSettlementBuildJob(job) {
         : job.stallAborted
           ? "stalled"
           : `incomplete (player ${distTxt} from site — not a leave-world pause)`;
+    if (!placed && job.siteGx != null && job.siteGz != null) {
+        try {
+            markSiteIncomplete(job.siteGx, job.siteGz, job.siteSub ?? 0, {
+                x: job.centerX,
+                y: job.y,
+                z: job.centerZ
+            });
+            const manifest = exportJobStructureManifest(job);
+            if (manifest) setSiteStructureManifest(job.siteGx, job.siteGz, job.siteSub ?? 0, manifest);
+        } catch {
+            /* ignore */
+        }
+    }
     avLogBuildLine(
         `Build completion FINAL ${outcome} placed=${placed} structures=${built}/${planned} edits=${job.totalEdits ?? 0} site=${job.siteGx},${job.siteGz},${job.siteSub ?? 0}`
     );
@@ -9569,9 +9842,13 @@ function tickBuildJob(job, budget) {
 
     while (spent < budget && job.phase === "paths") {
         if (job.pathIndex >= job.pathCells.length) {
-            job.phase = "structures";
             job.pathIndex = 0;
-            job.structureIndex = 0;
+            if (shouldBuildPathBunkers(job)) {
+                beginBunkerPhase(job);
+            } else {
+                job.phase = "structures";
+                job.structureIndex = 0;
+            }
             break;
         }
         const cell = job.pathCells[job.pathIndex++];
@@ -9592,6 +9869,16 @@ function tickBuildJob(job, budget) {
             spent++;
             job.totalEdits++;
         }
+    }
+
+    while (spent < budget && job.phase === "bunkers") {
+        spent += tickSettlementBunkers(job, dim, mat, budget - spent);
+        const bunkersDone = (job.bunkerIndex ?? 0) >= (job.bunkers?.length ?? 0);
+        if (bunkersDone) {
+            enterPhaseAfterPathBunkers(job);
+            break;
+        }
+        if (spent >= budget) break;
     }
 
     if (spent < budget && job.phase === "structures") {
@@ -9739,19 +10026,20 @@ function tickBuildJob(job, budget) {
 
     if (job.phase === "structure_hold") {
         if (!hasMinimumStructuresBuilt(job)) {
-            seedStructureSlotsFromWorld(job, dim);
-        }
-        if (hasMinimumStructuresBuilt(job)) {
+            if (!job.structureHoldSeeded) {
+                job.structureHoldSeeded = true;
+                seedStructureSlotsFromWorld(job, dim);
+            }
+            prepareStructureRetry(job);
+            if ((job.structureRetryIndices?.length ?? 0) > 0) {
+                job.phase = "structure_retry";
+            }
+        } else {
             if (job.structureCatalogMode) {
                 beginCatalogVoidPhase(job);
             } else {
                 job.phase = "well";
                 job.wellStep = 0;
-            }
-        } else {
-            prepareStructureRetry(job);
-            if ((job.structureRetryIndices?.length ?? 0) > 0) {
-                job.phase = "structure_retry";
             }
         }
     }
@@ -10053,17 +10341,6 @@ function tickBuildJob(job, budget) {
         enterPhaseAfterSettlementFeatures(job);
     }
 
-    while (spent < budget && job.phase === "bunkers") {
-        spent += tickSettlementBunkers(job, dim, mat, budget - spent);
-        const bunkersDone =
-            (job.bunkerIndex ?? 0) >= (job.bunkers?.length ?? 0) && !(job.bunkerFinishQueue?.length);
-        if (bunkersDone) {
-            enterPhaseAfterBunkers(job);
-            break;
-        }
-        if (spent >= budget) break;
-    }
-
     const zombieTarget = job.tier === "hamlet" ? 2 : job.tier === "village" ? 4 : 6;
     while (spent < budget && job.phase === "zombies") {
         if (job.skipZombies) {
@@ -10274,7 +10551,7 @@ export function enqueueSettlementBuild(dimension, center, ruleset, tier, cx, cz,
     const lampRelDz = lamp.z - centerZ;
     const layoutStructuresList =
         enqueueOpts.structures ?? layoutStructures(cx, cz, tier, ruleset, lampRelDx, lampRelDz);
-    const structures = sortStructuresNearLampFirst(layoutStructuresList, lampRelDx, lampRelDz);
+    const structures = sortStructuresAroundCenter(layoutStructuresList);
     const animalPen = catalogMode
         ? undefined
         : enqueueOpts.animalPen !== undefined
@@ -10363,12 +10640,12 @@ export function enqueueSettlementBuild(dimension, center, ruleset, tier, cx, cz,
         skipWell: catalogMode || singleOnly,
         skipZombies: catalogMode || singleOnly,
         skipProcessor: catalogMode || enqueueOpts.skipProcessor === true,
-        phase: resumeIncomplete ? "structures" : "cleanup",
+        phase: resumeIncomplete ? "structures" : SKIP_WORLDGEN_ARTIFACT_CLEANUP ? "ground" : "cleanup",
         cleanupIndex: 0,
         pathIndex: resumeIncomplete ? pathCells.length : 0,
         groundIndex: resumeIncomplete ? groundCells.length : 0,
         snowIndex: resumeIncomplete ? snowCells.length : 0,
-        lampArtifactDone: resumeIncomplete || catalogMode,
+        lampArtifactDone: resumeIncomplete || catalogMode || SKIP_WORLDGEN_ARTIFACT_CLEANUP,
         wellStep: 0,
         meetingVariant: pickMeetingVariant(ruleset, cx, cz),
         layoutVariant: pickSettlementLayoutVariant(cx, cz),
@@ -10395,22 +10672,31 @@ export function enqueueSettlementBuild(dimension, center, ruleset, tier, cx, cz,
         if (saved) applyStructureManifestToJob(job, saved);
     }
     if (resumeIncomplete) {
-        seedStructureSlotsFromWorld(job, dimension);
+        seedStructureSlotsFromWorld(job, dimension, { allowDemote: true });
         const nextIdx = findFirstStructureSlotNeedingWork(job);
         job.structureIndex = nextIdx;
         job.activeStructure = undefined;
-        if (nextIdx < structures.length) {
-            job.phase = "structures";
+        const built = countSettlementStructuresBuilt(job);
+        if (shouldBuildPathBunkers(job) && built === 0) {
+            job.phase = "bunkers";
             avLogBuildLine(
-                `Build resume — continuing structures at slot ${nextIdx + 1}/${structures.length} (${countSettlementStructuresBuilt(job)} already placed) site=${siteGx},${siteGz},${siteSub ?? 0}`
+                `Build resume — hide bunkers before structures site=${siteGx},${siteGz},${siteSub ?? 0}`
             );
-        } else if (hasMinimumStructuresBuilt(job)) {
-            job.phase = job.animalPen ? "pen" : "well";
-            job.wellStep = 0;
-            job.penCellIndex = 0;
-            job.penSpawnDone = false;
         } else {
-            job.phase = "structure_hold";
+            job.bunkerIndex = job.bunkers?.length ?? 0;
+            if (nextIdx < structures.length) {
+                job.phase = "structures";
+                avLogBuildLine(
+                    `Build resume — continuing structures at slot ${nextIdx + 1}/${structures.length} (${built} already placed) site=${siteGx},${siteGz},${siteSub ?? 0}`
+                );
+            } else if (hasMinimumStructuresBuilt(job)) {
+                job.phase = job.animalPen ? "pen" : "well";
+                job.wellStep = 0;
+                job.penCellIndex = 0;
+                job.penSpawnDone = false;
+            } else {
+                job.phase = "structure_hold";
+            }
         }
     }
     buildQueue.push(job);
@@ -10463,7 +10749,15 @@ export function listActiveSettlementBuildCenters() {
     return out;
 }
 
-export function tickSettlementBuildQueue(blockBudget = SETTLEMENT_BLOCKS_PER_TICK) {
+export function getSettlementBuildBlocksForJob(job) {
+    const dist = nearestPlayerDistToSettlement(job);
+    const nearInterest = Number.isFinite(dist) && dist <= SETTLEMENT_BUILD_PAUSE_DIST;
+    const idle = !isSettlementBuildActivelyWorking();
+    const base = getSettlementBuildBlocksPerTick({ idle, nearInterest });
+    return resolveSettlementBuildBudget(base, dist);
+}
+
+export function tickSettlementBuildQueue(blockBudget) {
     if (buildQueue.length === 0) return;
     if (buildQueue.length > 1) {
         let bestIdx = 0;
@@ -10481,7 +10775,12 @@ export function tickSettlementBuildQueue(blockBudget = SETTLEMENT_BLOCKS_PER_TIC
         }
     }
     const job = buildQueue[0];
-    tickBuildJob(job, blockBudget);
+    const budget =
+        typeof blockBudget === "number" && Number.isFinite(blockBudget)
+            ? blockBudget
+            : getSettlementBuildBlocksForJob(job);
+    if (budget <= 0) return;
+    tickBuildJob(job, budget);
     if (job.finished) {
         buildQueue.shift();
     }
@@ -10489,6 +10788,40 @@ export function tickSettlementBuildQueue(blockBudget = SETTLEMENT_BLOCKS_PER_TIC
 
 export function getSettlementBuildQueueLength() {
     return buildQueue.length;
+}
+
+/**
+ * True when a queued job is unpaused and a player is within the build band (actually placing blocks).
+ * @returns {boolean}
+ */
+export function isSettlementBuildActivelyWorking() {
+    for (const job of buildQueue) {
+        if (!job || job.finished) continue;
+        if (job.paused) continue;
+        const dist = nearestPlayerDistToSettlement(job);
+        if (Number.isFinite(dist) && dist <= SETTLEMENT_BUILD_PAUSE_DIST) return true;
+    }
+    return false;
+}
+
+/**
+ * Chebyshev distance from player to nearest active settlement build (Infinity if none).
+ * @param {number} playerX
+ * @param {number} playerZ
+ * @returns {number}
+ */
+export function nearestActiveSettlementBuildDist(playerX, playerZ) {
+    let best = Infinity;
+    for (const job of buildQueue) {
+        if (!job || job.finished) continue;
+        const dCenter = Math.max(Math.abs(playerX - job.centerX), Math.abs(playerZ - job.centerZ));
+        let d = dCenter;
+        if (job.lampWorldX != null && job.lampWorldZ != null) {
+            d = Math.min(d, Math.max(Math.abs(playerX - job.lampWorldX), Math.abs(playerZ - job.lampWorldZ)));
+        }
+        if (d < best) best = d;
+    }
+    return best;
 }
 
 /**

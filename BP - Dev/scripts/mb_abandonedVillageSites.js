@@ -4,6 +4,7 @@
  */
 
 import { hashChunkRoll, hasWorldgenLampMarkerAt, findWorldgenLampMarkerNear, LAMP_MARKER_SEARCH_RADIUS } from "./mb_abandonedSettlementBuilder.js";
+import { SETTLEMENT_BUILD_PAUSE_DIST } from "./mb_abandonedVillageConstants.js";
 import {
     flushWorldPropertyToDisk,
     getWorldProperty,
@@ -681,6 +682,25 @@ export function probeSettlementCenterNearWorld(
 }
 
 /**
+ * When the registry is empty/stale but mossy paths + structures remain near the lamp (pack reload, lost property).
+ * @param {import("@minecraft/server").Dimension} dimension
+ * @param {number} gx
+ * @param {number} gz
+ * @param {number} subIndex
+ * @param {number} hintY
+ * @param {string|undefined} biomeId
+ * @returns {boolean} true when an orphan village was linked and activation should skip
+ */
+export function tryLinkOrphanSettlementNearLamp(dimension, gx, gz, subIndex, hintY, biomeId) {
+    const lamp = lampMarkerWorldPosition(gx, gz, subIndex);
+    const orphan = probeSettlementCenterNearWorld(dimension, lamp.x, lamp.z, hintY, 36, biomeId);
+    if (!orphan) return false;
+    if (!verifyScriptSettlementAt(dimension, orphan.x, orphan.z, orphan.y, biomeId, 14)) return false;
+    linkSiteToExistingSettlement(gx, gz, subIndex, orphan);
+    return true;
+}
+
+/**
  * @param {number} worldX
  * @param {number} worldZ
  * @param {number} [maxDist]
@@ -769,6 +789,9 @@ export function shouldSkipSiteActivationForExistingSettlement(
         if (verifyScriptSettlementAt(dimension, saved.x, saved.z, saved.y ?? hintY, biomeId, 14)) {
             return true;
         }
+        if (tryLinkOrphanSettlementNearLamp(dimension, gx, gz, subIndex, hintY, biomeId)) {
+            return true;
+        }
         resetSiteSlot(gx, gz, subIndex);
         return false;
     }
@@ -781,6 +804,9 @@ export function shouldSkipSiteActivationForExistingSettlement(
         verifyScriptSettlementAt(dimension, overlap.center.x, overlap.center.z, overlap.center.y, biomeId, 14)
     ) {
         linkSiteToExistingSettlement(gx, gz, subIndex, overlap.center);
+        return true;
+    }
+    if (tryLinkOrphanSettlementNearLamp(dimension, gx, gz, subIndex, hintY, biomeId)) {
         return true;
     }
     return isSiteBuilt(gx, gz, subIndex);
@@ -1027,6 +1053,226 @@ export function getAbandonedVillageSiteRegistryStats() {
         gridBlocks: SITE_GRID_BLOCKS,
         largeSlotsPerCell: SITES_PER_LARGE_INFECTED_CELL
     };
+}
+
+/**
+ * @param {number} ax
+ * @param {number} az
+ * @param {number} bx
+ * @param {number} bz
+ * @returns {number}
+ */
+export function chebyshevDistXZ(ax, az, bx, bz) {
+    return Math.max(Math.abs(ax - bx), Math.abs(az - bz));
+}
+
+/**
+ * @param {string} key
+ * @returns {{ gx: number, gz: number, sub: number }|undefined}
+ */
+function parseSiteKeyParts(key) {
+    if (typeof key !== "string") return undefined;
+    const parts = key.split(",");
+    const gx = Number(parts[0]);
+    const gz = Number(parts[1]);
+    if (!Number.isFinite(gx) || !Number.isFinite(gz)) return undefined;
+    const sub = parts.length > 2 ? Number(parts[2]) : 0;
+    return { gx, gz, sub: Number.isFinite(sub) ? sub : 0 };
+}
+
+/**
+ * Registered site centers + lamp anchors for proximity checks (no full grid sweep).
+ * @returns {Generator<{ x: number, z: number, kind: string }>}
+ */
+function* iterRegisteredSiteInterestPoints() {
+    ensureSitesLoaded();
+    const seen = new Set();
+    for (const [key, center] of builtSiteCenters) {
+        if (center && Number.isFinite(center.x) && Number.isFinite(center.z)) {
+            const id = `${center.x},${center.z}`;
+            if (!seen.has(id)) {
+                seen.add(id);
+                yield { x: center.x, z: center.z, kind: "built" };
+            }
+        }
+    }
+    for (const [key, center] of incompleteSiteCenters) {
+        if (center && Number.isFinite(center.x) && Number.isFinite(center.z)) {
+            const id = `${center.x},${center.z}`;
+            if (!seen.has(id)) {
+                seen.add(id);
+                yield { x: center.x, z: center.z, kind: "incomplete" };
+            }
+        }
+    }
+    for (const key of pendingSiteKeys) {
+        const parsed = parseSiteKeyParts(key);
+        if (!parsed) continue;
+        const lamp = lampMarkerWorldPosition(parsed.gx, parsed.gz, parsed.sub);
+        const id = `${lamp.x},${lamp.z}`;
+        if (!seen.has(id)) {
+            seen.add(id);
+            yield { x: lamp.x, z: lamp.z, kind: "pending" };
+        }
+    }
+}
+
+/**
+ * @param {number} playerX
+ * @param {number} playerZ
+ * @param {number} [maxDist]
+ * @returns {number}
+ */
+export function distToNearestRegisteredSiteInterest(playerX, playerZ, maxDist = Infinity) {
+    let best = Infinity;
+    for (const pt of iterRegisteredSiteInterestPoints()) {
+        const d = chebyshevDistXZ(playerX, playerZ, pt.x, pt.z);
+        if (d < best) best = d;
+        if (best <= maxDist) break;
+    }
+    return best;
+}
+
+/**
+ * Current grid cell only — theoretical lamp slot within arrival distance (56 blocks).
+ * @param {number} px
+ * @param {number} pz
+ * @returns {boolean}
+ */
+export function playerNearTheoreticalLampSlot(px, pz) {
+    const { gx, gz } = worldToSiteGrid(px, pz);
+    for (let sub = 0; sub < SITES_PER_LARGE_INFECTED_CELL; sub++) {
+        const { distLamp } = getSiteActivationDistances(px, pz, gx, gz, sub);
+        if (distLamp <= LAMP_ARRIVAL_DIST_MAX) return true;
+    }
+    return false;
+}
+
+/**
+ * @param {import("@minecraft/server").Dimension|undefined} dimension
+ * @param {number} px
+ * @param {number} py
+ * @param {number} pz
+ * @returns {boolean}
+ */
+export function playerNearWorldgenLampMarker(dimension, px, py, pz) {
+    if (!dimension) return false;
+    try {
+        if (findWorldgenLampMarkerNear(dimension, px, pz, py, LAMP_MARKER_SEARCH_RADIUS)) return true;
+    } catch {
+        /* ignore */
+    }
+    try {
+        if (hasWorldgenLampMarkerAt(dimension, px, pz, py)) return true;
+    } catch {
+        /* ignore */
+    }
+    return false;
+}
+
+/**
+ * Horizon / large-infected scan band — infected biome, registered site within 224, or placed lamp marker.
+ * Does NOT use theoretical 224-block grid slots (avoids always-on interest).
+ * @param {import("@minecraft/server").Dimension|undefined} dimension
+ * @param {number} px
+ * @param {number} py
+ * @param {number} pz
+ * @param {string|undefined} playerBiome
+ * @returns {boolean}
+ */
+export function playerInVillageApproachBand(dimension, px, py, pz, playerBiome) {
+    if (infectedBiomeTierFromId(playerBiome) != null) return true;
+    if (distToNearestRegisteredSiteInterest(px, pz, LAMP_APPROACH_DIST_MAX) <= LAMP_APPROACH_DIST_MAX) {
+        return true;
+    }
+    return playerNearWorldgenLampMarker(dimension, px, py, pz);
+}
+
+/**
+ * Main-loop interest: infected biome, registered site within pause dist, lamp marker, or theoretical arrival slot (56).
+ * @param {import("@minecraft/server").Dimension|undefined} dimension
+ * @param {number} px
+ * @param {number} py
+ * @param {number} pz
+ * @param {string|undefined} playerBiome
+ * @returns {boolean}
+ */
+export function playerNearVillageInterest(dimension, px, py, pz, playerBiome) {
+    if (infectedBiomeTierFromId(playerBiome) != null) return true;
+    if (distToNearestRegisteredSiteInterest(px, pz, SETTLEMENT_BUILD_PAUSE_DIST) <= SETTLEMENT_BUILD_PAUSE_DIST) {
+        return true;
+    }
+    if (playerNearWorldgenLampMarker(dimension, px, py, pz)) return true;
+    return playerNearTheoreticalLampSlot(px, pz);
+}
+
+/**
+ * @param {import("@minecraft/server").Player[]} players
+ * @param {(dimension: import("@minecraft/server").Dimension, x: number, z: number, sampleY?: number) => string|undefined} getBiomeIdAt
+ * @returns {boolean}
+ */
+export function anyPlayerNearLampActivation(players, getBiomeIdAt) {
+    for (const player of players) {
+        if (!player?.isValid) continue;
+        let dim;
+        try {
+            dim = player.dimension;
+        } catch {
+            continue;
+        }
+        if (dim?.id !== "minecraft:overworld") continue;
+        const px = player.location.x;
+        const pz = player.location.z;
+        const py = Math.floor(player.location.y);
+        if (playerNearWorldgenLampMarker(dim, px, py, pz)) return true;
+        if (playerNearTheoreticalLampSlot(px, pz)) return true;
+    }
+    return false;
+}
+
+/**
+ * @param {import("@minecraft/server").Player[]} players
+ * @param {(dimension: import("@minecraft/server").Dimension, x: number, z: number, sampleY?: number) => string|undefined} getBiomeIdAt
+ * @returns {boolean}
+ */
+export function anyPlayerNearVillageInterest(players, getBiomeIdAt) {
+    for (const player of players) {
+        if (!player?.isValid) continue;
+        let dim;
+        try {
+            dim = player.dimension;
+        } catch {
+            continue;
+        }
+        if (dim?.id !== "minecraft:overworld") continue;
+        const px = player.location.x;
+        const pz = player.location.z;
+        const py = Math.floor(player.location.y);
+        let biome;
+        try {
+            biome = getBiomeIdAt(dim, px, pz, py);
+        } catch {
+            biome = undefined;
+        }
+        if (playerNearVillageInterest(dim, px, py, pz, biome)) return true;
+    }
+    return false;
+}
+
+/**
+ * Site centers within maxDist for targeted lamp cleanup (avoids 224-block grid loops).
+ * @param {number} playerX
+ * @param {number} playerZ
+ * @param {number} maxDist
+ * @returns {{ x: number, z: number, kind: string }[]}
+ */
+export function listRegisteredSiteInterestNearPlayer(playerX, playerZ, maxDist = LAMP_APPROACH_DIST_MAX) {
+    /** @type {{ x: number, z: number, kind: string }[]} */
+    const out = [];
+    for (const pt of iterRegisteredSiteInterestPoints()) {
+        if (chebyshevDistXZ(playerX, playerZ, pt.x, pt.z) <= maxDist) out.push(pt);
+    }
+    return out;
 }
 
 /**

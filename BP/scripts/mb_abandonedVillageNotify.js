@@ -286,6 +286,12 @@ export function clearSettlementBuildHudAtCenter(dimension, centerX, centerY, cen
 
 /**
  * @param {import("@minecraft/server").Player} player
+ * @param {ConstructionHudWatch} watch
+ * @param {{ dimId: string, x: number, y: number, z: number, paused: boolean }|undefined} match
+ * @param {number} dist
+ */
+/**
+ * @param {import("@minecraft/server").Player} player
  * @param {{ dimId: string, x: number, y: number, z: number, paused: boolean }|undefined} match
  * @param {number} buildDist
  */
@@ -348,12 +354,6 @@ function logConstructionPresenceTransitions(player, watch, match, buildDist) {
     });
 }
 
-/**
- * @param {import("@minecraft/server").Player} player
- * @param {ConstructionHudWatch} watch
- * @param {{ dimId: string, x: number, y: number, z: number, paused: boolean }|undefined} match
- * @param {number} dist
- */
 function tickConstructionHudWatch(player, watch, match, buildDist) {
     const now = system.currentTick;
     if (!match) {

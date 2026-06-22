@@ -14,6 +14,15 @@ Symptoms like **entities still making sound, blocks frozen, hits catching up aft
 
 **Day 0 bisect (dev):** Journal → **Entity query / village** → **Day 0 bisect (find lag)**. Requires **day 0** and **no Maple Bears**. Turn **bisect mode ON**, use **All systems OFF**, then enable **one** toggle at a time and re-test dispensers. **All ON** should reproduce full-addon lag; **All OFF** is vanilla-like script load. Bisect **off** = normal addon on day 0. Systems: infection, ground, villager spawn, perf sampler, entity-query HUD, spawn metrics, chunk edge, discovery, snow trail.
 
+**Abandoned village lag (2026-06):** Script toggle **Abandoned village placement** OFF should remove periodic block/mob freeze hitches. If lag returns **after** visiting a lamp and leaving, check dev **Journal → Abandoned villages** — **`idle=1`**, **`near=0`**, **`heavyScan=0`**, **`active=0`** when far in plains (scan interval **`scan=160–320t`** on day 0–1). Repro matrix:
+
+1. Day 0, toggle ON, plains **200+ blocks** from any village — smooth breaking/combat.
+2. Lamp → village → stay within **96 blocks** — full build speed.
+3. Leave **200+ blocks** while build paused — hitches stop; build resumes when you return within **192 blocks**.
+4. Toggle OFF — no lag (regression).
+
+Root fixes: paused build queue no longer marks the world globally busy; heavy scans and lamp cleanup are **player-proximity** gated (not global `incomplete > 0`); main 20t loop sleeps when no player near village interest.
+
 **Entity trace (dev, 2026-05-20):** Journal → **Entity query / village** → turn **Content log** on. Content Log tags: **`[ENTITY QUERY]`** (summary ~2s), **`[ENTITY TRACE] RUN/SKIP`** per `getEntities` / gate (budget 16 lines/tick), **`[VILLAGER SPAWN]`** on eggs. Hub: **Log entity trace**, **Clear trace stats**. Skip reasons: `villagerMute`, `villagerDefer`, `zeroBearStanddown`, `earlyZeroBear`, `villageDefer`.
 
 **Post-villager entity mute (2026-05-20):** Each adult villager/trader spawn extends **`VILLAGER_ENTITY_QUERY_MUTE_TICKS`** (**100** ≈ **5s** @ 20 TPS; tune **60–100** for 3–5s) in **`mb_entityQueryGate.js`**. While active, **`shouldSkipExpensiveEntityQueries`** blocks mob cache, bear snapshot rebuilds, spawn metrics sweeps, etc. **Exception:** query categories whose name includes **`mining`** when a mining MB was recently known (`lastKnownMiningBearCount` from snapshot or spawn). **Mining AI** keeps running on cached bear handles during mute; other bear AI stays dormant. HUD: **`mute=Nt`**, **`M=`** mining count. Also defers infection/biome/ground polls via **`shouldDeferVillageBurst`**.

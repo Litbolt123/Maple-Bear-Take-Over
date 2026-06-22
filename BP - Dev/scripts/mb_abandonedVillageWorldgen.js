@@ -36,6 +36,8 @@ import {
     formatSettlementCenterDiagnosis,
     getSettlementBuildQueueLength,
     getSettlementTier,
+    isSettlementBuildActivelyWorking,
+    nearestActiveSettlementBuildDist,
     JIGSAW_SCRIPT_VILLAGES_ENABLED,
     layoutForceStructure,
     layoutForceStructureComparePair,
@@ -60,8 +62,11 @@ import {
     getAbandonedVillagePerfBudget,
     refreshAbandonedVillagePerf
 } from "./mb_abandonedVillagePerf.js";
-import { SETTLEMENT_BUILD_PAUSE_DIST } from "./mb_abandonedVillageConstants.js";
+import { getCurrentDay } from "./mb_dayTracker.js";
+import { SETTLEMENT_BUILD_PAUSE_DIST, SKIP_WORLDGEN_ARTIFACT_CLEANUP } from "./mb_abandonedVillageConstants.js";
+import { getPerfWallStress01 } from "./mb_performanceProfile.js";
 import { getCachedPlayers } from "./mb_sharedCache.js";
+import { claimSpreadSlice, shouldDeferVillageBurst } from "./mb_workSpread.js";
 import {
     clearSettlementBuildHudAtCenter,
     deliverSettlementCompleteNotify,
@@ -84,6 +89,14 @@ import {
     getAbandonedVillageSiteRegistryStats,
     getSiteActivationDistances,
     infectedBiomeTierFromId,
+    anyPlayerNearVillageInterest,
+    anyPlayerNearLampActivation,
+    playerNearVillageInterest,
+    playerInVillageApproachBand,
+    playerNearTheoreticalLampSlot,
+    playerNearWorldgenLampMarker,
+    listRegisteredSiteInterestNearPlayer,
+    chebyshevDistXZ,
     largeInfectedSlotsNearPlayer,
     LARGE_INFECTED_ACTIVATIONS_PER_SCAN,
     SITES_PER_LARGE_INFECTED_CELL,
@@ -102,6 +115,7 @@ import {
     clearSiteIncomplete,
     clearSitePending,
     persistedSiteHasScriptSettlementInWorld,
+    tryLinkOrphanSettlementNearLamp,
     resetSiteCell,
     resetSiteSlot,
     siteKey,
@@ -122,8 +136,10 @@ const DEBUG_LOG_MASK_PROP = "mb_av_debug_log_mask";
 
 const MAX_CHUNK_KEYS = 2000;
 const SCAN_INTERVAL_TICKS = 20;
-/** When nothing is building/processing, skip every other horizon scan (lamp arrivals still run). */
-const IDLE_HORIZON_SCAN_SKIP = 2;
+/** When nothing is building/processing, skip horizon scans (more skips when idle on day 0–1). */
+const IDLE_HORIZON_SCAN_SKIP_BUSY = 2;
+const IDLE_HORIZON_SCAN_SKIP_IDLE = 4;
+const IDLE_HORIZON_SCAN_SKIP_IDLE_EARLY = 8;
 const ZOMBIFY_DELAY_TICKS = 100;
 const MARK_RADIUS_CHUNKS = 6;
 const BLOCKS_PER_PROCESSOR_TICK = 160;
@@ -195,6 +211,106 @@ const pendingZombify = new Map();
 
 /** @type {ProcessorJob[]} */
 const processorQueue = [];
+
+/**
+ * True when no settlement build is actively placing near a player, processor is far, and no activation queue.
+ * @returns {boolean}
+ */
+export function isAbandonedVillageWorkIdle() {
+    return !isAbandonedVillageActivelyWorking();
+}
+
+/**
+ * @returns {boolean}
+ */
+export function isAbandonedVillageActivelyWorking() {
+    return (
+        isSettlementBuildActivelyWorking() ||
+        isProcessorQueueNearPlayers() ||
+        pendingActivations.length > 0
+    );
+}
+
+/**
+ * @returns {boolean}
+ */
+function isProcessorQueueNearPlayers() {
+    if (processorQueue.length === 0) return false;
+    const job = processorQueue[0];
+    const centerX = (job.minX + job.maxX) / 2;
+    const centerZ = (job.minZ + job.maxZ) / 2;
+    const players = getCachedPlayers() || [];
+    for (const player of players) {
+        if (!player?.isValid) continue;
+        if (chebyshevDistXZ(player.location.x, player.location.z, centerX, centerZ) <= SETTLEMENT_BUILD_PAUSE_DIST) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Skip expensive worldgen work when no player is near village interest and nothing is actively working.
+ * @param {import("@minecraft/server").Player[]} players
+ * @param {(dimension: import("@minecraft/server").Dimension, x: number, z: number, sampleY?: number) => string|undefined} getBiomeIdAt
+ * @returns {boolean}
+ */
+function shouldRunAbandonedVillageMainTick(players, getBiomeIdAt) {
+    if (isAbandonedVillageActivelyWorking()) return true;
+    return anyPlayerNearVillageInterest(players, getBiomeIdAt);
+}
+
+/**
+ * @param {string|undefined} playerBiome
+ * @returns {boolean}
+ */
+function playerStandingInInfectedBiome(playerBiome) {
+    return infectedBiomeTierFromId(playerBiome) != null;
+}
+
+/**
+ * @param {import("@minecraft/server").Dimension} dimension
+ * @param {number} px
+ * @param {number} py
+ * @param {number} pz
+ * @returns {boolean}
+ */
+function playerNearPlacedLampMarker(dimension, px, py, pz) {
+    try {
+        return !!findWorldgenLampMarkerNear(dimension, px, pz, py);
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Heavy horizon / large-infected scans when actively working or this player is near village interest.
+ * @param {boolean} activelyWorking
+ * @param {import("@minecraft/server").Dimension} dimension
+ * @param {number} px
+ * @param {number} py
+ * @param {number} pz
+ * @param {string|undefined} playerBiome
+ * @returns {boolean}
+ */
+function shouldRunHeavyVillageScans(activelyWorking, dimension, px, py, pz, playerBiome) {
+    if (activelyWorking) return true;
+    return playerInVillageApproachBand(dimension, px, py, pz, playerBiome);
+}
+
+/**
+ * @param {boolean} idle
+ * @returns {number}
+ */
+function getIdleHorizonScanSkip(idle) {
+    if (!idle) return IDLE_HORIZON_SCAN_SKIP_BUSY;
+    try {
+        if (getCurrentDay() < 2) return IDLE_HORIZON_SCAN_SKIP_IDLE_EARLY;
+    } catch {
+        /* ignore */
+    }
+    return IDLE_HORIZON_SCAN_SKIP_IDLE;
+}
 
 /**
  * Placement work deferred off the scan/activate call stack (resolveSettlementCenter + build start).
@@ -1147,6 +1263,21 @@ function beginSettlementPlacement(
             );
             return { placed: true, queued: false };
         }
+        if (
+            tryLinkOrphanSettlementNearLamp(
+                dimension,
+                siteGx,
+                siteGz,
+                siteSub,
+                location.y,
+                biomeId
+            )
+        ) {
+            avLogActivation(
+                `Skip build — site ${siteGx},${siteGz},${siteSub} linked to existing village blocks near lamp (registry stale)`
+            );
+            return { placed: true, queued: false };
+        }
         resetSiteSlot(siteGx, siteGz, siteSub);
         avLogActivation(
             `Stale built flag cleared for ${siteGx},${siteGz},${siteSub} — no script village at saved center`
@@ -1378,6 +1509,8 @@ function tickProcessorJob(job, dimension, blocksPerTick = BLOCKS_PER_PROCESSOR_T
 
 function processProcessorQueue(budget = getAbandonedVillagePerfBudget()) {
     if (processorQueue.length === 0) return;
+    if (!isProcessorQueueNearPlayers()) return;
+    if (shouldDeferVillageBurst("avProcessor") || getPerfWallStress01() > 0.55) return;
     const job = processorQueue[0];
     let dim;
     try {
@@ -1746,6 +1879,7 @@ function logBuildInProgressThrottled(gx, gz, sub, job) {
  * @param {import("@minecraft/server").Player} player
  */
 function resumeIncompleteSettlementsNearPlayer(player) {
+    if (!isScriptEnabled(SCRIPT_IDS.abandonedVillageWorldgen)) return;
     if (!player?.isValid) return;
     const dim = player.dimension;
     if (!dim?.id || dim.id !== "minecraft:overworld") return;
@@ -1839,13 +1973,15 @@ function tryActivateAbandonedVillageSite(dimension, site, opts = {}) {
         if (isSiteIncomplete(gx, gz, sub)) {
             avLogActivation(`Site ${gx},${gz},${sub} incomplete — resume at saved center`);
         }
-        const cleared = clearLampColumnArtifacts(dimension, lamp.x, lamp.z);
-        if (cleared > 0) {
-            avLogLamp(
-                `Cleared ${cleared} lamp artifact block(s) @ ${gx},${gz},${sub}${lampFootingActivate ? " (infected)" : " (arrival)"}`
-            );
+        if (!SKIP_WORLDGEN_ARTIFACT_CLEANUP) {
+            const cleared = clearLampColumnArtifacts(dimension, lamp.x, lamp.z);
+            if (cleared > 0) {
+                avLogLamp(
+                    `Cleared ${cleared} lamp artifact block(s) @ ${gx},${gz},${sub}${lampFootingActivate ? " (infected)" : " (arrival)"}`
+                );
+            }
+            clearedLampArtifactKeys.delete(siteKey(gx, gz, sub));
         }
-        clearedLampArtifactKeys.delete(siteKey(gx, gz, sub));
     }
 
     const infectedProx = getInfectedProximityTier(dimension, cx, cz);
@@ -2053,10 +2189,8 @@ function scanPlayersForVillageSites(budget) {
     const scanR = getEffectiveScanRadiusChunks(budget);
     const minDist = getMinPlaceChunkDist(scanR);
     const maxActivations = budget.activationsPerScan;
-    const systemBusy =
-        getSettlementBuildQueueLength() > 0 ||
-        processorQueue.length > 0 ||
-        pendingActivations.length > 0;
+    const workIdle = isAbandonedVillageWorkIdle();
+    const activelyWorking = isAbandonedVillageActivelyWorking();
     let attemptsThisTick = 0;
     let activatedThisTick = false;
 
@@ -2095,39 +2229,58 @@ function scanPlayersForVillageSites(budget) {
         const runHorizonScan = !budget.horizonRotatePlayers || pi === horizonPlayerIndex;
 
         const siteStats = getAbandonedVillageSiteRegistryStats();
+        const runHeavy = shouldRunHeavyVillageScans(activelyWorking, dim, px, py, pz, playerBiome);
+        const nearInterest = playerNearVillageInterest(dim, px, py, pz, playerBiome);
+
+        if (!nearInterest && !activelyWorking) {
+            avLogScan(
+                `Scan #${avDebugStats.scans} p${pi + 1}/${overworldPlayers.length} @ chunk ${pcx},${pcz} — idle vanilla, skip lamp grid + horizon`
+            );
+            continue;
+        }
+
         avLogScan(
-            `Scan #${avDebugStats.scans} p${pi + 1}/${overworldPlayers.length} @ chunk ${pcx},${pcz} ring ${scanR} dist ${minDist}-${Math.floor((scanR * 16 + SITE_GRID_BLOCKS) / 16)}ch biome=${playerBiome ?? "?"} built=${siteStats.built} horizon=${runHorizonScan ? "yes" : "skip"}`
+            `Scan #${avDebugStats.scans} p${pi + 1}/${overworldPlayers.length} @ chunk ${pcx},${pcz} ring ${scanR} dist ${minDist}-${Math.floor((scanR * 16 + SITE_GRID_BLOCKS) / 16)}ch biome=${playerBiome ?? "?"} built=${siteStats.built} heavy=${runHeavy ? "yes" : "lamp"} horizon=${runHorizonScan ? "yes" : "skip"}`
         );
 
-        const lampArrivals = collectLampArrivalSitesNearPlayer(
-            dim,
-            px,
-            pz,
-            isOverworldChunkLoaded,
-            getBiomeIdAt,
-            playerBiome,
-            py
-        );
-        if (lampArrivals.length > 0) {
-            avLogScan(`  ${lampArrivals.length} lamp-arrival site(s)`);
-        }
-        for (const site of lampArrivals) {
-            if (attemptsThisTick >= maxActivations) break;
-            avLogActivation(
-                `  → lamp arrival ${site.gx},${site.gz},${site.subIndex ?? 0} distLamp=${site.distBlocks} biome=${site.biomeId ?? "?"}`
-            );
-            if (
-                tryActivateAbandonedVillageSite(dim, site, {
-                    skipSeedRoll: true,
-                    lampArrival: true
-                })
-            ) {
-                attemptsThisTick++;
-                activatedThisTick = true;
+        const atLampPost =
+            playerNearWorldgenLampMarker(dim, px, py, pz) || playerNearTheoreticalLampSlot(px, pz);
+        const lampSpread = atLampPost ? 20 : runHeavy ? 40 : workIdle ? 160 : 80;
+        if (nearInterest) {
+            if (activelyWorking || atLampPost || claimSpreadSlice("avLampArrival", lampSpread)) {
+                const lampArrivals = collectLampArrivalSitesNearPlayer(
+                    dim,
+                    px,
+                    pz,
+                    isOverworldChunkLoaded,
+                    getBiomeIdAt,
+                    playerBiome,
+                    py
+                );
+                if (lampArrivals.length > 0) {
+                    avLogScan(`  ${lampArrivals.length} lamp-arrival site(s)`);
+                }
+                for (const site of lampArrivals) {
+                    if (attemptsThisTick >= maxActivations) break;
+                    avLogActivation(
+                        `  → lamp arrival ${site.gx},${site.gz},${site.subIndex ?? 0} distLamp=${site.distBlocks} biome=${site.biomeId ?? "?"}`
+                    );
+                    if (
+                        tryActivateAbandonedVillageSite(dim, site, {
+                            skipSeedRoll: true,
+                            lampArrival: true
+                        })
+                    ) {
+                        attemptsThisTick++;
+                        activatedThisTick = true;
+                    }
+                }
+            } else {
+                avLogScan(`  lamp-arrival spread wait (${lampSpread}t)`);
             }
         }
 
-        if (deferHorizon) {
+        if (deferHorizon || !runHeavy) {
             continue;
         }
 
@@ -2171,11 +2324,12 @@ function scanPlayersForVillageSites(budget) {
             continue;
         }
 
-        if (!systemBusy) {
+        if (!activelyWorking) {
             if (activatedThisTick) idleHorizonScanStreak = 0;
             else {
                 idleHorizonScanStreak++;
-                if (idleHorizonScanStreak % IDLE_HORIZON_SCAN_SKIP !== 0) {
+                const horizonSkip = getIdleHorizonScanSkip(workIdle);
+                if (idleHorizonScanStreak % horizonSkip !== 0) {
                     continue;
                 }
             }
@@ -2237,9 +2391,37 @@ export function getAbandonedVillageDebugReport(player) {
 
     const scanR = getScanRadiusChunks();
     const siteStats = getAbandonedVillageSiteRegistryStats();
+    const workIdle = isAbandonedVillageWorkIdle();
+    const activelyWorking = isAbandonedVillageActivelyWorking();
+    let nearInterest = false;
+    let nearLamp = false;
+    let approach = false;
+    let heavyScan = false;
+    if (player?.isValid) {
+        try {
+            const dim = player.dimension;
+            const px = player.location.x;
+            const pz = player.location.z;
+            const py = Math.floor(player.location.y);
+            const biome = getBiomeIdAt(dim, px, pz, py);
+            nearInterest = playerNearVillageInterest(dim, px, py, pz, biome);
+            nearLamp =
+                playerNearWorldgenLampMarker(dim, px, py, pz) || playerNearTheoreticalLampSlot(px, pz);
+            approach = playerInVillageApproachBand(dim, px, py, pz, biome);
+            heavyScan = shouldRunHeavyVillageScans(activelyWorking, dim, px, py, pz, biome);
+        } catch {
+            /* ignore */
+        }
+    }
+    const perf = getAbandonedVillagePerfBudget({ idle: workIdle, nearInterest, nearLamp });
+    const villagesOn = isScriptEnabled(SCRIPT_IDS.abandonedVillageWorldgen);
+    push(
+        villagesOn
+            ? "§e§lWIP §7— script block placement §8(laggy interim; ship goal = natural jigsaw worldgen)"
+            : "§8Script placement §cOFF §8— §7Settings → Dev world features §8to test WIP builds"
+    );
     push("§7How placement works §8(hybrid site grid):");
     push(`§81.§7 Seed-planned sites every §f~${SITE_GRID_BLOCKS} blocks§7; activate on horizon.`);
-    const perf = getAbandonedVillagePerfBudget();
     push(
         `§82.§7 Scan every §f~${perf.scanIntervalTicks} ticks§7 (adaptive), §f~${getEffectiveScanRadiusChunks(perf)} chunk§7 ring §8(≥${getMinPlaceChunkDist(getEffectiveScanRadiusChunks(perf))} ch§7 from you).`
     );
@@ -2264,7 +2446,7 @@ export function getAbandonedVillageDebugReport(player) {
             : "§cJigsaw API missing"
     );
     push(
-        `§7Script toggle: §f${isScriptEnabled(SCRIPT_IDS.abandonedVillageWorldgen) ? "§aON" : "§cOFF"}`
+        `§7Dev setting: §f${isScriptEnabled(SCRIPT_IDS.abandonedVillageWorldgen) ? "§aON" : "§cOFF"} §8(Settings → Dev world features)`
     );
     push(`§7Content Log: §f${isAbandonedVillageDebugLogEnabled() ? "§aON" : "§7OFF"} §8(Failures still log when OFF)`);
     push(formatAbandonedVillageLogCategoriesReport());
@@ -2273,7 +2455,15 @@ export function getAbandonedVillageDebugReport(player) {
     push(
         `§7Build queue: §f${getSettlementBuildQueueLength()} §7· activate: §f${pendingActivations.length} §7· processor: §f${processorQueue.length} §7· zombify: §f${pendingZombify.size}`
     );
-    push(`§7Adaptive: §f${formatAbandonedVillagePerfBudget()}`);
+    push(
+        `§7Perf §8idle=${workIdle ? "§a1" : "§c0"}§8 active=${activelyWorking ? "§c1" : "§a0"}§8 near=${nearInterest ? "§a1" : "§70"}§8 lamp=${nearLamp ? "§a1" : "§70"}§8 approach=${approach ? "§e1" : "§70"}§8 heavyScan=${heavyScan ? "§e1" : "§70"}`
+    );
+    push(
+        `§8§oInterest: near=infected/site≤192/lamp/arr≤56 · approach=horizon band (224/reg/lamp) · main loop sleeps when all off`
+    );
+    push(
+        `§7Adaptive: §f${formatAbandonedVillagePerfBudget({ idle: workIdle, nearInterest, nearLamp, active: activelyWorking })}`
+    );
     push("");
     push("§7Session stats:");
     push(`§8Scans §f${avDebugStats.scans} §8· skip done-chunk §f${avDebugStats.skipChunkDone}`);
@@ -2585,7 +2775,13 @@ export function countLoadedPlacementCandidatesNearPlayer(player) {
  * @returns {string[]}
  */
 export function getAbandonedVillageSelfTestLines() {
-    const lines = [formatAbandonedVillagePerfBudget()];
+    const workIdle = isAbandonedVillageWorkIdle();
+    const activelyWorking = isAbandonedVillageActivelyWorking();
+    const nearInterest = anyPlayerNearVillageInterest(getCachedPlayers() || [], getBiomeIdAt);
+    const nearLamp = anyPlayerNearLampActivation(getCachedPlayers() || [], getBiomeIdAt);
+    const lines = [
+        formatAbandonedVillagePerfBudget({ idle: workIdle, nearInterest, nearLamp, active: activelyWorking })
+    ];
     const sm = world.structureManager;
     if (!sm) {
         lines.push("§cVillages: world.structureManager missing");
@@ -2597,7 +2793,7 @@ export function getAbandonedVillageSelfTestLines() {
     }
     lines.push("§aVillages: force featurerule, /place feature, or script ruin patch");
     lines.push(
-        `§7Toggle §fabandoned_village_worldgen§7: §f${isScriptEnabled(SCRIPT_IDS.abandonedVillageWorldgen) ? "ON" : "OFF"}`
+        `§7Setting §fabandoned_village_worldgen§7: §f${isScriptEnabled(SCRIPT_IDS.abandonedVillageWorldgen) ? "ON" : "OFF"} §8(Settings → Dev world)`
     );
     lines.push(`§7Chunk keys stored: §f${chunkKeysMemory.size}`);
     if (lastPlaceFailureId) {
@@ -2678,7 +2874,12 @@ export function initializeAbandonedVillageWorldgen() {
     system.runInterval(() => {
         try {
             if (!isScriptEnabled(SCRIPT_IDS.abandonedVillageWorldgen)) return;
-            const budget = refreshAbandonedVillagePerf(system.currentTick);
+            const players = getCachedPlayers() || [];
+            if (!shouldRunAbandonedVillageMainTick(players, getBiomeIdAt)) return;
+            const workIdle = isAbandonedVillageWorkIdle();
+            const nearInterest = anyPlayerNearVillageInterest(players, getBiomeIdAt);
+            const nearLamp = anyPlayerNearLampActivation(players, getBiomeIdAt);
+            const budget = refreshAbandonedVillagePerf(system.currentTick, { idle: workIdle, nearInterest, nearLamp });
             processPendingActivations();
             processProcessorQueue(budget);
             processPendingZombify();
@@ -2692,52 +2893,55 @@ export function initializeAbandonedVillageWorldgen() {
         }
     }, SCAN_INTERVAL_TICKS);
 
-    system.runInterval(() => {
-        try {
-            if (!isScriptEnabled(SCRIPT_IDS.abandonedVillageWorldgen)) return;
-            const budget = getAbandonedVillagePerfBudget();
-            avLampCleanupPhaseTicks += SCAN_INTERVAL_TICKS;
-            if (avLampCleanupPhaseTicks < budget.lampCleanupIntervalTicks) return;
-            avLampCleanupPhaseTicks = 0;
-
-            const players = getCachedPlayers() || [];
-            for (const player of players) {
-                if (!player?.isValid) continue;
-                let dim;
-                try {
-                    dim = player.dimension;
-                } catch {
-                    continue;
+    if (!SKIP_WORLDGEN_ARTIFACT_CLEANUP) {
+        system.runInterval(() => {
+            try {
+                if (!isScriptEnabled(SCRIPT_IDS.abandonedVillageWorldgen)) return;
+                const players = getCachedPlayers() || [];
+                const workIdle = isAbandonedVillageWorkIdle();
+                if (workIdle && !anyPlayerNearVillageInterest(players, getBiomeIdAt)) {
+                    return;
                 }
-                if (dim?.id !== "minecraft:overworld") continue;
-                const px = player.location.x;
-                const pz = player.location.z;
-                const py = Math.floor(player.location.y);
-                const { gx: gx0, gz: gz0 } = worldToSiteGrid(px - LAMP_APPROACH_DIST_MAX, pz - LAMP_APPROACH_DIST_MAX);
-                const { gx: gx1, gz: gz1 } = worldToSiteGrid(px + LAMP_APPROACH_DIST_MAX, pz + LAMP_APPROACH_DIST_MAX);
-                let anyNear = false;
-                for (let gx = gx0; gx <= gx1 && !anyNear; gx++) {
-                    for (let gz = gz0; gz <= gz1 && !anyNear; gz++) {
-                        for (let sub = 0; sub < SITES_PER_LARGE_INFECTED_CELL; sub++) {
-                            const { distLamp } = getSiteActivationDistances(px, pz, gx, gz, sub);
-                            if (distLamp <= LAMP_APPROACH_DIST_MAX) {
-                                anyNear = true;
-                                break;
-                            }
-                        }
+                if (!claimSpreadSlice("avLampCleanup", workIdle ? 120 : 40)) return;
+                const nearInterest = anyPlayerNearVillageInterest(players, getBiomeIdAt);
+                const nearLamp = anyPlayerNearLampActivation(players, getBiomeIdAt);
+                const budget = refreshAbandonedVillagePerf(system.currentTick, { idle: workIdle, nearInterest, nearLamp });
+                avLampCleanupPhaseTicks += SCAN_INTERVAL_TICKS;
+                if (avLampCleanupPhaseTicks < budget.lampCleanupIntervalTicks) return;
+                avLampCleanupPhaseTicks = 0;
+
+                for (const player of players) {
+                    if (!player?.isValid) continue;
+                    let dim;
+                    try {
+                        dim = player.dimension;
+                    } catch {
+                        continue;
+                    }
+                    if (dim?.id !== "minecraft:overworld") continue;
+                    const px = player.location.x;
+                    const pz = player.location.z;
+                    const py = Math.floor(player.location.y);
+                    const playerBiome = getBiomeIdAt(dim, px, pz, py);
+                    if (
+                        workIdle &&
+                        !playerNearVillageInterest(dim, px, py, pz, playerBiome)
+                    ) {
+                        continue;
+                    }
+                    const nearbySites = listRegisteredSiteInterestNearPlayer(px, pz, LAMP_APPROACH_DIST_MAX);
+                    if (nearbySites.length === 0) continue;
+                    try {
+                        clearNearbyLampArtifacts(dim, px, pz, 0, py, playerBiome);
+                    } catch {
+                        /* ignore */
                     }
                 }
-                if (!anyNear) continue;
-                try {
-                    clearNearbyLampArtifacts(dim, px, pz, 0, py, playerBiome);
-                } catch {
-                    /* ignore */
-                }
+            } catch {
+                /* ignore */
             }
-        } catch {
-            /* ignore */
-        }
-    }, SCAN_INTERVAL_TICKS);
+        }, SCAN_INTERVAL_TICKS);
+    }
 }
 
 /**

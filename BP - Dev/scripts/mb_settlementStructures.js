@@ -2255,6 +2255,27 @@ export function pickSettlementLayoutVariant(cx, cz) {
 }
 
 /**
+ * Even ring slot with small deterministic jitter — avoids angle clustering on one side.
+ * @param {number} i
+ * @param {number} count
+ * @param {number} cx
+ * @param {number} cz
+ * @param {number} salt
+ * @param {number} minRing
+ * @param {number} spread
+ * @param {number} [phaseRad]
+ * @returns {{ ox: number, oz: number }}
+ */
+function ringOffsetForSlot(i, count, cx, cz, salt, minRing, spread, phaseRad = 0) {
+    const spreadMod = Math.max(1, spread);
+    const dist = minRing + (hashChunkRoll(cx, cz, salt + 1, spreadMod) % spreadMod);
+    const jitter = ((hashChunkRoll(cx, cz, salt + 3, 100) - 50) / 100) * 0.18;
+    const slots = Math.max(1, count);
+    const angle = (2 * Math.PI * i) / slots + phaseRad + jitter;
+    return { ox: Math.floor(Math.cos(angle) * dist), oz: Math.floor(Math.sin(angle) * dist) };
+}
+
+/**
  * @param {SettlementLayoutVariant} layout
  * @param {number} i
  * @param {number} count
@@ -2266,28 +2287,28 @@ export function pickSettlementLayoutVariant(cx, cz) {
  * @returns {{ ox: number, oz: number }}
  */
 export function settlementLayoutOffset(layout, i, count, cx, cz, salt, minRing, spread) {
-    const dist = minRing + (hashChunkRoll(cx, cz, salt + 1, spread) % spread);
+    const dist = minRing + (hashChunkRoll(cx, cz, salt + 1, Math.max(1, spread)) % Math.max(1, spread));
     if (layout === 1) {
-        /** Cross arms — first four slots on N/S/E/W. */
+        /** Cross arms — first four slots on N/S/E/W; extra slots fill the ring diagonally. */
         if (i === 0) return { ox: 0, oz: -dist };
         if (i === 1) return { ox: 0, oz: dist };
         if (i === 2) return { ox: -dist, oz: 0 };
         if (i === 3) return { ox: dist, oz: 0 };
+        return ringOffsetForSlot(i, count, cx, cz, salt, minRing, spread, Math.PI / 4);
     }
     if (layout === 2) {
-        /** Semicircle arc (270° sweep). */
-        const t = count <= 1 ? 0.5 : i / (count - 1);
-        const angle = Math.PI * 0.25 + t * Math.PI * 1.5;
-        return { ox: Math.floor(Math.cos(angle) * dist), oz: Math.floor(Math.sin(angle) * dist) };
+        /** Full ring (even angular spacing). */
+        return ringOffsetForSlot(i, count, cx, cz, salt, minRing, spread);
     }
     if (layout === 3) {
         /** Inner / outer alternating rings. */
         const ringDist = i % 2 === 0 ? dist : minRing + Math.floor(spread * 0.72);
-        const angle = (2 * Math.PI * (i + hashChunkRoll(cx, cz, salt + 2, 100) / 100)) / count;
+        const jitter = ((hashChunkRoll(cx, cz, salt + 2, 100) - 50) / 100) * 0.18;
+        const angle = (2 * Math.PI * i) / Math.max(1, count) + jitter;
         return { ox: Math.floor(Math.cos(angle) * ringDist), oz: Math.floor(Math.sin(angle) * ringDist) };
     }
     if (layout === 4) {
-        /** Square corners + fill. */
+        /** Square corners + ring fill. */
         if (i < 4) {
             const corners = [
                 [-1, -1],
@@ -2299,8 +2320,8 @@ export function settlementLayoutOffset(layout, i, count, cx, cz, salt, minRing, 
             const cornerDist = minRing + Math.floor(spread * 0.55);
             return { ox: sx * cornerDist, oz: sz * cornerDist };
         }
+        return ringOffsetForSlot(i, count, cx, cz, salt, minRing, spread, Math.PI / 4);
     }
-    const angle = (hashChunkRoll(cx, cz, salt, 360) * Math.PI) / 180;
-    return { ox: Math.floor(Math.cos(angle) * dist), oz: Math.floor(Math.sin(angle) * dist) };
+    return ringOffsetForSlot(i, count, cx, cz, salt, minRing, spread);
 }
 

@@ -9,7 +9,7 @@ import {
     RELEASE_ADMIN_FORCE_SPAWN_IDS,
     RELEASE_ADMIN_FORCE_SPAWN_MAX
 } from "./mb_buildConfig.js";
-import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, getPlayerSettings, checkKnowledgeProgression, showEmulsifierMachineUI, getInfectionCueEmitterTier, getInfectionCueHearOthersTier } from "./mb_codex.js";
+import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, getPlayerSettings, checkKnowledgeProgression, showEmulsifierMachineUI, getInfectionCueEmitterTier, getInfectionCueHearOthersTier, getInfectionCameraShakeEnabled } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock, getEmulsifierZoneAtBlock, getZoneFuelQueueForUI, isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
@@ -50,6 +50,7 @@ import "./mb_biomeAmbience.js";
 import "./mb_snowStorm.js";
 import { isPlayerInStorm, getStormExposureRates, summonStorm, setStormOverride, resetStormOverride, getStormState, wasKilledByStorm } from "./mb_snowStorm.js";
 import { tickInfectionCoughAndBreath, playPowderHiccup, playCureSighRelief, resetInfectionAudioCooldowns } from "./mb_infectionAudio.js";
+import { tickInfectionCameraShake, clearInfectionCameraShake, shouldTickInfectionCameraShake } from "./mb_infectionCameraShake.js";
 import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
 import { tryPlaceSnowLayerUnder } from "./mb_snowPlacement.js";
@@ -1376,7 +1377,7 @@ function applyMajorInfectionFromGround(player, infectionState) {
             checkKnowledgeProgression(player);
         } catch { }
         
-        saveInfectionData(player);
+        saveInfectionData(player, { force: true });
         return;
     }
     
@@ -1422,7 +1423,7 @@ function applyMajorInfectionFromGround(player, infectionState) {
         } catch { }
         
         trackInfectionHistory(player, "infected");
-        saveInfectionData(player);
+        saveInfectionData(player, { force: true });
     }
 }
 
@@ -1517,7 +1518,7 @@ function applySnowExposureIncrease(player, infectionState, fromGround = false) {
     }
     
     applySnowTierEffects(player, snowCount);
-    saveInfectionData(player);
+    saveInfectionData(player, { force: true });
 }
 
 // --- Helper: Track infection history ---
@@ -1633,7 +1634,8 @@ function trackEffectExperience(player, effectId, severity) {
 
 // --- Helper: Handle infection expiration ---
 function handleInfectionExpiration(player, infectionState) {
-    const wasActiveRecently = infectionState.lastActiveTick && 
+    clearInfectionCameraShake(player);
+    const wasActiveRecently = infectionState.lastActiveTick &&
         (system.currentTick - infectionState.lastActiveTick) < 1200; // 1 minute grace period
     
     if (wasActiveRecently) {
@@ -2149,6 +2151,7 @@ function cureMinorInfection(player) {
         
         // Cure minor infection
         playerInfection.delete(player.id);
+        clearInfectionCameraShake(player);
         player.removeTag(INFECTED_TAG);
         console.log(`[MINOR CURE] Removed infection state and tag for ${player.name}`);
         
@@ -2210,7 +2213,7 @@ function cureMinorInfection(player) {
         }
         
         // Save infection data (clears infection)
-        saveInfectionData(player);
+        saveInfectionData(player, { force: true });
         
         console.log(`[MINOR CURE] ${player.name} cured minor infection and gained permanent immunity`);
     } catch (error) {
@@ -2254,6 +2257,7 @@ function handleEnchantedGoldenApple(player, item) {
             system.run(() => {
                 // Delete infection from map (permanently immune now)
                 playerInfection.delete(player.id);
+                clearInfectionCameraShake(player);
                 console.log(`[CURE] Cured major infection for ${player.name}`);
                 player.removeTag(INFECTED_TAG);
                 
@@ -2301,7 +2305,7 @@ function handleEnchantedGoldenApple(player, item) {
                 console.log(`[CURE] Granted ${player.name} permanent immunity and temporary immunity until ${new Date(immunityEndTime).toLocaleTimeString()}`);
 
                 // IMMEDIATELY save the cure data to dynamic properties
-                saveInfectionData(player);
+                saveInfectionData(player, { force: true });
                 console.log(`[CURE] Immediately saved cure data for ${player.name}`);
                 resetInfectionAudioCooldowns(player.id);
                 triggerCureSighReliefSound(player, true);
@@ -2521,7 +2525,7 @@ function handleSnowConsumption(player, item) {
             checkKnowledgeProgression(player);
         } catch { }
         
-        saveInfectionData(player);
+        saveInfectionData(player, { force: true });
         triggerPowderConsumptionHiccup(player);
         return;
     }
@@ -2807,6 +2811,7 @@ function handlePlayerDeath(player) {
     try {
         infectionActionBarSuppressedUntilSpawn.add(player.id);
         clearInfectionHudActionBar(player);
+        clearInfectionCameraShake(player);
 
         // Check if player has permanent immunity
         const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
@@ -3961,7 +3966,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 }
                 
                 bearHitCount.delete(player.id);
-                saveInfectionData(player);
+                saveInfectionData(player, { force: true });
                 try { markCodex(player, "status.bearTimerSeen"); } catch { }
                 try { markCodex(player, "infections.bear.discovered"); markCodex(player, "infections.bear.firstHitAt", true); } catch { }
             } else {
@@ -4072,7 +4077,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 }
                 
                 bearHitCount.delete(player.id);
-                saveInfectionData(player);
+                saveInfectionData(player, { force: true });
                 try { 
                     markCodex(player, "infections.bear.discovered"); 
                     markCodex(player, "infections.minor.discovered");
@@ -4170,7 +4175,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
             bearHitCount.delete(player.id);
 
             // IMMEDIATELY save the infection data
-            saveInfectionData(player);
+            saveInfectionData(player, { force: true });
             console.log(`[INFECTION] Immediately saved bear infection data for ${player.name}`);
             try { markCodex(player, "status.bearTimerSeen"); } catch { }
             try { 
@@ -4217,17 +4222,20 @@ export function formatInfectionHudTimeRemaining(ticksLeft, infectionType) {
         const days = Math.ceil(t / 24000);
         return `${label}~${days} day${days !== 1 ? "s" : ""} left`;
     }
-    const hours = Math.floor(t / 1000);
-    const tickRem = t % 1000;
-    const minutes = Math.floor((tickRem * 60) / 1000);
-    if (hours > 0) {
-        return `${label}${hours}h ${minutes}m left`;
+    const totalSeconds = t / 20;
+    if (totalSeconds < 30) {
+        const shown = Math.max(0.1, Math.round(totalSeconds * 10) / 10);
+        return `${label}${shown}s left`;
+    }
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    if (minutes > 0 && seconds > 0) {
+        return `${label}${minutes}m ${seconds}s left`;
     }
     if (minutes > 0) {
         return `${label}${minutes}m left`;
     }
-    const secs = Math.max(1, Math.ceil(t / 20));
-    return `${label}${secs}s left`;
+    return `${label}${seconds}s left`;
 }
 
 /**
@@ -4328,7 +4336,10 @@ function tickSimulatedPlayerInfection(id, state) {
     try {
         if (!state || state.cured) return;
         const infectionType = state.infectionType || MAJOR_INFECTION_TYPE;
-        const maxTicks = infectionType === MINOR_INFECTION_TYPE ? MINOR_INFECTION_TICKS : INFECTION_TICKS;
+        const maxTicks =
+            infectionType === MINOR_INFECTION_TYPE
+                ? getScaledMinorInfectionTicks(getCurrentDay ? getCurrentDay() : 0)
+                : INFECTION_TICKS;
         const decayMultiplier = getAddonDifficultyState().infectionDecayMultiplier;
         state.lastActiveTick = system.currentTick;
         state.ticksLeft -= Math.round(40 * decayMultiplier);
@@ -4501,10 +4512,16 @@ function tickBiomeDiscovery() {
 }
 
 // --- Infection Timers and Effects ---
+function tryInfectionCameraShake(player, state, shakeOpts) {
+    if (!getInfectionCameraShakeEnabled(player)) return;
+    if (!shouldTickInfectionCameraShake(state, shakeOpts.maxTicks)) return;
+    tickInfectionCameraShake(player, state, shakeOpts);
+}
+
 system.runInterval(() => {
     if (!isScriptEnabled(SCRIPT_IDS.infectionSystem)) return;
-    if (shouldSleepDayZeroWorldWork("infection")) return;
-    if (shouldDeferVillageBurst("infection")) return;
+    const sleepInfection = shouldSleepDayZeroWorldWork("infection");
+    const deferInfectionEffects = shouldDeferVillageBurst("infection");
     // Unified infection system
     syncSimPlayerInfectionEntries();
     const infectionAudioEnabled = isScriptEnabled(SCRIPT_IDS.infectionAudio);
@@ -4519,14 +4536,19 @@ system.runInterval(() => {
         const player = playersById.get(id);
         if (!player) continue;
 
+        if (sleepInfection) continue;
+
         const infectionType = state.infectionType || MAJOR_INFECTION_TYPE;
-        const maxTicks = infectionType === MINOR_INFECTION_TYPE ? MINOR_INFECTION_TICKS : INFECTION_TICKS;
+        const maxTicks =
+            infectionType === MINOR_INFECTION_TYPE
+                ? getScaledMinorInfectionTicks(getCurrentDay ? getCurrentDay() : 0)
+                : INFECTION_TICKS;
 
         // Ambient infection cough / rare dust breath (audible to nearby players; settings in journal)
         try {
             const gm = player.getGameMode?.();
             // Spectator skips body cues; creative still runs so cough / rare breath work while testing infected
-            if (gm !== "spectator" && !introInProgress.has(id)) {
+            if (gm !== "spectator" && !introInProgress.has(id) && !deferInfectionEffects) {
                 if (infectionAudioEnabled) {
                     let environmentSynergy = false;
                     try {
@@ -4568,8 +4590,39 @@ system.runInterval(() => {
             // Minor infection - apply random mild effects that worsen over time
             // Don't apply effects during intro sequence
             if (introInProgress.has(id)) {
-                // Skip effect application during intro
+                if (state.ticksLeft <= 0) {
+                    handleInfectionExpiration(player, state);
+                } else if (state.ticksLeft <= 1200 && !state.warningSent) {
+                    player.sendMessage(CHAT_DANGER_STRONG + "Your minor infection is reaching its final stages...");
+                    state.warningSent = true;
+                    playerInfection.set(id, state);
+                }
                 saveInfectionData(player);
+                continue;
+            }
+
+            if (deferInfectionEffects) {
+                if (state.ticksLeft <= 0) {
+                    handleInfectionExpiration(player, state);
+                } else {
+                    const ratio = Math.max(0, Math.min(1, state.ticksLeft / maxTicks));
+                    let severityLevel = 0;
+                    if (ratio > 0.75) severityLevel = 0;
+                    else if (ratio > 0.5) severityLevel = 1;
+                    else if (ratio > 0.2) severityLevel = 2;
+                    else severityLevel = 3;
+                    tryInfectionCameraShake(player, state, {
+                        maxTicks,
+                        severityLevel,
+                        introActive: false
+                    });
+                    if (state.ticksLeft <= 1200 && !state.warningSent) {
+                        player.sendMessage(CHAT_DANGER_STRONG + "Your minor infection is reaching its final stages...");
+                        state.warningSent = true;
+                        playerInfection.set(id, state);
+                    }
+                    saveInfectionData(player);
+                }
                 continue;
             }
             
@@ -4647,13 +4700,19 @@ system.runInterval(() => {
                 
                 lastSymptomTick.set(id, nowTick);
             }
+
+            tryInfectionCameraShake(player, state, {
+                maxTicks,
+                severityLevel,
+                introActive: introInProgress.has(id)
+            });
             
             // Minor infection doesn't have snow decay (snow consumption converts it to major)
             // Save data periodically
             saveInfectionData(player);
             
             // Log remaining time every 10 minutes (24000 ticks)
-            if (state.ticksLeft % 24000 === 0 && state.ticksLeft > 0) {
+            if (state.ticksLeft % 24000 === 0 && state.ticksLeft > 0 && isMinorInfectionDebugEnabled()) {
                 const daysLeft = Math.ceil(state.ticksLeft / 24000);
                 console.log(`[MINOR INFECTION] ${player.name} has ${daysLeft} days left until bear transformation`);
             }
@@ -4671,6 +4730,26 @@ system.runInterval(() => {
         }
 
         // Major infection - existing behavior
+        if (deferInfectionEffects) {
+            if (state.ticksLeft <= 0) {
+                handleInfectionExpiration(player, state);
+            } else {
+                const timeLevel = getSymptomLevel(state.ticksLeft);
+                tryInfectionCameraShake(player, state, {
+                    maxTicks,
+                    severityLevel: timeLevel,
+                    introActive: introInProgress.has(id)
+                });
+                if (state.ticksLeft <= 1200 && !state.warningSent) {
+                    player.sendMessage(CHAT_DANGER_STRONG + "You don't feel so good...");
+                    state.warningSent = true;
+                    playerInfection.set(id, state);
+                }
+                saveInfectionData(player);
+            }
+            continue;
+        }
+
         // Apply daily snow decay based on snow tier
         const snowCount = state.snowCount || 0;
         if (snowCount > 0) {
@@ -4750,6 +4829,13 @@ system.runInterval(() => {
                 playerInfection.set(id, state);
                 trackInfectionExperience(player, state.source || "unknown", severityLevel);
             }
+
+            tryInfectionCameraShake(player, state, {
+                maxTicks,
+                severityLevel,
+                introActive: introInProgress.has(id)
+            });
+
             const nowTick = system.currentTick;
             const lastTick = lastSymptomTick.get(id) ?? 0;
             const cooldown = severityLevel === 0 ? 2400 : severityLevel === 1 ? 1200 : severityLevel === 2 ? 600 : 240; // ticks between symptoms (adjusted for 5-day infection)
@@ -5800,6 +5886,7 @@ world.afterEvents.playerSpawn.subscribe((event) => {
         if (!player || !player.isValid) return;
 
         infectionActionBarSuppressedUntilSpawn.delete(player.id);
+        clearInfectionCameraShake(player);
         
         console.log(`[SPAWN] Player ${player.name} spawned`);
         
@@ -5916,12 +6003,26 @@ function hasWeaknessEffect(player) {
     }
 }
 
+const lastInfectionSaveTick = new Map();
+/** Throttle periodic saves — full write is costly on day 0 (many dynamic properties). */
+const INFECTION_SAVE_INTERVAL_TICKS = 200;
+
 /**
  * Save infection data to dynamic properties
  * @param {Player} player - The player to save data for
+ * @param {{ force?: boolean }} [options]
  */
-function saveInfectionData(player) {
+function saveInfectionData(player, options = {}) {
     try {
+        const force = options.force === true;
+        if (!force && player?.id) {
+            const now = system.currentTick;
+            const last = lastInfectionSaveTick.get(player.id) ?? 0;
+            if (now - last < INFECTION_SAVE_INTERVAL_TICKS) return;
+            lastInfectionSaveTick.set(player.id, now);
+        } else if (player?.id) {
+            lastInfectionSaveTick.set(player.id, system.currentTick);
+        }
         // Save bear infection
         const infectionData = playerInfection.get(player.id);
         if (infectionData) {
@@ -5987,6 +6088,14 @@ function saveInfectionData(player) {
     }
 }
 
+function isMinorInfectionDebugEnabled() {
+    return (
+        isDebugEnabled("main", "minorInfection") ||
+        isDebugEnabled("main", "infection") ||
+        isDebugEnabled("main", "all")
+    );
+}
+
 /**
  * Calculate scaled minor infection timer based on current day
  * As the world becomes more infected, minor infection progresses faster
@@ -6018,7 +6127,9 @@ function getScaledMinorInfectionTicks(currentDay) {
     }
     
     const scaledTicks = scaledDays * 24000;
-    console.log(`[MINOR INFECTION] Day ${currentDay}: Scaled timer to ${scaledDays} days (${scaledTicks} ticks)`);
+    if (isMinorInfectionDebugEnabled()) {
+        console.log(`[MINOR INFECTION] Day ${currentDay}: Scaled timer to ${scaledDays} days (${scaledTicks} ticks)`);
+    }
     return scaledTicks;
 }
 
@@ -6097,7 +6208,7 @@ function initializeMinorInfection(player) {
         }
         
         // Save to dynamic properties
-        saveInfectionData(player);
+        saveInfectionData(player, { force: true });
         
         // Mark minor infection as discovered in codex
         try {
@@ -6112,7 +6223,9 @@ function initializeMinorInfection(player) {
         }
         
         const daysLeft = Math.ceil(scaledTicks / 24000);
-        console.log(`[MINOR INFECTION] Initialized minor infection for ${player.name} (${daysLeft} days, day ${currentDay})`);
+        if (isMinorInfectionDebugEnabled()) {
+            console.log(`[MINOR INFECTION] Initialized minor infection for ${player.name} (${daysLeft} days, day ${currentDay})`);
+        }
     } catch (error) {
         console.warn(`[MINOR INFECTION] Error initializing minor infection for ${player?.name}:`, error);
     }
@@ -6175,8 +6288,10 @@ function loadInfectionData(player) {
                     // But preserve remaining time if it's less than the scaled amount
                     if (currentTicks > scaledTicks) {
                         infectionData.ticksLeft = scaledTicks;
-                        console.log(`[LOAD] Scaled minor infection timer for ${player.name} from ${Math.ceil(currentTicks / 24000)} days to ${Math.ceil(scaledTicks / 24000)} days (day ${currentDay})`);
-                    } else {
+                        if (isMinorInfectionDebugEnabled()) {
+                            console.log(`[LOAD] Scaled minor infection timer for ${player.name} from ${Math.ceil(currentTicks / 24000)} days to ${Math.ceil(scaledTicks / 24000)} days (day ${currentDay})`);
+                        }
+                    } else if (isMinorInfectionDebugEnabled()) {
                         // Keep existing time if it's already less than the scaled amount
                         console.log(`[LOAD] Preserved minor infection timer for ${player.name}: ${Math.ceil(currentTicks / 24000)} days remaining (day ${currentDay}, max ${Math.ceil(scaledTicks / 24000)} days)`);
                     }
@@ -6860,7 +6975,7 @@ world.afterEvents.playerLeave.subscribe((event) => {
         const player = world.getAllPlayers().find(p => p.id === playerId);
         if (player) {
             // Save infection data immediately when player leaves
-            saveInfectionData(player);
+            saveInfectionData(player, { force: true });
             console.log(`[LEAVE] Saved infection data for ${player.name} before they left`);
         }
         
@@ -7601,6 +7716,7 @@ function executeMbCommand(sender, subcommand, args = []) {
             const target = args[0] ? world.getAllPlayers().find(p => p.name === args[0]) : sender;
             if (!target) { sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `No player named ${args[0]} found.`); return; }
             playerInfection.delete(target.id);
+            clearInfectionCameraShake(target);
             bearHitCount.delete(target.id);
             curedPlayers.delete(target.id);
             setPlayerProperty(target, "mb_infection", undefined);
@@ -7634,7 +7750,7 @@ function executeMbCommand(sender, subcommand, args = []) {
                 warningSent: false,
                 lastActiveTick: system.currentTick
             });
-            saveInfectionData(target);
+            saveInfectionData(target, { force: true });
             sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Set ${target.name} to ${type} infection.`);
             return;
         }
@@ -7653,7 +7769,9 @@ function executeMbCommand(sender, subcommand, args = []) {
                 return;
             }
             state.ticksLeft = ticks;
-            saveInfectionData(target);
+            if (ticks > 1200) state.warningSent = false;
+            state.lastActiveTick = system.currentTick;
+            saveInfectionData(target, { force: true });
             sender.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + `Set ${target.name} infection timer to ${CHAT_HIGHLIGHT}${ticks}${CHAT_INFO} ticks.`);
             console.warn(`[MBI] Infection timer for ${target.name} set to ${ticks} ticks by ${sender.name}`);
             return;

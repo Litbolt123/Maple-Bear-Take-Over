@@ -6,6 +6,173 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+## 2026-06-22 — Clean structure exports (no runtime artifact cleanup)
+
+- **Discovery:** Structures can be saved for natural spawn **without** `structure_block` ever appearing in-world — no export bake, no script strip pass on approach.
+- **`SKIP_WORLDGEN_ARTIFACT_CLEANUP`** in `mb_abandonedVillageConstants.js` (default `true`): skips lamp cleanup interval, build `cleanup` phase, and activation-time column scans.
+- **`VILLAGE_STRUCTURE_COLLAB_GUIDE.md`:** export checklist updated; `strip:mcstructures` marked legacy-only.
+- Re-export old lamp/building `.mcstructure` files when convenient; flip flag to `false` only if legacy baked artifacts return.
+
+---
+
+## 2026-06-22 — Script villages: WIP rationale (default OFF)
+
+- **Why off by default:** Current script placement path is **laggy** and **buggy**; not ready for normal play.
+- **Ship goal:** **Natural jigsaw worldgen** (connected `.mcstructure` pieces) per `docs/development/VILLAGE_STRUCTURE_COLLAB_GUIDE.md` — not block-by-block script builds.
+- **Dev path:** Journal → **Settings → Dev world features** → Script villages (WIP). Manual test places in Developer Tools still work when OFF.
+
+---
+
+## 2026-06-22 — Abandoned villages: dev opt-in (Settings, default OFF)
+
+- **`mb_scriptToggles.js`:** `SCRIPT_DEFAULT_OFF` includes `abandoned_village_worldgen` — unset world property = OFF. `isAbandonedVillageWorldgenEnabled()` helper. Removed from Script toggles infection category (use Settings instead).
+- **`mb_codex.js`:** Dev pack → **Settings → Dev world features** → Abandoned villages ON/OFF. Script toggles hub notes the new location.
+- **`mb_abandonedVillageWorldgen.js`:** `resumeIncompleteSettlementsNearPlayer` skips when setting OFF; debug HUD points to Settings.
+- New worlds join with villages **off** until enabled; manual test places (Developer Tools) still work.
+
+---
+
+## 2026-06-22 — Abandoned village lag: fix 224-block theoretical lamp interest
+
+- **Root cause:** `playerNearVillageInterest` returned true for almost every overworld player because `distLamp <= LAMP_APPROACH_DIST_MAX` (224) matched the current grid cell's theoretical lamp — main 20t loop never slept → lag spikes (especially day 0).
+- **`mb_abandonedVillageSites.js`:** `playerNearTheoreticalLampSlot` (≤56), `playerNearWorldgenLampMarker`, `playerInVillageApproachBand` (horizon band without 224 grid), `anyPlayerNearLampActivation`. `playerNearVillageInterest` now uses infected biome, registered site ≤192, lamp marker, or theoretical arrival ≤56 only.
+- **`mb_abandonedVillageWorldgen.js`:** `shouldRunHeavyVillageScans` uses `playerInVillageApproachBand`; lamp arrival bypasses spread when `atLampPost`; `nearLamp` passed to perf refresh; debug HUD shows `lamp`/`approach` flags.
+- **`mb_abandonedVillagePerf.js`:** `nearLamp` opt caps scan interval to 20t and skips idle 8× stretch when at a lamp.
+- **`mb_scriptToggles.js`:** toggle note that placement sleeps when far from sites/lamps. BP + BP - Dev synced; `npm run check` OK.
+
+---
+
+## 2026-06-22 — Abandoned village proximity perf (post-lamp lag fix)
+
+- **Root cause:** Paused build jobs in queue counted as globally busy; global `incomplete/pending` registry forced heavy horizon scans everywhere; lamp cleanup never slept after first `built` site.
+- **`mb_abandonedVillageSites.js`:** `playerNearVillageInterest`, `anyPlayerNearVillageInterest`, `listRegisteredSiteInterestNearPlayer`, `distToNearestRegisteredSiteInterest`.
+- **`mb_abandonedSettlementBuilder.js`:** `isSettlementBuildActivelyWorking`, `getSettlementBuildBlocksForJob` + proximity budget (≤96 full, 96–192 ~60%).
+- **`mb_abandonedVillageWorldgen.js`:** `isAbandonedVillageActivelyWorking`, proximity `shouldRunHeavyVillageScans`, main-loop sleep, processor only near players, lamp cleanup via registry + `claimSpreadSlice`.
+- **`mb_abandonedVillagePerf.js`:** idle + `nearInterest` opts; day-0 load floor only when not idle-far; dev HUD shows `idle/active/near/heavyScan`.
+
+---
+
+## 2026-06-22 — Infection camera shake softer (+30% cut, 30s ramp)
+
+- **Shake:** Another ~30% reduction — base **0.28** (was 0.4), peak **0.7** (was 1.0). Gradual ramp over the **last 30s** before transform instead of jumping to full in the final phase. Lower jitter/burst caps and burst frequency. BP + BP - Dev.
+
+---
+
+## 2026-06-22 — Gate minor infection scaled-timer Content Log spam
+
+- **Bug:** `[MINOR INFECTION] Day N: Scaled timer to …` logged every **40t** from `getScaledMinorInfectionTicks()` (infection loop calls it for `maxTicks`) — ignored debug toggles.
+- **Fix:** `isMinorInfectionDebugEnabled()` gates scaled-timer, init, load-cap, and days-left logs behind **Main Script → Minor Infection** (or Infection / all). **Clear infection debug** also clears `main.infection` + `main.minorInfection`. BP + BP - Dev.
+
+---
+
+## 2026-06-22 — Idle abandoned-village scan throttling
+
+- **Root cause (confirmed):** Lag with **Abandoned village placement** ON while **not near a village** came from background scans every ~20–40t: lamp grid loops (224-block radius), `findLargeInfectedSitesNeedingVillage`, and horizon ring + `getInfectedProximityTier` (O(radius²) biome reads) — not settlement block placement.
+- **`mb_abandonedVillageWorldgen.js`:** `isAbandonedVillageWorkIdle()` (no build / processor / activation queues). When idle + vanilla biome + no lamp marker at feet: **skip** lamp grid, large-infected search, and horizon scan entirely. Lamp arrivals when near a marker use `claimSpreadSlice("avLampArrival", 160t)` when idle. Dynamic `getIdleHorizonScanSkip`: 8× on day 0–1 idle, 4× idle, 2× when busy. Lamp cleanup skipped when registry empty; per-player skip when idle vanilla far from lamps.
+- **`mb_abandonedVillagePerf.js`:** `refreshAbandonedVillagePerf(tick, { idle })` — idle multiplies scan interval up to **320t** (day 0–1) / **160t** (later days); lamp cleanup interval 2–4× longer when idle.
+- **Synced** BP + BP - Dev. `npm run test:scripts:release` OK.
+
+---
+
+## 2026-06-22 — Revert settlement build throttling (keep scan idle opts)
+
+- **Playtest finding:** Lag traced to **idle horizon scans**, not settlement block placement. Reverted building-only caps in `mb_abandonedVillagePerf.js` + `mb_abandonedSettlementBuilder.js` (BP + BP - Dev).
+- **Removed:** `DAY01_MAX_BUILD_PER_TICK` (day 0–1 build ≤6/t), outer-band throttling (`OUTER_BAND_*`, `resolveSettlementBuildBudget`, `shouldSpendSettlementBuildBudgetThisTick`). `tickSettlementBuildQueue` again uses full adaptive `getSettlementBuildBlocksPerTick()` every tick.
+- **Kept:** Day 0–1 processor cap (≤48/t), scan interval floor (`DAY01_MIN_SCAN_INTERVAL`), load floor, horizon scan defer (`shouldDeferAbandonedVillageHorizonScan`), adaptive scan/processor budgets.
+
+---
+
+## 2026-06-22 — Village perf + softer infection shake
+
+- **Village lag fix (confirmed: `abandoned_village_worldgen` toggle):** Day 0–1 load floor + caps (build ≤6/t, processor ≤48/t). **≤96 blocks** from center: full capped budget (faster witness build). **96–192**: ~30% budget, every other tick. Processor skips on village burst defer + high wall stress.
+- **Shake:** ~60% weaker outside final **2s** (`ticksLeft ≤ 40`); full intensity preserved at transform. Burst chance reduced outside final window. Shake debug dev-pack only; `clearInfectionDevDebugForPlayer` in Infection Dev Tools.
+
+---
+
+## 2026-06-22 — Abandoned village worldgen confirmed as tick-stall source
+
+- **Playtest:** Script toggle **Abandoned village placement** OFF → lag gone; ON → periodic block-break / mob-freeze hitches return. Not infection or camera shake.
+- **Cause:** `mb_abandonedVillageWorldgen.js` — processor up to **160 blocks/20t**, settlement builder up to **12 blocks/tick** when queue active near player (~192 blocks).
+- **Day 0 gap:** `mb_spawnLoadMetrics` skips bear/item sampling before day 2, so `mb_abandonedVillagePerf` often sees **load01 ≈ 0** and keeps **full** build/processor budgets on day 0 (worst case for new worlds).
+
+---
+
+## 2026-06-22 — Periodic tick stalls (blocks/mobs freeze)
+
+- **Symptom:** ~2s smooth, then 1–2s where block breaks and mob movement pause, then catch-up — repeats. That is **server tick stall** (MSPT), not camera shake or client FPS.
+- **Likely culprits (day 0):** (1) **Abandoned village worldgen** — every **20t** applies up to **160** infected-biome block rules per tick; settlement builder places up to **12 blocks/tick** when queue active (within ~192 blocks of site). Action bar may show *Generating abandoned village…*. (2) **Infection loop** every **40t** — minor cost alone; not enough for multi-second hitches after save throttle. (3) **Ground exposure** if standing on infected/dusted dirt.
+- **Isolate:** Script toggles → **Abandoned village placement** OFF; or walk **200+ blocks** from any generating village. Day 0 bisect → **Infection timer** off vs **All OFF**. Shake debug off.
+
+---
+
+## 2026-06-22 — Day 0 lag (infection loop + camera shake)
+
+- **Why lag with shake OFF:** Day 0 already has heavy baseline work (chunk load, abandoned village worldgen, 8× work spread, biome checks, spawn metrics). The infection loop runs every **40t** regardless of camera shake — timer decay, `syncSimPlayerInfectionEntries`, and (previously) **`saveInfectionData` every 40t** (8+ dynamic property writes). After the timer-pause fix, the loop **no longer skips entirely** during village/chunk defer (only symptoms/audio/snow defer), so infected players add steady cost on day 0.
+- **Why shake ON feels the same early:** `shouldTickInfectionCameraShake` skips shake when the timer is still high (>45% remaining on minor / not in last day phase on major). Toggle off only saves a `getCodex` read per 40t tick — not the main hitch.
+- **Perf fixes:** `saveInfectionData` throttled to **200t** for loop saves; event saves (cure, apply infection, leave, dev) still `{ force: true }`. Shake API mode cached per player; debug logging gated on dev toggle. Synced `main.js` + `mb_infectionCameraShake.js` to `BP - Dev/`.
+- **Isolate lag:** Journal → Developer Tools → **Day 0 bisect** — turn infection off vs all off; check shake **debug** is not left on (Content Log flood).
+
+---
+
+## 2026-06-22 — Infection timer pause fix
+
+- **Root cause:** `shouldDeferVillageBurst("infection")` paused the **entire** infection loop (including timer decay) during chunk crossings / village load — HUD still refreshed, so the timer looked stuck (~6–8s) then jumped.
+- **Fix:** Timer decay + transformation always run; only symptoms/audio/snow decay defer. Intro path now still expires at 0 ticks. Dev timer adjust resets `warningSent` when > 1 min left.
+- **Camera shake:** Two layers — jitters + random bursts. **Major** = full intensity always (+ snow boost). **Minor** = milder when healthy, ramps to **full** shake near death (same as major at urgency ≥ 88%).
+
+---
+
+- **Bunkers:** Hatch on east interior edge (`2,1`); ladder shaft on east shell wall beside it; trap via `trySetFloorTrapdoor`; ladders placed **last** after caps/chest/lights; `trySetLadderRung` skips invalid rungs (no `/setblock` force → no item drops).
+- **Houses:** Brown stained glass panes never roll on perimeter **corner** columns (grid + stub build).
+- **Cellar houses:** Main-floor barrels/pantry stripped; food in cellar (`lootSlot: cellar`).
+- **Floor pantry houses:** Same main-floor rule — barrels/pantry furnishings removed from plan; **`placeFloorPantry`** fills the pit chest with `housePantryLootKeyForRuleset` (food stays under the trapdoor, not on open floor).
+
+---
+
+## 2026-06-02 — Hide bunkers build right after paths
+
+- **Design:** Path trapdoor bunkers are early safe holes while the village generates (lore later).
+- **Change:** Build phase order is now paths → **bunkers** → structures → pen → well → snow → zombies. Bunker ladders place immediately (not deferred to ruin pass). Resume with zero structures placed re-enters bunker phase first.
+
+---
+
+## 2026-06-02 — Village structure ring layout + build order
+
+- **Symptom:** Houses clustered on one side of the village (worse when standing on that side).
+- **Cause:** Default layout used **random angles** per slot (clustering expected); layout variant 2 was a **270° arc**; build order sorted **nearest lamp first** (player often at lamp).
+- **Fix:** `ringOffsetForSlot` — even angular spacing + small jitter for ring/default/cross-fill/arc layouts; build order `sortStructuresAroundCenter` (clockwise by angle) instead of lamp distance.
+
+---
+
+## 2026-06-02 — Church regen skeleton + hide bunker box cleanup
+
+- **Church “correct then broken”:** Second build pass ran pad carve (`rise < 0` → air in footprint) after resume/retry on partial footprints. **Fix:** `footprintHasSubstantialShellEvidence` → skip rebuild when perimeter shell already present; skip vegetation sweep when partial debris or chunks unloaded; `skipPadCarve` jumps pad phase on partial resume so existing walls/interior are not carved away.
+- **Hide bunkers on slopes:** Per-cell `cachedFloorY` made uneven floors, hill-meld shells, lanterns/torches/ladders on bad attachment (item drops). **Fix:** uniform 5×5 box from max reference Y across shell; prep pass carves flat floor + interior air + shell walls; caps/trap/chest only after prep; `trySetSettlementLantern`/`trySetSettlementTorch` + ladder back-wall checks before placement.
+
+---
+
+## 2026-06-02 — Pack update / orphan village overlap protection
+
+- **Concern:** Reinstalling the BP on a world that already has script villages — will it build again on top?
+- **Usually no:** `mb_av_village_sites` world property (built keys + centers) lives in the **world save**, not the pack; survives pack delete/reinstall on the same world. Activation checks `isSiteBuilt` + block verify before building.
+- **Could happen if:** registry lost/reset (dev “clear registry”), stale built flag cleared without blocks at saved coords, or village finished in-world but never `markSiteBuilt` (left mid-build → resumes instead).
+- **Fix:** Wired `probeSettlementCenterNearWorld` → `tryLinkOrphanSettlementNearLamp` into activation + placement (was dead code). Scans mossy/path footprint near lamp, links site as built instead of placing again.
+
+---
+
+- **Symptom (ContentLog):** Rejoin meadow site `2,-4,0` → `Build resume — 6 slot(s) demoted`, fletcher **relocated** onto other houses, edits climbing 7k→15k in `structure_retry` loop; wake showed `structures=0/9` then full rebuild.
+- **Cause:** `reconcile` fail-closed on unloaded chunks → demoted real completes → vegetation sweep + rebuild; ran on every wake + every `structure_hold` tick. Pending ladders blocked completion → infinite retry.
+- **Fix:** Tri-state footprint (`undefined`=unloaded, never demote); demote only with partial debris; no reconcile on wake; structure_hold seeds once; skip/relocate blocked when shell complete; ladders no longer block structure completion.
+
+---
+
+## 2026-06-02 — Village false completion + empty enchanted books
+
+- **Village stuck at 9/9 / “finished” with half-built houses:** Loose footprint probes (paths + partial mossy cobble) marked slots **existing** without full walls/roof; wake/resume then advanced to well/done. **Fix:** `footprintHasCompleteStructureEvidence` (perimeter + roof line), demote false completes on resume (`reconcileStructureSlotStatesBeforeResume`), no footprint skip during live `structures`/`structure_retry`/`structure_hold`, `allResolvableStructureSlotsFinished` required before placement success, incomplete finalize persists manifest + `markSiteIncomplete`.
+- **Enchanted books empty:** Smith/librarian augments spawned bare `minecraft:enchanted_book`; `canAddEnchantment` often fails on books. **Fix:** `applyEnchantsToStack` forces `addEnchantment` on books, random `ENCHANTED_BOOK_POOL`, librarian fallback entries with Protection/Sharpness I.
+
+---
+
 ## 2026-06-09 — Dev Beta 4.1 tagged (Patreon dev drop)
 
 - Version **`v0.9.0-beta.4.1`** on **`BP - Dev/`** only; public **`BP/`** stays **`beta.4`** until next store release.

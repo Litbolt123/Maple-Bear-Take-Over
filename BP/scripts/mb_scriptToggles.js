@@ -107,7 +107,7 @@ export const SCRIPT_TOGGLE_LABELS = {
     [SCRIPT_IDS.actionBarHud]: "Action bar HUD merge",
     [SCRIPT_IDS.emulsifier]: "Emulsifier machine loops",
     [SCRIPT_IDS.villagerSuppress]: "Villager script despawn",
-    [SCRIPT_IDS.abandonedVillageWorldgen]: "Abandoned village placement",
+    [SCRIPT_IDS.abandonedVillageWorldgen]: "Script village placement (WIP; Settings → Dev world)",
     [SCRIPT_IDS.snowTrail]: "Snow trail placement",
     [SCRIPT_IDS.chunkEdgeWatch]: "Chunk-edge defer watch",
     [SCRIPT_IDS.playerDiscovery]: "Biome + inventory discovery",
@@ -150,7 +150,6 @@ export const SCRIPT_TOGGLE_GROUPS = {
             SCRIPT_IDS.biomeAmbience,
             SCRIPT_IDS.dimensionAdaptation,
             SCRIPT_IDS.villagerSuppress,
-            SCRIPT_IDS.abandonedVillageWorldgen,
             SCRIPT_IDS.snowTrail,
             SCRIPT_IDS.dustedDirtCleanup
         ]
@@ -192,12 +191,25 @@ export const SCRIPT_BISECT_CATEGORY_MAP = {
     entity_queries: SCRIPT_IDS.workSpread
 };
 
-/** Default: all scripts enabled. Only explicit false disables. */
+/**
+ * Opt-in dev systems — default OFF until explicitly enabled (Journal → Settings → Dev world).
+ * @type {Set<string>}
+ */
+const SCRIPT_DEFAULT_OFF = new Set([SCRIPT_IDS.abandonedVillageWorldgen]);
+
+/** Default: all scripts enabled except {@link SCRIPT_DEFAULT_OFF}. Explicit 0/false disables. */
 export function isScriptEnabled(scriptId) {
     const key = SCRIPT_PROP_PREFIX + scriptId;
     const val = getWorldProperty(key);
     if (val === false || val === 0 || val === "0") return false;
+    if (val === true || val === 1 || val === "1") return true;
+    if (SCRIPT_DEFAULT_OFF.has(scriptId)) return false;
     return true;
+}
+
+/** Abandoned village horizon / lamp / script settlements (dev opt-in). */
+export function isAbandonedVillageWorldgenEnabled() {
+    return isScriptEnabled(SCRIPT_IDS.abandonedVillageWorldgen);
 }
 
 export function setScriptEnabled(scriptId, enabled) {

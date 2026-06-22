@@ -457,6 +457,18 @@ const FALLBACK_LIBRARIAN = [
     { id: "minecraft:ink_sac", min: 2, max: 6 },
     { id: "minecraft:feather", min: 2, max: 6 },
     { id: "minecraft:writable_book", min: 1, max: 2 },
+    {
+        id: "minecraft:enchanted_book",
+        min: 1,
+        max: 1,
+        enchant: [{ type: "protection", level: 1 }]
+    },
+    {
+        id: "minecraft:enchanted_book",
+        min: 1,
+        max: 1,
+        enchant: [{ type: "sharpness", level: 1 }]
+    },
     { id: "minecraft:bookshelf", min: 1, max: 1 },
     { id: "minecraft:lantern", min: 1, max: 2 },
     { id: "minecraft:emerald", min: 1, max: 4 },
@@ -1151,9 +1163,22 @@ export function appendFloorPantryToPlan(plan, ruleset = "plains") {
     if (candidates.length === 0) return plan;
 
     const pick = candidates[(roll >> 5) % candidates.length];
-    const interior = stripInteriorPantryStorage(plan.interior);
+    const interior = stripMainFloorFoodFromInterior(stripInteriorPantryStorage(plan.interior));
 
     return { ...plan, interior, floorPantry: pick };
+}
+
+/**
+ * Food belongs in floor pantries or cellars — not main-floor barrels / pantry slots.
+ * @param {typeof plan.interior} interior
+ */
+function stripMainFloorFoodFromInterior(interior) {
+    return interior.filter((spec) => {
+        if (spec.zone === "basement") return true;
+        if (spec.id === "minecraft:barrel") return false;
+        if (isStorageBlockId(spec.id) && spec.lootSlot === "pantry") return false;
+        return true;
+    });
 }
 
 /**
@@ -1175,7 +1200,11 @@ function stripInteriorPantryStorage(interior) {
  * @returns {T}
  */
 export function stripHousePantryStorageFromPlan(plan) {
-    return { ...plan, interior: stripInteriorPantryStorage(plan.interior) };
+    let interior = stripInteriorPantryStorage(plan.interior);
+    if (plan.basementDepth) {
+        interior = stripMainFloorFoodFromInterior(interior);
+    }
+    return { ...plan, interior };
 }
 
 /**
@@ -1395,26 +1424,95 @@ function seededChance(seed, max = 100) {
     return (seed % max) / max;
 }
 
+/** @type {{ type: string, level: number }[][]} */
+const ENCHANTED_BOOK_POOL = [
+    [{ type: "sharpness", level: 1 }],
+    [{ type: "sharpness", level: 2 }],
+    [{ type: "protection", level: 1 }],
+    [{ type: "protection", level: 2 }],
+    [{ type: "efficiency", level: 1 }],
+    [{ type: "efficiency", level: 2 }],
+    [{ type: "power", level: 1 }],
+    [{ type: "fortune", level: 1 }],
+    [{ type: "unbreaking", level: 1 }],
+    [{ type: "unbreaking", level: 2 }],
+    [{ type: "punch", level: 1 }],
+    [{ type: "flame", level: 1 }],
+    [{ type: "looting", level: 1 }],
+    [{ type: "silk_touch", level: 1 }],
+    [{ type: "feather_falling", level: 1 }],
+    [{ type: "depth_strider", level: 1 }],
+    [{ type: "mending", level: 1 }]
+];
+
 /**
- * @param {LootEntry} entry
+ * @param {string} type
  */
-function createLootItemStack(entry) {
-    const stack = new ItemStack(entry.id, rollCount(entry.min, entry.max));
-    if (!entry.enchant?.length) return stack;
+function enchantmentTypeId(type) {
+    return type.includes(":") ? type : `minecraft:${type}`;
+}
+
+/**
+ * @param {number} seed
+ */
+function pickEnchantedBookEnchants(seed) {
+    return ENCHANTED_BOOK_POOL[Math.abs(seed) % ENCHANTED_BOOK_POOL.length];
+}
+
+/**
+ * @param {import("@minecraft/server").ItemStack} stack
+ * @param {{ type: string, level: number }[]} enchants
+ */
+function applyEnchantsToStack(stack, enchants) {
+    if (!enchants?.length) return stack;
     try {
         const enchComp = stack.getComponent("minecraft:enchantable");
         if (!enchComp) return stack;
-        for (const e of entry.enchant) {
-            const type = new EnchantmentType(e.type);
-            const spec = { type, level: e.level };
-            if (enchComp.canAddEnchantment?.(spec)) {
-                enchComp.addEnchantment(spec);
+        const forceBook = stack.typeId === "minecraft:enchanted_book";
+        for (const e of enchants) {
+            const spec = {
+                type: new EnchantmentType(enchantmentTypeId(e.type)),
+                level: e.level
+            };
+            if (forceBook) {
+                try {
+                    enchComp.addEnchantment(spec);
+                } catch {
+                    /* ignore single enchant */
+                }
+                continue;
+            }
+            try {
+                if (enchComp.canAddEnchantment?.(spec)) {
+                    enchComp.addEnchantment(spec);
+                } else {
+                    enchComp.addEnchantment(spec);
+                }
+            } catch {
+                /* ignore single enchant */
             }
         }
     } catch {
         /* incompatible enchant — return unenchanted */
     }
     return stack;
+}
+
+/**
+ * @param {LootEntry} entry
+ * @param {number} [seedHint]
+ */
+function createLootItemStack(entry, seedHint) {
+    const isBook = entry.id === "minecraft:enchanted_book";
+    const enchants =
+        entry.enchant?.length > 0
+            ? entry.enchant
+            : isBook
+              ? pickEnchantedBookEnchants(seedHint ?? rollCount(1, 99999))
+              : undefined;
+    const stack = new ItemStack(entry.id, rollCount(entry.min, entry.max));
+    if (!enchants?.length) return stack;
+    return applyEnchantsToStack(stack, enchants);
 }
 
 /**
@@ -1657,7 +1755,10 @@ function maybeAugmentSmithStorage(dimension, x, y, z, lootTableId) {
             x,
             y,
             z,
-            createLootItemStack({ id: "minecraft:enchanted_book", min: 1, max: 1 })
+            createLootItemStack(
+                { id: "minecraft:enchanted_book", min: 1, max: 1 },
+                seed + 7
+            )
         );
     }
     if (seededChance(seed + 11, 100) < 0.05) {
@@ -1796,7 +1897,10 @@ function maybeAugmentLibrarianStorage(dimension, x, y, z, lootTableId) {
             x,
             y,
             z,
-            createLootItemStack({ id: "minecraft:enchanted_book", min: 1, max: 1 })
+            createLootItemStack(
+                { id: "minecraft:enchanted_book", min: 1, max: 1 },
+                seed
+            )
         );
     }
     if (seededChance(seed + 4, 100) < 0.15) {

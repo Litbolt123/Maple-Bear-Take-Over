@@ -24,6 +24,220 @@ const SETTLEMENT_WEAK_PRESENCE_IDS = new Set([
     "minecraft:packed_ice"
 ]);
 
+/** Perimeter / shell blocks that indicate a finished structure (not paths alone). */
+const STRUCTURE_SHELL_IDS = new Set([
+    ...SETTLEMENT_SCRIPT_SIGNATURE_IDS,
+    ...SETTLEMENT_WEAK_PRESENCE_IDS,
+    "minecraft:brick_block",
+    "minecraft:stone_bricks",
+    "minecraft:mossy_stone_bricks",
+    "minecraft:cracked_stone_bricks",
+    "minecraft:deepslate_bricks",
+    "minecraft:polished_deepslate",
+    "minecraft:spruce_log",
+    "minecraft:oak_log",
+    "minecraft:acacia_log",
+    "minecraft:jungle_log",
+    "minecraft:spruce_stairs",
+    "minecraft:oak_stairs",
+    "minecraft:acacia_stairs",
+    "minecraft:jungle_stairs",
+    "minecraft:cobblestone_stairs",
+    "minecraft:mossy_cobblestone_stairs",
+    "minecraft:sandstone_stairs",
+    "minecraft:smooth_sandstone_stairs",
+    "minecraft:glass_pane",
+    "minecraft:white_stained_glass_pane",
+    "minecraft:ladder",
+    "minecraft:oak_door",
+    "minecraft:spruce_door",
+    "minecraft:acacia_door",
+    "minecraft:jungle_door",
+    "minecraft:iron_door"
+]);
+
+/**
+ * @param {string|undefined} id
+ */
+function isStructureShellBlockId(id) {
+    if (!id || id === "minecraft:air" || id === "minecraft:dirt_path") return false;
+    if (STRUCTURE_SHELL_IDS.has(id)) return true;
+    return (
+        id.includes("_planks") ||
+        id.includes("_log") ||
+        id.includes("_stairs") ||
+        id.includes("_door") ||
+        id === "mb:dusted_dirt"
+    );
+}
+
+/**
+ * @param {import("@minecraft/server").Dimension} dimension
+ * @param {number} originX
+ * @param {number} originZ
+ * @param {number} w
+ * @param {number} d
+ * @param {number} baseY
+ */
+function structureFootprintAreaLoaded(dimension, originX, originZ, w, d, baseY) {
+    const minCx = Math.floor(originX / 16);
+    const maxCx = Math.floor((originX + Math.max(1, w) - 1) / 16);
+    const minCz = Math.floor(originZ / 16);
+    const maxCz = Math.floor((originZ + Math.max(1, d) - 1) / 16);
+    const yProbe = Math.floor(baseY);
+    for (let cx = minCx; cx <= maxCx; cx++) {
+        for (let cz = minCz; cz <= maxCz; cz++) {
+            try {
+                dimension.getBlock({ x: cx * 16 + 8, y: yProbe, z: cz * 16 + 8 });
+            } catch {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+/**
+ * True when a slot footprint has walls and a roof line — not merely plaza paths or partial debris.
+ * @returns {boolean|undefined} true=complete, false=incomplete, undefined=footprint chunks not loaded
+ */
+export function footprintHasCompleteStructureEvidence(dimension, originX, originZ, w, d, baseY) {
+    if (w < 3 || d < 3) return false;
+    if (!structureFootprintAreaLoaded(dimension, originX, originZ, w, d, baseY)) {
+        return undefined;
+    }
+    let perimeterWalls = 0;
+    let probeOk = 0;
+    let probeFail = 0;
+    const yLow = Math.floor(baseY) + 1;
+    const yHigh = yLow + 4;
+    for (let y = yLow; y <= yHigh; y++) {
+        for (let x = originX; x < originX + w; x++) {
+            for (const z of [originZ, originZ + d - 1]) {
+                try {
+                    probeOk++;
+                    if (isStructureShellBlockId(dimension.getBlock({ x, y, z })?.typeId)) {
+                        perimeterWalls++;
+                    }
+                } catch {
+                    probeFail++;
+                }
+            }
+        }
+        for (let z = originZ + 1; z < originZ + d - 1; z++) {
+            for (const x of [originX, originX + w - 1]) {
+                try {
+                    probeOk++;
+                    if (isStructureShellBlockId(dimension.getBlock({ x, y, z })?.typeId)) {
+                        perimeterWalls++;
+                    }
+                } catch {
+                    probeFail++;
+                }
+            }
+        }
+    }
+    if (probeOk > 0 && probeFail > Math.max(2, Math.floor(probeOk * 0.2))) {
+        return undefined;
+    }
+    let roofBlocks = 0;
+    let roofOk = 0;
+    let roofFail = 0;
+    const roofY = yHigh + 1;
+    for (let x = originX; x < originX + w; x++) {
+        for (let z = originZ; z < originZ + d; z++) {
+            try {
+                roofOk++;
+                const id = dimension.getBlock({ x, y: roofY, z })?.typeId;
+                if (id && id !== "minecraft:air" && !id.includes("glass")) roofBlocks++;
+            } catch {
+                roofFail++;
+            }
+        }
+    }
+    if (roofOk > 0 && roofFail > Math.max(2, Math.floor(roofOk * 0.2))) {
+        return undefined;
+    }
+    const perimeterNeed = Math.max(20, Math.floor((w + d) * 2 * 0.42));
+    const roofNeed = Math.max(4, Math.floor((w * d) * 0.12));
+    return perimeterWalls >= perimeterNeed && roofBlocks >= roofNeed;
+}
+
+/**
+ * Perimeter wall count for shell probes (shared by complete / substantial checks).
+ * @returns {{ perimeterWalls: number, probeOk: number, probeFail: number }|undefined}
+ */
+function countFootprintPerimeterShellBlocks(dimension, originX, originZ, w, d, baseY) {
+    if (w < 3 || d < 3) return { perimeterWalls: 0, probeOk: 0, probeFail: 0 };
+    if (!structureFootprintAreaLoaded(dimension, originX, originZ, w, d, baseY)) {
+        return undefined;
+    }
+    let perimeterWalls = 0;
+    let probeOk = 0;
+    let probeFail = 0;
+    const yLow = Math.floor(baseY) + 1;
+    const yHigh = yLow + 4;
+    for (let y = yLow; y <= yHigh; y++) {
+        for (let x = originX; x < originX + w; x++) {
+            for (const z of [originZ, originZ + d - 1]) {
+                try {
+                    probeOk++;
+                    if (isStructureShellBlockId(dimension.getBlock({ x, y, z })?.typeId)) {
+                        perimeterWalls++;
+                    }
+                } catch {
+                    probeFail++;
+                }
+            }
+        }
+        for (let z = originZ + 1; z < originZ + d - 1; z++) {
+            for (const x of [originX, originX + w - 1]) {
+                try {
+                    probeOk++;
+                    if (isStructureShellBlockId(dimension.getBlock({ x, y, z })?.typeId)) {
+                        perimeterWalls++;
+                    }
+                } catch {
+                    probeFail++;
+                }
+            }
+        }
+    }
+    if (probeOk > 0 && probeFail > Math.max(2, Math.floor(probeOk * 0.2))) {
+        return undefined;
+    }
+    return { perimeterWalls, probeOk, probeFail };
+}
+
+/**
+ * Enough perimeter shell to treat a slot as present — avoids destructive rebuild on resume.
+ * @returns {boolean|undefined}
+ */
+export function footprintHasSubstantialShellEvidence(dimension, originX, originZ, w, d, baseY) {
+    const complete = footprintHasCompleteStructureEvidence(dimension, originX, originZ, w, d, baseY);
+    if (complete === true) return true;
+    if (complete === undefined) return undefined;
+    const counts = countFootprintPerimeterShellBlocks(dimension, originX, originZ, w, d, baseY);
+    if (!counts) return undefined;
+    const perimeterNeed = Math.max(12, Math.floor((w + d) * 2 * 0.28));
+    return counts.perimeterWalls >= perimeterNeed;
+}
+
+/**
+ * Partial script debris — enough to know something was started but not a finished shell.
+ * @param {import("@minecraft/server").Dimension} dimension
+ * @param {number} originX
+ * @param {number} originZ
+ * @param {number} w
+ * @param {number} d
+ * @param {number} baseY
+ */
+export function footprintHasPartialStructureEvidence(dimension, originX, originZ, w, d, baseY) {
+    const midX = originX + Math.floor(w / 2);
+    const midZ = originZ + Math.floor(d / 2);
+    return footprintHasSettlementEvidence(dimension, midX, midZ, baseY, 4);
+}
+
 /**
  * @param {import("@minecraft/server").Dimension} dimension
  * @param {number} wx
@@ -273,9 +487,9 @@ export function recordStructureSlotOutcome(job, idx, slot, label, buildState) {
 export function refreshStructureSlotFromWorld(job, idx, slot, dimension, footprintForStructure) {
     const state = ensureStructureSlotState(job, idx, slot);
     const fp = footprintForStructure(slot.type, slot.housePlan, job.ruleset);
-    const midX = job.centerX + slot.ox + Math.floor(fp.w / 2);
-    const midZ = job.centerZ + slot.oz + Math.floor(fp.d / 2);
-    if (!footprintHasSettlementEvidence(dimension, midX, midZ, job.y, 5)) {
+    const originX = job.centerX + slot.ox;
+    const originZ = job.centerZ + slot.oz;
+    if (!footprintHasCompleteStructureEvidence(dimension, originX, originZ, fp.w, fp.d, job.y)) {
         return false;
     }
     if (structureSlotBlocksRebuild(state) && state.status !== "pending") {
@@ -349,7 +563,85 @@ export function refreshAllStructureSlotsFromWorld(job, footprintForStructure) {
 export function structureSlotShouldSkipBuild(job, idx, slot, dimension, footprintForStructure) {
     const state = getStructureSlotState(job, idx);
     if (structureSlotBlocksRebuild(state)) return true;
+    const fp = footprintForStructure(slot.type, slot.housePlan, job.ruleset);
+    const originX = job.centerX + slot.ox;
+    const originZ = job.centerZ + slot.oz;
+    const complete = footprintHasCompleteStructureEvidence(
+        dimension,
+        originX,
+        originZ,
+        fp.w,
+        fp.d,
+        job.y
+    );
+    if (complete === true) {
+        return refreshStructureSlotFromWorld(job, idx, slot, dimension, footprintForStructure);
+    }
+    // During live placement, never infer skip from partial debris — only finished shells above.
+    if (
+        !job.finished &&
+        (job.phase === "structures" ||
+            job.phase === "structure_retry" ||
+            job.phase === "structure_hold")
+    ) {
+        return false;
+    }
     return refreshStructureSlotFromWorld(job, idx, slot, dimension, footprintForStructure);
+}
+
+/**
+ * Every non-abandoned slot must be complete before the settlement counts as finished.
+ * @param {{ structures?: import("./mb_abandonedSettlementBuilder.js").StructureSlot[], structureSlotStates?: (StructureSlotState|null)[], structureSlotAbandoned?: Set<number> }} job
+ */
+export function allResolvableStructureSlotsFinished(job) {
+    const slots = job.structures ?? [];
+    if (!slots.length) return false;
+    const abandoned = job.structureSlotAbandoned ?? new Set();
+    for (let i = 0; i < slots.length; i++) {
+        if (abandoned.has(i)) continue;
+        const state = getStructureSlotState(job, i);
+        if (!state || !structureSlotCountsAsBuilt(state)) return false;
+    }
+    return true;
+}
+
+/**
+ * Demote registry rows that were marked complete from loose footprint probes but are half-built.
+ * @param {{ structures?: import("./mb_abandonedSettlementBuilder.js").StructureSlot[], structureSlotStates?: (StructureSlotState|null)[], centerX: number, centerZ: number, y: number, ruleset: string, structureSlotAbandoned?: Set<number> }} job
+ * @param {import("@minecraft/server").Dimension} dimension
+ * @param {(type: string, housePlan: number|undefined, ruleset: string) => { w: number, d: number }} footprintForStructure
+ */
+export function reconcileStructureSlotStatesBeforeResume(job, dimension, footprintForStructure) {
+    const slots = job.structures ?? [];
+    let demoted = 0;
+    for (let i = 0; i < slots.length; i++) {
+        const state = getStructureSlotState(job, i);
+        if (!state || (state.status !== "complete" && state.status !== "existing")) continue;
+        const slot = slots[i];
+        const fp = footprintForStructure(slot.type, slot.housePlan, job.ruleset);
+        const originX = job.centerX + slot.ox;
+        const originZ = job.centerZ + slot.oz;
+        const complete = footprintHasCompleteStructureEvidence(
+            dimension,
+            originX,
+            originZ,
+            fp.w,
+            fp.d,
+            job.y
+        );
+        if (complete === true || complete === undefined) {
+            continue;
+        }
+        if (!footprintHasPartialStructureEvidence(dimension, originX, originZ, fp.w, fp.d, job.y)) {
+            continue;
+        }
+        state.status = "pending";
+        delete state.label;
+        if (state.ladders === "placed") state.ladders = "needed";
+        demoted++;
+    }
+    if (demoted > 0) syncBuiltStructuresListFromStates(job);
+    return demoted;
 }
 
 /**
