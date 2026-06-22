@@ -9099,7 +9099,7 @@ export function showCodexBook(player, context) {
                 .dropdown("Block Break Volume", volumeOptions, { defaultValueIndex: breakVolIndex })
                 .dropdown("Infection sounds you make §8(cough, hiccup, cure sigh)", volumeOptions, { defaultValueIndex: infectionEmitterIndex })
                 .dropdown("Hearing others' infection sounds", volumeOptions, { defaultValueIndex: infectionHearOthersIndex })
-                .toggle("Infection camera shake §8(worsens near death)", { defaultValue: settings.infectionCameraShake !== false })
+                .toggle("Camera shake §8(infection + snow buzz)", { defaultValue: settings.infectionCameraShake !== false })
                 .dropdown("Storm Particles §8(Less = better performance)", particleOptions, { defaultValueIndex: stormParticlesIndex })
                 .toggle("Show Search Button", { defaultValue: settings.showSearchButton !== false })
                 .toggle("Infection timer on screen (action bar)", { defaultValue: showInfectionTimer })

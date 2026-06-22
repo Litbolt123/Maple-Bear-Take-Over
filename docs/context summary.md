@@ -6,6 +6,15 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+## 2026-06-22 — Snow eat camera buzz (stacking, diminishing)
+
+- **`triggerSnowEatCameraBuzz`** in `mb_infectionCameraShake.js` — rotational + light positional pulse on `mb:snow` use.
+- **Stacks** if re-eaten within ~5s (longer linger, up to ~6.5s); each rapid bite adds a **weaker** pulse.
+- **Lifetime `snowCount`** dims intensity (√ decay) so late-tier snow feels muted — matches tier messaging.
+- Same journal toggle: **Settings → Camera shake (infection + snow buzz)**.
+
+---
+
 ## 2026-06-22 — Clean structure exports (no runtime artifact cleanup)
 
 - **Discovery:** Structures can be saved for natural spawn **without** `structure_block` ever appearing in-world — no export bake, no script strip pass on approach.

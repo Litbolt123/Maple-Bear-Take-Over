@@ -15,6 +15,18 @@ const SHAKE_INTENSITY_BASE = 0.28;
 /** ~70% of prior peak (was 1.0) — still strongest at transform, not overwhelming. */
 const SHAKE_INTENSITY_PEAK = 0.7;
 
+/** Powder buzz on eating mb:snow — separate from infection death-rattle. */
+const SNOW_BUZZ_BASE_INTENSITY = 0.48;
+const SNOW_BUZZ_MIN_INTENSITY = 0.08;
+const SNOW_BUZZ_BASE_DURATION_SEC = 2.1;
+const SNOW_BUZZ_EXTEND_PER_STACK_SEC = 0.45;
+const SNOW_BUZZ_MAX_DURATION_SEC = 6.5;
+const SNOW_BUZZ_STACK_WINDOW_TICKS = 100;
+const SNOW_BUZZ_MAX_STACK = 8;
+
+/** @type {Map<string, { lastEatTick: number, stack: number, untilTick: number }>} */
+const snowBuzzByPlayer = new Map();
+
 /** @type {Map<string, number>} */
 const lastJitterTick = new Map();
 /** @type {Map<string, number>} */
@@ -126,6 +138,79 @@ export function clearInfectionCameraShake(player) {
     lastBurstTick.delete(player.id);
     nextBurstTick.delete(player.id);
     shakeApiModeByPlayer.delete(player.id);
+    snowBuzzByPlayer.delete(player.id);
+}
+
+/**
+ * Per-bite intensity falls as lifetime snowCount rises; rapid re-eats stack duration but each pulse is weaker.
+ * @param {number} snowCount
+ * @param {number} stackIndex 0 = first bite in a chain
+ * @returns {number}
+ */
+export function computeSnowEatBuzzIntensity(snowCount, stackIndex) {
+    const count = Math.max(1, snowCount || 1);
+    const lifetimeDim = 1 / Math.sqrt(1 + (count - 1) * 0.22);
+    const stackDim = 1 / (1 + Math.max(0, stackIndex) * 0.32);
+    return Math.max(SNOW_BUZZ_MIN_INTENSITY, SNOW_BUZZ_BASE_INTENSITY * lifetimeDim * stackDim);
+}
+
+/**
+ * Immediate camera "buzz" when eating snow. Stacks if eaten again within ~5s (longer linger, weaker pulses).
+ * @param {import("@minecraft/server").Player} player
+ * @param {number} [snowCount] lifetime snow eaten this infection (after this bite)
+ */
+export function triggerSnowEatCameraBuzz(player, snowCount = 1) {
+    if (!player?.isValid) return;
+    try {
+        if (player.getGameMode?.() === "spectator") return;
+    } catch {
+        /* ignore */
+    }
+    if (!getInfectionCameraShakeEnabled(player)) return;
+
+    const pid = player.id;
+    const now = system.currentTick;
+    let entry = snowBuzzByPlayer.get(pid);
+    if (!entry) {
+        entry = { lastEatTick: 0, stack: 0, untilTick: 0 };
+    }
+
+    if (now - entry.lastEatTick <= SNOW_BUZZ_STACK_WINDOW_TICKS) {
+        entry.stack = Math.min(SNOW_BUZZ_MAX_STACK, entry.stack + 1);
+    } else {
+        entry.stack = 0;
+    }
+    entry.lastEatTick = now;
+
+    const intensity = computeSnowEatBuzzIntensity(snowCount, entry.stack);
+    const durationSec = Math.min(
+        SNOW_BUZZ_MAX_DURATION_SEC,
+        SNOW_BUZZ_BASE_DURATION_SEC + entry.stack * SNOW_BUZZ_EXTEND_PER_STACK_SEC
+    );
+    const extendFromActive = entry.untilTick > now ? Math.min(1.2, (entry.untilTick - now) / 20 * 0.35) : 0;
+    const totalDuration = Math.min(SNOW_BUZZ_MAX_DURATION_SEC, durationSec + extendFromActive);
+
+    const rotApi = applyShakePulse(player, intensity, totalDuration, "Rotational");
+    if (intensity >= 0.14) {
+        applyShakePulse(player, intensity * 0.38, totalDuration * 0.7, "Positional");
+    }
+
+    entry.untilTick = now + Math.floor(totalDuration * 20);
+    snowBuzzByPlayer.set(pid, entry);
+
+    if (isInfectionCameraShakeDebugEnabled()) {
+        recordShakeDebug(pid, {
+            player: player.name,
+            mode: "snow_buzz",
+            snowCount,
+            stack: entry.stack,
+            intensity: Number(intensity.toFixed(2)),
+            durationSec: Number(totalDuration.toFixed(2)),
+            api: rotApi,
+            skipped: rotApi === "none",
+            reason: rotApi === "none" ? "api_unavailable" : "snow_buzz"
+        });
+    }
 }
 
 /**

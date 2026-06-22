@@ -50,7 +50,7 @@ import "./mb_biomeAmbience.js";
 import "./mb_snowStorm.js";
 import { isPlayerInStorm, getStormExposureRates, summonStorm, setStormOverride, resetStormOverride, getStormState, wasKilledByStorm } from "./mb_snowStorm.js";
 import { tickInfectionCoughAndBreath, playPowderHiccup, playCureSighRelief, resetInfectionAudioCooldowns } from "./mb_infectionAudio.js";
-import { tickInfectionCameraShake, clearInfectionCameraShake, shouldTickInfectionCameraShake } from "./mb_infectionCameraShake.js";
+import { tickInfectionCameraShake, clearInfectionCameraShake, shouldTickInfectionCameraShake, triggerSnowEatCameraBuzz } from "./mb_infectionCameraShake.js";
 import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
 import { tryPlaceSnowLayerUnder } from "./mb_snowPlacement.js";
@@ -2527,6 +2527,7 @@ function handleSnowConsumption(player, item) {
         
         saveInfectionData(player, { force: true });
         triggerPowderConsumptionHiccup(player);
+        triggerSnowEatCameraBuzz(player, infectionState?.snowCount || 1);
         return;
     }
     
@@ -2597,6 +2598,7 @@ function handleSnowConsumption(player, item) {
         // Track infection history
         trackInfectionHistory(player, "infected");
         triggerPowderConsumptionHiccup(player);
+        triggerSnowEatCameraBuzz(player, 1);
     } else {
         // Player is infected - apply progressive snow mechanics based on tier
         const snowCount = (infectionState.snowCount || 0) + 1;
@@ -2657,7 +2659,8 @@ function handleSnowConsumption(player, item) {
         // Apply random effects based on snow tier for infected players
         applySnowTierEffects(player, snowCount);
         triggerPowderConsumptionHiccup(player);
-        
+        triggerSnowEatCameraBuzz(player, snowCount);
+
         console.log(`[SNOW] ${player.name} consumed snow (count: ${snowCount}, time effect: ${timeEffect}, new ticks: ${infectionState.ticksLeft})`);
     }
 }
