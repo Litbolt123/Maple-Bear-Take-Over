@@ -1,6 +1,8 @@
-# Unreleased — draft release notes (next beta)
+# Unreleased — draft release notes (next **public** beta)
 
-**Status:** Work landed on `main` in dev commit `67d9de8` — **do not bump version** until maintainer says release.  
+**Dev Beta 4.2** shipped as a **Patreon dev-only** drop (`BP - Dev/`, `v0.9.0-beta.4.2`) — see [DEV_BETA_4.2.md](DEV_BETA_4.2.md). Public `BP/` remains **beta.4** until next store/GitHub release.
+
+**Status:** Work landed on `main` in dev commit `67d9de8` — **do not bump public version** until maintainer says release.  
 **When shipping:** copy player bullets → `docs/PLAYER_CHANGELOG.md`, `docs/RELEASE_BODY.md`, `BP/scripts/mb_playerChangelog.js`, run `npm run sync:pack-metadata`, tag `v*`. CI attaches **BP + RP** zips only (no dev pack downloads on the Release).
 
 ---

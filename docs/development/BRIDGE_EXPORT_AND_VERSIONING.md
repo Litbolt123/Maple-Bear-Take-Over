@@ -50,6 +50,7 @@ Before a **public** release (folding dev work into `BP/`): run **`npm run sync:b
 | Field | What it shows | How to bump |
 |-------|----------------|-------------|
 | **`header.description`** | Full semver, e.g. `v0.9.0-beta.3 — …` | Edit `ADDON_VERSION_*` in `mb_buildConfig.js`, run `npm run sync:pack-metadata` |
+| **Dev pack description** | e.g. `v0.9.0-beta.4.2 — … (Dev)` | Edit `ADDON_VERSION_PRERELEASE` in **`BP - Dev/scripts/mb_buildConfig.js`**, then `npm run sync:pack-metadata` (dev manifests read dev config; public `BP/` stays on release config) |
 | **`header.version`** `[0,9,0]` | Bedrock pack version (integers only; no `-beta.3`) | Same sync script — tracks `0.9.0` from build config |
 | In-game journal / UI | `getAddonVersionDisplayString()` | Same `mb_buildConfig.js` constants |
 

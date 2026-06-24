@@ -21,6 +21,8 @@ export function getPlayerChangelogBody() {
         `§eMapleBear TakeOver §7— §f${ver}`,
         "",
         "§7Recent highlights:",
+        "§8• §7Snow buzz: camera wobble when you eat powder — §eSettings §7→ camera shake",
+        "§8• §7Infection shake: gentler day-to-day; ramps in the last ~30s before transform",
         "§8• §7Performance: smoother day 0–1 and village approach (spread work, smaller scans)",
         "§8• §7Buff bears: death explosion back; kills respect victim size",
         "§8• §7Buff cap on all paths — storms/conversions spawn infected when over limit",

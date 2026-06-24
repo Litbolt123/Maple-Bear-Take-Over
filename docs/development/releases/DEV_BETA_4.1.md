@@ -1,5 +1,7 @@
 # Dev Beta 4.1 — The Maple Bear Apocalypse (Dev pack only)
 
+**Superseded by [DEV_BETA_4.2.md](DEV_BETA_4.2.md)** for current Patreon dev playtests.
+
 **Label:** `v0.9.0-beta.4.1 (dev build)`  
 **Base public release:** `v0.9.0-beta.4`  
 **Audience:** Patreon / internal playtest — **`BP - Dev/` + `RP - Dev/`** (not GitHub Release zips).

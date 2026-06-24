@@ -1,9 +1,28 @@
 # Player-facing changelog
 
-Short bullets for patch notes and in-game **What's new** (`BP/scripts/mb_playerChangelog.js`).  
+Short bullets for patch notes and in-game **What's new** (`mb_playerChangelog.js` — **`BP - Dev/`** for dev drops; **`BP/`** for public).
 Bump **`PLAYER_CHANGELOG_VERSION`** in `mb_playerChangelog.js` when you ship a new beta.
 
-## Unreleased (draft — next beta)
+## Dev Beta 4.2 (dev pack only · `v0.9.0-beta.4.2`)
+
+Patreon / **`BP - Dev/`** playtest — public **`BP/`** remains **v0.9.0-beta.4** until next store release.  
+Release notes: [`development/releases/DEV_BETA_4.2.md`](development/releases/DEV_BETA_4.2.md)
+
+### Feel
+
+- **Snow buzz:** eating `mb:snow` gives a short camera wobble (~2s). Re-eat within ~5s → longer buzz, weaker each pulse. High lifetime snow count dulls the effect.
+- **Infection camera shake:** softer overall; ramps over the **last ~30 seconds** before transform (not constant heavy shake early).
+- **Journal → Settings → Camera shake (infection + snow buzz)** — one toggle.
+
+### Performance & villages
+
+- Fixed abandoned-village worldgen treating almost every player as “near a lamp” (day-0 lag spikes).
+- **Script village placement OFF by default** — **Settings → Dev world features** (WIP; ship goal is natural jigsaw worldgen).
+- Clean structure exports — no runtime `structure_block` cleanup at lamp posts.
+
+---
+
+## Unreleased (draft — next public beta)
 
 **Copy from here when releasing.** Full draft + dev bullets: [`docs/development/releases/UNRELEASED_DRAFT.md`](development/releases/UNRELEASED_DRAFT.md).  
 **Do not bump version** until release day.
@@ -33,6 +52,8 @@ Bump **`PLAYER_CHANGELOG_VERSION`** in `mb_playerChangelog.js` when you ship a n
 ## v0.9.0-beta.4
 
 - Performance: day 0–1 and approaching villages should hitch less — heavy work is spread across ticks and uses smaller entity scans near players.
+- **Snow buzz:** eating powder gives a short camera wobble (Settings → camera shake); stacks softer if eaten quickly; dulls at high snow count.
+- **Infection camera shake:** softer overall; ramps over the last ~30 seconds before transform.
 - Buff bears: death powder explosion is back; kills convert by victim size (tiny / normal / large), not always the smallest bear.
 - Balance: buff bear count is capped on **all** spawn paths (including storms and conversions); extra conversions become infected bears for the current day.
 - Storms: fixed double conversion when a bear killed the mob; storm waves no longer flood buff bears past the cap.

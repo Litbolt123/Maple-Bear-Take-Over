@@ -784,7 +784,7 @@ export function getInfectionCueHearOthersTier(player) {
 }
 
 /**
- * Infection camera shake (worsens as timer runs down). Default on.
+ * Infection + snow eat camera shake. Default on. Journal → Settings.
  * @param {import("@minecraft/server").Player} player
  * @returns {boolean}
  */
@@ -2202,6 +2202,9 @@ export function showCodexBook(player, context) {
             if (stagesKnown) mechLines.push("§7• Infection progresses through multiple stages");
             if (symptomsEscalateKnown) mechLines.push("§7• Symptoms worsen as infection advances");
             if (snowTimerKnown) mechLines.push("§7• \"Snow\" consumption affects the timer (major infection only)");
+            if (codex.infections?.snow?.discovered || (infectionState?.snowCount || 0) > 0) {
+                mechLines.push("§7• Eating \"snow\" can buzz the camera — §eSettings §7→ camera shake");
+            }
             if (dayScalingKnown) mechLines.push("§7• Conversion pressure from the outbreak tends to rise as days pass");
             if (day20ConversionKnown) mechLines.push("§7• By Day 20, all mob kills convert to infected variants");
             if (codex.symptomsUnlocks?.infectionBodySoundsUnlocked) {
@@ -3169,9 +3172,9 @@ export function showCodexBook(player, context) {
                         const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
                         
                         if (hasBeenInfected && hasFoundSnow && infectionKnowledge >= 1) {
-                            body = "§e\"Snow\" (Powder)\n§7Risky substance. Leads to symptoms and doom.";
+                            body = "§e\"Snow\" (Powder)\n§7Risky substance. Leads to symptoms and doom.\n§7Consuming it may buzz your vision — §eSettings §7→ camera shake.";
                         } else if (codex.items.snowIdentified && infectionKnowledge >= 1) {
-                            body = "§e\"Snow\" (Powder)\n§7Risky substance. Leads to symptoms and doom.";
+                            body = "§e\"Snow\" (Powder)\n§7Risky substance. Leads to symptoms and doom.\n§7Consuming it may buzz your vision — §eSettings §7→ camera shake.";
                         } else if (snowKnowledge >= 1) {
                             body = "§e\"Snow\" (Powder)\n§7A mysterious white powder. You sense it has properties beyond what you currently understand.";
                         } else {

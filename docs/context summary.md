@@ -6,6 +6,29 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+## 2026-06-22 — Dev Beta 4.2 alignment (public What's new + snow item + docs commit)
+
+- **`BP/scripts/mb_playerChangelog.js`:** snow buzz + infection shake bullets (version still `beta.4`).
+- **`mb_codex.js`:** Snow (Powder) item entry mentions camera buzz when identified.
+- Dev 4.2 version/manifests/Patreon docs committed.
+
+---
+
+## 2026-06-22 — Dev Beta 4.2 journal + version alignment
+
+- **`BP - Dev/`** `mb_buildConfig.js` → `beta.4.2`; `mb_playerChangelog.js` What's new; codex infection mechanics + settings label.
+- **`docs/PLAYER_CHANGELOG.md`** Dev Beta 4.2 section; smoke checklist row; `syncPackMetadata.js` reads dev prerelease from `BP - Dev/scripts/mb_buildConfig.js`.
+- Public **`BP/`** changelog/version unchanged (`beta.4`).
+
+---
+
+## 2026-06-22 — Dev Beta 4.2 release notes + Patreon draft
+
+- **`docs/development/releases/DEV_BETA_4.2.md`** — dev drop scope (camera shake, day-0 perf, opt-in villages, clean exports).
+- **`docs/marketing/PATREON_DEV_BETA_4.2.md`** — paste-ready Patreon post (video hook for snow buzz / jitter).
+
+---
+
 ## 2026-06-22 — Snow eat camera buzz (stacking, diminishing)
 
 - **`triggerSnowEatCameraBuzz`** in `mb_infectionCameraShake.js` — rotational + light positional pulse on `mb:snow` use.

@@ -12,7 +12,14 @@ import { fileURLToPath } from "url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const buildConfigPath = join(root, "BP/scripts/mb_buildConfig.js");
+const devBuildConfigPath = join(root, "BP - Dev/scripts/mb_buildConfig.js");
 const src = readFileSync(buildConfigPath, "utf8");
+const devSrc = readFileSync(devBuildConfigPath, "utf8");
+
+function readPrereleaseFromSource(text, fallback = "") {
+    const m = text.match(/export const ADDON_VERSION_PRERELEASE = ["']([^"']*)["']/);
+    return m ? m[1] : fallback;
+}
 
 function readConst(name, fallback = "") {
     const m = src.match(new RegExp(`export const ${name} = ["']([^"']+)["']`));
@@ -31,9 +38,11 @@ const ADDON_VERSION_MINOR = readNum("ADDON_VERSION_MINOR");
 const ADDON_VERSION_PATCH = readNum("ADDON_VERSION_PATCH");
 const prereleaseMatch = src.match(/export const ADDON_VERSION_PRERELEASE = ["']([^"']*)["']/);
 const ADDON_VERSION_PRERELEASE = prereleaseMatch ? prereleaseMatch[1] : "";
+const DEV_ADDON_VERSION_PRERELEASE = readPrereleaseFromSource(devSrc, ADDON_VERSION_PRERELEASE);
 
 const core = `${ADDON_VERSION_MAJOR}.${ADDON_VERSION_MINOR}.${ADDON_VERSION_PATCH}`;
 const semver = ADDON_VERSION_PRERELEASE ? `${core}-${ADDON_VERSION_PRERELEASE}` : core;
+const devSemver = DEV_ADDON_VERSION_PRERELEASE ? `${core}-${DEV_ADDON_VERSION_PRERELEASE}` : semver;
 const versionTriple = [ADDON_VERSION_MAJOR, ADDON_VERSION_MINOR, ADDON_VERSION_PATCH];
 
 function releaseDescription(kind) {
@@ -45,9 +54,9 @@ function releaseDescription(kind) {
 
 function devDescription(kind) {
     if (kind === "behavior") {
-        return `v${semver} — ${PACK_DISPLAY_NAME_DEV}. Full developer tools.`;
+        return `v${devSemver} — ${PACK_DISPLAY_NAME_DEV}. Full developer tools.`;
     }
-    return `v${semver} — ${PACK_DISPLAY_NAME_DEV} (resource pack).`;
+    return `v${devSemver} — ${PACK_DISPLAY_NAME_DEV} (resource pack).`;
 }
 
 function patchManifest(path, { name, description }) {
@@ -101,5 +110,5 @@ writeFileSync(configPath, JSON.stringify(config, null, "\t") + "\n", "utf8");
 console.log(`Updated ${configPath}`);
 
 console.log(
-    `\nDone. In-game / .mcpack name: "${PACK_DISPLAY_NAME}". Description includes v${semver}. Manifest version: [${versionTriple.join(", ")}].`
+    `\nDone. Release: v${semver}. Dev packs: v${devSemver}. Manifest version: [${versionTriple.join(", ")}].`
 );
