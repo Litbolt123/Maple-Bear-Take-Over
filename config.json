@@ -1,17 +1,17 @@
 {
 	"type": "minecraftBedrock",
-	"name": "The Maple Bear Apocalypse",
+	"name": "M.B.A (Dev)",
 	"namespace": "bridge",
 	"authors": [
-		"Maple Bear Industries"
+		"Litbolt123 and Compoohter"
 	],
 	"targetVersion": "1.21.130",
-	"description": "The Maple Bear Apocalypse — v0.9.0-beta.4. Don't do drugs kids...",
+	"description": "The Maple Bear Apocalypse (Dev) — v0.9.0-beta.4.2. Don't do drugs kids...",
 	"experimentalGameplay": {},
 	"bdsProject": false,
 	"packs": {
-		"behaviorPack": "./BP",
-		"resourcePack": "./RP"
+		"behaviorPack": "./BP - Dev",
+		"resourcePack": "./RP - Dev"
 	},
 	"worlds": [
 		"./worlds/*"

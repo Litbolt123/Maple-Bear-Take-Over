@@ -22,7 +22,10 @@ const destPath = join(root, "config.json");
 const config = JSON.parse(readFileSync(templatePath, "utf8"));
 
 if (syncNames) {
-    const buildConfigPath = join(root, "BP/scripts/mb_buildConfig.js");
+    const buildConfigPath = join(
+        root,
+        flavor === "dev" ? "BP - Dev/scripts/mb_buildConfig.js" : "BP/scripts/mb_buildConfig.js"
+    );
     const src = readFileSync(buildConfigPath, "utf8");
     const readConst = (name, fallback = "") => {
         const m = src.match(new RegExp(`export const ${name} = ["']([^"']+)["']`));

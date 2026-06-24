@@ -9,7 +9,7 @@ import {
     RELEASE_ADMIN_FORCE_SPAWN_IDS,
     RELEASE_ADMIN_FORCE_SPAWN_MAX
 } from "./mb_buildConfig.js";
-import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, getPlayerSettings, checkKnowledgeProgression, showEmulsifierMachineUI, getInfectionCueEmitterTier, getInfectionCueHearOthersTier, getInfectionCameraShakeEnabled } from "./mb_codex.js";
+import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, getPlayerSettings, checkKnowledgeProgression, showEmulsifierMachineUI, getInfectionCueEmitterTier, getInfectionCueHearOthersTier, getInfectionCameraShakeEnabled, ensurePlayerChangelogMigration } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock, getEmulsifierZoneAtBlock, getZoneFuelQueueForUI, isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
 import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
@@ -6939,6 +6939,7 @@ world.afterEvents.playerJoin.subscribe((event) => {
 
                 console.log(`[JOIN MAIN] ✓ Player ${player.name} found! Loading infection data and checking intro...`);
                 loadInfectionData(player);
+                ensurePlayerChangelogMigration(player);
                 
                 // Check if this player has seen intro (per-player: each new player gets full intro)
                 const introSeenRaw = getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY);

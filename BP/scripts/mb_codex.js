@@ -54,7 +54,8 @@ import {
     INCLUDE_FULL_DEVELOPER_TOOLS,
     INCLUDE_ADMIN_TOOLS,
     isReleaseAdminBuild,
-    getAddonVersionDisplayString
+    getAddonVersionDisplayString,
+    BUILD_FLAVOR
 } from "./mb_buildConfig.js";
 import { summonStorm, endStorm, getStormState, getStormDebugInfo, setStormOverride, resetStormOverride, getStormControlParams, isMultiStormEnabled, setMultiStormEnabled, getStorms, endStormById, setStormEnabled } from "./mb_snowStorm.js";
 import { getMiningAIState } from "./mb_miningAI.js";
@@ -88,6 +89,7 @@ import {
     BEAR_CULL_TYPE_GROUPS
 } from "./mb_bearCullDev.js";
 import { showJournalWhatsNew } from "./mb_journalWhatsNew.js";
+import { PLAYER_CHANGELOG_VERSION, isPlayerChangelogUnread, getPlayerChangelogDisplayLabel } from "./mb_playerChangelog.js";
 import {
     openBiomeCheckerHub,
     isBiomeCheckerHudPersonalEnabled,
@@ -688,7 +690,8 @@ export function getDefaultCodex() {
             subsectionLastUnlock: {},
             subsectionLastViewed: {},
             hasOpenedBefore: false,
-            powderyHudTimerHintShown: false
+            powderyHudTimerHintShown: false,
+            whatsNewLastSeenVersion: ""
         },
         biomeData: {} // Will store biome-specific infection data as discovered
     };
@@ -710,6 +713,42 @@ export function saveCodex(player, codex) {
         setPlayerPropertyChunked(player, "mb_codex", JSON.stringify(codex));
     } catch (e) {
         console.warn('Failed to save codex:', e);
+    }
+}
+
+/** Mark current pack changelog as read (Powdery Journal → What's new). */
+export function markPlayerChangelogSeen(player) {
+    try {
+        const codex = getCodex(player);
+        if (!codex.journal) codex.journal = {};
+        if (codex.journal.whatsNewLastSeenVersion === PLAYER_CHANGELOG_VERSION) return;
+        codex.journal.whatsNewLastSeenVersion = PLAYER_CHANGELOG_VERSION;
+        saveCodex(player, codex);
+    } catch {
+        /* ignore */
+    }
+}
+
+/**
+ * Ensure existing players have changelog tracking fields after a version bump.
+ * What's new body is always read from scripts — this only drives the (new) badge.
+ */
+export function ensurePlayerChangelogMigration(player) {
+    try {
+        const codex = getCodex(player);
+        if (!codex.journal) codex.journal = {};
+        if (codex.journal.whatsNewLastSeenVersion === undefined) {
+            codex.journal.whatsNewLastSeenVersion = "";
+            saveCodex(player, codex);
+        }
+        if (BUILD_FLAVOR === "dev" && INCLUDE_FULL_DEVELOPER_TOOLS) {
+            console.warn(
+                `[MBA] Dev pack scripts loaded — journal What's new: ${getPlayerChangelogDisplayLabel()} (${PLAYER_CHANGELOG_VERSION}). ` +
+                `If the journal still shows MapleBear TakeOver or beta.4.1, re-export BP - Dev from Bridge and replace the world pack.`
+            );
+        }
+    } catch {
+        /* ignore */
     }
 }
 
@@ -1883,8 +1922,12 @@ export function showCodexBook(player, context) {
 
         addSectionButton("§fAchievements", "achievements", () => openAchievements());
 
-        buttons.push("§aWhat's new");
-        buttonActions.push(() => showJournalWhatsNew(player, () => openMain(), getPlayerSoundVolume(player)));
+        let whatsNewLabel = "§aWhat's new";
+        if (isPlayerChangelogUnread(codex)) {
+            whatsNewLabel = `§l§o§aWhat's new §8(new)`;
+        }
+        buttons.push(whatsNewLabel);
+        buttonActions.push(() => showJournalWhatsNew(player, () => openMain(), getPlayerSoundVolume(player), markPlayerChangelogSeen));
 
         if (hasJournalPowerToolsAccess(player) && (INCLUDE_ADMIN_TOOLS || INCLUDE_FULL_DEVELOPER_TOOLS)) {
             sanitizePinnedDevItems(player);

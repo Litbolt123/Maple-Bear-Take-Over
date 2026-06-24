@@ -6,7 +6,22 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
-## 2026-06-22 — Dev Beta 4.2 alignment (public What's new + snow item + docs commit)
+## 2026-06-24 — What's new still showed beta.4.1 (stale Bridge export)
+
+- **Diagnosis:** Screenshot matched **pre-4.2** scripts (`MapleBear TakeOver`, `Recent highlights`, beta.4.1). Journal does **not** cache changelog text — world was on an old pack export. Root `config.json` had been on **`./BP`** (release), not **`./BP - Dev`**.
+- **Fix:** `npm run bridge:config:dev:sync` → Bridge now targets dev packs. `copyBridgeConfig.js` reads **`BP - Dev/scripts/mb_buildConfig.js`** for dev flavor. Join Content Log warns expected **Dev Beta 4.2** version. User must **re-export `.mcpack` from Bridge** and replace the behavior pack on the world.
+
+---
+
+## 2026-06-24 — What's new version tracking (Dev Beta 4.2, existing worlds)
+
+- **Root cause:** `PLAYER_CHANGELOG_VERSION` was never wired to journal UI — no per-player `whatsNewLastSeenVersion`, no **(new)** badge. What's new body is **not** cached (always from `getPlayerChangelogBody()`); stale text in existing worlds usually means the world still runs **public `BP/`** scripts or an old dev export.
+- **`mb_playerChangelog.js`:** `getPlayerChangelogDisplayLabel()` → **Dev Beta 4.2** (dev) / **Beta 4** (public); `isPlayerChangelogUnread(codex)`.
+- **`mb_journalWhatsNew.js`:** title `What's new — Dev Beta 4.2`; marks seen on open.
+- **`mb_codex.js`:** `journal.whatsNewLastSeenVersion`, `markPlayerChangelogSeen`, `ensurePlayerChangelogMigration`; Powdery main menu **What's new (new)** when version differs.
+- **`main.js`:** `ensurePlayerChangelogMigration` on player join. Mirrored `BP/` + `BP - Dev/`.
+
+---
 
 - **`BP/scripts/mb_playerChangelog.js`:** snow buzz + infection shake bullets (version still `beta.4`).
 - **`mb_codex.js`:** Snow (Powder) item entry mentions camera buzz when identified.
