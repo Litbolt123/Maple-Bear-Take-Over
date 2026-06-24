@@ -23,6 +23,7 @@
     "release:package": "node tools/packageRelease.js",
     "sync:biome-registry": "node tools/syncBiomeReplaceRegistry.cjs",
     "sync:bp-from-dev": "node tools/syncBpFromDev.js",
+    "sync:dev-to-minecraft": "node tools/syncDevPackToMinecraft.js",
     "generate:no-village-biomes": "node tools/generateNoVillageBiomeOverrides.js",
     "strip:mcstructures": "node tools/stripMcstructureArtifacts.js",
     "strip:mcstructures:dry": "node tools/stripMcstructureArtifacts.js --dry-run",

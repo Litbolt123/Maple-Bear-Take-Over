@@ -6,6 +6,55 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+## 2026-06-24 — Duplicate minor infection chat on death respawn
+
+- Death respawn called `initializeMinorInfection` + `showMinorInfectionDeathRespawnUi` — both sent "Minor infection." Init now supports `{ silentUi: true }` on death path; UI only from death respawn helper.
+
+---
+
+## 2026-06-24 — Death respawn still loaded major (flush re-read stale disk + playerJoin race)
+
+- Content log: `[DEATH] Cleared major…` then `[LOAD] Loaded active infection (type: major) ticksLeft:520` — same `lastActiveTick` as pre-death.
+- **Bug 1:** `flushPlayerPropertyToDisk` called `getPlayerProperty` after cache delete → re-read stale `mb_infection` from disk.
+- **Bug 2:** `playerJoin` → `loadInfectionData` after spawn undid death clear.
+- **Fix:** `clearPlayerPropertyToDisk()`; `deathRespawnFreshMinorPending` blocks load until `initializeMinorInfection` on death respawn; spawn forces fresh minor when death pending.
+
+---
+
+## 2026-06-24 — Death respawn reloaded stale major infection (property flush bug)
+
+- **Root cause:** `handlePlayerDeath` cleared infection in memory/cache but **did not flush** `mb_infection` to player dynamic properties. On respawn `getPlayerProperty` read the **old saved major** (~30s left) → shake + wrong timer.
+- **Fix:** `flushClearActiveInfectionSave()` + `flushPlayerPropertyToDisk` on death; skip `loadInfectionData` when death-respawn pending; block infection loop/saves while `infectionActionBarSuppressedUntilSpawn`.
+
+---
+
+## 2026-06-24 — Death → fresh minor infection; camera shake fully cleared
+
+- **Design:** Death (without permanent immunity) always wipes active infection and respawns with **fresh minor** (`initializeMinorInfection`) — no carrying near-death major timer / snow / shake urgency through death.
+- **Shake:** Suppress through death screen + respawn grace; `pulseClearInfectionCameraShake` resolves live player by id across delayed retries.
+
+---
+
+## 2026-06-24 — Death: camera shake stuck + infection timer decaying on death screen
+
+- **Bug:** Infection loop kept ticking (and applying camera shake) while player was dead; `camerashake stop` often failed once on death. Timer kept counting down on death screen → respawn looked like a “short” timer with heavy shake.
+- **Fix (`BP - Dev/`):** Skip infection loop when dead; suppress shake 12s on death + 5s grace on respawn; `pulseClearInfectionCameraShake` retries stop across several ticks.
+
+---
+
+## 2026-06-24 — Dev Beta 4.2 What's new confirmed in-game
+
+- User verified Powdery Journal **What's new** shows **Dev Beta 4.2** after full Minecraft restart (not just world rejoin). `BP - Dev/scripts/mb_playerChangelog.js` is the source; `npm run sync:dev-to-minecraft` pushes repo → AppData dev packs.
+
+---
+
+## 2026-06-24 — What's new text lives in scripts; Minecraft used stale AppData copy
+
+- Journal What's new is **`getPlayerChangelogBody()`** in `mb_playerChangelog.js` — not stored on the player. World was loading **`development_behavior_packs/MapleBear TakeOver BP`** (beta.4.1 scripts) while git had 4.2 in `BP - Dev/`.
+- **`npm run sync:dev-to-minecraft`** copies `BP - Dev` + `RP - Dev` into every dev pack folder with matching UUID (legacy + renamed). Run after script edits before playtesting.
+
+---
+
 ## 2026-06-24 — What's new still showed beta.4.1 (stale Bridge export)
 
 - **Diagnosis:** Screenshot matched **pre-4.2** scripts (`MapleBear TakeOver`, `Recent highlights`, beta.4.1). Journal does **not** cache changelog text — world was on an old pack export. Root `config.json` had been on **`./BP`** (release), not **`./BP - Dev`**.

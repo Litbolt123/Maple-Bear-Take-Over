@@ -1,4 +1,4 @@
-import { system } from "@minecraft/server";
+import { system, world } from "@minecraft/server";
 import { getInfectionCameraShakeEnabled } from "./mb_codex.js";
 import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
 import { getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
@@ -36,6 +36,63 @@ const nextBurstTick = new Map();
 
 /** @type {Map<string, object>} */
 const lastDebugByPlayer = new Map();
+
+/** @type {Map<string, number>} playerId → world tick when shake may resume */
+const shakeSuppressedUntilTick = new Map();
+
+/**
+ * Block infection/snow camera shake until a future tick (death screen, respawn grace).
+ * @param {import("@minecraft/server").Player} player
+ * @param {number} [ticks]
+ */
+export function suppressInfectionCameraShake(player, ticks = 100) {
+    if (!player?.id) return;
+    const until = system.currentTick + Math.max(1, ticks);
+    const prev = shakeSuppressedUntilTick.get(player.id) ?? 0;
+    shakeSuppressedUntilTick.set(player.id, Math.max(prev, until));
+}
+
+/**
+ * @param {string} playerId
+ * @returns {boolean}
+ */
+export function isInfectionCameraShakeSuppressed(playerId) {
+    const until = shakeSuppressedUntilTick.get(playerId) ?? 0;
+    if (until <= system.currentTick) {
+        if (until > 0) shakeSuppressedUntilTick.delete(playerId);
+        return false;
+    }
+    return true;
+}
+
+/**
+ * camerashake stop often fails once on death; retry across a few ticks.
+ * @param {import("@minecraft/server").Player} player
+ * @param {number} [attempts]
+ */
+export function pulseClearInfectionCameraShake(player, attempts = 6) {
+    const playerId = player?.id;
+    if (!playerId) return;
+
+    const clearLive = () => {
+        try {
+            for (const p of world.getAllPlayers()) {
+                if (p.id === playerId && p.isValid) {
+                    clearInfectionCameraShake(p);
+                    return;
+                }
+            }
+        } catch {
+            /* ignore */
+        }
+    };
+
+    clearLive();
+    const delays = [1, 3, 8, 15, 30, 50, 80];
+    for (let i = 0; i < Math.min(attempts, delays.length); i++) {
+        system.runTimeout(clearLive, delays[i]);
+    }
+}
 
 /**
  * @returns {boolean}
@@ -161,6 +218,7 @@ export function computeSnowEatBuzzIntensity(snowCount, stackIndex) {
  */
 export function triggerSnowEatCameraBuzz(player, snowCount = 1) {
     if (!player?.isValid) return;
+    if (isInfectionCameraShakeSuppressed(player.id)) return;
     try {
         if (player.getGameMode?.() === "spectator") return;
     } catch {
@@ -340,8 +398,23 @@ function scheduleNextBurst(playerId, urgency, severity, now) {
 export function tickInfectionCameraShake(player, state, opts) {
     if (!player?.isValid || !state || state.cured || opts.introActive) return;
 
+    if (isInfectionCameraShakeSuppressed(player.id)) {
+        clearInfectionCameraShake(player);
+        return;
+    }
+
     try {
         if (player.getGameMode?.() === "spectator") return;
+    } catch {
+        /* ignore */
+    }
+
+    try {
+        const health = player.getComponent("minecraft:health");
+        if (health && health.currentValue <= 0) {
+            clearInfectionCameraShake(player);
+            return;
+        }
     } catch {
         /* ignore */
     }
