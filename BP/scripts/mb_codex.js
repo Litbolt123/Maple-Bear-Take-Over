@@ -1,4 +1,4 @@
-import { system, world, ItemStack } from "@minecraft/server";
+﻿import { system, world, ItemStack } from "@minecraft/server";
 import { ActionFormData, ModalFormData, FormCancelationReason } from "@minecraft/server-ui";
 import { getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getPlayerPropertyChunked, setPlayerPropertyChunked, getWorldPropertyChunked, setWorldPropertyChunked, saveAllProperties, ADDON_DIFFICULTY_PROPERTY, getAddonDifficultyState, getPlayerJournalSettingsChunked, setPlayerJournalSettingsChunked } from "./mb_dynamicPropertyHandler.js";
 import {
@@ -104,6 +104,7 @@ import {
     setEntityQueryHudPersonalEnabled
 } from "./mb_entityQueryDebugDev.js";
 import { DEV_BTN_BACK, DEV_BTN_DOT, devBtnBackTo, devBtnParen } from "./mb_devFormUi.js";
+import { previewVanillaFreezeCameraShake } from "./mb_infectionCameraShake.js";
 
 const SPAWN_DIFFICULTY_PROPERTY = "mb_spawnDifficulty";
 
@@ -155,14 +156,14 @@ export function applyJournalLagComfortBundle(level) {
 }
 
 /**
- * Two-step journal flow: Have lag? → severity. Used from Basic and Powdery settings.
+ * Two-step journal flow: Have lag? ? severity. Used from Basic and Powdery settings.
  * @param {import("@minecraft/server").Player} player
  * @param {() => void} goBack
  */
 export function openJournalLagComfortWizard(player, goBack) {
     const form1 = new ActionFormData()
         .title("§eHave lag?")
-        .body("§7Tune spawn scanning, dust storms, and mining AI.\n\n§8Default §7(recommended) uses the §6Mid§7 tier — lighter scans like most playtests. §7Full auto is for max scaling.");
+        .body("§7Tune spawn scanning, dust storms, and mining AI.\n\n§8Default §7(recommended) uses the §6Mid§7 tier § lighter scans like most playtests. §7Full auto is for max scaling.");
     form1.button("§6How much? §8(choose level)");
     form1.button(DEV_BTN_BACK);
     form1.show(player).then((res) => {
@@ -176,7 +177,7 @@ export function openJournalLagComfortWizard(player, goBack) {
         const form2 = new ActionFormData()
             .title("§eHow much lag?")
             .body(`§7Current: §f${journalLagComfortLabel(cur)}\n\n§aDefault §7= Mid (recommended).\n§7Full auto §8= max scaling for strong devices.`);
-        form2.button("§aDefault §8(Mid — recommended)");
+        form2.button("§aDefault §8(Mid § recommended)");
         form2.button("§eA little");
         form2.button("§7Full auto §8(advanced)");
         form2.button("§cLAGGY!");
@@ -192,10 +193,10 @@ export function openJournalLagComfortWizard(player, goBack) {
             const lvl = lvlByButton[res2.selection] ?? DEFAULT_LAG_COMFORT_LEVEL;
             applyJournalLagComfortBundle(lvl);
             const names = [
-                "Default (Mid) — low spawn preset + low-lag scan + slower storms/mining.",
-                "A little — lighter spawn scan, slower storm/mining work.",
-                "Full auto — spawn + storms + mining scale freely with player count.",
-                "LAGGY! — ultra-low spawn + minimal scan + slowest storm/mining cadence."
+                "Default (Mid) § low spawn preset + low-lag scan + slower storms/mining.",
+                "A little § lighter spawn scan, slower storm/mining work.",
+                "Full auto § spawn + storms + mining scale freely with player count.",
+                "LAGGY! § ultra-low spawn + minimal scan + slowest storm/mining cadence."
             ];
             player.sendMessage(CHAT_SUCCESS + (names[res2.selection] ?? names[0]));
             goBack();
@@ -207,7 +208,7 @@ function hasCheats(p) {
     return (p?.hasTag && p.hasTag("mb_cheats")) || Boolean(typeof system !== "undefined" && system?.isEnableCheats?.());
 }
 
-/** World flag: dev build only — show §6Admin tools on the journal main menu like the public pack. */
+/** World flag: dev build only § show §6Admin tools on the journal main menu like the public pack. */
 const MB_WORLD_DEV_PREVIEW_ADMIN_MAIN = "mb_world_dev_preview_admin_main";
 
 export function isDevPreviewAdminMainMenuEnabled() {
@@ -304,7 +305,7 @@ function getFuelCostAvailabilityLine(player, fuelType) {
         const have = countItemInInventory(player, c.item);
         const haveColor = have >= c.count ? "§a" : "§c";
         const name = c.item.replace("minecraft:", "").replace("mb:", "");
-        parts.push(`${haveColor}${have}/${c.count}§f× ${name}`);
+        parts.push(`${haveColor}${have}/${c.count}§f${name}`);
     }
     return "§8You have: §f" + parts.join("  ");
 }
@@ -350,7 +351,7 @@ export function showEmulsifierMachineUI(player, block) {
                 })();
                 return `${i + 1}. ${label}`;
             });
-            fuelBody += parts.join(" §8→ ");
+            fuelBody += parts.join(" §8  ");
         }
         fuelBody += `\n§fBurn order: §8${orderLabel(order)}`;
         const hasNetheriteInQueue = queue.some(e => e.fuelType === "netherite");
@@ -716,7 +717,7 @@ export function saveCodex(player, codex) {
     }
 }
 
-/** Mark current pack changelog as read (Powdery Journal → What's new). */
+/** Mark current pack changelog as read (Powdery Journal ? What's new). */
 export function markPlayerChangelogSeen(player) {
     try {
         const codex = getCodex(player);
@@ -731,7 +732,7 @@ export function markPlayerChangelogSeen(player) {
 
 /**
  * Ensure existing players have changelog tracking fields after a version bump.
- * What's new body is always read from scripts — this only drives the (new) badge.
+ * What's new body is always read from scripts § this only drives the (new) badge.
  */
 export function ensurePlayerChangelogMigration(player) {
     try {
@@ -743,7 +744,7 @@ export function ensurePlayerChangelogMigration(player) {
         }
         if (BUILD_FLAVOR === "dev" && INCLUDE_FULL_DEVELOPER_TOOLS) {
             console.warn(
-                `[MBA] Dev pack scripts loaded — journal What's new: ${getPlayerChangelogDisplayLabel()} (${PLAYER_CHANGELOG_VERSION}). ` +
+                `[MBA] Dev pack scripts loaded § journal What's new: ${getPlayerChangelogDisplayLabel()} (${PLAYER_CHANGELOG_VERSION}). ` +
                 `If the journal still shows MapleBear TakeOver or beta.4.1, re-export BP - Dev from Bridge and replace the world pack.`
             );
         }
@@ -795,7 +796,7 @@ export function getPlayerSoundVolume(player) {
 /**
  * Infection body sounds the player produces (cough, hiccup, cure sigh). 0=off, 1=low, 2=high
  * @param {import("@minecraft/server").Player} player
- * @returns {number} 0–2
+ * @returns {number} 0§2
  */
 export function getInfectionCueEmitterTier(player) {
     try {
@@ -810,7 +811,7 @@ export function getInfectionCueEmitterTier(player) {
 /**
  * How loudly this player hears *other* players' infection coughs/hiccups/sighs. 0=off, 1=low, 2=high
  * @param {import("@minecraft/server").Player} player
- * @returns {number} 0–2
+ * @returns {number} 0§2
  */
 export function getInfectionCueHearOthersTier(player) {
     try {
@@ -823,7 +824,7 @@ export function getInfectionCueHearOthersTier(player) {
 }
 
 /**
- * Infection + snow eat camera shake. Default on. Journal → Settings.
+ * Infection + snow eat camera shake. Default on. Journal ? Settings.
  * @param {import("@minecraft/server").Player} player
  * @returns {boolean}
  */
@@ -831,6 +832,35 @@ export function getInfectionCameraShakeEnabled(player) {
     try {
         const codex = getCodex(player);
         return codex.settings?.infectionCameraShake !== false;
+    } catch {
+        return true;
+    }
+}
+
+/** @typedef {"infection"|"snow"|"combat"|"storm"|"cues"} CameraShakeCategory */
+
+/** Codex settings keys per camera-shake category (master toggle: infectionCameraShake). */
+export const CAMERA_SHAKE_CATEGORY_SETTINGS = {
+    infection: "cameraShakeInfection",
+    snow: "cameraShakeSnow",
+    combat: "cameraShakeCombat",
+    storm: "cameraShakeStorm",
+    cues: "cameraShakeCues"
+};
+
+/**
+ * Master + per-category camera shake (defaults on when master is on).
+ * @param {import("@minecraft/server").Player} player
+ * @param {CameraShakeCategory} category
+ * @returns {boolean}
+ */
+export function getCameraShakeCategoryEnabled(player, category) {
+    if (!getInfectionCameraShakeEnabled(player)) return false;
+    const key = CAMERA_SHAKE_CATEGORY_SETTINGS[category];
+    if (!key) return true;
+    try {
+        const codex = getCodex(player);
+        return codex.settings?.[key] !== false;
     } catch {
         return true;
     }
@@ -1525,7 +1555,7 @@ export function updateSymptomMeta(player, effectId, durationTicks, amp, source, 
 export function showCodexBook(player, context) {
     const { playerInfection, curedPlayers, formatTicksDuration, formatMillisDuration, HITS_TO_INFECT, bearHitCount, maxSnowLevels, getCurrentDay, getDayDisplayInfo } = context;
 
-    /** Alias for menus — definitions live in `mb_spawnController.js` (`SPAWN_INTENSITY_PRESETS`). */
+    /** Alias for menus § definitions live in `mb_spawnController.js` (`SPAWN_INTENSITY_PRESETS`). */
     const SPAWN_PRESETS = SPAWN_INTENSITY_PRESETS;
 
     // Play journal open sound
@@ -1566,6 +1596,11 @@ export function showCodexBook(player, context) {
                     infectionCueEmitterVolume: 2,
                     infectionCueHearOthersVolume: 2,
                     infectionCameraShake: true,
+                    cameraShakeInfection: true,
+                    cameraShakeSnow: true,
+                    cameraShakeCombat: true,
+                    cameraShakeStorm: true,
+                    cameraShakeCues: true,
                     soundVolume: 1.0,
                     showTips: true,
                     audioMessages: true,
@@ -1607,6 +1642,11 @@ export function showCodexBook(player, context) {
                 if (codex.settings.infectionCameraShake === undefined) {
                     codex.settings.infectionCameraShake = true;
                 }
+                for (const key of Object.values(CAMERA_SHAKE_CATEGORY_SETTINGS)) {
+                    if (codex.settings[key] === undefined) {
+                        codex.settings[key] = true;
+                    }
+                }
             }
             
             // Sync with Basic Journal settings if they exist (for backwards compatibility)
@@ -1632,7 +1672,7 @@ export function showCodexBook(player, context) {
                     if (typeof parsedBasicSettings.audioMessages === 'boolean') {
                         codex.settings.audioMessages = parsedBasicSettings.audioMessages;
                     }
-                    // Powdery saves timer HUD here; Basic usually omits the key — only apply when present
+                    // Powdery saves timer HUD here; Basic usually omits the key § only apply when present
                     if ("showInfectionTimer" in parsedBasicSettings) {
                         codex.settings.showInfectionTimer = Boolean(parsedBasicSettings.showInfectionTimer);
                     }
@@ -1704,7 +1744,7 @@ export function showCodexBook(player, context) {
                     } else if (ticks > 0) {
                         summary.push(`§eTime: §c${formatInfectionHudTimeRemaining(ticks, infectionType)}`);
                     } else {
-                        summary.push(`§eTime: §c—`);
+                        summary.push(`§eTime: §c✗??`);
                     }
                     if (hasPowderyJournal && !codex.journal?.powderyHudTimerHintShown) {
                         summary.push(`§8Open §7Settings §8here to show that time on your HUD even when this book is closed.`);
@@ -2173,7 +2213,7 @@ export function showCodexBook(player, context) {
                 lines.push("§7• Minor infection can progress to major infection:");
                 lines.push(`§7  - ${minorToMajorHits} hit${minorToMajorHits !== 1 ? "s" : ""} from Maple Bears`);
                 lines.push("§7  - OR 1 \"snow\" consumption");
-                lines.push("§c• Warning: Minor infection is more easily treatable.");
+                lines.push("§c§ Warning: Minor infection is more easily treatable.");
                 lines.push("§c  Once it becomes major, the cure becomes much more difficult.");
                 lines.push("");
             }
@@ -2225,7 +2265,7 @@ export function showCodexBook(player, context) {
                 lines.push("");
             }
             
-            // Infection Mechanics — one line at a time as the player lives the mechanic
+            // Infection Mechanics § one line at a time as the player lives the mechanic
             lines.push("§6Infection Mechanics:");
             const currentDayMech = typeof getCurrentDay === "function" ? getCurrentDay() : 0;
             const bearHits = (bearHitCount && bearHitCount.get) ? (bearHitCount.get(player.id) || 0) : 0;
@@ -2246,12 +2286,12 @@ export function showCodexBook(player, context) {
             if (symptomsEscalateKnown) mechLines.push("§7• Symptoms worsen as infection advances");
             if (snowTimerKnown) mechLines.push("§7• \"Snow\" consumption affects the timer (major infection only)");
             if (codex.infections?.snow?.discovered || (infectionState?.snowCount || 0) > 0) {
-                mechLines.push("§7• Eating \"snow\" can buzz the camera — §eSettings §7→ camera shake");
+                mechLines.push("§7• Eating \"snow\" can buzz the camera → §eSettings §7→ camera shake");
             }
             if (dayScalingKnown) mechLines.push("§7• Conversion pressure from the outbreak tends to rise as days pass");
             if (day20ConversionKnown) mechLines.push("§7• By Day 20, all mob kills convert to infected variants");
             if (codex.symptomsUnlocks?.infectionBodySoundsUnlocked) {
-                mechLines.push("§7• Body sounds (cough, powder hiccup, rare dust breath): nearby players may hear you— adjust in §eSettings §7(infection sound sliders)");
+                mechLines.push("§7• Body sounds (cough, powder hiccup, rare dust breath): nearby players may hear you — adjust in §eSettings §7(infection sound sliders)");
             }
             if (mechLines.length > 0) {
                 lines.push(...mechLines);
@@ -2428,11 +2468,11 @@ export function showCodexBook(player, context) {
             "",
             "§6Major infection §7tends to cough §fmore often§7 and §flouder§7 than minor. Standing on corrupted ground or being in a §6dust storm §7makes fits more likely.",
             "",
-            "§ePowdery Journal → Settings:",
-            "§7• §fInfection sounds you make §7— Off / Low / High (your coughs, hiccups, cure sigh). §8Off §7= only §oyou §7hear them quietly; nearby players do not. Low/High = others can hear (scaled by their \"hear others\" setting).",
-            "§7• §fHearing others' infection sounds §7— how loudly you hear nearby players' infection noises.",
+            "§ePowdery Journal ? Settings:",
+            "§7• §fInfection sounds you make §7• Off / Low / High (your coughs, hiccups, cure sigh). §8Off §7= only §oyou §7hear them quietly; nearby players do not. Low/High = others can hear (scaled by their \"hear others\" setting).",
+            "§7• §fHearing others' infection sounds §7• how loudly you hear nearby players' infection noises.",
             "",
-            "§8Cures can come with a short sigh of relief— nearby players may hear that too."
+            "§8Cures can come with a short sigh of relief§ nearby players may hear that too."
         ].join("\n");
 
         new ActionFormData()
@@ -2681,13 +2721,13 @@ export function showCodexBook(player, context) {
                 const nameKnown = (tier === 1 && maxEver >= 1) || (tier === 2 && maxEver >= 6) || (tier === 3 && maxEver >= 11) || (tier === 4 && maxEver >= 21) || (tier === 5 && maxEver >= 51) || (tier === 6 && maxEver > 100);
                 body += nameKnown
                     ? `\n§7Current Tier: §f${tier} (${tierName})`
-                    : `\n§7Current Tier: §f${tier} §8(?) §7— chart this band in the table above to name it`;
+                    : `\n§7Current Tier: §f${tier} §8(?) §7• chart this band in the table above to name it`;
             }
         }
         
         // Show warnings based on experience
         if (maxLevel >= 20) {
-            body += `\n\n§c⚠ Warning: High infection levels are extremely dangerous!`;
+            body += `\n\n§c✗ Warning: High infection levels are extremely dangerous!`;
         } else if (maxLevel >= 10) {
             body += `\n\n§e⚠ Caution: Infection effects become severe at higher levels.`;
         }
@@ -2793,8 +2833,8 @@ export function showCodexBook(player, context) {
                 const minorToMajor = Math.max(1, getAddonDifficultyState().hitsBase - 1);
                 body += "§6Progression:\n";
                 body += "§7Minor infection can progress to major infection:\n";
-                body += `§7  • ${minorToMajor} hit${minorToMajor !== 1 ? "s" : ""} from Maple Bears\n`;
-                body += "§7  • OR 1 \"snow\" consumption\n";
+                body += `§7  § ${minorToMajor} hit${minorToMajor !== 1 ? "s" : ""} from Maple Bears\n`;
+                body += "§7  § OR 1 \"snow\" consumption\n";
                 body += "§cWarning: Minor infection is more easily treatable.\n";
                 body += "§cOnce it becomes major, the cure becomes much more difficult.\n";
             } else if (isMinor) {
@@ -2947,7 +2987,7 @@ export function showCodexBook(player, context) {
                         }
 
                         if (e.key === "flyingBearSeen") {
-                            body += `\n\n§6Field Notes:\n§7Sky hunters that shower you with the white powder—ground them or risk suffocation.`;
+                            body += `\n\n§6Field Notes:\n§7Sky hunters that shower you with the white powder§ground them or risk suffocation.`;
                         } else if (e.key === "miningBearSeen") {
                             body += `\n\n§6Field Notes:\n§7Engineers that carve 1x2 tunnels so more Maple Bears can march through.`;
                         } else if (e.key === "torpedoBearSeen") {
@@ -3215,9 +3255,9 @@ export function showCodexBook(player, context) {
                         const infectionKnowledge = getKnowledgeLevel(player, 'infectionLevel');
                         
                         if (hasBeenInfected && hasFoundSnow && infectionKnowledge >= 1) {
-                            body = "§e\"Snow\" (Powder)\n§7Risky substance. Leads to symptoms and doom.\n§7Consuming it may buzz your vision — §eSettings §7→ camera shake.";
+                            body = "§e\"Snow\" (Powder)\n§7Risky substance. Leads to symptoms and doom.\n§7Consuming it may buzz your vision → §eSettings §7→ camera shake.";
                         } else if (codex.items.snowIdentified && infectionKnowledge >= 1) {
-                            body = "§e\"Snow\" (Powder)\n§7Risky substance. Leads to symptoms and doom.\n§7Consuming it may buzz your vision — §eSettings §7→ camera shake.";
+                            body = "§e\"Snow\" (Powder)\n§7Risky substance. Leads to symptoms and doom.\n§7Consuming it may buzz your vision → §eSettings §7→ camera shake.";
                         } else if (snowKnowledge >= 1) {
                             body = "§e\"Snow\" (Powder)\n§7A mysterious white powder. You sense it has properties beyond what you currently understand.";
                         } else {
@@ -3307,7 +3347,7 @@ export function showCodexBook(player, context) {
                                 
                                 if (hasDiscoveredReduction) {
                                     body += "\n§7• Reduces infection severity when consumed while infected\n§7• Provides temporary relief from infection symptoms";
-                                    body += "\n\n§6Infection Reduction:\n§7• Eating a golden apple while infected weakens the infection\n§7• The effect is small but real\n§7• Does not cure, only eases it\n§7• More apples can help more\n§7• Relief is temporary—the infection keeps growing";
+                                    body += "\n\n§6Infection Reduction:\n§7• Eating a golden apple while infected weakens the infection\n§7• The effect is small but real\n§7• Does not cure, only eases it\n§7• More apples can help more\n§7• Relief is temporary — the infection keeps growing";
                                 }
                             }
                             
@@ -3769,7 +3809,7 @@ export function showCodexBook(player, context) {
             }
         }
 
-        // Snow Layer Entry (infected dust/powder layers—not cold)
+        // Snow Layer Entry (infected dust/powder layers§not cold)
         if (codex.biomes.snowLayerSeen) {
             hasEntries = true;
             body += "§fInfected Dust Layer\n";
@@ -3801,15 +3841,15 @@ export function showCodexBook(player, context) {
             const minorS = !!codex.biomes.stormMinorSeen;
             const majorS = !!codex.biomes.stormMajorSeen;
             body += "§fInfection Storm\n";
-            body += "§6When they appear: §7Addon difficulty sets the first day storms can begin—§cHard §7day §f2§7, §6Normal §7day §f4§7, §aEasy §7day §f6§7. Through day §f10§7, only §fminor §7storms; §4major §7storms can appear from day §f11§7 onward (more likely toward day §f20§7). After day §f20§7, §4only major §7storms roll. Storm centers require §fopen sky§7 above ground—not underground caves.\n\n";
+            body += "§6When they appear: §7Addon difficulty sets the first day storms can begin§§cHard §7day §f2§7, §6Normal §7day §f4§7, §aEasy §7day §f6§7. Through day §f10§7, only §fminor §7storms; §4major §7storms can appear from day §f11§7 onward (more likely toward day §f20§7). After day §f20§7, §4only major §7storms roll. Storm centers require §fopen sky§7 above ground§not underground caves.\n\n";
             if (minorS && majorS) {
-                body += "§7A moving wall of white dust that sweeps across the land. Bears spawn inside it. Standing in it causes blindness and speeds infection—similar to standing on corrupted blocks, but worse. You can hear it from far away.\n\n";
+                body += "§7A moving wall of white dust that sweeps across the land. Bears spawn inside it. Standing in it causes blindness and speeds infection§similar to standing on corrupted blocks, but worse. You can hear it from far away.\n\n";
                 body += "§6Storm Types:\n§7Minor storms are smaller and shorter. Major storms are larger, last longer, and place more dust.\n\n";
                 body += "§6Expert Notes:\n§7The storm carries the infection through the air. Maple Bears thrive in it.";
             } else if (minorS) {
                 body += "§7You've weathered a §fsmaller §7dust storm: it blinds you, speeds infection like bad ground, and you hear it before it hits.\n\n";
                 body += "§8??? §7(Larger storm class not logged yet.)\n\n";
-                body += "§6Expert Notes:\n§7The storm carries infection through the air—bears use it as cover.";
+                body += "§6Expert Notes:\n§7The storm carries infection through the air§bears use it as cover.";
             } else if (majorS) {
                 body += "§7You've been inside a §4major §7dust storm: huge, lasting, heavy placement, worse than corrupted soil underfoot. Sound carries for blocks.\n\n";
                 body += "§8??? §7(Smaller storm class not logged yet.)\n\n";
@@ -3817,7 +3857,7 @@ export function showCodexBook(player, context) {
             } else {
                 body += "§7A wall of white dust that moves across the land. It blinds you and spreads the infection.\n\n§8Survive inside specific storm sizes to split minor vs major notes.";
             }
-            body += "\n\n§6Pressure over time:\n§7Later weeks hit harder than the first. Bears press harder near open storms and storm centers as days advance; staying exposed stacks danger.\n\n§6Shelter & reclaim:\n§7Solid cover slows infection buildup during storms. Fuel an emulsifier—its detox bubble blocks natural Maple Bear spawns inside the field so you can push corruption back.";
+            body += "\n\n§6Pressure over time:\n§7Later weeks hit harder than the first. Bears press harder near open storms and storm centers as days advance; staying exposed stacks danger.\n\n§6Shelter & reclaim:\n§7Solid cover slows infection buildup during storms. Fuel an emulsifier§its detox bubble blocks natural Maple Bear spawns inside the field so you can push corruption back.";
             body += "\n\n";
         }
 
@@ -3845,7 +3885,7 @@ export function showCodexBook(player, context) {
                 id: "world",
                 title: "Day 20: World Memory",
                 summary: "How the land feels under the dust.",
-                body: "§eWorld Memory (Day 20)\n§7The air is heavy with dust. Survivors say the dust remembers our steps—mistakes no one recalls making. The journal says the world is keeping score."
+                body: "§eWorld Memory (Day 20)\n§7The air is heavy with dust. Survivors say the dust remembers our steps§mistakes no one recalls making. The journal says the world is keeping score."
             });
         }
         if (codex.journal?.day20TinyLoreUnlocked) {
@@ -4175,7 +4215,7 @@ export function showCodexBook(player, context) {
             }
             body += `\n`;
         } else {
-            body += `§8✗ Victory Achieved\n`;
+            body += `§8  Victory Achieved\n`;
             body += `§7Survive until Day 25\n\n`;
         }
         
@@ -4195,7 +4235,7 @@ export function showCodexBook(player, context) {
                 } else if (achievements.maxDaysSurvived >= milestone) {
                     body += `§a✓ ${label}\n`;
                 } else {
-                    body += `§8✗ ${"?".repeat(label.length)}\n`;
+                    body += `§8  ${"?".repeat(label.length)}\n`;
                 }
             }
         } else if (achievements.maxDaysSurvived) {
@@ -4205,9 +4245,9 @@ export function showCodexBook(player, context) {
         // First cures: Minor always shown; Major only if player has had major infection
         const majorDiscovered = codex.infections?.major && (typeof codex.infections.major === "object" ? codex.infections.major.discovered : !!codex.infections.major);
         body += `\n§6Cures\n`;
-        body += achievements.firstMinorCure ? `§a✓ Minor Cure\n` : `§8✗ Minor Cure\n`;
+        body += achievements.firstMinorCure ? `§a✓ Minor Cure\n` : `§8  Minor Cure\n`;
         if (majorDiscovered) {
-            body += achievements.firstMajorCure ? `§a✓ Major Cure\n` : `§8✗ Major Cure\n`;
+            body += achievements.firstMajorCure ? `§a✓ Major Cure\n` : `§8  Major Cure\n`;
         }
         
         // First bear kills: show name only when unlocked or when player has experienced that mob (seen in codex)
@@ -4224,7 +4264,7 @@ export function showCodexBook(player, context) {
             const unlocked = achievements[key];
             const revealed = codex.mobs && codex.mobs[seenKey];
             const displayName = (unlocked || revealed) ? label : "?".repeat(label.length);
-            body += unlocked ? `§a✓ First ${displayName} kill\n` : `§8✗ First ${displayName} kill\n`;
+            body += unlocked ? `§a✓ First ${displayName} kill\n` : `§8  First ${displayName} kill\n`;
         }
         // Hidden easter-egg achievements (only shown when unlocked)
         const hiddenEntries = [
@@ -4388,7 +4428,7 @@ export function showCodexBook(player, context) {
 
     function openKillBearsByTypeMenu() {
         const form = new ActionFormData()
-            .title("§eKill Bears % — By Type")
+            .title("§eKill Bears % § By Type")
             .body("§7Select bear type, then enter % and radius.");
         for (const t of KILL_BEARS_TYPES) form.button(t.label);
         form.button(DEV_BTN_BACK);
@@ -4406,7 +4446,7 @@ export function showCodexBook(player, context) {
 
     function openKillBearsByVariantMenu() {
         const form = new ActionFormData()
-            .title("§bKill Bears % — By Variant")
+            .title("§bKill Bears % § By Variant")
             .body("§7Select exact entity variant, then enter % and radius.");
         for (const v of KILL_BEARS_VARIANTS) form.button(`§f${v.label} §8(${v.id})`);
         form.button(DEV_BTN_BACK);
@@ -4612,7 +4652,7 @@ export function showCodexBook(player, context) {
                     console.warn(`[SCRIPT SELF-TEST] ${full ? "full" : "quick"}\n` + plain);
                     const maxBody = 10000;
                     const body =
-                        report.length > maxBody ? report.slice(0, maxBody) + "\n§8... (truncated — full text in Content Log)" : report;
+                        report.length > maxBody ? report.slice(0, maxBody) + "\n§8... (truncated § full text in Content Log)" : report;
                     const form = new ActionFormData()
                         .title(full ? "§6Full script self-test" : "§eScript self-test")
                         .body(body)
@@ -4668,7 +4708,7 @@ export function showCodexBook(player, context) {
     }
 
     const PINNABLE_DEV_ITEMS = [
-        // Performance & spawn (matches Developer Tools → Performance / Spawn controller)
+        // Performance & spawn (matches Developer Tools ? Performance / Spawn controller)
         {
             id: "spawn_auto",
             pinCategory: "performance",
@@ -4771,7 +4811,7 @@ export function showCodexBook(player, context) {
         {
             id: "set_day",
             pinCategory: "world",
-            label: "Set day…",
+            label: "Set day",
             action: () => pinDevShortcutFromMain(() => promptSetDay())
         },
         {
@@ -4945,7 +4985,7 @@ export function showCodexBook(player, context) {
             .dropdown("§fDimensions", ["overworld (anchor dim)", "all (OW+Nether+End)"], { defaultValueIndex: dims.toLowerCase() === "all" ? 1 : 0 })
             .dropdown("§fMovement pattern", ["orbit", "jitter"], { defaultValueIndex: pattern.toLowerCase() === "jitter" ? 1 : 0 })
             .slider("§fRadius (blocks)", 6, 256, { valueStep: 1, defaultValue: Math.max(6, Math.min(256, Math.floor(radius))) })
-            .slider("§fSpeed (×10)  §8(10 = 1.0)", 1, 100, { valueStep: 1, defaultValue: speed10 })
+            .slider("§fSpeed (§10)  §8(10 = 1.0)", 1, 100, { valueStep: 1, defaultValue: speed10 })
             .toggle("§fFull stress §8(infection+spawn count)", { defaultValue: fullBeh })
             .toggle("§fParticle markers §8(world)", { defaultValue: markersOn })
             .toggle("§fStress: chest minecart §8(per sim)", { defaultValue: stressMc })
@@ -4968,7 +5008,7 @@ export function showCodexBook(player, context) {
                 setWorldProperty("mb_sim_stress_chest_minecarts", stressMcSel ? 1 : 0);
                 setWorldProperty("mb_sim_stress_armor_stands", stressArmSel ? 1 : 0);
                 setWorldProperty("mb_sim_players_debug", dbgSel ? 1 : 0);
-                player.sendMessage(CHAT_INFO + `Sim players: ${en ? "ON" : "OFF"} · count=${Math.floor(Number(c) || 0)}`);
+                player.sendMessage(CHAT_INFO + `Sim players: ${en ? "ON" : "OFF"} § count=${Math.floor(Number(c) || 0)}`);
             } catch { /* ignore */ }
             try { player.playSound("mb.codex_turn_page", { pitch: 1.1, volume: 0.7 * v }); } catch { /* ignore */ }
             journalPowerToolsBack();
@@ -5134,7 +5174,7 @@ export function showCodexBook(player, context) {
             .title("§e" + cat.title)
             .body("§7Choose a sound event §8(random variant if the definition has many files)§7.\n§8Back returns to categories.");
         for (const s of cat.sounds) {
-            form.button(`§f${s.label} §8· ${s.soundId}`);
+            form.button(`§f${s.label} §8• ${s.soundId}`);
         }
         form.button(devBtnBackTo("categories"));
         form.show(player).then((res) => {
@@ -5228,8 +5268,8 @@ export function showCodexBook(player, context) {
         const stormSc = getStormStartChanceCampScale();
         p.sendMessage(CHAT_DEV + "[Camp dev]" + CHAT_INFO + ` dim=${ctx.dimId} cluster ${ctx.clusterIndex} of ${ctx.clusterCount} inCluster=${ctx.memberCount} (${ctx.memberNames.join(", ")})`);
         p.sendMessage(CHAT_INFO + `Centroid: ${ctx.centroid.x.toFixed(2)}, ${ctx.centroid.y.toFixed(2)}, ${ctx.centroid.z.toFixed(2)}`);
-        p.sendMessage(CHAT_INFO + `Ramping cylinder: XZ r=${tune.campRadiusXZ} Y ±${tune.campYTolerance} (must be inside to build camp)`);
-        p.sendMessage(CHAT_INFO + `Big-base footprint: XZ r=${tune.baseZoneRadiusXZ} Y ±${tune.baseZoneYTolerance} qual=${tune.bigBaseQualificationTicks}t (~2 days)`);
+        p.sendMessage(CHAT_INFO + `Ramping cylinder: XZ r=${tune.campRadiusXZ} Y ${tune.campYTolerance} (must be inside to build camp)`);
+        p.sendMessage(CHAT_INFO + `Big-base footprint: XZ r=${tune.baseZoneRadiusXZ} Y ${tune.baseZoneYTolerance} qual=${tune.bigBaseQualificationTicks}t (~2 days)`);
         p.sendMessage(CHAT_INFO + `Ramp: small ${tune.rampFullTicks}t / big ${tune.rampFullTicksBig}t | spawn cap +${(tune.spawnPressureMaxBonus * 100).toFixed(0)}% / +${(tune.spawnPressureMaxBonusBig * 100).toFixed(0)}% | storm +${(tune.stormRollMaxBonus * 100).toFixed(0)}% / +${(tune.stormRollMaxBonusBig * 100).toFixed(0)}%`);
         p.sendMessage(CHAT_INFO + `Mobility: EMA tau=${tune.mobilityEmaTau} high>${tune.mobilityHighEma} low<${tune.mobilityLowEma} queryMult=${mobQ.toFixed(3)} (range ${tune.queryMultMin}-${tune.queryMultMax})`);
         p.sendMessage(CHAT_INFO + `This cluster: ramp01=${rampRead.toFixed(4)} spawnMult=${spawnM.toFixed(4)}`);
@@ -5254,14 +5294,14 @@ export function showCodexBook(player, context) {
         const ctx = getMobilityCampDevContext(player);
         const watchOn = player.hasTag("mb_dev_camp_watch");
         const short = ctx
-            ? `§7Dim §f${ctx.dimId.replace("minecraft:", "")}§7 cluster §f${ctx.clusterIndex}§7/§f${ctx.clusterCount}§7 in-cluster §f${ctx.memberCount}§7 · ${watchOn ? "§aHUD on" : "§8HUD off"}`
+            ? `§7Dim §f${ctx.dimId.replace("minecraft:", "")}§7 cluster §f${ctx.clusterIndex}§7/§f${ctx.clusterCount}§7 in-cluster §f${ctx.memberCount}§7 § ${watchOn ? "§aHUD on" : "§8HUD off"}`
             : "§cCould not read dimension.";
         const form = new ActionFormData()
             .title("§eCamp / mobility")
             .body(`§7Centroid camp (spawn pressure) + movement EMA (scan throttle).\n\n${short}`);
         form.button(watchOn ? `§cStop camp HUD${devBtnParen("action bar")}` : `§aStart camp HUD${devBtnParen("action bar")}`);
         form.button(`§fDump full details${devBtnParen("chat")}`);
-        form.button(`§eAnchor → my feet${devBtnParen("dev")}`);
+        form.button(`§eAnchor ? my feet${devBtnParen("dev")}`);
         form.button(`§e+half ramp sedentary${devBtnParen("+6000 ticks")}`);
         form.button("§eMax ramp sedentary");
         form.button(`§cClear camp state${devBtnParen("this cluster")}`);
@@ -5333,12 +5373,12 @@ export function showCodexBook(player, context) {
             }
         } catch { /* ignore */ }
         const noticeBody = isReleaseAdminBuild()
-            ? `§e§lHost play tools§r\n\n§7Limited storms and spawns for realms — no world tuning or dev menus.\n\n§7Version: §f${getAddonVersionDisplayString()}\n\n§7Continue only if you understand and accept this.`
+            ? `§e§lHost play tools§r\n\n§7Limited storms and spawns for realms § no world tuning or dev menus.\n\n§7Version: §f${getAddonVersionDisplayString()}\n\n§7Continue only if you understand and accept this.`
             : `§e§lNotice§r\n\n§7These options can start storms and spawn Maple Bear mobs. They are meant for hosts and should not corrupt saves, but heavy use can cause lag or chaos.\n\n§7Version: §f${getAddonVersionDisplayString()}\n\n§7Continue only if you understand and accept this.`;
         const form = new ActionFormData()
             .title(isReleaseAdminBuild() ? "§6Host tools" : "§6Admin tools")
             .body(noticeBody)
-            .button("§aI understand — continue")
+            .button("§aI understand § continue")
             .button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
@@ -5409,13 +5449,13 @@ export function showCodexBook(player, context) {
         }).catch(() => openMain());
     }
 
-    /** Public pack: safe host toys — no world tuning, no heavy bear types, capped spawns. */
+    /** Public pack: safe host toys § no world tuning, no heavy bear types, capped spawns. */
     function openReleaseHostToolsMenu() {
         journalPowerToolsBack = () => openReleaseHostToolsMenu();
         const form = new ActionFormData()
             .title("§6Host tools")
             .body(
-                `§7Play with storms and a few bears — §fnot§7 full dev control.\n` +
+                `§7Play with storms and a few bears § §fnot§7 full dev control.\n` +
                     `§8No day edits, spawn sliders, or mining/torpedo spawns.\n\n§8${getAddonVersionDisplayString()}`
             )
             .button("§6Storms §8(minor / end)")
@@ -5458,7 +5498,7 @@ export function showCodexBook(player, context) {
         const info = getStormDebugInfo();
         const countStr = state.stormCount > 1 ? ` §8(${state.stormCount})` : "";
         const body =
-            `§7Host storm toys — §fminor only§7, no intensity or multi-storm tuning.\n\n` +
+            `§7Host storm toys § §fminor only§7, no intensity or multi-storm tuning.\n\n` +
             `§8Active: §f${info.active}${countStr}\n` +
             `§8Dust storms: §f${dustOn ? "ON" : "OFF"}`;
         const form = new ActionFormData().title("§6Storms").body(body);
@@ -5517,7 +5557,7 @@ export function showCodexBook(player, context) {
         journalPowerToolsBack = () => openReleaseForceSpawnMenu();
         const form = new ActionFormData()
             .title("§fSpawn bears")
-            .body("§7Near you only · up to 3 · tiny or infected.\n§8No flying, mining, torpedo, or buff spawns.");
+            .body("§7Near you only § up to 3 § tiny or infected.\n§8No flying, mining, torpedo, or buff spawns.");
         for (const opt of RELEASE_FORCE_SPAWN_MENU_OPTIONS) {
             form.button(`§f${opt.label}`);
         }
@@ -5570,7 +5610,7 @@ export function showCodexBook(player, context) {
         journalPowerToolsBack = () => openSpawnLoadEfficiencyMenu(onBack);
         const s = getSpawnLoadDebugSnapshot();
         const p = getAdaptivePerfDebugSnapshot();
-        const body = `§7Spawn scans get cheaper when addon bears, overworld item entities §8(sampled)§7, storms, tick stress, or heavy mob pressure rise. §8Does not remove entities.\n\n§8Addon mobs §7· §f${s.bears}§7 · §8OW items §7· §f${s.itemsOw}§7 · §8Storms §7· §f${s.storms}\n§8Model §7· §f${(s.load01 * 100).toFixed(0)}% §8load §7→ interval §f×${s.intervalMult.toFixed(2)}§7 blocks §f×${s.blockScale.toFixed(2)}§7 scan CD §f×${s.scanCooldownMult.toFixed(2)}\n§8Auto §7· §f${s.auto ? "ON" : "OFF"}§7 · §8Thrift bias §7· §f${s.bias} §8(0–4)\n§8Heavy systems adaptive §7· §f×${p.adaptiveAddon.toFixed(2)}`;
+        const body = `§7Spawn scans get cheaper when addon bears, overworld item entities §8(sampled)§7, storms, tick stress, or heavy mob pressure rise. §8Does not remove entities.\n\n§8Addon mobs §7• §f${s.bears}§7 → §8OW items §7• §f${s.itemsOw}§7 → §8Storms §7• §f${s.storms}\n§8Model §7• §f${(s.load01 * 100).toFixed(0)}% §8load §7→ interval §f${s.intervalMult.toFixed(2)}§7 blocks §f${s.blockScale.toFixed(2)}§7 scan CD §f${s.scanCooldownMult.toFixed(2)}\n§8Auto §7• §f${s.auto ? "ON" : "OFF"}§7 → §8Thrift bias §7• §f${s.bias} §8(0–4)\n§8Heavy systems adaptive §7• §f${p.adaptiveAddon.toFixed(2)}`;
         const form = new ActionFormData().title("§bSpawn load & efficiency").body(body);
         form.button(s.auto ? "§cTurn auto spawn load scaling OFF" : "§aTurn auto spawn load scaling ON");
         form.button(`§fBias 0${DEV_BTN_DOT}Default`);
@@ -5599,7 +5639,7 @@ export function showCodexBook(player, context) {
                     player.sendMessage(CHAT_INFO + "Spawn load thrift bias: " + (res.selection - 1) + " §8(0–4)");
                 } else if (res.selection === 6) {
                     const s2 = getSpawnLoadDebugSnapshot();
-                    player.sendMessage(CHAT_DEV + `[Spawn load] bears=${s2.bears} itemsOW=${s2.itemsOw} storms=${s2.storms} load01=${s2.load01.toFixed(3)} int×${s2.intervalMult.toFixed(3)} block×${s2.blockScale.toFixed(3)} scanCD×${s2.scanCooldownMult.toFixed(3)} auto=${s2.auto} bias=${s2.bias}`);
+                    player.sendMessage(CHAT_DEV + `[Spawn load] bears=${s2.bears} itemsOW=${s2.itemsOw} storms=${s2.storms} load01=${s2.load01.toFixed(3)} int${s2.intervalMult.toFixed(3)} block${s2.blockScale.toFixed(3)} scanCD${s2.scanCooldownMult.toFixed(3)} auto=${s2.auto} bias=${s2.bias}`);
                 } else if (res.selection === 7) {
                     journalPowerToolsBack = () => openSpawnLoadEfficiencyMenu(onBack);
                     return openHeavyPerfPresetsMenu();
@@ -5656,10 +5696,10 @@ export function showCodexBook(player, context) {
             .body(
                 "§7Script toggles §8(all systems)§7, spawn hub, biome checker, abandoned villages, self-test.\n\n" +
                     `§8Script toggles: §7${areAllScriptTogglesOff() ? "§cALL OFF" : "§amixed/on"}\n` +
-                    `§8Biome HUD: §7${biomeHudOn ? "§aON" : "§7OFF"} §8· Entity-query HUD: §7${entityQueryHudOn ? "§aON" : "§7OFF"}\n` +
-                    "§8Abandoned villages: §7hamlet/village test · §bStarter set for export§7 in that menu · pin §fabandoned_villages§7"
+                    `§8Biome HUD: §7${biomeHudOn ? "§aON" : "§7OFF"} §8• Entity-query HUD: §7${entityQueryHudOn ? "§aON" : "§7OFF"}\n` +
+                    "§8Abandoned villages: §7hamlet/village test § §bStarter set for export§7 in that menu § pin §fabandoned_villages§7"
             );
-        form.button(`§fScript toggles${devBtnParen("AI, storms, infection audio…")}`);
+        form.button(`§fScript toggles${devBtnParen("AI, storms, infection audio")}`);
         form.button("§fSpawn controller");
         form.button(biomeHudOn ? "§cTurn off §2§lmy§r §fbiome HUD" : "§aTurn on §2§lmy§r §fbiome HUD");
         form.button(`§2Biome checker${devBtnParen("replace list")}`);
@@ -5734,7 +5774,7 @@ export function showCodexBook(player, context) {
             .title("§eWorld & day")
             .body("§7Day counter and intro progression flags.");
         form.button("§fReset world day to 1");
-        form.button("§fSet day…");
+        form.button("§fSet day");
         form.button("§fSimulate next day");
         form.button("§fReset intro");
         form.button(DEV_BTN_BACK);
@@ -5812,10 +5852,14 @@ export function showCodexBook(player, context) {
         form.button("§fClear / set infection");
         form.button("§fGrant / remove immunity");
         form.button("§fSet kill counts");
+        if (INCLUDE_FULL_DEVELOPER_TOOLS) {
+            form.button(`Preview vanilla freeze shake${devBtnParen("15s")}`);
+        }
         form.button(DEV_BTN_BACK);
+        const backIdx = INCLUDE_FULL_DEVELOPER_TOOLS ? 4 : 3;
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
-            if (!res || res.canceled || res.selection === 3) {
+            if (!res || res.canceled || res.selection === backIdx) {
                 player.playSound("mb.codex_turn_page", { pitch: 1.0, volume: 0.8 * v });
                 return openDeveloperTools();
             }
@@ -5823,7 +5867,11 @@ export function showCodexBook(player, context) {
             journalPowerToolsBack = () => openDeveloperToolsInfectionMenu();
             if (res.selection === 0) openTargetPlayerMenu("Infection", (name) => openInfectionDevMenu(name));
             else if (res.selection === 1) openTargetPlayerMenu("Immunity", (name) => openImmunityDevMenu(name));
-            else openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name));
+            else if (res.selection === 2) openTargetPlayerMenu("Set Kill Counts", (name) => openSetKillCountMenu(name));
+            else if (INCLUDE_FULL_DEVELOPER_TOOLS && res.selection === 3) {
+                previewVanillaFreezeCameraShake(player, 15);
+                return openDeveloperToolsInfectionMenu();
+            }
         }).catch(() => openDeveloperTools());
     }
 
@@ -5880,7 +5928,7 @@ export function showCodexBook(player, context) {
                     `${formatHudMergeOrderForMenu()}\n\n` +
                     `§8Your toggles §7scan ${scanPersonal ? "§aON" : "§7OFF"} §8preset ${presetPersonal ? "§aON" : "§7OFF"} §8sim ${simHudPersonal ? "§aON" : "§7OFF"} §8biome ${biomeHudPersonal ? "§aON" : "§7OFF"} §8| §8Broadcast §7(world) ${broadcastHud ? "§aON" : "§7OFF"}\n` +
                     `§8You see §7scan ${scanSee ? "§aON" : "§7OFF"} §8preset ${presetSee ? "§aON" : "§7OFF"} §8biome ${biomeHudSee ? "§aON" : "§7OFF"} §8§o(includes legacy world scan if ever ON)` +
-                    (legacyScanWorld ? "\n§8Legacy world scan HUD §7was ON §8— toggle scan to migrate to per-player." : "") +
+                    (legacyScanWorld ? "\n§8Legacy world scan HUD §7was ON §8• toggle scan to migrate to per-player." : "") +
                     (seesExtraHud
                         ? "\n\n§e§lNote:§r §7If §8You see §7differs from §8Your toggles§7, another player or §fbroadcast§7 is driving your bar. Turn §fbroadcast OFF§7 and each use §2my§7 toggles."
                         : "") +
@@ -5891,13 +5939,13 @@ export function showCodexBook(player, context) {
         form.button(presetPersonal ? "§cTurn off §6§lmy§r §fpreset hint HUD" : "§aTurn on §6§lmy§r §fpreset hint HUD");
         form.button(simHudPersonal ? "§cTurn off §b§lmy§r §fsim players HUD" : "§aTurn on §b§lmy§r §fsim players HUD");
         form.button(biomeHudPersonal ? "§cTurn off §2§lmy§r §fbiome checker HUD" : "§aTurn on §2§lmy§r §fbiome checker HUD");
-        form.button(broadcastHud ? "§cBroadcast spawn HUDs §f→ OFF (all players)" : "§aBroadcast spawn HUDs §f→ ON (all players)");
+        form.button(broadcastHud ? "§cBroadcast spawn HUDs §f? OFF (all players)" : "§aBroadcast spawn HUDs §f? ON (all players)");
         form.button(campWatch ? "§cRemove §bcamp watch §ftag" : "§aAdd §bcamp watch §ftag");
         form.button(`§eClear all merged segments${devBtnParen("your line")}`);
         form.button(`§6Clear day / ambient${devBtnParen("narrative slot only")}`);
         form.button(`§fTest toast${devBtnParen("~3s, merged")}`);
-        form.button(`§aSpawn AUTO hub${devBtnParen("preset+scan+load")}…`);
-        form.button(`§bSpawn — World tuning${devBtnParen("presets & combos")}…`);
+        form.button(`§aSpawn AUTO hub${devBtnParen("preset+scan+load")}§`);
+        form.button(`§bSpawn § World tuning${devBtnParen("presets & combos")}§`);
         form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
@@ -5936,7 +5984,7 @@ export function showCodexBook(player, context) {
                 player.sendMessage(
                     CHAT_INFO +
                         "Spawn HUD broadcast (world): " +
-                        (!broadcastHud ? "ON — everyone's bar can mirror dev spawn HUDs." : "OFF — only §2my§r toggles per player.")
+                        (!broadcastHud ? "ON § everyone's bar can mirror dev spawn HUDs." : "OFF § only §2my§r toggles per player.")
                 );
                 return openDeveloperToolsHudMenu(onBack);
             }
@@ -6009,16 +6057,16 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData()
             .title("§cDeveloper Tools")
             .body("§7Pick a category. §8Performance §7= §aSpawn AUTO hub§7, load scaling, heavy presets, camp, mining.");
-        form.button("§b■ Performance");
-        form.button(`§a■ Systems${devBtnParen("scripts, spawn")}`);
-        form.button("§d■ Codex");
-        form.button("§e■ World & day");
-        form.button("§6■ Bears");
-        form.button("§3■ Storm");
-        form.button("§c■ Infection & players");
-        form.button("§5■ Audio & debug");
-        form.button("§f■ HUD & action bar");
-        if (hasPreview) form.button("§f■ Public preview");
+        form.button("§bPerformance");
+        form.button(`§aSystems${devBtnParen("scripts, spawn")}`);
+        form.button("§dCodex");
+        form.button("§eWorld & day");
+        form.button("§6Bears");
+        form.button("§3Storm");
+        form.button("§cInfection & players");
+        form.button("§5Audio & debug");
+        form.button("§fHUD & action bar");
+        if (hasPreview) form.button("§fPublic preview");
         form.button(DEV_BTN_BACK);
         const backIdx = hasPreview ? 10 : 9;
         form.show(player).then((res) => {
@@ -6062,7 +6110,7 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData()
             .title("§cDeveloper tools")
             .body(`§c§lRisk warning§r\n\n§7These tools can corrupt saves, break progression, unbalance worlds, or cause crashes. Only continue if you accept that risk.\n\n§7Version: §f${getAddonVersionDisplayString()}\n\n§7Continuing means you acknowledge this.`)
-            .button("§aI understand — continue")
+            .button("§aI understand § continue")
             .button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
@@ -6086,7 +6134,7 @@ export function showCodexBook(player, context) {
         if (!group) return openScriptTogglesHub();
         const toggles = getAllScriptToggles();
         const body =
-            group.ids.map((id) => `§7${SCRIPT_TOGGLE_LABELS[id]}: §${toggles[id] ? "aON" : "cOFF"}`).join("\n") ||
+            group.ids.map((id) => `§7${SCRIPT_TOGGLE_LABELS[id]}: ${toggles[id] ? "aON" : "cOFF"}`).join("\n") ||
             "§8(none)";
         const form = new ActionFormData().title(group.title).body(`§7Tap to flip one system.\n\n${body}`);
         for (const id of group.ids) {
@@ -6126,8 +6174,8 @@ export function showCodexBook(player, context) {
             .title("§cScript toggles")
             .body(
                 "§7Turn addon systems on/off. §8Journal + day counter always run.\n\n" +
-                    `§8Active: §7${onCount}/${total} §8· §7${areAllScriptTogglesOff() ? "§c§lALL OFF" : "mixed"}\n\n` +
-                    "§8Script villages (WIP): §7Settings → Dev world features §8(off by default; laggy interim — goal is natural worldgen).\n\n" +
+                    `§8Active: §7${onCount}/${total} §8• §7${areAllScriptTogglesOff() ? "§c§lALL OFF" : "mixed"}\n\n` +
+                    "§8Script villages (WIP): §7Settings ? Dev world features §8(off by default; laggy interim § goal is natural worldgen).\n\n" +
                     "§8Use §4All OFF§8 for a bare world, then enable one category at a time."
             );
         form.button("§4All systems OFF");
@@ -6152,7 +6200,7 @@ export function showCodexBook(player, context) {
                     /* ignore */
                 }
                 player.sendMessage(
-                    CHAT_WARNING + "All script toggles OFF — journal + day counter still run."
+                    CHAT_WARNING + "All script toggles OFF § journal + day counter still run."
                 );
                 return openScriptTogglesHub();
             }
@@ -6187,21 +6235,21 @@ export function showCodexBook(player, context) {
         const loadAuto = isSpawnLoadAutoEnabled();
         const stormM = getStormWorkManualOrZero();
         const minM = getMiningWorkManualOrZero();
-        const stormLine = stormM ? `${stormM}× manual` : "§aauto §7(journal + probes)";
-        const minLine = minM ? `${minM}× manual` : "§aauto §7(journal + probes)";
+        const stormLine = stormM ? `${stormM} manual` : "§aauto §7(journal + probes)";
+        const minLine = minM ? `${minM} manual` : "§aauto §7(journal + probes)";
         const form = new ActionFormData()
-            .title("§aSpawn — Auto modes")
+            .title("§aSpawn § Auto modes")
             .body(
                 "§7§lManual §r§8(World tuning)§7: spawn intensity + scan presets §fstay§7 until you change them.\n\n" +
                     "§7§lSpawn+scan AUTO§7 §8(~5s, §adefault ON§8)§7: §cRe-applies§7 intensity §8+§7 scan from §fbear count§7, §fload model§7, §fclusters§7, §fplayers§7. §8Turn OFF§7 to lock manual presets.\n\n" +
                     "§7§lSpawn load AUTO§7: scales controller §8interval / block budget§7 from bears, storms, tick stress §8(separate from preset AUTO; both can be on).\n\n" +
                     "§7§lStorm & mining§7: §aAuto§7 clears manual multipliers so §eHave lag?§7 tiers + probes drive cadence.\n\n" +
-                    `§8Preset+scan AUTO: §7${presetAuto ? "§aON" : "§7OFF"}\n§8Load AUTO: §7${loadAuto ? "§aON" : "§7OFF"}\n§8Storm: §7${stormLine} §8· §8Mining: §7${minLine}`
+                    `§8Preset+scan AUTO: §7${presetAuto ? "§aON" : "§7OFF"}\n§8Load AUTO: §7${loadAuto ? "§aON" : "§7OFF"}\n§8Storm: §7${stormLine} §8• §8Mining: §7${minLine}`
             );
         form.button(presetAuto ? "§cTurn OFF §dspawn+scan §fAUTO" : "§aTurn ON §dspawn+scan §fAUTO");
         form.button(loadAuto ? "§cTurn OFF §bspawn load §fAUTO" : "§aTurn ON §bspawn load §fAUTO");
         form.button(`§aStorm & mining → §fAuto${devBtnParen("clear manuals")}`);
-        form.button(`§fSpawn load details & bias${devBtnParen("intervals, snapshot")}…`);
+        form.button(`§fSpawn load details & bias${devBtnParen("intervals, snapshot")}§`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -6274,8 +6322,8 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData()
             .title("§cSpawn Controller")
             .body(
-                `§7One action bar merges infection, spawn HUDs, day text, camp dev, toasts §8(Developer → HUD)§7.\n` +
-                    `§8AUTO hub: §a§lfirst green button§7 below — preset+scan, load scaling, storm/mining auto.\n\n` +
+                `§7One action bar merges infection, spawn HUDs, day text, camp dev, toasts §8(Developer ? HUD)§7.\n` +
+                    `§8AUTO hub: §a§lfirst green button§7 below § preset+scan, load scaling, storm/mining auto.\n\n` +
                     `${tuneSum.menuBody}\n\n` +
                     `§fScript: §7${spawnEnabled ? "§aON" : "§cOFF"}\n§fCore: §7${diffLabel} | ${speedLabel} | ${typeLabel}\n` +
                     `§8Numbers: §7BlockQ ${blockQLabel} | Max ${maxGlobal}/tick | ${rangeLabel} | Tiles ${tileLabel} | B/T ${blocksLabel}\n` +
@@ -6320,7 +6368,7 @@ export function showCodexBook(player, context) {
 
     function openSpawnGameplayHub() {
         const form = new ActionFormData()
-            .title("§cSpawn — Core")
+            .title("§cSpawn § Core")
             .body("§7Difficulty, how often the controller runs, and which bear types are allowed.");
         form.button("§fSpawn Difficulty");
         form.button("§fSpawn Speed");
@@ -6350,12 +6398,12 @@ export function showCodexBook(player, context) {
         let loadLine = "";
         try {
             const s = getSpawnLoadDebugSnapshot();
-            loadLine = `§8Spawn load §7${(s.load01 * 100).toFixed(0)}% §8→ int×${s.intervalMult.toFixed(2)} block×${s.blockScale.toFixed(2)}`;
+            loadLine = `§8Spawn load §7${(s.load01 * 100).toFixed(0)}% §8  int${s.intervalMult.toFixed(2)} block${s.blockScale.toFixed(2)}`;
         } catch {
-            loadLine = "§8Spawn load: §7…";
+            loadLine = "§8Spawn load: §7§";
         }
         const form = new ActionFormData()
-            .title("§bSpawn — HUD & spatial")
+            .title("§bSpawn § HUD & spatial")
             .body(
                 `§7Spawn HUDs are §fper player§7. §eBroadcast§7: everyone sees scan+preset lines if §fany§7 dev has theirs on.\n` +
                     `§8Preset+scan AUTO / load: §7§aAuto modes§7.\n\n` +
@@ -6367,10 +6415,10 @@ export function showCodexBook(player, context) {
             );
         form.button(scanPersonal ? "§cTurn off §e§lmy§r §fscan perf HUD" : "§aTurn on §e§lmy§r §fscan perf HUD");
         form.button(presetPersonal ? "§cTurn off §6§lmy§r §fpreset match HUD" : `§aTurn on §6§lmy§r §fpreset match HUD${devBtnParen("~nearest tier")}`);
-        form.button(broadcastHud ? "§cBroadcast spawn HUDs §f→ OFF" : "§aBroadcast spawn HUDs §f→ ON");
-        form.button(spatialOn ? "§6Spatial groups §aON §f→ OFF" : "§eSpatial groups §cOFF §f→ ON");
-        form.button(`§a§lAuto modes hub §r${devBtnParen("preset+scan, load, storm/mining")}…`);
-        form.button(`§fSpawn load details & bias${devBtnParen("intervals, snapshot")}…`);
+        form.button(broadcastHud ? "§cBroadcast spawn HUDs §f? OFF" : "§aBroadcast spawn HUDs §f? ON");
+        form.button(spatialOn ? "§6Spatial groups §aON §f? OFF" : "§eSpatial groups §cOFF §f? ON");
+        form.button(`§a§lAuto modes hub §r${devBtnParen("preset+scan, load, storm/mining")}§`);
+        form.button(`§fSpawn load details & bias${devBtnParen("intervals, snapshot")}§`);
         form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             const v = getPlayerSoundVolume(player);
@@ -6416,7 +6464,7 @@ export function showCodexBook(player, context) {
     function openSpawnPerformanceHub() {
         const tuneActive = getSpawnTuningSummaryForDevTools();
         const form = new ActionFormData()
-            .title("§cSpawn — World tuning")
+            .title("§cSpawn § World tuning")
             .body(
                 `§7Named spawn intensity, scan scheduler, quick combos, §dworld perf combos §7(+ storm + mining).\n` +
                     `§8While §dspawn+scan AUTO §7is ON §8(Spawn Controller → Auto modes)§7, intensity+scan refresh ~5s and §cmay replace§7 manual picks.\n\n` +
@@ -6452,7 +6500,7 @@ export function showCodexBook(player, context) {
         if (!stormM && !minM) {
             const s = getAdaptivePerfDebugSnapshot();
             const medTxt = s.msptSampleCount >= 6 ? `${s.medianMsPerTick.toFixed(0)}ms/t` : "…";
-            adaptHint = `\n§8Auto adaptive §7×${s.adaptiveAddon.toFixed(2)} §8(mob ${s.weightedMobScore.toFixed(0)}w · ${medTxt})`;
+            adaptHint = `\n§8Auto adaptive §7${s.adaptiveAddon.toFixed(2)} §8(mob ${s.weightedMobScore.toFixed(0)}w § ${medTxt})`;
         }
         const tuneNow = getSpawnTuningSummaryForDevTools();
         const form = new ActionFormData()
@@ -6463,13 +6511,13 @@ export function showCodexBook(player, context) {
                     `§8Spawn → World tuning → §dWorld perf combos §8= one tap spawn+scan+storm+mining.\n\n` +
                     `${tuneNow.menuBody}\n\n` +
                     `§8Lag comfort: §7${journalLagComfortLabel(lag)}\n` +
-                    `§8Storm work: §7${stormM ? `${stormM}× manual` : "auto (lag + players + bears + tick probe)"}\n` +
-                    `§8Mining load: §7${minM ? `${minM}× manual` : "auto (lag + players + bears + tick probe)"}\n` +
+                    `§8Storm work: §7${stormM ? `${stormM} manual` : "auto (lag + players + bears + tick probe)"}\n` +
+                    `§8Mining load: §7${minM ? `${minM} manual` : "auto (lag + players + bears + tick probe)"}\n` +
                     `§8Spatial spawn groups: §7${spatial ? "ON" : "OFF"}${adaptHint}`
             );
         form.button(`§bDust storm cadence${devBtnParen("preset")}`);
         form.button(`§bMining AI cadence${devBtnParen("preset")}`);
-        form.button(spatial ? "§6Spatial spawn groups §aON §f→ OFF" : "§eSpatial spawn groups §cOFF §f→ ON");
+        form.button(spatial ? "§6Spatial spawn groups §aON §f? OFF" : "§eSpatial spawn groups §cOFF §f? ON");
         form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
             if (!res || res.canceled || res.selection === 3) {
@@ -6492,29 +6540,29 @@ export function showCodexBook(player, context) {
     /** Storm work interval multiplier presets (higher = less work per tick). `mult` undefined = clear manual. */
     const STORM_WORK_PRESET_ROWS = [
         { label: `§aAuto${devBtnParen("lag tier + players")}`, mult: undefined },
-        { label: `§fBase${devBtnParen("1.0× fixed")}`, mult: 1 },
-        { label: `§eLite${devBtnParen("1.12×")}`, mult: 1.12 },
-        { label: `§2Low${devBtnParen("1.25×")}`, mult: 1.25 },
-        { label: `§3Med-Low${devBtnParen("1.38×")}`, mult: 1.38 },
-        { label: `§6Med${devBtnParen("1.55×")}`, mult: 1.55 },
-        { label: `§6Med-High${devBtnParen("1.72×")}`, mult: 1.72 },
-        { label: `§cHeavy${devBtnParen("1.95×")}`, mult: 1.95 },
-        { label: `§4Extreme${devBtnParen("2.4×")}`, mult: 2.4 },
-        { label: `§fUltra${devBtnParen("4× cap")}`, mult: 4 }
+        { label: `§fBase${devBtnParen("1.0§ fixed")}`, mult: 1 },
+        { label: `§eLite${devBtnParen("1.12")}`, mult: 1.12 },
+        { label: `§2Low${devBtnParen("1.25")}`, mult: 1.25 },
+        { label: `§3Med-Low${devBtnParen("1.38")}`, mult: 1.38 },
+        { label: `§6Med${devBtnParen("1.55")}`, mult: 1.55 },
+        { label: `§6Med-High${devBtnParen("1.72")}`, mult: 1.72 },
+        { label: `§cHeavy${devBtnParen("1.95")}`, mult: 1.95 },
+        { label: `§4Extreme${devBtnParen("2.4")}`, mult: 2.4 },
+        { label: `§fUltra${devBtnParen("4§ cap")}`, mult: 4 }
     ];
 
     /** Mining AI batch interval multiplier (higher = less often). Max 3. */
     const MINING_WORK_PRESET_ROWS = [
         { label: `§aAuto${devBtnParen("lag tier + players")}`, mult: undefined },
-        { label: `§fBase${devBtnParen("1.0× fixed")}`, mult: 1 },
-        { label: `§eLite${devBtnParen("1.1×")}`, mult: 1.1 },
-        { label: `§2Low${devBtnParen("1.2×")}`, mult: 1.2 },
-        { label: `§3Med-Low${devBtnParen("1.32×")}`, mult: 1.32 },
-        { label: `§6Med${devBtnParen("1.45×")}`, mult: 1.45 },
-        { label: `§6Med-High${devBtnParen("1.6×")}`, mult: 1.6 },
-        { label: `§cHeavy${devBtnParen("1.85×")}`, mult: 1.85 },
-        { label: `§4Extreme${devBtnParen("2.2×")}`, mult: 2.2 },
-        { label: `§fUltra${devBtnParen("3× cap")}`, mult: 3 }
+        { label: `§fBase${devBtnParen("1.0§ fixed")}`, mult: 1 },
+        { label: `§eLite${devBtnParen("1.1")}`, mult: 1.1 },
+        { label: `§2Low${devBtnParen("1.2")}`, mult: 1.2 },
+        { label: `§3Med-Low${devBtnParen("1.32")}`, mult: 1.32 },
+        { label: `§6Med${devBtnParen("1.45")}`, mult: 1.45 },
+        { label: `§6Med-High${devBtnParen("1.6")}`, mult: 1.6 },
+        { label: `§cHeavy${devBtnParen("1.85")}`, mult: 1.85 },
+        { label: `§4Extreme${devBtnParen("2.2")}`, mult: 2.2 },
+        { label: `§fUltra${devBtnParen("3§ cap")}`, mult: 3 }
     ];
 
     function openStormWorkPresetMenu() {
@@ -6533,7 +6581,7 @@ export function showCodexBook(player, context) {
             if (!row) return openStormWorkPresetMenu();
             setStormWorkMultiplierManual(row.mult);
             try { saveAllProperties(); } catch { /* ignore */ }
-            player.sendMessage(CHAT_SUCCESS + (row.mult === undefined ? "Storm cadence: Auto (journal + players)." : `Storm cadence: manual ${row.mult}×.`));
+            player.sendMessage(CHAT_SUCCESS + (row.mult === undefined ? "Storm cadence: Auto (journal + players)." : `Storm cadence: manual ${row.mult}x.`));
             return openStormWorkPresetMenu();
         }).catch(() => openHeavyPerfPresetsMenu());
     }
@@ -6554,7 +6602,7 @@ export function showCodexBook(player, context) {
             if (!row) return openMiningWorkPresetMenu();
             setMiningWorkMultiplierManual(row.mult);
             try { saveAllProperties(); } catch { /* ignore */ }
-            player.sendMessage(CHAT_SUCCESS + (row.mult === undefined ? "Mining cadence: Auto (journal + players)." : `Mining cadence: manual ${row.mult}×.`));
+            player.sendMessage(CHAT_SUCCESS + (row.mult === undefined ? "Mining cadence: Auto (journal + players)." : `Mining cadence: manual ${row.mult}x.`));
             return openMiningWorkPresetMenu();
         }).catch(() => openHeavyPerfPresetsMenu());
     }
@@ -6563,7 +6611,7 @@ export function showCodexBook(player, context) {
     const SPAWN_COMBO_PRESETS = [
         { spawnKey: "low", scanKey: "lowLag", label: "§aLow + Low Lag scan", desc: "Default lagfight" },
         { spawnKey: "ultraLow", scanKey: "minimal", label: "§fUltra + Minimal scan", desc: "Worst TPS / many players" },
-        { spawnKey: "medLow", scanKey: "multiplayerSpread", label: "§3Med-Low + MP Spread scan", desc: "6–8 players spread out" },
+        { spawnKey: "medLow", scanKey: "multiplayerSpread", label: "§3Med-Low + MP Spread scan", desc: "6§8 players spread out" },
         { spawnKey: "med", scanKey: "soloHost", label: "§fMed + Solo-host scan", desc: "Mostly solo on a server world" },
         { spawnKey: "med", scanKey: "balanced", label: "§fMed + Balanced scan", desc: "Vanilla-like pacing" }
     ];
@@ -6596,10 +6644,10 @@ export function showCodexBook(player, context) {
 
     /** Aligns with Quick combos + named storm/mining preset tiers (Heavy perf menus). */
     const WORLD_PERF_COMBO_PRESETS = [
-        { spawnKey: "low", scanKey: "lowLag", stormWorkMult: 1.25, miningWorkMult: 1.2, label: `§aLow${devBtnParen("all systems")}`, desc: "Low spawn + Low Lag scan + Low storm (1.25×) + Low mining (1.2×)" },
+        { spawnKey: "low", scanKey: "lowLag", stormWorkMult: 1.25, miningWorkMult: 1.2, label: `§aLow${devBtnParen("all systems")}`, desc: "Low spawn + Low Lag scan + Low storm (1.25) + Low mining (1.2)" },
         { spawnKey: "ultraLow", scanKey: "minimal", stormWorkMult: 2.4, miningWorkMult: 2.2, label: `§fUltra-light${devBtnParen("all")}`, desc: "Ultra spawn + Minimal scan + Extreme storm/mining cadence" },
         { spawnKey: "medLow", scanKey: "multiplayerSpread", stormWorkMult: 1.38, miningWorkMult: 1.32, label: `§3Med-low MP${devBtnParen("+ storm/mining")}`, desc: "Med-Low spawn + MP Spread + Med-Low heavy presets" },
-        { spawnKey: "med", scanKey: "balanced", stormWorkMult: 1, miningWorkMult: 1, label: `§fMed${devBtnParen("1× storm & mining fixed")}`, desc: "Balanced spawn/scan; minimum heavy-system multipliers" },
+        { spawnKey: "med", scanKey: "balanced", stormWorkMult: 1, miningWorkMult: 1, label: `§fMed${devBtnParen("1§ storm & mining fixed")}`, desc: "Balanced spawn/scan; minimum heavy-system multipliers" },
         { spawnKey: "med", scanKey: "balanced", clearHeavyManuals: true, label: `§aMed + Balanced${devBtnParen("+ auto storm/mining")}`, desc: "Same spawn/scan as above; clears manual storm & mining (journal lag applies)" }
     ];
 
@@ -6618,8 +6666,8 @@ export function showCodexBook(player, context) {
             if (combo) {
                 applyWorldPerfCombo(combo);
                 const scanLabel = SPAWN_SCAN_PRESETS[combo.scanKey]?.label ?? combo.scanKey;
-                const heavy = combo.clearHeavyManuals ? "storm & mining → Auto (journal)." : `storm ${combo.stormWorkMult}×, mining ${combo.miningWorkMult}×.`;
-                player.sendMessage(CHAT_SUCCESS + `World perf: ${combo.label.replace(/§./g, "")} | scan “${scanLabel}” | ${heavy}`);
+                const heavy = combo.clearHeavyManuals ? "storm & mining → Auto (journal)." : `storm ${combo.stormWorkMult}§, mining ${combo.miningWorkMult}x.`;
+                player.sendMessage(CHAT_SUCCESS + `World perf: ${combo.label.replace(/§./g, "")} | scan ${scanLabel} | ${heavy}`);
             }
             openWorldPerfComboMenu();
         }).catch(() => openSpawnPerformanceHub());
@@ -6651,16 +6699,16 @@ export function showCodexBook(player, context) {
         const presetKeys = Object.keys(SPAWN_PRESETS);
         const body = presetKeys.map((k) => {
             const v = SPAWN_PRESETS[k];
-            return `${v.label} §8– §8${v.desc}`;
+            return `${v.label} §8• §8${v.desc}`;
         }).join("\n");
         const presetAutoOn = isSpawnPresetAutoEnabled();
         const form = new ActionFormData()
             .title("§c§lSpawn intensity presets")
             .body(
                 `§f§lCoordinated spawn settings only §8(speed, caps, block budget, range).\n` +
-                    `§7Use World tuning → Quick combos §8(spawn+scan) §7or §dWorld perf combos §7(+ storm + mining).\n` +
+                    `§7Use World tuning ? Quick combos §8(spawn+scan) §7or §dWorld perf combos §7(+ storm + mining).\n` +
                     (presetAutoOn
-                        ? `§c§lSpawn+scan AUTO is ON§r§7 — picks re-apply ~5s; §8turn off §7in §aAuto modes §7to keep this preset.\n\n`
+                        ? `§c§lSpawn+scan AUTO is ON§r§7 § picks re-apply ~5s; §8turn off §7in §aAuto modes §7to keep this preset.\n\n`
                         : `§8Spawn+scan AUTO: §7OFF §8(manual presets stick until you change them).\n\n`) +
                     `${tuneNow.menuBody}\n\n` +
                     `${body}`
@@ -6858,7 +6906,7 @@ export function showCodexBook(player, context) {
         const tuneNow = getSpawnTuningSummaryForDevTools();
         const keys = Object.keys(SPAWN_SCAN_PRESETS);
         const scanAutoWarn = isSpawnPresetAutoEnabled()
-            ? "§c§lSpawn+scan AUTO is ON§r§7 — this may be replaced on the next auto tick.\n\n"
+            ? "§c§lSpawn+scan AUTO is ON§r§7 § this may be replaced on the next auto tick.\n\n"
             : "";
         const form = new ActionFormData()
             .title("§bScan Presets")
@@ -7014,7 +7062,7 @@ export function showCodexBook(player, context) {
             { key: "gold", label: "Snow + Gold (high tier)" },
             { key: "netherite", label: "Netherite (permanent core)" }
         ];
-        const form = new ActionFormData().title("§dEmulsifier Fuel").body("§7Set nearest Emulsifier fuel tier.\n§8Performance + longevity increase from Iron → Copper → Gold.\n§8Netherite is permanent.\n\n§7Counts below update each time you open this menu.");
+        const form = new ActionFormData().title("§dEmulsifier Fuel").body("§7Set nearest Emulsifier fuel tier.\n§8Performance + longevity increase from Iron ? Copper ? Gold.\n§8Netherite is permanent.\n\n§7Counts below update each time you open this menu.");
         options.forEach((o) => {
             const availability = getFuelCostAvailabilityLine(player, o.key);
             form.button(`§f${o.label}\n${availability}`, o.key === "netherite" ? "textures/items/netherite_ingot" : "textures/items/emulsifier_machine");
@@ -7125,12 +7173,12 @@ export function showCodexBook(player, context) {
             .title("§cSpawn Speed")
             .body(`§7How often the spawn controller runs.\n§8Throttle to reduce lag; increase for more frequent spawns.\n\n§7Current: §f${label}`);
 
-        form.button("§aVery Slow §7(0.25×)");
-        form.button("§2Slow §7(0.5×)");
-        form.button("§fNormal §7(1×)");
-        form.button("§6Fast §7(2×)");
-        form.button("§cVery Fast §7(3×)");
-        form.button("§eCustom §7(0.25–4)");
+        form.button("§aVery Slow §7(0.25)");
+        form.button("§2Slow §7(0.5)");
+        form.button("§fNormal §7(1)");
+        form.button("§6Fast §7(2)");
+        form.button("§cVery Fast §7(3)");
+        form.button("§eCustom §7(0.25§4)");
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -7161,7 +7209,7 @@ export function showCodexBook(player, context) {
     function promptCustomSpawnSpeed(currentValue = 1) {
         const modal = new ModalFormData()
             .title("§cCustom Spawn Speed")
-            .textField("Multiplier (0.25–4). 1=normal, 0.5=half, 2=double", String(currentValue));
+            .textField("Multiplier (0.25§4). 1=normal, 0.5=half, 2=double", String(currentValue));
 
         modal.show(player).then((res) => {
             if (!res || res.canceled) return openSpawnSpeedMenu();
@@ -7268,7 +7316,7 @@ export function showCodexBook(player, context) {
             const raw = res.formValues?.[0] ?? "";
             const ticks = parseInt(raw, 10);
             if (Number.isNaN(ticks) || ticks < 0) {
-                player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Invalid ticks. Enter a number ≥ 0.");
+                player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Invalid ticks. Enter a number ? 0.");
                 return onBack();
             }
             const args = targetName ? [targetName, String(ticks)] : [String(ticks)]; // [target?, ticks] or [ticks] for self
@@ -7283,13 +7331,13 @@ export function showCodexBook(player, context) {
         const current = inf ? inf.snowCount : maxSnow.maxLevel;
         const modal = new ModalFormData()
             .title("§dAdjust Snow Level")
-            .textField("Snow level (current infection severity / max achieved). 0–500 typical.", String(current));
+            .textField("Snow level (current infection severity / max achieved). 0§500 typical.", String(current));
         modal.show(player).then((res) => {
             if (!res || res.canceled) return onBack();
             const raw = res.formValues?.[0] ?? "";
             const level = parseInt(raw, 10);
             if (Number.isNaN(level) || level < 0) {
-                player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Invalid level. Enter a number ≥ 0.");
+                player.sendMessage(CHAT_DEV + "[MBI] " + CHAT_INFO + "Invalid level. Enter a number ? 0.");
                 return onBack();
             }
             const args = targetName ? [targetName, String(level)] : [String(level)]; // [target?, level] or [level] for self
@@ -7380,7 +7428,7 @@ export function showCodexBook(player, context) {
         const opts = FORCE_SPAWN_OPTIONS.slice(cat.start, cat.end);
         const plainTitle = cat.label.replace(/§./g, "").trim();
         const form = new ActionFormData()
-            .title(`§cForce Spawn — ${plainTitle}`)
+            .title(`§cForce Spawn § ${plainTitle}`)
             .body("§7Choose a bear type.");
         for (const opt of opts) {
             form.button(`§f${opt.label} §8(${opt.id})`);
@@ -7411,7 +7459,7 @@ export function showCodexBook(player, context) {
         const allPlayers = world.getAllPlayers();
         const otherPlayers = allPlayers.filter(p => p && p.id !== player.id);
         const form = new ActionFormData()
-            .title("§cForce Spawn — Target")
+            .title("§cForce Spawn § Target")
             .body(`§7Spawn §f${opt.label}§7 near whom?`);
         form.button("§aNear me");
         for (const p of otherPlayers) {
@@ -7439,7 +7487,7 @@ export function showCodexBook(player, context) {
 
     function openForceSpawnDistanceMenu(opt, targetName) {
         const form = new ActionFormData()
-            .title("§cForce Spawn — Distance")
+            .title("§cForce Spawn § Distance")
             .body(`§7How far from the target? §8(Target: ${targetName ? targetName : "you"})`);
         for (const d of FORCE_SPAWN_DISTANCES) {
             form.button(`§f${d.label}`);
@@ -7459,7 +7507,7 @@ export function showCodexBook(player, context) {
 
     function openForceSpawnQuantityMenu(opt, targetName, distanceValue) {
         const form = new ActionFormData()
-            .title("§cForce Spawn — Quantity")
+            .title("§cForce Spawn § Quantity")
             .body(`§7How many to spawn? §8(Distance: ${distanceValue} blocks)`);
         for (const q of FORCE_SPAWN_QUANTITIES) {
             form.button(`§f${q.label}`);
@@ -7516,7 +7564,7 @@ export function showCodexBook(player, context) {
             const current = codex.mobs?.[opt.key] ?? 0;
             const modal = new ModalFormData()
                 .title("§cSet Kill Count")
-                .slider("Value (0–500)", 0, 500, { valueStep: 1, defaultValue: Math.min(500, Math.max(0, current)) });
+                .slider("Value (0§500)", 0, 500, { valueStep: 1, defaultValue: Math.min(500, Math.max(0, current)) });
             modal.show(player).then((modalRes) => {
                 if (!modalRes || modalRes.canceled) return openSetKillCountMenu(targetName);
                 const value = typeof modalRes.formValues?.[0] === "number" ? Math.round(modalRes.formValues[0]) : current;
@@ -7537,7 +7585,7 @@ export function showCodexBook(player, context) {
         const dustOn = isDustStormsEnabled();
         const info = getStormDebugInfo();
         const countStr = state.stormCount > 1 ? ` §8(${state.stormCount})` : "";
-        const body = `§6§lStorm §r§7— Dust storm controls
+        const body = `§6§lStorm §r§7• Dust storm controls
 
 §8=== Status ===
 §7Active: ${info.active}${countStr}
@@ -7661,7 +7709,7 @@ export function showCodexBook(player, context) {
         const allPlayers = world.getAllPlayers();
         const otherPlayers = allPlayers.filter(p => p && p.id !== player.id);
         const form = new ActionFormData()
-            .title("§cSummon Storm — Target")
+            .title("§cSummon Storm § Target")
             .body(`§7Summon §f${type}§7 storm near whom?`);
         form.button("§aNear me");
         for (const p of otherPlayers) {
@@ -7694,7 +7742,7 @@ export function showCodexBook(player, context) {
 
     function openSummonStormDistanceMenu(type, targetName) {
         const form = new ActionFormData()
-            .title("§cSummon Storm — Distance")
+            .title("§cSummon Storm § Distance")
             .body(`§7How far from target? §8(Target: ${targetName ? targetName : "you"})`);
         for (const d of STORM_DISTANCES) {
             form.button(`§f${d.label}`);
@@ -7794,7 +7842,7 @@ export function showCodexBook(player, context) {
 
     function openStormControlSettingsMenu() {
         const ctrl = getStormControlParams();
-        const intensityOpts = ["Auto (0.85–1.15)", "0.5", "0.75", "1.0", "1.25", "1.5", "2.0"];
+        const intensityOpts = ["Auto (0.85§1.15)", "0.5", "0.75", "1.0", "1.25", "1.5", "2.0"];
         let intensityIdx = 0;
         if (ctrl.intensity != null) {
             const v = ctrl.intensity;
@@ -7811,7 +7859,7 @@ export function showCodexBook(player, context) {
             .title("§6Storm Control Settings")
             .dropdown("Intensity override", intensityOpts, { defaultValueIndex: intensityIdx })
             .dropdown("Max concurrent storms", ["1", "2", "3"], { defaultValueIndex: maxStormsIdx })
-            .slider("Secondary storm chance when 1+ active (0–50%)", 0, 50, { valueStep: 5, defaultValue: secondaryVal });
+            .slider("Secondary storm chance when 1+ active (0§50%)", 0, 50, { valueStep: 5, defaultValue: secondaryVal });
 
         modal.show(player).then((res) => {
             if (!res || res.canceled) {
@@ -7858,14 +7906,14 @@ export function showCodexBook(player, context) {
             .title("§cBear cull (dev)")
             .body(
                 "§7When §fglobal §7Maple Bear count §f(all types) §7exceeds the threshold, distant bears whose §ftype §7is eligible may be removed §8(requires §7mb_bear_cull§8 on).\n\n" +
-                    `§8Active: §fabove ${eff.whenAbove} §7toward §f${eff.targetGlobal} §7· §f${eff.maxRemovedPerPass}/pass §7· urgent §f>${eff.urgentWhenAbove}\n` +
+                    `§8Active: §fabove ${eff.whenAbove} §7toward §f${eff.targetGlobal} §7• §f${eff.maxRemovedPerPass}/pass §7• urgent §f>${eff.urgentWhenAbove}\n` +
                     `§8Distance: §f${eff.minNearestBlocks}m §7normal §8| §f${eff.urgentMinNearestBlocks}m §7urgent §8| §fevery ${eff.intervalTicks}t\n` +
                     `§8Eligible types: §f${typeOn}§7/§f${ALL_MB_BEAR_TYPES.length}\n` +
                     (ov ? "§eWorld overrides: §aON\n" : "§7World overrides: §8none §7(pack defaults)\n") +
                     "\n§8Keys: §7mb_dev_bear_cull_*"
             );
-        form.button("§eEdit numeric values…");
-        form.button("§ePer-type eligibility…");
+        form.button("§eEdit numeric values");
+        form.button("§ePer-type eligibility");
         form.button(ov ? "§cReset to pack defaults" : "§fReset (already default)");
         form.button(DEV_BTN_BACK);
         form.show(player).then((res) => {
@@ -7893,7 +7941,7 @@ export function showCodexBook(player, context) {
     function openBearCullDevTypesMenu() {
         const enabled = getBearCullEligibleTypeSet();
         const form = new ActionFormData()
-            .title("§cBear cull — per type")
+            .title("§cBear cull § per type")
             .body(
                 `§7Toggle which addon bear §ftypes §7can be culled when distant.\n§8Enabled: §f${enabled.size}§7/§f${ALL_MB_BEAR_TYPES.length}\n\n§8Pick a group:`
             );
@@ -7955,7 +8003,7 @@ export function showCodexBook(player, context) {
         const v = getPlayerSoundVolume(player);
         const targetDef = Math.min(Math.max(5, eff.targetGlobal), Math.max(5, eff.whenAbove - 1));
         const modal = new ModalFormData()
-            .title("§cBear cull — world overrides")
+            .title("§cBear cull § world overrides")
             .slider("§fGlobal total above §8(trigger)", 15, 400, { valueStep: 1, defaultValue: Math.min(400, Math.max(15, eff.whenAbove)) })
             .slider("§fTarget floor §8(work toward)", 5, 380, { valueStep: 1, defaultValue: targetDef })
             .slider("§fMax removals per pass", 1, 24, { valueStep: 1, defaultValue: Math.min(24, Math.max(1, eff.maxRemovedPerPass)) })
@@ -7998,7 +8046,7 @@ export function showCodexBook(player, context) {
             } catch { /* ignore */ }
             player.sendMessage(
                 CHAT_SUCCESS +
-                    `Bear cull dev: above ${whenAbove} toward ${targetGlobal} · ${maxRp}/pass · urgent>${urgentAbove} · dist ${minDist}/${urgDist}m · ${intervalTicks}t`
+                    `Bear cull dev: above ${whenAbove} toward ${targetGlobal} § ${maxRp}/pass § urgent>${urgentAbove} § dist ${minDist}/${urgDist}m § ${intervalTicks}t`
             );
             openBearCullDevMenu();
         }).catch(() => openBearCullDevMenu());
@@ -8090,7 +8138,7 @@ export function showCodexBook(player, context) {
         const defaultVal = Math.min(20, Math.max(2, Number(current) || 2));
         const modal = new ModalFormData()
             .title("§eMining Min Interval")
-            .slider("Min ticks between block breaks (2–20)", 2, 20, { valueStep: 1, defaultValue: defaultVal });
+            .slider("Min ticks between block breaks (2§20)", 2, 20, { valueStep: 1, defaultValue: defaultVal });
 
         modal.show(player).then((res) => {
             if (!res || res.canceled) {
@@ -8335,9 +8383,9 @@ export function showCodexBook(player, context) {
         const fullStress = isSimFullBehaviorEnabled();
         const form = new ActionFormData().title("§bSimulated players debug");
         form.body(
-            `§7Ghost sim clients for stress testing (Developer Tools).\n\n§8Current:\n§7• Sims system: ${simOn ? "§aON" : "§cOFF"}\n§7• Full stress: ${fullStress ? "§aON" : "§cOFF"}\n§7• Content log §8([SIM PLAYERS])§7: ${dbgOn ? "§aON" : "§cOFF"} §8(~100t)\n\n§8Toggle mirrors Journal → Simulated players → Content log debug.`
+            `§7Ghost sim clients for stress testing (Developer Tools).\n\n§8Current:\n§7• Sims system: ${simOn ? "§aON" : "§cOFF"}\n§7• Full stress: ${fullStress ? "§aON" : "§cOFF"}\n§7• Content log §8([SIM PLAYERS])§7: ${dbgOn ? "§aON" : "§cOFF"} §8(~100t)\n\n§8Toggle mirrors Journal ? Simulated players ? Content log debug.`
         );
-        form.button(`§${dbgOn ? "a" : "c"}Toggle Content log debug`);
+        form.button(`${dbgOn ? "a" : "c"}Toggle Content log debug`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8367,15 +8415,15 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bMining AI Debug");
         form.body(`§7Toggle debug logging for Mining Bears:\n\n§8Current settings:\n§7• Pitfall: ${mining.pitfall ? "§aON" : "§cOFF"}\n§7• General: ${mining.general ? "§aON" : "§cOFF"}\n§7• Target: ${mining.target ? "§aON" : "§cOFF"}\n§7• Pathfinding: ${mining.pathfinding ? "§aON" : "§cOFF"}\n§7• Vertical: ${mining.vertical ? "§aON" : "§cOFF"}\n§7• Mining: ${mining.mining ? "§aON" : "§cOFF"}\n§7• Movement: ${mining.movement ? "§aON" : "§cOFF"}\n§7• Stair Creation: ${mining.stairCreation ? "§aON" : "§cOFF"}`);
         
-        form.button(`§${mining.pitfall ? "a" : "c"}Pitfall Debug`);
-        form.button(`§${mining.general ? "a" : "c"}General Logging`);
-        form.button(`§${mining.target ? "a" : "c"}Target Detection`);
-        form.button(`§${mining.pathfinding ? "a" : "c"}Pathfinding`);
-        form.button(`§${mining.vertical ? "a" : "c"}Vertical Mining`);
-        form.button(`§${mining.mining ? "a" : "c"}Block Mining`);
-        form.button(`§${mining.movement ? "a" : "c"}Movement`);
-        form.button(`§${mining.stairCreation ? "a" : "c"}Stair Creation`);
-        form.button(`§${mining.all ? "a" : "c"}Toggle All`);
+        form.button(`${mining.pitfall ? "a" : "c"}Pitfall Debug`);
+        form.button(`${mining.general ? "a" : "c"}General Logging`);
+        form.button(`${mining.target ? "a" : "c"}Target Detection`);
+        form.button(`${mining.pathfinding ? "a" : "c"}Pathfinding`);
+        form.button(`${mining.vertical ? "a" : "c"}Vertical Mining`);
+        form.button(`${mining.mining ? "a" : "c"}Block Mining`);
+        form.button(`${mining.movement ? "a" : "c"}Movement`);
+        form.button(`${mining.stairCreation ? "a" : "c"}Stair Creation`);
+        form.button(`${mining.all ? "a" : "c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8404,10 +8452,10 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bInfected AI Debug");
         form.body(`§7Toggle debug logging for Infected AI (bears/pig/cow):\n\n§8Current settings:\n§7• General: ${infected.general ? "§aON" : "§cOFF"}\n§7• Pathfinding: ${infected.pathfinding ? "§aON" : "§cOFF"}\n§7• Gap Jump: ${infected.gapJump ? "§aON" : "§cOFF"}`);
 
-        form.button(`§${infected.general ? "a" : "c"}General Logging`);
-        form.button(`§${infected.pathfinding ? "a" : "c"}Pathfinding`);
-        form.button(`§${infected.gapJump ? "a" : "c"}Gap Jump`);
-        form.button(`§${infected.all ? "a" : "c"}Toggle All`);
+        form.button(`${infected.general ? "a" : "c"}General Logging`);
+        form.button(`${infected.pathfinding ? "a" : "c"}Pathfinding`);
+        form.button(`${infected.gapJump ? "a" : "c"}Gap Jump`);
+        form.button(`${infected.all ? "a" : "c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8436,12 +8484,12 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bTorpedo AI Debug");
         form.body(`§7Toggle debug logging for Torpedo Bears:\n\n§8Current settings:\n§7• General: ${torpedo.general ? "§aON" : "§cOFF"}\n§7• Targeting: ${torpedo.targeting ? "§aON" : "§cOFF"}\n§7• Diving: ${torpedo.diving ? "§aON" : "§cOFF"}\n§7• Block Breaking: ${torpedo.blockBreaking ? "§aON" : "§cOFF"}\n§7• Block Placement: ${torpedo.blockPlacement ? "§aON" : "§cOFF"}`);
         
-        form.button(`§${torpedo.general ? "a" : "c"}General Logging`);
-        form.button(`§${torpedo.targeting ? "a" : "c"}Targeting`);
-        form.button(`§${torpedo.diving ? "a" : "c"}Diving Mechanics`);
-        form.button(`§${torpedo.blockBreaking ? "a" : "c"}Block Breaking`);
-        form.button(`§${torpedo.blockPlacement ? "a" : "c"}Block Placement`);
-        form.button(`§${torpedo.all ? "a" : "c"}Toggle All`);
+        form.button(`${torpedo.general ? "a" : "c"}General Logging`);
+        form.button(`${torpedo.targeting ? "a" : "c"}Targeting`);
+        form.button(`${torpedo.diving ? "a" : "c"}Diving Mechanics`);
+        form.button(`${torpedo.blockBreaking ? "a" : "c"}Block Breaking`);
+        form.button(`${torpedo.blockPlacement ? "a" : "c"}Block Placement`);
+        form.button(`${torpedo.all ? "a" : "c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8471,10 +8519,10 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bFlying AI Debug");
         form.body(`§7Toggle debug logging for Flying Bears:\n\n§8Current settings:\n§7• General: ${flying.general ? "§aON" : "§cOFF"}\n§7• Targeting: ${flying.targeting ? "§aON" : "§cOFF"}\n§7• Pathfinding: ${flying.pathfinding ? "§aON" : "§cOFF"}`);
         
-        form.button(`§${flying.general ? "a" : "c"}General Logging`);
-        form.button(`§${flying.targeting ? "a" : "c"}Targeting`);
-        form.button(`§${flying.pathfinding ? "a" : "c"}Pathfinding`);
-        form.button(`§${flying.all ? "a" : "c"}Toggle All`);
+        form.button(`${flying.general ? "a" : "c"}General Logging`);
+        form.button(`${flying.targeting ? "a" : "c"}Targeting`);
+        form.button(`${flying.pathfinding ? "a" : "c"}Pathfinding`);
+        form.button(`${flying.all ? "a" : "c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8548,12 +8596,12 @@ export function showCodexBook(player, context) {
 
         const form = new ActionFormData().title("§bBuff AI Debug");
         form.body(
-            `§7Toggle debug logging for Buff Bears.\n§8Nearby bears (64 blocks): alive time, 15s stuck fuse, and explosion countdown are listed below. §8That list is a snapshot — tap §eRefresh §8to update without leaving.\n\n§8Current settings:\n§7• General: ${buff.general ? "§aON" : "§cOFF"}\n§7• Block Breaking: ${buff.blockBreaking ? "§aON" : "§cOFF"}${countdownText}${scriptNote}`
+            `§7Toggle debug logging for Buff Bears.\n§8Nearby bears (64 blocks): alive time, 15s stuck fuse, and explosion countdown are listed below. §8That list is a snapshot § tap §eRefresh §8to update without leaving.\n\n§8Current settings:\n§7• General: ${buff.general ? "§aON" : "§cOFF"}\n§7• Block Breaking: ${buff.blockBreaking ? "§aON" : "§cOFF"}${countdownText}${scriptNote}`
         );
 
-        form.button(`§${buff.general ? "a" : "c"}General Logging`);
-        form.button(`§${buff.blockBreaking ? "a" : "c"}Block Breaking`);
-        form.button(`§${buff.all ? "a" : "c"}Toggle All`);
+        form.button(`${buff.general ? "a" : "c"}General Logging`);
+        form.button(`${buff.blockBreaking ? "a" : "c"}Block Breaking`);
+        form.button(`${buff.all ? "a" : "c"}Toggle All`);
         form.button("§eRefresh countdown");
         form.button(DEV_BTN_BACK);
 
@@ -8596,16 +8644,16 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bSpawn Controller Debug");
         form.body(`§7Toggle debug logging for Spawn Controller:\n\n§8Current settings:\n§7• General: ${spawn.general ? "§aON" : "§cOFF"}\n§7• Discovery: ${spawn.discovery ? "§aON" : "§cOFF"}\n§7• Tile Scanning: ${spawn.tileScanning ? "§aON" : "§cOFF"}\n§7• Cache: ${spawn.cache ? "§aON" : "§cOFF"}\n§7• Validation: ${spawn.validation ? "§aON" : "§cOFF"}\n§7• Distance: ${spawn.distance ? "§aON" : "§cOFF"}\n§7• Spacing: ${spawn.spacing ? "§aON" : "§cOFF"}\n§7• Isolated: ${spawn.isolated ? "§aON" : "§cOFF"}\n§7• Bear telemetry: ${spawn.bearTelemetry ? "§aON" : "§cOFF"}`);
         
-        form.button(`§${spawn.general ? "a" : "c"}General Logging`);
-        form.button(`§${spawn.discovery ? "a" : "c"}Discovery Phase`);
-        form.button(`§${spawn.tileScanning ? "a" : "c"}Tile Scanning`);
-        form.button(`§${spawn.cache ? "a" : "c"}Cache`);
-        form.button(`§${spawn.validation ? "a" : "c"}Validation`);
-        form.button(`§${spawn.distance ? "a" : "c"}Distance`);
-        form.button(`§${spawn.spacing ? "a" : "c"}Spacing`);
-        form.button(`§${spawn.isolated ? "a" : "c"}Isolated Players`);
-        form.button(`§${spawn.bearTelemetry ? "a" : "c"}Bear telemetry §7(log)`);
-        form.button(`§${spawn.all ? "a" : "c"}Toggle All`);
+        form.button(`${spawn.general ? "a" : "c"}General Logging`);
+        form.button(`${spawn.discovery ? "a" : "c"}Discovery Phase`);
+        form.button(`${spawn.tileScanning ? "a" : "c"}Tile Scanning`);
+        form.button(`${spawn.cache ? "a" : "c"}Cache`);
+        form.button(`${spawn.validation ? "a" : "c"}Validation`);
+        form.button(`${spawn.distance ? "a" : "c"}Distance`);
+        form.button(`${spawn.spacing ? "a" : "c"}Spacing`);
+        form.button(`${spawn.isolated ? "a" : "c"}Isolated Players`);
+        form.button(`${spawn.bearTelemetry ? "a" : "c"}Bear telemetry §7(log)`);
+        form.button(`${spawn.all ? "a" : "c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8635,12 +8683,12 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bMain Script Debug");
         form.body(`§7Toggle debug logging for Main Script:\n\n§8Current settings:\n§7• Death Events: ${main.death ? "§aON" : "§cOFF"}\n§7• Snow Placement: ${main.snow_placement ? "§aON" : "§cOFF"}\n§7• Mob Conversion: ${main.conversion ? "§aON" : "§cOFF"}\n§7• Infection: ${main.infection ? "§aON" : "§cOFF"}\n§7• Minor Infection: ${main.minorInfection ? "§aON" : "§cOFF"}`);
         
-        form.button(`§${main.death ? "a" : "c"}Death Events`);
-        form.button(`§${main.snow_placement ? "a" : "c"}Snow Placement`);
-        form.button(`§${main.conversion ? "a" : "c"}Mob Conversion`);
-        form.button(`§${main.infection ? "a" : "c"}Infection`);
-        form.button(`§${main.minorInfection ? "a" : "c"}Minor Infection`);
-        form.button(`§${main.all ? "a" : "c"}Toggle All`);
+        form.button(`${main.death ? "a" : "c"}Death Events`);
+        form.button(`${main.snow_placement ? "a" : "c"}Snow Placement`);
+        form.button(`${main.conversion ? "a" : "c"}Mob Conversion`);
+        form.button(`${main.infection ? "a" : "c"}Infection`);
+        form.button(`${main.minorInfection ? "a" : "c"}Minor Infection`);
+        form.button(`${main.all ? "a" : "c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8669,14 +8717,14 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bBiome Ambience Debug");
         form.body(`§7Toggle debug logging for Biome Ambience:\n\n§8Current settings:\n§7• Biome Check: ${biome.biome_check ? "§aON" : "§cOFF"}\n§7• Player Check: ${biome.player_check ? "§aON" : "§cOFF"}\n§7• Sound Playback: ${biome.sound_playback ? "§aON" : "§cOFF"}\n§7• Loop Status: ${biome.loop_status ? "§aON" : "§cOFF"}\n§7• Initialization: ${biome.initialization ? "§aON" : "§cOFF"}\n§7• Cleanup: ${biome.cleanup ? "§aON" : "§cOFF"}\n§7• Errors: ${biome.errors ? "§aON" : "§cOFF"}`);
         
-        form.button(`§${biome.biome_check ? "a" : "c"}Biome Check`);
-        form.button(`§${biome.player_check ? "a" : "c"}Player Check`);
-        form.button(`§${biome.sound_playback ? "a" : "c"}Sound Playback`);
-        form.button(`§${biome.loop_status ? "a" : "c"}Loop Status`);
-        form.button(`§${biome.initialization ? "a" : "c"}Initialization`);
-        form.button(`§${biome.cleanup ? "a" : "c"}Cleanup`);
-        form.button(`§${biome.errors ? "a" : "c"}Errors`);
-        form.button(`§${biome.all ? "a" : "c"}Toggle All`);
+        form.button(`${biome.biome_check ? "a" : "c"}Biome Check`);
+        form.button(`${biome.player_check ? "a" : "c"}Player Check`);
+        form.button(`${biome.sound_playback ? "a" : "c"}Sound Playback`);
+        form.button(`${biome.loop_status ? "a" : "c"}Loop Status`);
+        form.button(`${biome.initialization ? "a" : "c"}Initialization`);
+        form.button(`${biome.cleanup ? "a" : "c"}Cleanup`);
+        form.button(`${biome.errors ? "a" : "c"}Errors`);
+        form.button(`${biome.all ? "a" : "c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8706,12 +8754,12 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bDynamic Properties Debug");
         form.body(`§7Toggle debug logging for Dynamic Property Handler:\n\n§8Current settings:\n§7• Chunking: ${dp.chunking ? "§aON" : "§cOFF"}\n§7• Caching: ${dp.caching ? "§aON" : "§cOFF"}\n§7• Reads: ${dp.reads ? "§aON" : "§cOFF"}\n§7• Writes: ${dp.writes ? "§aON" : "§cOFF"}\n§7• Errors: ${dp.errors ? "§aON" : "§cOFF"}`);
         
-        form.button(`§${dp.chunking ? "a" : "c"}Chunking`);
-        form.button(`§${dp.caching ? "a" : "c"}Caching`);
-        form.button(`§${dp.reads ? "a" : "c"}Reads`);
-        form.button(`§${dp.writes ? "a" : "c"}Writes`);
-        form.button(`§${dp.errors ? "a" : "c"}Errors`);
-        form.button(`§${dp.all ? "a" : "c"}Toggle All`);
+        form.button(`${dp.chunking ? "a" : "c"}Chunking`);
+        form.button(`${dp.caching ? "a" : "c"}Caching`);
+        form.button(`${dp.reads ? "a" : "c"}Reads`);
+        form.button(`${dp.writes ? "a" : "c"}Writes`);
+        form.button(`${dp.errors ? "a" : "c"}Errors`);
+        form.button(`${dp.all ? "a" : "c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8747,12 +8795,12 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bCodex/Knowledge Debug");
         form.body(`§7Toggle debug logging for Codex/Knowledge System:\n\n§8Current settings:\n§7• Progressive: ${codex.progressive ? "§aON" : "§cOFF"}\n§7• Experience: ${codex.experience ? "§aON" : "§cOFF"}\n§7• Flags: ${codex.flags ? "§aON" : "§cOFF"}\n§7• Chunking: ${codex.chunking ? "§aON" : "§cOFF"}\n§7• Saving: ${codex.saving ? "§aON" : "§cOFF"}`);
         
-        form.button(`§${codex.progressive ? "a" : "c"}Progressive`);
-        form.button(`§${codex.experience ? "a" : "c"}Experience`);
-        form.button(`§${codex.flags ? "a" : "c"}Flags`);
-        form.button(`§${codex.chunking ? "a" : "c"}Chunking`);
-        form.button(`§${codex.saving ? "a" : "c"}Saving`);
-        form.button(`§${codex.all ? "a" : "c"}Toggle All`);
+        form.button(`${codex.progressive ? "a" : "c"}Progressive`);
+        form.button(`${codex.experience ? "a" : "c"}Experience`);
+        form.button(`${codex.flags ? "a" : "c"}Flags`);
+        form.button(`${codex.chunking ? "a" : "c"}Chunking`);
+        form.button(`${codex.saving ? "a" : "c"}Saving`);
+        form.button(`${codex.all ? "a" : "c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8788,13 +8836,13 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bGround Infection Timer Debug");
         form.body(`§7Toggle debug logging for Ground Infection Timer:\n\n§8Current settings:\n§7• Timer: ${ground.timer ? "§aON" : "§cOFF"}\n§7• Ground Check: ${ground.groundCheck ? "§aON" : "§cOFF"}\n§7• Ambient Pressure: ${ground.ambient ? "§aON" : "§cOFF"}\n§7• Biome Pressure: ${ground.biome ? "§aON" : "§cOFF"}\n§7• Decay: ${ground.decay ? "§aON" : "§cOFF"}\n§7• Warnings: ${ground.warnings ? "§aON" : "§cOFF"}`);
         
-        form.button(`§${ground.timer ? "a" : "c"}Timer Updates`);
-        form.button(`§${ground.groundCheck ? "a" : "c"}Ground Detection`);
-        form.button(`§${ground.ambient ? "a" : "c"}Ambient Pressure`);
-        form.button(`§${ground.biome ? "a" : "c"}Biome Pressure`);
-        form.button(`§${ground.decay ? "a" : "c"}Decay Logic`);
-        form.button(`§${ground.warnings ? "a" : "c"}Warning Messages`);
-        form.button(`§${ground.all ? "a" : "c"}Toggle All`);
+        form.button(`${ground.timer ? "a" : "c"}Timer Updates`);
+        form.button(`${ground.groundCheck ? "a" : "c"}Ground Detection`);
+        form.button(`${ground.ambient ? "a" : "c"}Ambient Pressure`);
+        form.button(`${ground.biome ? "a" : "c"}Biome Pressure`);
+        form.button(`${ground.decay ? "a" : "c"}Decay Logic`);
+        form.button(`${ground.warnings ? "a" : "c"}Warning Messages`);
+        form.button(`${ground.all ? "a" : "c"}Toggle All`);
         form.button(DEV_BTN_BACK);
 
         form.show(player).then((res) => {
@@ -8835,7 +8883,7 @@ export function showCodexBook(player, context) {
 §8=== Current State ===
 §7Active: ${info.active}
 §7Center: §f${info.stormCenter ?? "N/A"} §7(rolls randomly)
-§7Radius: §f${info.currentRadius ?? 0} blocks §7(size: small→big→small)
+§7Radius: §f${info.currentRadius ?? 0} blocks §7(size: small?big?small)
 §7Progress: §f${info.sizeProgress ?? 0}%
 §7Ends in: §f${info.endsIn}
 §7Cooldown: §f${info.cooldown}
@@ -8846,9 +8894,9 @@ export function showCodexBook(player, context) {
 §8=== Day-Based Parameters ===
 §7Current day: §f${info.currentDay}
 §7Storm start day (by difficulty): §f${info.startDay}
-§7Minor duration: §f${info.minorDurationMin}s–${info.minorDurationMax}s
-§7Major duration: §f${info.majorDurationMin}s–${info.majorDurationMax}s
-§7Cooldown range: §f${info.cooldownMin}s–${info.cooldownMax}s
+§7Minor duration: §f${info.minorDurationMin}s${info.minorDurationMax}s
+§7Major duration: §f${info.majorDurationMin}s${info.majorDurationMax}s
+§7Cooldown range: §f${info.cooldownMin}s${info.cooldownMax}s
 §7Start chance per check: §f${info.startChance}
 §7Major chance (when storm starts): §f${info.majorChance}
 
@@ -8864,11 +8912,11 @@ export function showCodexBook(player, context) {
             
             const form = new ActionFormData().title("§bSnow Storm Debug");
             form.body(body);
-            form.button(`§${stormSettings.general ? "a" : "c"}General Logging`);
-            form.button(`§${stormSettings.movement ? "a" : "c"}Movement`);
-            form.button(`§${stormSettings.placement ? "a" : "c"}Placement`);
-            form.button(`§${stormSettings.particles ? "a" : "c"}Particles`);
-            form.button(`§${stormSettings.all ? "a" : "c"}Toggle All`);
+            form.button(`${stormSettings.general ? "a" : "c"}General Logging`);
+            form.button(`${stormSettings.movement ? "a" : "c"}Movement`);
+            form.button(`${stormSettings.placement ? "a" : "c"}Placement`);
+            form.button(`${stormSettings.particles ? "a" : "c"}Particles`);
+            form.button(`${stormSettings.all ? "a" : "c"}Toggle All`);
             form.button("§eRefresh");
             form.button(DEV_BTN_BACK);
 
@@ -8904,11 +8952,11 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData().title("§bEmulsifier Debug");
         form.body(`§7Debug the Emulsifier (purification + persistence).\n\n§8Current:\n§7• General: ${emulsifier.general ? "§aON" : "§cOFF"}\n§7• Persistence: ${emulsifier.persistence ? "§aON" : "§cOFF"}\n§7• Purification: ${emulsifier.purification ? "§aON" : "§cOFF"}\n§7• Zones: ${emulsifier.zones ? "§aON" : "§cOFF"}\n\n§eRun diagnostics to see live state and locate save/purify issues.`);
 
-        form.button(`§${emulsifier.general ? "a" : "c"}General`);
-        form.button(`§${emulsifier.persistence ? "a" : "c"}Persistence`);
-        form.button(`§${emulsifier.purification ? "a" : "c"}Purification`);
-        form.button(`§${emulsifier.zones ? "a" : "c"}Zones`);
-        form.button(`§${emulsifier.all ? "a" : "c"}Toggle All`);
+        form.button(`${emulsifier.general ? "a" : "c"}General`);
+        form.button(`${emulsifier.persistence ? "a" : "c"}Persistence`);
+        form.button(`${emulsifier.purification ? "a" : "c"}Purification`);
+        form.button(`${emulsifier.zones ? "a" : "c"}Zones`);
+        form.button(`${emulsifier.all ? "a" : "c"}Toggle All`);
         form.button("§eRun diagnostics (chat)");
         form.button("§6Force reload from world");
         form.button(DEV_BTN_BACK);
@@ -9030,16 +9078,16 @@ export function showCodexBook(player, context) {
         const form = new ActionFormData()
             .title("§6Dev world features")
             .body(
-                "§7Work-in-progress dev systems. §8Default §cOFF§8 on join — enable only when testing.\n\n" +
-                    `§7Script village placement §8(WIP): §${villagesOn ? "aON" : "cOFF"}\n` +
+                "§7Work-in-progress dev systems. §8Default §cOFF§8 on join § enable only when testing.\n\n" +
+                    `§7Script village placement §8(WIP): ${villagesOn ? "aON" : "cOFF"}\n` +
                     "§8Laggy + buggy interim path: lamp posts, horizon scans, block-by-block builds.\n" +
                     "§8Ship goal: §7natural jigsaw worldgen §8(see structure collab guide).\n\n" +
-                    "§8Debug: §7Developer Tools → Abandoned villages."
+                    "§8Debug: §7Developer Tools ? Abandoned villages."
             );
         form.button(
             villagesOn
-                ? "§aScript villages §8(WIP ON) → OFF"
-                : "§cScript villages §8(WIP OFF) → ON"
+                ? "§aScript villages §8(WIP ON) ? OFF"
+                : "§cScript villages §8(WIP OFF) ? ON"
         );
         form.button(DEV_BTN_BACK);
 
@@ -9072,14 +9120,14 @@ export function showCodexBook(player, context) {
         const canEdit = canChangeBeta(player);
         const infectedOn = isBetaInfectedAIEnabled();
         const visibleToAll = isBetaVisibleToAll();
-        const stormWhere = INCLUDE_FULL_DEVELOPER_TOOLS ? "Developer Tools → Storm hub" : "Admin tools → Storm hub";
+        const stormWhere = INCLUDE_FULL_DEVELOPER_TOOLS ? "Developer Tools ? Storm hub" : "Admin tools ? Storm hub";
         const form = new ActionFormData()
             .title("§dBeta Features")
-            .body(`§7Experimental features. §8(First joiner + mb_cheats can change)\n\n§7Infected AI (beta): §${infectedOn ? "aON" : "cOFF"}\n§7Visible to others in book: §${visibleToAll ? "aON" : "cOFF"}\n\n§8Dust storms / multiple storms: §7${stormWhere}.${!canEdit ? "\n\n§8You are viewing read-only." : ""}`);
+            .body(`§7Experimental features. §8(First joiner + mb_cheats can change)\n\n§7Infected AI (beta): ${infectedOn ? "aON" : "cOFF"}\n§7Visible to others in book: ${visibleToAll ? "aON" : "cOFF"}\n\n§8Dust storms / multiple storms: §7${stormWhere}.${!canEdit ? "\n\n§8You are viewing read-only." : ""}`);
 
         if (canEdit) {
-            form.button(infectedOn ? "§aInfected AI §8(ON) → OFF" : "§cInfected AI §8(OFF) → ON");
-            form.button(visibleToAll ? "§aVisible to others §8(ON) → OFF" : "§cVisible to others §8(OFF) → ON");
+            form.button(infectedOn ? "§aInfected AI §8(ON) ? OFF" : "§cInfected AI §8(OFF) ? ON");
+            form.button(visibleToAll ? "§aVisible to others §8(ON) ? OFF" : "§cVisible to others §8(OFF) ? ON");
         }
         form.button(DEV_BTN_BACK);
 
@@ -9145,18 +9193,23 @@ export function showCodexBook(player, context) {
                 .dropdown("Block Break Volume", volumeOptions, { defaultValueIndex: breakVolIndex })
                 .dropdown("Infection sounds you make §8(cough, hiccup, cure sigh)", volumeOptions, { defaultValueIndex: infectionEmitterIndex })
                 .dropdown("Hearing others' infection sounds", volumeOptions, { defaultValueIndex: infectionHearOthersIndex })
-                .toggle("Camera shake §8(infection + snow buzz)", { defaultValue: settings.infectionCameraShake !== false })
+                .toggle("Camera shake §8(master)", { defaultValue: settings.infectionCameraShake !== false })
+                .toggle("§8  Infection timer shake", { defaultValue: settings.cameraShakeInfection !== false })
+                .toggle("§8  Snow eat buzz", { defaultValue: settings.cameraShakeSnow !== false })
+                .toggle("§8  Combat §7(hits, blasts)", { defaultValue: settings.cameraShakeCombat !== false })
+                .toggle("§8  Storm exposure", { defaultValue: settings.cameraShakeStorm !== false })
+                .toggle("§8  Cues §7(cough, cures, milestones)", { defaultValue: settings.cameraShakeCues !== false })
                 .dropdown("Storm Particles §8(Less = better performance)", particleOptions, { defaultValueIndex: stormParticlesIndex })
                 .toggle("Show Search Button", { defaultValue: settings.showSearchButton !== false })
                 .toggle("Infection timer on screen (action bar)", { defaultValue: showInfectionTimer })
                 .toggle("Only critical infection/day warnings", { defaultValue: criticalWarningsOnly })
                 .toggle("Day / dawn line on action bar §8(new day at sunrise; auto-hides)", { defaultValue: showDayNarrativeActionBar })
-                .dropdown((hasCheats(player) ? "Addon Difficulty — Spawn: E 0.7× N 1× H 1.3×. Major hits (from nothing): E 4 N 3 H 2. Major hits (from minor): E 3 N 2 H 1. Infection decay: E 0.8× N 1× H 1.2×. Mining interval: E 1.2× N 1× H 0.5×. Torpedo max blocks: E 0.85× N 1× H 2×." : "Addon Difficulty") + (canEditDifficulty ? "" : " §8(read-only)"), difficultyOptions, { defaultValueIndex: addonDifficultyIndex });
+                .dropdown((hasCheats(player) ? "Addon Difficulty § Spawn: E 0.7§ N 1§ H 1.3§. Major hits (from nothing): E 4 N 3 H 2. Major hits (from minor): E 3 N 2 H 1. Infection decay: E 0.8§ N 1§ H 1.2§. Mining interval: E 1.2§ N 1§ H 0.5§. Torpedo max blocks: E 0.85§ N 1§ H 2§." : "Addon Difficulty") + (canEditDifficulty ? "" : " §8(read-only)"), difficultyOptions, { defaultValueIndex: addonDifficultyIndex });
             
             form.show(player).then((res) => {
                 const volumeMultiplier = getPlayerSoundVolume(player);
                 
-                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 14) {
+                if (res && res.formValues && Array.isArray(res.formValues) && res.formValues.length >= 19) {
                     const sliderValue = typeof res.formValues[0] === 'number' 
                         ? Math.max(0, Math.min(10, Math.round(Number(res.formValues[0]))))
                         : volumeSliderValue;
@@ -9170,14 +9223,19 @@ export function showCodexBook(player, context) {
                     settings.infectionCueEmitterVolume = typeof res.formValues[5] === 'number' ? Math.max(0, Math.min(2, res.formValues[5])) : infectionEmitterIndex;
                     settings.infectionCueHearOthersVolume = typeof res.formValues[6] === 'number' ? Math.max(0, Math.min(2, res.formValues[6])) : infectionHearOthersIndex;
                     settings.infectionCameraShake = Boolean(res.formValues[7]);
-                    settings.stormParticles = typeof res.formValues[8] === 'number' ? Math.max(0, Math.min(2, Math.floor(res.formValues[8]))) : stormParticlesIndex;
-                    settings.showSearchButton = Boolean(res.formValues[9]);
-                    settings.showInfectionTimer = Boolean(res.formValues[10]);
-                    settings.criticalWarningsOnly = Boolean(res.formValues[11]);
-                    settings.showDayNarrativeActionBar = Boolean(res.formValues[12]);
+                    settings.cameraShakeInfection = Boolean(res.formValues[8]);
+                    settings.cameraShakeSnow = Boolean(res.formValues[9]);
+                    settings.cameraShakeCombat = Boolean(res.formValues[10]);
+                    settings.cameraShakeStorm = Boolean(res.formValues[11]);
+                    settings.cameraShakeCues = Boolean(res.formValues[12]);
+                    settings.stormParticles = typeof res.formValues[13] === 'number' ? Math.max(0, Math.min(2, Math.floor(res.formValues[13]))) : stormParticlesIndex;
+                    settings.showSearchButton = Boolean(res.formValues[14]);
+                    settings.showInfectionTimer = Boolean(res.formValues[15]);
+                    settings.criticalWarningsOnly = Boolean(res.formValues[16]);
+                    settings.showDayNarrativeActionBar = Boolean(res.formValues[17]);
                     
-                    if (canEditDifficulty && typeof res.formValues[13] === 'number') {
-                        const selectedIndex = Math.max(0, Math.min(2, Math.floor(res.formValues[13])));
+                    if (canEditDifficulty && typeof res.formValues[18] === 'number') {
+                        const selectedIndex = Math.max(0, Math.min(2, Math.floor(res.formValues[18])));
                         const newAddonValue = selectedIndex === 0 ? -1 : selectedIndex === 1 ? 0 : 1;
                         setWorldProperty(ADDON_DIFFICULTY_PROPERTY, newAddonValue);
                         setWorldProperty(SPAWN_DIFFICULTY_PROPERTY, newAddonValue);

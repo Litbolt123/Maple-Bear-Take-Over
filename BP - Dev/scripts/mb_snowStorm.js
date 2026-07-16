@@ -15,6 +15,7 @@ import { STORM_RESERVOIR_INNER_RADIUS_FRACTION, STORM_RESERVOIR_SPAWN_CHANCE_MAX
 import { shouldPauseDayZeroAddonLoops } from "./mb_dayZeroPerfBisect.js";
 import { shouldSkipExpensiveEntityQueries } from "./mb_entityQueryGate.js";
 import { safeQueryEntitiesNear } from "./mb_workSpread.js";
+import { tickStormExposureCameraBuzz } from "./mb_infectionCameraShake.js";
 
 /** Stretch storm work intervals when lag profile / player count / dev mult asks for lighter load. */
 function scaledStormTicks(baseTicks) {
@@ -1245,6 +1246,9 @@ system.runInterval(() => {
                         } catch { }
                         try {
                             player.addEffect("blindness", BLINDNESS_DURATION_TICKS, { amplifier: 0, showParticles: false });
+                        } catch { }
+                        try {
+                            tickStormExposureCameraBuzz(player);
                         } catch { }
                         const lastSound = lastStormSoundTickByPlayer.get(player.id) ?? 0;
                         if (currentTick - lastSound >= scaledStormTicks(STORM_SOUND_INTERVAL)) {

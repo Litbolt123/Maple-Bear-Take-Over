@@ -8,6 +8,11 @@ import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
 
 const COUGH_DUST_PARTICLE = "mb:white_dust_particle_short";
 
+import {
+    triggerInfectionCoughCameraBuzz,
+    triggerInfectionDustCoughCameraBuzz
+} from "./mb_infectionCameraShake.js";
+
 const COUGH_SOUND_MINOR = "mb.infection_cough_minor";
 const COUGH_SOUND_MAJOR = "mb.infection_cough_major";
 const HICCUP_SOUND = "mb.dust_eat_hiccup";
@@ -159,6 +164,7 @@ export function tickInfectionCoughAndBreath(sourcePlayer, infectionState, ctx) {
             );
             if (played) {
                 out.playedCough = true;
+                triggerInfectionCoughCameraBuzz(sourcePlayer, isMajor);
                 const gapMin = isMajor ? 520 : 2800;
                 const gapMax = isMajor ? 1280 : 7200;
                 const gap = Math.max(240, Math.round(randInt(gapMin, gapMax) / pressure));
@@ -199,9 +205,53 @@ export function tickInfectionCoughAndBreath(sourcePlayer, infectionState, ctx) {
             ctx.getMasterVolume
         );
         out.playedBreath = true;
+        triggerInfectionDustCoughCameraBuzz(sourcePlayer, isMajor);
     }
 
     return out;
+}
+
+/**
+ * Forced cough + white dust puff (torpedo blast, scripted exposure bursts).
+ * @param {import("@minecraft/server").Player} sourcePlayer
+ * @param {function} getEmitterTier
+ * @param {function} getHearOthersTier
+ * @param {function} getMasterVolume
+ * @param {boolean} [isMajor] when unknown, infer from infection state in caller if needed
+ */
+export function playForcedCoughDustBurst(sourcePlayer, getEmitterTier, getHearOthersTier, getMasterVolume, isMajor = true) {
+    if (!sourcePlayer?.isValid) return false;
+
+    try {
+        const dim = sourcePlayer.dimension;
+        const l = sourcePlayer.location;
+        if (dim && l) {
+            dim.spawnParticle(COUGH_DUST_PARTICLE, { x: l.x, y: l.y + 1.2, z: l.z });
+            try {
+                dim.spawnParticle(COUGH_DUST_PARTICLE, { x: l.x + 0.15, y: l.y + 1.35, z: l.z - 0.1 });
+            } catch {
+                /* ignore */
+            }
+        }
+    } catch {
+        /* ignore */
+    }
+
+    const soundId = isMajor ? COUGH_SOUND_MAJOR : COUGH_SOUND_MINOR;
+    const baseVol = BASE_DEFINITION_ATTENUATION * (isMajor ? MAJOR_VOLUME_MULT : MINOR_VOLUME_MULT) * 0.92;
+    const pitch = 0.9 + Math.random() * 0.1;
+    const played = playInfectionSpatialSound(
+        sourcePlayer,
+        soundId,
+        pitch,
+        baseVol,
+        COUGH_RADIUS,
+        getEmitterTier,
+        getHearOthersTier,
+        getMasterVolume
+    );
+    triggerInfectionDustCoughCameraBuzz(sourcePlayer, isMajor);
+    return played || true;
 }
 
 /** After eating powder — higher pitch (~+25%). Radius 0 = only the eater (no nearby players). */

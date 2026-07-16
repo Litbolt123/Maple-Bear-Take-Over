@@ -77,10 +77,9 @@ const WALKABLE_THROUGH_BLOCKS = new Set([
     "minecraft:weeping_vines",
     "minecraft:twisting_vines",
     "minecraft:cave_vines",
-    // Carpets and thin layers
+    // Carpets and thin layers (snow layers handled via SNOW_LAYER_BLOCK_IDS)
     "minecraft:carpet",
     "minecraft:moss_carpet",
-    "minecraft:snow_layer",
     // Pressure plates and buttons
     "minecraft:wooden_pressure_plate",
     "minecraft:stone_pressure_plate",
@@ -116,6 +115,9 @@ const WALKABLE_THROUGH_BLOCKS = new Set([
     "minecraft:lava",
     "minecraft:flowing_lava"
 ]);
+
+/** Addon + vanilla snow layers — mined for mb:snow (loot table parity; no silk touch). */
+const SNOW_LAYER_BLOCK_IDS = new Set(["mb:snow_layer", "minecraft:snow_layer"]);
 
 // All blocks are breakable by default except unbreakable ones
 // Mining speed: starts at wooden pickaxe speed (11 ticks) at day 15, scales to 2 ticks by day 24+
@@ -426,6 +428,16 @@ function blockToItemType(blockTypeId) {
         "minecraft:farmland": "minecraft:dirt",
         "minecraft:grass_path": "minecraft:dirt",
         
+        // Snow layers -> mb:snow (matches loot_tables/blocks/snow_layer.json; no silk touch)
+        "mb:snow_layer": "mb:snow",
+        "minecraft:snow_layer": "mb:snow",
+        "mb:dusted_dirt": "minecraft:dirt",
+        "minecraft:snow": "minecraft:snowball",
+        "minecraft:clay": "minecraft:clay_ball",
+        "minecraft:bookshelf": "minecraft:book",
+        "minecraft:melon_block": "minecraft:melon_slice",
+        "minecraft:hay_block": "minecraft:wheat",
+
         // Ice variants - don't drop without silk touch
         "minecraft:ice": null, // Doesn't drop without silk touch
         "minecraft:packed_ice": null, // Doesn't drop without silk touch
@@ -553,54 +565,87 @@ const NO_DROP_BLOCKS = new Set([
     "minecraft:repeating_command_block"
 ]);
 
-// Try to add item to entity inventory, or drop it if inventory is full
-function collectOrDropBlock(entity, blockTypeId, location) {
-    if (!entity || !blockTypeId || !location) return;
-    
-    // Don't collect blocks that don't drop items without silk touch
-    if (NO_DROP_BLOCKS.has(blockTypeId)) {
-        return; // Block doesn't drop an item without silk touch
+/** Primary drop count when one item ID maps to several (no silk touch). */
+const MINING_DROP_COUNTS = {
+    "minecraft:snow": 4,
+    "minecraft:clay": 4,
+    "minecraft:bookshelf": 3,
+    "minecraft:glowstone": 2,
+    "minecraft:melon_block": 4
+};
+
+/** Extra rolls after primary drop (loot_tables/blocks parity). */
+const MINING_BONUS_DROPS = {
+    "mb:dusted_dirt": [{ item: "mb:snow", chance: 0.15 }]
+};
+
+/** Fraction of breaks that spawn/collect loot (throttle when bear inventory fills and spills items). */
+const MINING_BLOCK_DROP_CHANCE = 0.25;
+
+function trackCollectedItem(entity, itemTypeId, amount = 1) {
+    if (!collectedBlocks.has(entity.id)) {
+        collectedBlocks.set(entity.id, new Map());
     }
-    
-    const itemTypeId = blockToItemType(blockTypeId);
-    if (!itemTypeId) return; // Block doesn't drop an item
-    
+    const entityBlocks = collectedBlocks.get(entity.id);
+    entityBlocks.set(itemTypeId, (entityBlocks.get(itemTypeId) || 0) + amount);
+}
+
+/** Give one item stack to bear inventory or spawn at location. */
+function collectOrDropItem(entity, itemTypeId, location, amount = 1) {
+    if (!entity || !itemTypeId || !location) return;
+    const count = Math.max(1, Math.floor(amount));
     try {
-        // Try to add to entity inventory
         const inventory = entity.getComponent("inventory")?.container;
         if (inventory) {
             try {
-                const itemStack = new ItemStack(itemTypeId, 1);
+                const itemStack = new ItemStack(itemTypeId, count);
                 const remaining = inventory.addItem(itemStack);
-                // addItem returns undefined when all items are successfully added
-                // Returns an ItemStack when there are remaining items (inventory full)
                 if (!remaining) {
-                    // Successfully added to inventory - track it
-                    if (!collectedBlocks.has(entity.id)) {
-                        collectedBlocks.set(entity.id, new Map());
-                    }
-                    const entityBlocks = collectedBlocks.get(entity.id);
-                    entityBlocks.set(itemTypeId, (entityBlocks.get(itemTypeId) || 0) + 1);
+                    trackCollectedItem(entity, itemTypeId, count);
                     return;
                 }
-                // If remaining is truthy, inventory is full - fall through to drop
             } catch {
                 // Inventory add failed, fall through to drop
             }
         }
-        
-        // Inventory is full or entity doesn't have inventory - drop the item
-        const itemStack = new ItemStack(itemTypeId, 1);
+
+        const itemStack = new ItemStack(itemTypeId, count);
         const dropLocation = {
             x: location.x + (Math.random() - 0.5) * 0.5,
             y: location.y + 0.5,
             z: location.z + (Math.random() - 0.5) * 0.5
         };
         entity.dimension.spawnItem(itemStack, dropLocation);
-    } catch (error) {
+    } catch {
         // Silently fail - don't spam console
     }
 }
+
+// Try to add item to entity inventory, or drop it if inventory is full
+function collectOrDropBlock(entity, blockTypeId, location) {
+    if (!entity || !blockTypeId || !location) return;
+
+    const itemTypeId = blockToItemType(blockTypeId);
+    if (!itemTypeId) return; // No natural drop without silk touch
+
+    const count = MINING_DROP_COUNTS[blockTypeId] ?? 1;
+    collectOrDropItem(entity, itemTypeId, location, count);
+}
+
+/** Primary + bonus loot for a scripted break (player-like, no silk touch). */
+function collectMiningBlockDrops(entity, blockTypeId, location) {
+    if (!entity || !blockTypeId || !location) return;
+    collectOrDropBlock(entity, blockTypeId, location);
+    const bonuses = MINING_BONUS_DROPS[blockTypeId];
+    if (!bonuses) return;
+    for (const bonus of bonuses) {
+        if (Math.random() < bonus.chance) {
+            collectOrDropItem(entity, bonus.item, location, bonus.count ?? 1);
+        }
+    }
+}
+
+// Legacy NO_DROP_BLOCKS kept for reference; blockToItemType(null) gates collection.
 
 /**
  * Get a block with caching to reduce redundant queries
@@ -665,6 +710,7 @@ function isBreakableBlock(block) {
     if (!id) return false;
     // Air blocks are not breakable
     if (AIR_BLOCKS.has(id)) return false;
+    if (SNOW_LAYER_BLOCK_IDS.has(id)) return true;
     // Walkable-through blocks (grass, flowers, etc.) are not breakable - entities can walk through them
     if (WALKABLE_THROUGH_BLOCKS.has(id)) return false;
     // Liquid blocks are not breakable (they're passable)
@@ -1249,12 +1295,9 @@ function clearBlock(dimension, x, y, z, digContext, entity = null, targetInfo = 
             }
         }
         
-        // Collect or drop the broken block (using natural drops, not silk touch)
-        // Use blockToItemType to convert blocks to their natural drops (e.g., stone -> cobblestone, grass_block -> dirt)
-        // This ensures blocks drop like player breaking (no silk touch)
-        // Only drop 25% of the time to reduce lag from too many items
-        if (entity && Math.random() < 0.25) {
-            collectOrDropBlock(entity, originalType, { x: x + 0.5, y: y + 0.5, z: z + 0.5 });
+        // Natural drops (no silk touch) — throttled so full inventories don't flood the world
+        if (entity && Math.random() < MINING_BLOCK_DROP_CHANCE) {
+            collectMiningBlockDrops(entity, originalType, { x: x + 0.5, y: y + 0.5, z: z + 0.5 });
         }
 
         if (entity) {
@@ -1806,6 +1849,7 @@ function isSolidBlock(block) {
     if (!block || !block.typeId) return false;
     // Air blocks are not solid
     if (AIR_BLOCKS.has(block.typeId)) return false;
+    if (SNOW_LAYER_BLOCK_IDS.has(block.typeId)) return true;
     // Walkable-through blocks are not considered solid for pathfinding
     if (WALKABLE_THROUGH_BLOCKS.has(block.typeId)) return false;
     return true;
@@ -1814,6 +1858,7 @@ function isSolidBlock(block) {
 // Check if a block can be walked through (non-solid, like grass, flowers, etc.)
 function canWalkThrough(block) {
     if (!block || !block.typeId) return true; // No block = can walk through
+    if (SNOW_LAYER_BLOCK_IDS.has(block.typeId)) return false;
     return AIR_BLOCKS.has(block.typeId) || WALKABLE_THROUGH_BLOCKS.has(block.typeId);
 }
 

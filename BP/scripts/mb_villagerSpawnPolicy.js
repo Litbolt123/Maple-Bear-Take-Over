@@ -1,17 +1,17 @@
 /**
- * Maple Bear worlds: no employed villagers (abandoned / custom settlements only).
- * - Spawn rules: empty / impossible conditions (natural rules only; not structure villages).
- * - Vanilla village_type disabled (worldgen_no_village); mb_abandonedVillageWorldgen.js places 100% abandoned villages.
- * - Living villagers removed; zombie villagers from abandoned villages are kept.
- * - Scripts: block spawn eggs (use + use-on-block); remove on entitySpawn; periodic purge.
- * Wandering traders are allowed.
+ * Villager policy — release vs dev defaults differ via mb_buildConfig.
+ * - Release (public BP): vanilla villages ON; living villagers allowed unless world property forces suppress.
+ * - Dev (BP - Dev): default suppress ON for abandoned-settlement testing; toggle in Entity query / village dev menu.
+ * - Spawn rules: impossible biome tag (natural spawn only); structure villages use jigsaw, not spawn rules.
+ * - When suppression ON: block villager eggs, remove on entitySpawn, periodic purge. Wandering traders always allowed.
  *
- * World property mb_suppress_villagers: default ON; set 0 to allow (testing).
+ * World property mb_suppress_villagers: release default OFF; dev default ON when unset.
  */
 
 import { system, world } from "@minecraft/server";
 import { getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
 import { isScriptEnabled, SCRIPT_IDS } from "./mb_scriptToggles.js";
+import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
 
 export const SUPPRESS_VILLAGERS_PROP = "mb_suppress_villagers";
 
@@ -40,11 +40,11 @@ let eggBlocksTickId = -1;
 let policyHooksStarted = false;
 let purgeRotate = 0;
 
-/** @returns {boolean} Default true when property unset. */
+/** @returns {boolean} Release: default false. Dev: default true when property unset. */
 export function isVillagerSuppressionEnabled() {
     if (!isScriptEnabled(SCRIPT_IDS.villagerSuppress)) return false;
     const v = getWorldProperty(SUPPRESS_VILLAGERS_PROP);
-    if (v === undefined || v === null) return true;
+    if (v === undefined || v === null) return INCLUDE_FULL_DEVELOPER_TOOLS;
     return v === true || v === 1 || v === "1";
 }
 
@@ -52,7 +52,7 @@ export function ensureVillagerSuppressionDefault() {
     try {
         const v = getWorldProperty(SUPPRESS_VILLAGERS_PROP);
         if (v === undefined || v === null) {
-            setWorldProperty(SUPPRESS_VILLAGERS_PROP, 1);
+            setWorldProperty(SUPPRESS_VILLAGERS_PROP, INCLUDE_FULL_DEVELOPER_TOOLS ? 1 : 0);
         }
     } catch {
         /* ignore */

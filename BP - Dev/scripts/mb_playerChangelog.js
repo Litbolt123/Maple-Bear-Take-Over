@@ -1,8 +1,6 @@
 /**
  * Player-facing "what changed" text (journal + docs/PLAYER_CHANGELOG.md).
  * Bump PLAYER_CHANGELOG_VERSION when you edit bullets for a new beta.
- *
- * Dev pack only — public BP/scripts/mb_playerChangelog.js stays on beta.4 until store release.
  */
 
 import {
@@ -12,11 +10,11 @@ import {
     PACK_DISPLAY_NAME_DEV
 } from "./mb_buildConfig.js";
 
-export const PLAYER_CHANGELOG_VERSION = "0.9.0-beta.4.2";
+export const PLAYER_CHANGELOG_VERSION = "0.9.0-beta.5";
 
 /** Human label for journal What's new title (not raw semver). */
 export function getPlayerChangelogDisplayLabel() {
-    if (BUILD_FLAVOR === "dev") return "Dev Beta 4.2";
+    if (BUILD_FLAVOR === "dev") return "Beta 5";
     const m = PLAYER_CHANGELOG_VERSION.match(/beta\.(\d+)(?:\.(\d+))?/);
     if (m) return m[2] ? `Beta ${m[1]}.${m[2]}` : `Beta ${m[1]}`;
     return PLAYER_CHANGELOG_VERSION;
@@ -39,13 +37,13 @@ export function getPlayerChangelogBody() {
         "",
         `§6${label}`,
         "§7Highlights:",
-        "§8• §7Snow buzz: camera wobble when you eat powder — stacks softer if you spam it",
-        "§8• §7Infection shake: gentler day-to-day; ramps in the last ~30s before transform",
-        "§8• §7Settings → Camera shake (infection + snow buzz)",
-        "§8• §7Day 0 perf: village worldgen sleeps when you're far from sites/lamps",
-        "§8• §7Script villages §cOFF§7 by default — §7Settings → Dev world features",
+        "§8• §7Camera: snow buzz, bear hits, torpedo & buff blasts — shorter pulses; sub-toggles in Settings",
+        "§8• §7No blindness on your first bear hit; infection shake ramps near transform",
+        "§8• §7Death clears active infection (fresh minor on respawn); minor cure does not make snow safe",
+        "§8• §7Mining bears collect dirt & powder from infected ground",
+        "§8• §7Day 0 perf + chunk travel: less hitch from spread work",
         "",
-        "§8Full notes: §7docs/PLAYER_CHANGELOG.md · Patreon Dev Beta 4.2"
+        "§8Full notes: §7docs/PLAYER_CHANGELOG.md · Patreon beta.5"
     ];
     return lines.join("\n");
 }

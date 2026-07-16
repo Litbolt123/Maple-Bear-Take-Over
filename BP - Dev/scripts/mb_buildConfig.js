@@ -38,8 +38,7 @@ export const ADDON_VERSION_MAJOR = 0;
 export const ADDON_VERSION_MINOR = 9;
 export const ADDON_VERSION_PATCH = 0;
 /** Semver pre-release label — keep in sync with `PLAYER_CHANGELOG_VERSION` and pack manifest descriptions. */
-/** Dev-only patch on public beta.4 — Patreon Dev Beta 4.2 drop. */
-export const ADDON_VERSION_PRERELEASE = "beta.4.2";
+export const ADDON_VERSION_PRERELEASE = "beta.5";
 
 export const PACK_DISPLAY_NAME = "The Maple Bear Apocalypse";
 

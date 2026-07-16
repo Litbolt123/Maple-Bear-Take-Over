@@ -145,7 +145,7 @@ function savePlayerProperties(player) {
     
     for (const key of dirtySet) {
         try {
-            const value = cache.get(key);
+            const value = cache.has(key) ? cache.get(key) : undefined;
             if (typeof player.setDynamicProperty === 'function') {
                 player.setDynamicProperty(key, value);
             }
@@ -598,13 +598,39 @@ export function setPlayerJournalSettingsChunked(player, value) {
 export function flushPlayerPropertyToDisk(player, key) {
     try {
         if (!player?.isValid || typeof player.setDynamicProperty !== "function") return false;
-        const value = getPlayerProperty(player, key);
+        const cache = playerPropertyCache.get(player.id);
+        const value = cache?.has(key) ? cache.get(key) : getPlayerProperty(player, key);
         player.setDynamicProperty(key, value === undefined || value === null ? undefined : value);
         const dirtySet = playerDirtyFlags.get(player.id);
         dirtySet?.delete(key);
         return true;
     } catch (e) {
         console.warn(`[PropertyHandler] flushPlayerPropertyToDisk ${key}:`, e);
+        return false;
+    }
+}
+
+/**
+ * Remove a player property from cache and disk immediately (clears must not re-read stale disk via getPlayerProperty).
+ * @param {import("@minecraft/server").Player} player
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function clearPlayerPropertyToDisk(player, key) {
+    try {
+        if (!player?.isValid || typeof player.setDynamicProperty !== "function") return false;
+        const playerId = player.id;
+        let cache = playerPropertyCache.get(playerId);
+        if (!cache) {
+            cache = new Map();
+            playerPropertyCache.set(playerId, cache);
+        }
+        cache.delete(key);
+        playerDirtyFlags.get(playerId)?.delete(key);
+        player.setDynamicProperty(key, undefined);
+        return true;
+    } catch (e) {
+        console.warn(`[PropertyHandler] clearPlayerPropertyToDisk ${key}:`, e);
         return false;
     }
 }

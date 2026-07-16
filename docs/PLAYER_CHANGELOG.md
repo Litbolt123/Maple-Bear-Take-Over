@@ -1,7 +1,40 @@
 # Player-facing changelog
 
-Short bullets for patch notes and in-game **What's new** (`mb_playerChangelog.js` — **`BP - Dev/`** for dev drops; **`BP/`** for public).
+Short bullets for patch notes and in-game **What's new** (`mb_playerChangelog.js` — **`BP/`** for public; **`BP - Dev/`** for internal dev drops).
 Bump **`PLAYER_CHANGELOG_VERSION`** in `mb_playerChangelog.js` when you ship a new beta.
+
+## v0.9.0-beta.5
+
+Public Patreon / **`BP/`** + **`RP/`** release.
+
+### Camera feel
+
+- **Snow buzz** — eating powder gives a short camera wobble (~1.1s base). Re-eat within ~5s → longer buzz, **softer** each pulse. High lifetime snow count dulls the effect.
+- **Infection shake** — gentler day-to-day; **ramps over the last ~30 seconds** before transform.
+- **Bear hit shake** — tiered buzz by bear size. Flying bears stay lighter. **No blindness on first bear hit.**
+- **Torpedo blast** and **buff death burst** — hard hit, **short** pulse (shared explosion shake tuning).
+- **Journal → Settings → Camera shake** — master + infection / snow / combat / storm / cues.
+
+### Cures & powder
+
+- **Minor cure** grants permanent immunity to **minor** infection on respawn — eating `mb:snow` can still cause or worsen **major** infection.
+
+### Mining bears
+
+- Natural drops (no silk touch): `mb:snow_layer` → powder; `mb:dusted_dirt` → dirt + **15%** bonus snow.
+- **25% drop roll** per break so realms do not flood with items.
+
+### Performance & stability
+
+- **Day 0–1** — lighter background scans until infection ramps.
+- **Chunk travel** — heavy work spreads across ticks; brief defer at chunk borders.
+- **Worldgen perf** — fixed script work that treated every player as always near a lamp post (day-0 hitch).
+
+### Death & respawn
+
+- Infection saves flush on death; camera shake clears through death screen and respawn grace.
+
+---
 
 ## Dev Beta 4.2 (dev pack only · `v0.9.0-beta.4.2`)
 

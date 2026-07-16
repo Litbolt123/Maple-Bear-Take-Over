@@ -1,7 +1,30 @@
 import { system, world } from "@minecraft/server";
-import { getInfectionCameraShakeEnabled } from "./mb_codex.js";
+import { getInfectionCameraShakeEnabled, getCameraShakeCategoryEnabled } from "./mb_codex.js";
 import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
 import { getWorldProperty, setWorldProperty } from "./mb_dynamicPropertyHandler.js";
+import {
+    TINY_BEAR_ID,
+    DAY4_BEAR_ID,
+    DAY8_BEAR_ID,
+    DAY13_BEAR_ID,
+    DAY20_BEAR_ID,
+    INFECTED_BEAR_ID,
+    INFECTED_BEAR_DAY8_ID,
+    INFECTED_BEAR_DAY13_ID,
+    INFECTED_BEAR_DAY20_ID,
+    BUFF_BEAR_ID,
+    BUFF_BEAR_DAY13_ID,
+    BUFF_BEAR_DAY20_ID,
+    FLYING_BEAR_ID,
+    FLYING_BEAR_DAY15_ID,
+    FLYING_BEAR_DAY20_ID,
+    MINING_BEAR_ID,
+    MINING_BEAR_DAY20_ID,
+    TORPEDO_BEAR_ID,
+    TORPEDO_BEAR_DAY20_ID,
+    INFECTED_PIG_ID,
+    INFECTED_COW_ID
+} from "./mb_spawnEntityIds.js";
 
 const SHAKE_DEBUG_PROP = "mb_infection_shake_debug";
 
@@ -18,11 +41,80 @@ const SHAKE_INTENSITY_PEAK = 0.7;
 /** Powder buzz on eating mb:snow — separate from infection death-rattle. */
 const SNOW_BUZZ_BASE_INTENSITY = 0.48;
 const SNOW_BUZZ_MIN_INTENSITY = 0.08;
-const SNOW_BUZZ_BASE_DURATION_SEC = 2.1;
-const SNOW_BUZZ_EXTEND_PER_STACK_SEC = 0.45;
-const SNOW_BUZZ_MAX_DURATION_SEC = 6.5;
+const SNOW_BUZZ_BASE_DURATION_SEC = 1.15;
+const SNOW_BUZZ_EXTEND_PER_STACK_SEC = 0.22;
+const SNOW_BUZZ_MAX_DURATION_SEC = 3.2;
 const SNOW_BUZZ_STACK_WINDOW_TICKS = 100;
 const SNOW_BUZZ_MAX_STACK = 8;
+
+/** One-shot pulses (snow, melee, blasts) — shorter than early beta.5 tuning. */
+const REFERENCE_PULSE_DURATION_SCALE = 0.55;
+const EXPLOSION_PULSE_DURATION_SCALE = 0.45;
+const INFECTION_JITTER_DURATION_SCALE = 0.58;
+const INFECTION_BURST_DURATION_SCALE = 0.5;
+
+/** Bear melee hit — intensity vs snow-eat first-bite baseline; scales with bear SIZE (bigger = harder shake). */
+export const BEAR_HIT_SHAKE_RATIO_TINY = 0.24;
+export const BEAR_HIT_SHAKE_RATIO_SMALL = 0.36;
+export const BEAR_HIT_SHAKE_RATIO_STANDARD = 0.5;
+/** Alias — mid-size day13/day20 and mining bears. */
+export const BEAR_HIT_SHAKE_RATIO_DEFAULT = BEAR_HIT_SHAKE_RATIO_STANDARD;
+export const BEAR_HIT_SHAKE_RATIO_LARGE = 0.62;
+export const BEAR_HIT_SHAKE_RATIO_LARGE_PLUS = 0.66;
+export const BEAR_HIT_SHAKE_RATIO_LARGE_MAX = 0.7;
+export const BEAR_HIT_SHAKE_RATIO_HEAVY = 0.76;
+export const BEAR_HIT_SHAKE_RATIO_BUFF = 1.0;
+/** Flying MBs — light aerial hits; between tiny and standard, scaled by day variant. */
+export const BEAR_HIT_SHAKE_RATIO_FLYING = 0.28;
+export const BEAR_HIT_SHAKE_RATIO_FLYING_DAY15 = 0.38;
+export const BEAR_HIT_SHAKE_RATIO_FLYING_DAY20 = 0.44;
+/** Torpedo melee vs powder blast (blast stronger than body slam). */
+export const BEAR_HIT_SHAKE_RATIO_TORPEDO_HIT = 0.54;
+export const TORPEDO_BLAST_SHAKE_RATIO = 0.86;
+/** Buff death powder burst — matches torpedo blast. */
+export const BUFF_BURST_SHAKE_RATIO = TORPEDO_BLAST_SHAKE_RATIO;
+/** Exposed inside active storm — ~flying MB base hit. */
+export const STORM_EXPOSURE_SHAKE_RATIO = BEAR_HIT_SHAKE_RATIO_FLYING;
+/** Normal infection cough (sound only). */
+export const COUGH_SHAKE_RATIO_MINOR = 0.12;
+export const COUGH_SHAKE_RATIO_MAJOR = 0.18;
+/** Dust breath / forced dust cough — much stronger than normal cough. */
+export const DUST_COUGH_SHAKE_RATIO_MINOR = 0.38;
+export const DUST_COUGH_SHAKE_RATIO_MAJOR = 0.55;
+/** Major cure relief — brief settle pulse. */
+export const MAJOR_CURE_SETTLE_SHAKE_RATIO = 0.2;
+/** World day milestone at sunrise. */
+export const DAY_MILESTONE_SHAKE_RATIO = 0.24;
+
+const STORM_SHAKE_INTERVAL_TICKS = 55;
+/** @type {Map<string, number>} */
+const lastStormExposureShakeTick = new Map();
+
+const SMALL_BEAR_TYPE_IDS = new Set([DAY4_BEAR_ID, DAY8_BEAR_ID]);
+const STANDARD_BEAR_TYPE_IDS = new Set([DAY13_BEAR_ID, DAY20_BEAR_ID, MINING_BEAR_ID]);
+const LARGE_BEAR_TYPE_IDS = new Set([INFECTED_BEAR_ID, INFECTED_PIG_ID, INFECTED_COW_ID]);
+const LARGE_PLUS_BEAR_TYPE_IDS = new Set([INFECTED_BEAR_DAY8_ID]);
+const LARGE_MAX_BEAR_TYPE_IDS = new Set([INFECTED_BEAR_DAY13_ID, MINING_BEAR_DAY20_ID]);
+const HEAVY_BEAR_TYPE_IDS = new Set([INFECTED_BEAR_DAY20_ID]);
+const FLYING_BEAR_TYPE_IDS = new Set([
+    FLYING_BEAR_ID,
+    FLYING_BEAR_DAY15_ID,
+    FLYING_BEAR_DAY20_ID
+]);
+const TORPEDO_BEAR_TYPE_IDS = new Set([TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID]);
+const BUFF_BEAR_TYPE_IDS = new Set([BUFF_BEAR_ID, BUFF_BEAR_DAY13_ID, BUFF_BEAR_DAY20_ID]);
+const ALL_MAPLE_BEAR_HIT_TYPE_IDS = new Set([
+    TINY_BEAR_ID,
+    ...SMALL_BEAR_TYPE_IDS,
+    ...STANDARD_BEAR_TYPE_IDS,
+    ...LARGE_BEAR_TYPE_IDS,
+    ...LARGE_PLUS_BEAR_TYPE_IDS,
+    ...LARGE_MAX_BEAR_TYPE_IDS,
+    ...HEAVY_BEAR_TYPE_IDS,
+    ...FLYING_BEAR_TYPE_IDS,
+    ...TORPEDO_BEAR_TYPE_IDS,
+    ...BUFF_BEAR_TYPE_IDS
+]);
 
 /** @type {Map<string, { lastEatTick: number, stack: number, untilTick: number }>} */
 const snowBuzzByPlayer = new Map();
@@ -39,6 +131,24 @@ const lastDebugByPlayer = new Map();
 
 /** @type {Map<string, number>} playerId → world tick when shake may resume */
 const shakeSuppressedUntilTick = new Map();
+
+const POWDER_SNOW_BLOCK = "minecraft:powder_snow";
+const VANILLA_FREEZE_PREVIEW_RESISTANCE_AMP = 4;
+const VANILLA_FREEZE_PREVIEW_REPLACEABLE = new Set([
+    POWDER_SNOW_BLOCK,
+    "minecraft:air",
+    "minecraft:snow_layer",
+    "mb:snow_layer",
+    "minecraft:short_grass",
+    "minecraft:tall_grass",
+    "minecraft:fern",
+    "minecraft:large_fern",
+    "minecraft:water",
+    "minecraft:flowing_water"
+]);
+
+/** @type {Map<string, { saved: Array<{ x: number, y: number, z: number, typeId: string }>, restoreTick: number }>} */
+const activeVanillaFreezePreviewByPlayer = new Map();
 
 /**
  * Block infection/snow camera shake until a future tick (death screen, respawn grace).
@@ -199,6 +309,151 @@ export function clearInfectionCameraShake(player) {
 }
 
 /**
+ * @param {import("@minecraft/server").Dimension} dimension
+ * @param {Array<{ x: number, y: number, z: number, typeId: string }>} saved
+ */
+function restoreVanillaFreezePreviewBlocks(dimension, saved) {
+    if (!dimension || !saved?.length) return;
+    for (const entry of saved) {
+        try {
+            const block = dimension.getBlock({ x: entry.x, y: entry.y, z: entry.z });
+            if (!block) continue;
+            if (block.typeId !== POWDER_SNOW_BLOCK) continue;
+            block.setType(entry.typeId);
+        } catch {
+            /* ignore */
+        }
+    }
+}
+
+/**
+ * @param {import("@minecraft/server").Player} player
+ * @param {boolean} [notify]
+ */
+function stopVanillaFreezeCameraShakePreview(player, notify = false) {
+    const pid = player?.id;
+    if (!pid) return;
+    const active = activeVanillaFreezePreviewByPlayer.get(pid);
+    if (!active) return;
+    activeVanillaFreezePreviewByPlayer.delete(pid);
+    try {
+        if (player.isValid) {
+            restoreVanillaFreezePreviewBlocks(player.dimension, active.saved);
+            if (notify) {
+                player.sendMessage("§7[Dev] Vanilla freeze shake preview stopped.");
+            }
+        }
+    } catch {
+        /* ignore */
+    }
+}
+
+/**
+ * Fallback when powder snow cannot be placed: ramping rotational camerashake pulses (approximation).
+ * @param {import("@minecraft/server").Player} player
+ * @param {number} durationSec
+ */
+function runVanillaFreezeShakeFallback(player, durationSec) {
+    const durationTicks = Math.max(20, Math.floor(durationSec * 20));
+    const pulseEvery = 8;
+    const totalPulses = Math.ceil(durationTicks / pulseEvery);
+    let pulse = 0;
+
+    const tickPulse = () => {
+        if (!player?.isValid) return;
+        if (!activeVanillaFreezePreviewByPlayer.has(player.id)) return;
+        const t = pulse / Math.max(1, totalPulses - 1);
+        const intensity = 0.06 + t * 0.22;
+        applyShakePulse(player, intensity, 0.55 + t * 0.35, "Rotational");
+        pulse++;
+        if (pulse < totalPulses) {
+            system.runTimeout(tickPulse, pulseEvery);
+        }
+    };
+
+    tickPulse();
+}
+
+/**
+ * Dev-only: trigger client-hardcoded powder-snow freeze camera shake for comparison with MBA shake.
+ * Places powder snow at the player's feet/head blocks, restores afterward, and suppresses MBA shake.
+ * @param {import("@minecraft/server").Player} player
+ * @param {number} [durationSec]
+ */
+export function previewVanillaFreezeCameraShake(player, durationSec = 15) {
+    if (!INCLUDE_FULL_DEVELOPER_TOOLS) return;
+    if (!player?.isValid) return;
+
+    const durationTicks = Math.max(20, Math.floor(durationSec * 20));
+    stopVanillaFreezeCameraShakePreview(player);
+
+    clearInfectionCameraShake(player);
+    suppressInfectionCameraShake(player, durationTicks + 40);
+
+    const loc = player.location;
+    const dim = player.dimension;
+    const bx = Math.floor(loc.x);
+    const by = Math.floor(loc.y);
+    const bz = Math.floor(loc.z);
+    const slots = [
+        { x: bx, y: by, z: bz },
+        { x: bx, y: by + 1, z: bz }
+    ];
+
+    /** @type {Array<{ x: number, y: number, z: number, typeId: string }>} */
+    const saved = [];
+    for (const pos of slots) {
+        try {
+            const block = dim.getBlock(pos);
+            if (!block) continue;
+            const typeId = block.typeId;
+            if (!VANILLA_FREEZE_PREVIEW_REPLACEABLE.has(typeId)) continue;
+            saved.push({ x: pos.x, y: pos.y, z: pos.z, typeId });
+            block.setType(POWDER_SNOW_BLOCK);
+        } catch {
+            /* ignore */
+        }
+    }
+
+    if (saved.length === 0) {
+        player.sendMessage("§e[Dev] Could not place powder snow — using camerashake approximation.");
+        activeVanillaFreezePreviewByPlayer.set(player.id, { saved: [], restoreTick: system.currentTick + durationTicks });
+        runVanillaFreezeShakeFallback(player, durationSec);
+        system.runTimeout(() => {
+            activeVanillaFreezePreviewByPlayer.delete(player.id);
+            try {
+                if (player.isValid) {
+                    player.sendMessage("§7[Dev] Vanilla freeze shake preview stopped (approximation).");
+                }
+            } catch {
+                /* ignore */
+            }
+        }, durationTicks);
+        return;
+    }
+
+    try {
+        player.addEffect("resistance", durationTicks + 60, {
+            amplifier: VANILLA_FREEZE_PREVIEW_RESISTANCE_AMP,
+            showParticles: false
+        });
+    } catch {
+        /* ignore */
+    }
+
+    activeVanillaFreezePreviewByPlayer.set(player.id, {
+        saved,
+        restoreTick: system.currentTick + durationTicks
+    });
+
+    player.sendMessage(`§b[Dev] Vanilla freeze shake preview started (~${durationSec}s). MBA shake suppressed.`);
+
+    system.runTimeout(() => {
+        stopVanillaFreezeCameraShakePreview(player, true);
+    }, durationTicks);
+}
+
+/**
  * Per-bite intensity falls as lifetime snowCount rises; rapid re-eats stack duration but each pulse is weaker.
  * @param {number} snowCount
  * @param {number} stackIndex 0 = first bite in a chain
@@ -212,11 +467,60 @@ export function computeSnowEatBuzzIntensity(snowCount, stackIndex) {
 }
 
 /**
- * Immediate camera "buzz" when eating snow. Stacks if eaten again within ~5s (longer linger, weaker pulses).
- * @param {import("@minecraft/server").Player} player
- * @param {number} [snowCount] lifetime snow eaten this infection (after this bite)
+ * Size-tier shake multiplier vs snow-eat first bite (tiny → buff).
+ * @param {string} attackerTypeId
+ * @returns {number}
  */
-export function triggerSnowEatCameraBuzz(player, snowCount = 1) {
+export function getBearHitShakeRatio(attackerTypeId) {
+    if (!attackerTypeId) return BEAR_HIT_SHAKE_RATIO_STANDARD;
+    if (BUFF_BEAR_TYPE_IDS.has(attackerTypeId)) return BEAR_HIT_SHAKE_RATIO_BUFF;
+    if (TORPEDO_BEAR_TYPE_IDS.has(attackerTypeId)) return BEAR_HIT_SHAKE_RATIO_TORPEDO_HIT;
+    if (attackerTypeId === FLYING_BEAR_DAY20_ID) return BEAR_HIT_SHAKE_RATIO_FLYING_DAY20;
+    if (attackerTypeId === FLYING_BEAR_DAY15_ID) return BEAR_HIT_SHAKE_RATIO_FLYING_DAY15;
+    if (attackerTypeId === FLYING_BEAR_ID) return BEAR_HIT_SHAKE_RATIO_FLYING;
+    if (HEAVY_BEAR_TYPE_IDS.has(attackerTypeId)) return BEAR_HIT_SHAKE_RATIO_HEAVY;
+    if (LARGE_MAX_BEAR_TYPE_IDS.has(attackerTypeId)) return BEAR_HIT_SHAKE_RATIO_LARGE_MAX;
+    if (LARGE_PLUS_BEAR_TYPE_IDS.has(attackerTypeId)) return BEAR_HIT_SHAKE_RATIO_LARGE_PLUS;
+    if (LARGE_BEAR_TYPE_IDS.has(attackerTypeId)) return BEAR_HIT_SHAKE_RATIO_LARGE;
+    if (STANDARD_BEAR_TYPE_IDS.has(attackerTypeId)) return BEAR_HIT_SHAKE_RATIO_STANDARD;
+    if (SMALL_BEAR_TYPE_IDS.has(attackerTypeId)) return BEAR_HIT_SHAKE_RATIO_SMALL;
+    if (attackerTypeId === TINY_BEAR_ID) return BEAR_HIT_SHAKE_RATIO_TINY;
+    return BEAR_HIT_SHAKE_RATIO_STANDARD;
+}
+
+/**
+ * Shorter shake linger for the smallest bears so hits feel subtle, not buzzy.
+ * @param {string} attackerTypeId
+ * @returns {number}
+ */
+export function getBearHitShakeDurationScale(attackerTypeId) {
+    const ratio = getBearHitShakeRatio(attackerTypeId);
+    if (ratio <= BEAR_HIT_SHAKE_RATIO_TINY + 0.01) return 0.5;
+    if (ratio <= BEAR_HIT_SHAKE_RATIO_FLYING + 0.01) return 0.55;
+    if (ratio <= BEAR_HIT_SHAKE_RATIO_SMALL + 0.01) return 0.65;
+    if (ratio <= BEAR_HIT_SHAKE_RATIO_FLYING_DAY20 + 0.01) return 0.75;
+    return 1;
+}
+
+/**
+ * @param {string} typeId
+ * @returns {boolean}
+ */
+export function isMapleBearHitShakeType(typeId) {
+    return ALL_MAPLE_BEAR_HIT_TYPE_IDS.has(typeId);
+}
+
+/**
+ * Shared snow-reference camera buzz (snow eat, bear hits, torpedo blast).
+ * @param {import("@minecraft/server").Player} player
+ * @param {number} snowCount
+ * @param {number} intensityRatio vs first-bite snow buzz
+ * @param {string} mode debug label
+ * @param {string} [detail] optional attacker type id etc.
+ * @param {number} [durationScale] multiplier on pulse length (tiny/small bear hits)
+ * @param {"infection"|"snow"|"combat"|"storm"|"cues"} [category]
+ */
+function triggerReferenceCameraBuzz(player, snowCount = 1, intensityRatio = 1, mode = "snow_buzz", detail, durationScale = 1, category = "snow") {
     if (!player?.isValid) return;
     if (isInfectionCameraShakeSuppressed(player.id)) return;
     try {
@@ -224,7 +528,7 @@ export function triggerSnowEatCameraBuzz(player, snowCount = 1) {
     } catch {
         /* ignore */
     }
-    if (!getInfectionCameraShakeEnabled(player)) return;
+    if (!getCameraShakeCategoryEnabled(player, category)) return;
 
     const pid = player.id;
     const now = system.currentTick;
@@ -240,13 +544,17 @@ export function triggerSnowEatCameraBuzz(player, snowCount = 1) {
     }
     entry.lastEatTick = now;
 
-    const intensity = computeSnowEatBuzzIntensity(snowCount, entry.stack);
+    const baseIntensity = computeSnowEatBuzzIntensity(snowCount, entry.stack);
+    const intensity = Math.max(SNOW_BUZZ_MIN_INTENSITY, baseIntensity * Math.max(0.05, intensityRatio));
     const durationSec = Math.min(
         SNOW_BUZZ_MAX_DURATION_SEC,
         SNOW_BUZZ_BASE_DURATION_SEC + entry.stack * SNOW_BUZZ_EXTEND_PER_STACK_SEC
     );
     const extendFromActive = entry.untilTick > now ? Math.min(1.2, (entry.untilTick - now) / 20 * 0.35) : 0;
-    const totalDuration = Math.min(SNOW_BUZZ_MAX_DURATION_SEC, durationSec + extendFromActive);
+    const totalDuration = Math.min(
+        SNOW_BUZZ_MAX_DURATION_SEC,
+        (durationSec + extendFromActive) * Math.max(0.25, durationScale) * REFERENCE_PULSE_DURATION_SCALE
+    );
 
     const rotApi = applyShakePulse(player, intensity, totalDuration, "Rotational");
     if (intensity >= 0.14) {
@@ -259,16 +567,108 @@ export function triggerSnowEatCameraBuzz(player, snowCount = 1) {
     if (isInfectionCameraShakeDebugEnabled()) {
         recordShakeDebug(pid, {
             player: player.name,
-            mode: "snow_buzz",
+            mode,
+            detail,
             snowCount,
             stack: entry.stack,
+            intensityRatio: Number(intensityRatio.toFixed(2)),
             intensity: Number(intensity.toFixed(2)),
             durationSec: Number(totalDuration.toFixed(2)),
             api: rotApi,
             skipped: rotApi === "none",
-            reason: rotApi === "none" ? "api_unavailable" : "snow_buzz"
+            reason: rotApi === "none" ? "api_unavailable" : mode
         });
     }
+}
+
+/**
+ * Immediate camera "buzz" when eating snow. Stacks if eaten again within ~5s (longer linger, weaker pulses).
+ * @param {import("@minecraft/server").Player} player
+ * @param {number} [snowCount] lifetime snow eaten this infection (after this bite)
+ */
+export function triggerSnowEatCameraBuzz(player, snowCount = 1) {
+    triggerReferenceCameraBuzz(player, snowCount, 1, "snow_buzz", undefined, 1, "snow");
+}
+
+/**
+ * Camera buzz when struck by a Maple Bear (size-tiered vs snow-eat baseline).
+ * @param {import("@minecraft/server").Player} player
+ * @param {string} attackerTypeId
+ * @param {number} [snowCount] lifetime snow severity when infected (else 1)
+ */
+export function triggerMapleBearHitCameraBuzz(player, attackerTypeId, snowCount = 1) {
+    if (!isMapleBearHitShakeType(attackerTypeId)) return;
+    const ratio = getBearHitShakeRatio(attackerTypeId);
+    const durationScale = getBearHitShakeDurationScale(attackerTypeId);
+    triggerReferenceCameraBuzz(player, snowCount, ratio, "bear_hit", attackerTypeId, durationScale, "combat");
+}
+
+/**
+ * Camera buzz when caught in a torpedo bear explosion.
+ * @param {import("@minecraft/server").Player} player
+ * @param {number} [snowCount]
+ */
+export function triggerTorpedoBlastCameraBuzz(player, snowCount = 1) {
+    triggerReferenceCameraBuzz(player, snowCount, TORPEDO_BLAST_SHAKE_RATIO, "torpedo_blast", undefined, EXPLOSION_PULSE_DURATION_SCALE, "combat");
+}
+
+/**
+ * Buff bear death powder burst — torpedo-class shake for players in radius.
+ * @param {import("@minecraft/server").Player} player
+ */
+export function triggerBuffBurstCameraBuzz(player) {
+    triggerReferenceCameraBuzz(player, 1, BUFF_BURST_SHAKE_RATIO, "buff_burst", undefined, EXPLOSION_PULSE_DURATION_SCALE, "combat");
+}
+
+/**
+ * Normal infection cough (small wobble).
+ * @param {import("@minecraft/server").Player} player
+ * @param {boolean} [isMajor]
+ */
+export function triggerInfectionCoughCameraBuzz(player, isMajor = false) {
+    const ratio = isMajor ? COUGH_SHAKE_RATIO_MAJOR : COUGH_SHAKE_RATIO_MINOR;
+    triggerReferenceCameraBuzz(player, 1, ratio, "cough", isMajor ? "major" : "minor", 0.55, "cues");
+}
+
+/**
+ * Dust breath / forced dust cough — stronger than normal cough.
+ * @param {import("@minecraft/server").Player} player
+ * @param {boolean} [isMajor]
+ */
+export function triggerInfectionDustCoughCameraBuzz(player, isMajor = false) {
+    const ratio = isMajor ? DUST_COUGH_SHAKE_RATIO_MAJOR : DUST_COUGH_SHAKE_RATIO_MINOR;
+    triggerReferenceCameraBuzz(player, 1, ratio, "dust_cough", isMajor ? "major" : "minor", 0.85, "cues");
+}
+
+/**
+ * Brief settle pulse on major infection cure.
+ * @param {import("@minecraft/server").Player} player
+ */
+export function triggerMajorCureSettleCameraBuzz(player) {
+    triggerReferenceCameraBuzz(player, 1, MAJOR_CURE_SETTLE_SHAKE_RATIO, "major_cure_settle", undefined, 0.45, "cues");
+}
+
+/**
+ * Subtle pulse when a milestone world day begins.
+ * @param {import("@minecraft/server").Player} player
+ * @param {number} [day]
+ */
+export function triggerDayMilestoneCameraBuzz(player, day = 0) {
+    triggerReferenceCameraBuzz(player, 1, DAY_MILESTONE_SHAKE_RATIO, "day_milestone", String(day), 0.6, "cues");
+}
+
+/**
+ * Throttled ambient shake while exposed inside an active storm (~flying MB hit).
+ * @param {import("@minecraft/server").Player} player
+ */
+export function tickStormExposureCameraBuzz(player) {
+    if (!player?.isValid) return;
+    const pid = player.id;
+    const now = system.currentTick;
+    const last = lastStormExposureShakeTick.get(pid) ?? 0;
+    if (now - last < STORM_SHAKE_INTERVAL_TICKS) return;
+    lastStormExposureShakeTick.set(pid, now);
+    triggerReferenceCameraBuzz(player, 1, STORM_EXPOSURE_SHAKE_RATIO, "storm_exposure", undefined, 0.7, "storm");
 }
 
 /**
@@ -419,9 +819,9 @@ export function tickInfectionCameraShake(player, state, opts) {
         /* ignore */
     }
 
-    if (!getInfectionCameraShakeEnabled(player)) return;
+    if (!getCameraShakeCategoryEnabled(player, "infection")) return;
 
-    const maxTicks = Math.max(1, opts.maxTicks || 1);
+    const maxTicks = Math.max(1, opts?.maxTicks ?? 1);
     if (!opts.forceBurst && !shouldTickInfectionCameraShake(state, maxTicks)) return;
 
     const debug = {
@@ -486,7 +886,7 @@ export function tickInfectionCameraShake(player, state, opts) {
             isMinor ? 0.85 : 1.05,
             (0.08 + urgency * 0.3 + severity * 0.05 + (isMinor ? 0 : snowBoost * 0.09)) * intensityScale
         );
-        const jitterDuration = 1.2 + urgency * 2.2 + severity * 0.2 + Math.random() * 0.75;
+        const jitterDuration = (1.2 + urgency * 2.2 + severity * 0.2 + Math.random() * 0.75) * INFECTION_JITTER_DURATION_SCALE;
         const jitApi = applyShakePulse(player, jitterIntensity, jitterDuration, "Rotational");
         if (jitApi !== "none") {
             api = jitApi;
@@ -512,7 +912,7 @@ export function tickInfectionCameraShake(player, state, opts) {
                 2.85,
                 (0.5 + urgency * 1.55 + severity * 0.45 + snowBoost * 0.65) * intensityScale
             );
-            const burstDuration = 0.18 + Math.random() * 0.38 + urgency * 0.1;
+            const burstDuration = (0.18 + Math.random() * 0.38 + urgency * 0.1) * INFECTION_BURST_DURATION_SCALE;
             const rotApi = applyShakePulse(player, burstIntensity, burstDuration, "Rotational");
             if (rotApi !== "none") {
                 api = rotApi;

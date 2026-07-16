@@ -1,4 +1,5 @@
 import { system, world } from "@minecraft/server";
+import { triggerBuffBurstCameraBuzz } from "./mb_infectionCameraShake.js";
 import { UNBREAKABLE_BLOCKS } from "./mb_miningBlockList.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
 import { isDebugEnabled } from "./mb_codex.js";
@@ -327,6 +328,14 @@ function createBuffExplosion(source) {
                 const dist = Math.hypot(dx, dy, dz);
                 
                 if (dist === 0 || dist > KNOCKBACK_RANGE) continue;
+
+                if (targetEntity.typeId === "minecraft:player" && dist <= EXPLOSION_RADIUS) {
+                    try {
+                        triggerBuffBurstCameraBuzz(targetEntity);
+                    } catch {
+                        /* ignore */
+                    }
+                }
                 
                 // Calculate knockback direction (away from explosion)
                 const dirX = dx / dist;

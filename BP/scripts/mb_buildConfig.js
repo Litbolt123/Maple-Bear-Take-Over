@@ -38,7 +38,7 @@ export const ADDON_VERSION_MAJOR = 0;
 export const ADDON_VERSION_MINOR = 9;
 export const ADDON_VERSION_PATCH = 0;
 /** Semver pre-release label, e.g. beta.1, beta.2 — keep in sync with `PLAYER_CHANGELOG_VERSION` and pack manifest descriptions. */
-export const ADDON_VERSION_PRERELEASE = "beta.4";
+export const ADDON_VERSION_PRERELEASE = "beta.5";
 
 /** In-game / Bridge export display name (release). */
 export const PACK_DISPLAY_NAME = "The Maple Bear Apocalypse";

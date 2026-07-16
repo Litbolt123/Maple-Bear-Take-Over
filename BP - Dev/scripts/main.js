@@ -50,7 +50,14 @@ import "./mb_biomeAmbience.js";
 import "./mb_snowStorm.js";
 import { isPlayerInStorm, getStormExposureRates, summonStorm, setStormOverride, resetStormOverride, getStormState, wasKilledByStorm } from "./mb_snowStorm.js";
 import { tickInfectionCoughAndBreath, playPowderHiccup, playCureSighRelief, resetInfectionAudioCooldowns } from "./mb_infectionAudio.js";
-import { tickInfectionCameraShake, clearInfectionCameraShake, shouldTickInfectionCameraShake, triggerSnowEatCameraBuzz, suppressInfectionCameraShake, pulseClearInfectionCameraShake, isInfectionCameraShakeSuppressed } from "./mb_infectionCameraShake.js";
+import { tickInfectionCameraShake, clearInfectionCameraShake, shouldTickInfectionCameraShake, triggerSnowEatCameraBuzz, triggerMapleBearHitCameraBuzz, suppressInfectionCameraShake, pulseClearInfectionCameraShake, isInfectionCameraShakeSuppressed, triggerMajorCureSettleCameraBuzz } from "./mb_infectionCameraShake.js";
+import {
+    registerTorpedoBlastInfectionHandler,
+    applyTorpedoBlastPlayerEffects,
+    TORPEDO_BLAST_SNOW_INCREASE,
+    TORPEDO_BLAST_MAJOR_TIMER_REDUCE_TICKS,
+    TORPEDO_BLAST_MINOR_TIMER_REDUCE_TICKS
+} from "./mb_torpedoBlastEffects.js";
 import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
 import { tryPlaceSnowLayerUnder } from "./mb_snowPlacement.js";
@@ -1034,6 +1041,38 @@ function getSnowTimeEffect(snowCount) {
         return -Math.floor(INFECTION_TICKS * 0.15); // -15% time
     }
 }
+
+registerTorpedoBlastInfectionHandler((player) => {
+    const state = playerInfection.get(player.id);
+    if (!state || state.cured || (state.ticksLeft || 0) <= 0) return;
+
+    if (state.infectionType === MAJOR_INFECTION_TYPE) {
+        state.snowCount = (state.snowCount || 0) + TORPEDO_BLAST_SNOW_INCREASE;
+        const timeEffect = getSnowTimeEffect(state.snowCount);
+        state.ticksLeft = Math.max(
+            0,
+            Math.min(
+                INFECTION_TICKS,
+                state.ticksLeft + timeEffect - TORPEDO_BLAST_MAJOR_TIMER_REDUCE_TICKS
+            )
+        );
+        playerInfection.set(player.id, state);
+        updateMaxSnowLevel(player, state.snowCount);
+        if (state.ticksLeft <= 0) {
+            handleInfectionExpiration(player, state);
+        } else if (state.ticksLeft <= 1200 && !state.warningSent) {
+            player.sendMessage(CHAT_DANGER_STRONG + "You don't feel so good...");
+            state.warningSent = true;
+            playerInfection.set(player.id, state);
+        }
+        return;
+    }
+
+    if (state.infectionType === MINOR_INFECTION_TYPE) {
+        state.ticksLeft = Math.max(0, state.ticksLeft - TORPEDO_BLAST_MINOR_TIMER_REDUCE_TICKS);
+        playerInfection.set(player.id, state);
+    }
+});
 
 // --- Helper: Apply random effects based on snow tier ---
 function applySnowTierEffects(player, snowCount) {
@@ -2228,6 +2267,7 @@ function cureMinorInfection(player) {
         player.sendMessage(CHAT_SUCCESS + "§lYou have cured your minor infection!");
         player.sendMessage(CHAT_INFO + `Cured on Day ${getCurrentDay()}.`);
         player.sendMessage(CHAT_WARNING + "You are now permanently immune. You will never contract minor infection again.");
+        player.sendMessage(CHAT_DANGER + "Eating \"snow\" can still cause a major infection.");
         const addonHits = getAddonDifficultyState();
         const immuneHits = addonHits.hitsBase;
         const normalHits = Math.max(1, addonHits.hitsBase - 1);
@@ -2351,6 +2391,7 @@ function handleEnchantedGoldenApple(player, item) {
                 console.log(`[CURE] Immediately saved cure data for ${player.name}`);
                 resetInfectionAudioCooldowns(player.id);
                 triggerCureSighReliefSound(player, true);
+                triggerMajorCureSettleCameraBuzz(player);
 
                 // Note: We do NOT remove the weakness effect - let it run its course naturally
                 player.sendMessage(CHAT_SUCCESS + "§lYou have cured your major infection!");
@@ -2414,7 +2455,6 @@ function triggerCureSighReliefSound(player, isMajorCure) {
 function handleSnowConsumption(player, item) {
     const infectionState = playerInfection.get(player.id);
     const isImmune = isPlayerImmune(player);
-    const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
     const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE && !infectionState.cured;
     
     // ALWAYS mark snow as discovered and identified when consumed
@@ -2428,19 +2468,8 @@ function handleSnowConsumption(player, item) {
         recordDailyEvent(player, today, eventMessage, "items");
     } catch { }
     
-    // Handle snow consumption while permanently immune
-    if (hasPermanentImmunity) {
-        // Permanently immune players - no infection from snow
-        try { 
-            const codex = getCodex(player);
-            if (!codex.status.immuneKnown) {
-                markCodex(player, "status.immuneKnown");
-                player.sendMessage(CHAT_INFO + "You realize you are permanently immune to infection from snow.");
-            }
-        } catch { }
-        player.sendMessage(CHAT_WARNING + "You are permanently immune. The snow has no effect on you.");
-        return; // Don't proceed with normal snow consumption
-    }
+    // Permanent immunity (minor or major cure) blocks minor infection / respawn minor — not powder.
+    // Temp immunity from major cure still interacts with snow below.
     
     // Handle snow consumption while temporarily immune (from major infection cure)
     if (isImmune && (!infectionState || infectionState.cured)) {
@@ -3564,6 +3593,12 @@ world.afterEvents.entityDie.subscribe((event) => {
                     dimension.spawnParticle("mb:white_dust_particle", { x: loc.x, y: loc.y + 1, z: loc.z });
                     dimension.runCommand(`particle minecraft:ash ${x} ${y} ${z} 0.5 0.5 0.5 0.05 15`);
                 } catch { }
+
+                try {
+                    applyTorpedoBlastPlayerEffects(dimension, loc, 5);
+                } catch {
+                    /* ignore */
+                }
             } catch (error) {
                 if (isDebugEnabled("main", "death")) {
                     console.warn(`[TORPEDO DEATH] Error executing explosion commands:`, error);
@@ -3784,6 +3819,13 @@ world.afterEvents.entityHurt.subscribe((event) => {
                     TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID
                 ];
     if (source && source.damagingEntity && mapleBearTypes.includes(source.damagingEntity.typeId)) {
+        try {
+            const infectionState = playerInfection.get(player.id);
+            const snowCount = Math.max(1, infectionState?.snowCount || 1);
+            triggerMapleBearHitCameraBuzz(player, source.damagingEntity.typeId, snowCount);
+        } catch {
+            /* ignore */
+        }
         // Anger spread: nearby flying bears and infected (bear/pig/cow) target this player (another bear hit them)
         try {
             if (player.dimension && player.location) {
@@ -4007,9 +4049,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                     firstTime.hasBeenHit = true;
                     firstTimeMessages.set(player.id, firstTime);
                 }
-                if (newHitCount === 1) {
-                    applyEffect(player, "minecraft:blindness", 60, { amplifier: 0 });
-                } else if (newHitCount === 2) {
+                if (newHitCount === 2) {
                     applyEffect(player, "minecraft:blindness", 100, { amplifier: 0 });
                     applyEffect(player, "minecraft:nausea", 160, { amplifier: 0 });
                 }
@@ -4125,7 +4165,6 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 
                 // Apply staged effects based on hit count (pre-progression)
                 if (newHitCount === 1) {
-                    applyEffect(player, "minecraft:blindness", 80, { amplifier: 0 });
                     applyEffect(player, "minecraft:slowness", 100, { amplifier: 0 });
                 }
             }
@@ -4224,9 +4263,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 firstTimeMessages.set(player.id, firstTime);
             }
             // Apply staged effects based on hit count (pre-infection)
-                if (newHitCount === 1) {
-                applyEffect(player, "minecraft:blindness", 60, { amplifier: 0 });
-                } else if (newHitCount === 2) {
+                if (newHitCount === 2) {
                 applyEffect(player, "minecraft:blindness", 100, { amplifier: 0 });
                 applyEffect(player, "minecraft:nausea", 160, { amplifier: 0 });
                 }

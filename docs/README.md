@@ -12,13 +12,17 @@ Start here to navigate the repo. **Session log:** [context summary.md](context%2
 | [PLAYER_CHANGELOG.md](PLAYER_CHANGELOG.md) | Player-facing beta notes (referenced in-game); **§ Unreleased** = draft for next beta |
 | [development/releases/UNRELEASED_DRAFT.md](development/releases/UNRELEASED_DRAFT.md) | Full draft bullets + ship checklist (copy on release day) |
 | [development/releases/DEV_BETA_4.2.md](development/releases/DEV_BETA_4.2.md) | Patreon dev drop **4.2** (dev pack only) |
+| [development/releases/PUBLIC_BETA_5_PREVIEW.md](development/releases/PUBLIC_BETA_5_PREVIEW.md) | Draft **beta.5** public feature list (pre-ship) |
 | [marketing/PATREON_DEV_BETA_4.2.md](marketing/PATREON_DEV_BETA_4.2.md) | Paste-ready Patreon post for 4.2 |
+| [marketing/PATREON_ORIGINAL_LAUNCH_POST.md](marketing/PATREON_ORIGINAL_LAUNCH_POST.md) | Live launch post archive (beta.3 era; tone reference) |
+| [marketing/PATREON_BETA_5_UPDATE_DRAFT.md](marketing/PATREON_BETA_5_UPDATE_DRAFT.md) | Paste-ready Patreon post for public beta.5 |
 | [RELEASE_BODY.md](RELEASE_BODY.md) | GitHub Release description (CI; edit before each tag) |
 | [releasing.md](releasing.md) | Maintainer runbook: tag → Actions → `.mcpack` on Releases |
 | [development/PERFORMANCE_OPTIMIZATION_ROADMAP.md](development/PERFORMANCE_OPTIMIZATION_ROADMAP.md) | Hot scripts, phased optimizations |
 | [development/CURSOR_SDK.md](development/CURSOR_SDK.md) | Optional Cursor SDK ideas (not in repo) |
 | [README.md](README.md) | This index |
 | [ORGANIZATION.md](ORGANIZATION.md) | Folder tree and conventions |
+| [reference/MAPLE_BEAR_TYPES.md](reference/MAPLE_BEAR_TYPES.md) | All MBA mob types, IDs, camera shake tiers |
 
 ---
 

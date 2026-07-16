@@ -5,11 +5,13 @@
 
 import { getWorldProperty, setWorldProperty, saveAllProperties } from "./mb_dynamicPropertyHandler.js";
 import { ensureWorldLagComfortDefaults } from "./mb_codex.js";
+import { INCLUDE_FULL_DEVELOPER_TOOLS } from "./mb_buildConfig.js";
+import { SUPPRESS_VILLAGERS_PROP } from "./mb_villagerSpawnPolicy.js";
 
 const SCHEMA_WORLD_KEY = "mb_addon_schema_version";
 
 /** Increment when you add a new migration block. */
-export const CURRENT_PROPERTY_SCHEMA = 2;
+export const CURRENT_PROPERTY_SCHEMA = 3;
 
 /**
  * Run after world/properties are loadable. Safe to call once per session (idempotent).
@@ -27,6 +29,11 @@ export function runWorldPropertyMigrations() {
 
         if (v < 2) {
             ensureWorldLagComfortDefaults();
+        }
+
+        if (v < 3 && !INCLUDE_FULL_DEVELOPER_TOOLS) {
+            // Beta.5 public: allow vanilla villages on worlds that previously defaulted suppress ON.
+            setWorldProperty(SUPPRESS_VILLAGERS_PROP, 0);
         }
 
         setWorldProperty(SCHEMA_WORLD_KEY, CURRENT_PROPERTY_SCHEMA);

@@ -3,6 +3,7 @@ import { ACTION_BAR_SLOT, setHudActionBarSegment, clearHudActionBarSegment } fro
 import { getWorldProperty, setWorldProperty, getPlayerProperty } from "./mb_dynamicPropertyHandler.js";
 import { getCodex, saveCodex, markSectionUnlock, markSubsectionUnlock, getKnowledgeLevel, hasKnowledge, checkKnowledgeProgression, getPlayerSoundVolume, getPlayerSettings } from "./mb_codex.js";
 import { CHAT_ACHIEVEMENT, CHAT_DANGER, CHAT_DANGER_STRONG, CHAT_SUCCESS, CHAT_WARNING, CHAT_INFO, CHAT_DEV, CHAT_HIGHLIGHT } from "./mb_chatColors.js";
+import { triggerDayMilestoneCameraBuzz } from "./mb_infectionCameraShake.js";
 
 // Minimal dynamic property test (must be delayed until after startup)
 // system.run(() => {
@@ -794,6 +795,14 @@ function startDayCycleLoop() {
                         }
                         
                         showPlayerTitle(player, titleText, undefined, TITLE_TIMING_SUNRISE, newDay);
+                        
+                        if (isMilestone) {
+                            try {
+                                triggerDayMilestoneCameraBuzz(player, newDay);
+                            } catch {
+                                /* ignore */
+                            }
+                        }
                         
                         let actionbarText = "";
                         if (showDayMessage) {

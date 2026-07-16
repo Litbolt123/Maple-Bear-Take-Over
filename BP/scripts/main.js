@@ -12,7 +12,7 @@ import {
 import { getCodex, getDefaultCodex, markCodex, markSubsectionUnlock, markSectionUnlock, showCodexBook, saveCodex, recordBiomeVisit, getBiomeInfectionLevel, shareKnowledge, isDebugEnabled, showBasicJournalUI, showFirstTimeWelcomeScreen, getPlayerSoundVolume, getPlayerSettings, checkKnowledgeProgression, showEmulsifierMachineUI, getInfectionCueEmitterTier, getInfectionCueHearOthersTier, getInfectionCameraShakeEnabled, ensurePlayerChangelogMigration } from "./mb_codex.js";
 import { initializeDayTracking, getCurrentDay, setCurrentDay, getInfectionMessage, checkDailyEventsForAllPlayers, getDayDisplayInfo, recordDailyEvent, mbiHandleMilestoneDay, isMilestoneDay } from "./mb_dayTracker.js";
 import { registerDustedDirtBlock, unregisterDustedDirtBlock, countNearbyDustedDirtBlocks, upsertEmulsifierZoneAtBlock, removeEmulsifierZoneAtBlock, getEmulsifierZoneAtBlock, getZoneFuelQueueForUI, isInsideEmulsifierNoSpawnZone } from "./mb_spawnController.js";
-import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState } from "./mb_dynamicPropertyHandler.js";
+import { initializePropertyHandler, getPlayerProperty, setPlayerProperty, getWorldProperty, setWorldProperty, getAddonDifficultyState, flushPlayerPropertyToDisk, clearPlayerPropertyToDisk } from "./mb_dynamicPropertyHandler.js";
 import { initializeAdaptivePerformanceWatch, getPerfWallStress01, getPerfMobPressureForSpawn01, getPlayerThriftTier } from "./mb_performanceProfile.js";
 import { getBearSnapshot, getBearSnapshotsForDimensions } from "./mb_bearSnapshot.js";
 import { shouldPauseDayZeroAddonLoops, shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
@@ -50,7 +50,14 @@ import "./mb_biomeAmbience.js";
 import "./mb_snowStorm.js";
 import { isPlayerInStorm, getStormExposureRates, summonStorm, setStormOverride, resetStormOverride, getStormState, wasKilledByStorm } from "./mb_snowStorm.js";
 import { tickInfectionCoughAndBreath, playPowderHiccup, playCureSighRelief, resetInfectionAudioCooldowns } from "./mb_infectionAudio.js";
-import { tickInfectionCameraShake, clearInfectionCameraShake, shouldTickInfectionCameraShake, triggerSnowEatCameraBuzz } from "./mb_infectionCameraShake.js";
+import { tickInfectionCameraShake, clearInfectionCameraShake, shouldTickInfectionCameraShake, triggerSnowEatCameraBuzz, triggerMapleBearHitCameraBuzz, suppressInfectionCameraShake, pulseClearInfectionCameraShake, isInfectionCameraShakeSuppressed, triggerMajorCureSettleCameraBuzz } from "./mb_infectionCameraShake.js";
+import {
+    registerTorpedoBlastInfectionHandler,
+    applyTorpedoBlastPlayerEffects,
+    TORPEDO_BLAST_SNOW_INCREASE,
+    TORPEDO_BLAST_MAJOR_TIMER_REDUCE_TICKS,
+    TORPEDO_BLAST_MINOR_TIMER_REDUCE_TICKS
+} from "./mb_torpedoBlastEffects.js";
 import { hasInfectionExposureLineOfSight } from "./mb_infectionExposureLos.js";
 import { SNOW_REPLACEABLE_BLOCKS, SNOW_TWO_BLOCK_PLANTS } from "./mb_blockLists.js";
 import { tryPlaceSnowLayerUnder } from "./mb_snowPlacement.js";
@@ -262,8 +269,47 @@ const lastSymptomTick = new Map(); // playerId -> last tick applied
 const cureReminderLastTick = new Map(); // playerId -> last tick cure hint shown
 /** Hide infection HUD on death screen until respawn (`playerSpawn`). */
 const infectionActionBarSuppressedUntilSpawn = new Set();
+/** Blocks loadInfectionData from restoring pre-death major until fresh minor is applied. */
+const deathRespawnFreshMinorPending = new Set();
+/** Infection property keys cleared on death — must flush to disk or respawn reloads stale major timer. */
+const INFECTION_PERSISTENCE_KEYS = [
+    "mb_infection",
+    "mb_infection_type",
+    "mb_bear_infection",
+    "mb_snow_infection"
+];
+
+/** Wipe runtime + saved infection; flush immediately so respawn cannot reload near-death major. */
+function flushClearActiveInfectionSave(player) {
+    if (!player?.id) return;
+    playerInfection.delete(player.id);
+    for (const key of INFECTION_PERSISTENCE_KEYS) {
+        try {
+            clearPlayerPropertyToDisk(player, key);
+        } catch {
+            /* ignore */
+        }
+    }
+}
 /** Action bar fades on Bedrock if not refreshed; main infection logic runs every 40t — re-apply HUD here. */
 const INFECTION_ACTIONBAR_REFRESH_TICKS = 10;
+
+/** True while on death screen or otherwise not alive for infection ticks / camera shake. */
+function isPlayerDeadForInfection(player) {
+    if (!player?.isValid) return true;
+    try {
+        if (player.getGameMode?.() === "spectator") return true;
+    } catch {
+        /* ignore */
+    }
+    try {
+        const health = player.getComponent("minecraft:health");
+        if (health && health.currentValue <= 0) return true;
+    } catch {
+        /* ignore */
+    }
+    return false;
+}
 
 function clearInfectionHudActionBar(player) {
     try {
@@ -996,6 +1042,38 @@ function getSnowTimeEffect(snowCount) {
     }
 }
 
+registerTorpedoBlastInfectionHandler((player) => {
+    const state = playerInfection.get(player.id);
+    if (!state || state.cured || (state.ticksLeft || 0) <= 0) return;
+
+    if (state.infectionType === MAJOR_INFECTION_TYPE) {
+        state.snowCount = (state.snowCount || 0) + TORPEDO_BLAST_SNOW_INCREASE;
+        const timeEffect = getSnowTimeEffect(state.snowCount);
+        state.ticksLeft = Math.max(
+            0,
+            Math.min(
+                INFECTION_TICKS,
+                state.ticksLeft + timeEffect - TORPEDO_BLAST_MAJOR_TIMER_REDUCE_TICKS
+            )
+        );
+        playerInfection.set(player.id, state);
+        updateMaxSnowLevel(player, state.snowCount);
+        if (state.ticksLeft <= 0) {
+            handleInfectionExpiration(player, state);
+        } else if (state.ticksLeft <= 1200 && !state.warningSent) {
+            player.sendMessage(CHAT_DANGER_STRONG + "You don't feel so good...");
+            state.warningSent = true;
+            playerInfection.set(player.id, state);
+        }
+        return;
+    }
+
+    if (state.infectionType === MINOR_INFECTION_TYPE) {
+        state.ticksLeft = Math.max(0, state.ticksLeft - TORPEDO_BLAST_MINOR_TIMER_REDUCE_TICKS);
+        playerInfection.set(player.id, state);
+    }
+});
+
 // --- Helper: Apply random effects based on snow tier ---
 function applySnowTierEffects(player, snowCount) {
     try {
@@ -1634,6 +1712,8 @@ function trackEffectExperience(player, effectId, severity) {
 
 // --- Helper: Handle infection expiration ---
 function handleInfectionExpiration(player, infectionState) {
+    suppressInfectionCameraShake(player, 240);
+    pulseClearInfectionCameraShake(player);
     clearInfectionCameraShake(player);
     const wasActiveRecently = infectionState.lastActiveTick &&
         (system.currentTick - infectionState.lastActiveTick) < 1200; // 1 minute grace period
@@ -1679,6 +1759,7 @@ function handleInfectionExpiration(player, infectionState) {
     
     player.removeTag(INFECTED_TAG);
     playerInfection.delete(player.id);
+    flushClearActiveInfectionSave(player);
 }
 
 // --- Helper: Normalize boolean values from world/player properties ---
@@ -2186,6 +2267,7 @@ function cureMinorInfection(player) {
         player.sendMessage(CHAT_SUCCESS + "§lYou have cured your minor infection!");
         player.sendMessage(CHAT_INFO + `Cured on Day ${getCurrentDay()}.`);
         player.sendMessage(CHAT_WARNING + "You are now permanently immune. You will never contract minor infection again.");
+        player.sendMessage(CHAT_DANGER + "Eating \"snow\" can still cause a major infection.");
         const addonHits = getAddonDifficultyState();
         const immuneHits = addonHits.hitsBase;
         const normalHits = Math.max(1, addonHits.hitsBase - 1);
@@ -2309,6 +2391,7 @@ function handleEnchantedGoldenApple(player, item) {
                 console.log(`[CURE] Immediately saved cure data for ${player.name}`);
                 resetInfectionAudioCooldowns(player.id);
                 triggerCureSighReliefSound(player, true);
+                triggerMajorCureSettleCameraBuzz(player);
 
                 // Note: We do NOT remove the weakness effect - let it run its course naturally
                 player.sendMessage(CHAT_SUCCESS + "§lYou have cured your major infection!");
@@ -2372,7 +2455,6 @@ function triggerCureSighReliefSound(player, isMajorCure) {
 function handleSnowConsumption(player, item) {
     const infectionState = playerInfection.get(player.id);
     const isImmune = isPlayerImmune(player);
-    const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
     const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE && !infectionState.cured;
     
     // ALWAYS mark snow as discovered and identified when consumed
@@ -2386,19 +2468,8 @@ function handleSnowConsumption(player, item) {
         recordDailyEvent(player, today, eventMessage, "items");
     } catch { }
     
-    // Handle snow consumption while permanently immune
-    if (hasPermanentImmunity) {
-        // Permanently immune players - no infection from snow
-        try { 
-            const codex = getCodex(player);
-            if (!codex.status.immuneKnown) {
-                markCodex(player, "status.immuneKnown");
-                player.sendMessage(CHAT_INFO + "You realize you are permanently immune to infection from snow.");
-            }
-        } catch { }
-        player.sendMessage(CHAT_WARNING + "You are permanently immune. The snow has no effect on you.");
-        return; // Don't proceed with normal snow consumption
-    }
+    // Permanent immunity (minor or major cure) blocks minor infection / respawn minor — not powder.
+    // Temp immunity from major cure still interacts with snow below.
     
     // Handle snow consumption while temporarily immune (from major infection cure)
     if (isImmune && (!infectionState || infectionState.cured)) {
@@ -2809,91 +2880,75 @@ function handleGoldenCarrot(player, item) {
     }
 }
 
-// Handle player death - clear infection data
+// Handle player death - clear infection data; respawn with fresh minor infection (unless permanently immune)
 function handlePlayerDeath(player) {
     try {
         infectionActionBarSuppressedUntilSpawn.add(player.id);
         clearInfectionHudActionBar(player);
+        suppressInfectionCameraShake(player, 400);
+        pulseClearInfectionCameraShake(player, 7);
         clearInfectionCameraShake(player);
 
-        // Check if player has permanent immunity
         const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
-        
+
         if (hasPermanentImmunity) {
-            // Permanently immune players - normal death handling (no infection on respawn)
             playerInfection.delete(player.id);
             curedPlayers.delete(player.id);
             bearHitCount.delete(player.id);
             infectionExperience.delete(player.id);
             player.removeTag(INFECTED_TAG);
-            
-            // Clear temporary immunity (major infection cure immunity)
+
             try {
                 setPlayerProperty(player, "mb_immunity_end", undefined);
                 setPlayerProperty(player, "mb_bear_hit_count", undefined);
-                // Keep permanent immunity property and minor infection cured property
             } catch (error) {
                 console.warn(`[DEATH] Error clearing properties for permanently immune ${player.name}:`, error);
             }
             console.log(`[DEATH] Cleared infection data for permanently immune ${player.name}`);
             return;
         }
-        
-        // Check if player has minor infection
-        const infectionState = playerInfection.get(player.id);
-        const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE;
-        
-        if (hasMinorInfection) {
-            // Minor infected players - do NOT clear infection data, only clear major infection data
-            // They will respawn with minor infection still active
-            // Clear hit count but keep infection state
-            bearHitCount.delete(player.id);
-            infectionExperience.delete(player.id);
-            // Keep minor infection in playerInfection map - it will persist through death
-            // Keep INFECTED_TAG - will be re-applied on respawn
-            
-            // Clear temporary immunity if any
-            curedPlayers.delete(player.id);
-            
-            try {
-                setPlayerProperty(player, "mb_immunity_end", undefined);
-                setPlayerProperty(player, "mb_bear_hit_count", undefined);
-                setPlayerProperty(player, MINOR_POST_DEATH_UI_PENDING_PROPERTY, true);
-                // Keep infection data and infection type - minor infection persists
-            } catch (error) {
-                console.warn(`[DEATH] Error clearing properties for minor infected ${player.name}:`, error);
-            }
-            console.log(`[DEATH] ${player.name} has minor infection - will respawn with it`);
-            return;
-        }
-        
-        // Major infected or no infection - clear major infection data
-        // If major infected and no permanent immunity: Clear infection, but on respawn they get minor infection back
+
+        // Major or minor: wipe active infection so respawn starts a fresh minor cycle (no near-death shake/timer carryover)
+        deathRespawnFreshMinorPending.add(player.id);
         playerInfection.delete(player.id);
         curedPlayers.delete(player.id);
         bearHitCount.delete(player.id);
         infectionExperience.delete(player.id);
         player.removeTag(INFECTED_TAG);
-        
-        // Clear dynamic properties on death (but not permanent immunity or minor infection cured - those persist)
+
         try {
-            setPlayerProperty(player, "mb_bear_infection", undefined);
-            setPlayerProperty(player, "mb_snow_infection", undefined);
-            setPlayerProperty(player, "mb_infection", undefined);
-            setPlayerProperty(player, "mb_infection_type", undefined);
             setPlayerProperty(player, "mb_immunity_end", undefined);
+            flushPlayerPropertyToDisk(player, "mb_immunity_end");
             setPlayerProperty(player, "mb_bear_hit_count", undefined);
-            // Keep permanent immunity property if it exists
-            // Keep minor infection cured property if it exists
-            // Keep first-time tutorial flags so players don't see them again after death
-            // Keep codex knowledge - that persists across deaths
-            // Keep max snow level - it's a lifetime achievement
-            console.log(`[DEATH] Cleared major infection data for ${player.name} - will get minor infection on respawn`);
+            flushPlayerPropertyToDisk(player, "mb_bear_hit_count");
+            setPlayerProperty(player, MINOR_POST_DEATH_UI_PENDING_PROPERTY, true);
+            flushPlayerPropertyToDisk(player, MINOR_POST_DEATH_UI_PENDING_PROPERTY);
+            flushClearActiveInfectionSave(player);
         } catch (error) {
-            console.warn(`[DEATH] Error clearing dynamic properties for ${player.name}:`, error);
+            console.warn(`[DEATH] Error clearing infection for ${player.name}:`, error);
         }
+        console.log(`[DEATH] ${player.name} — cleared infection; respawn → fresh minor`);
     } catch (error) {
         console.warn(`[DEATH] Error in handlePlayerDeath for ${player?.name}:`, error);
+    }
+}
+
+function showMinorInfectionDeathRespawnUi(player) {
+    const hasExplainedDeathPersistence = getPlayerProperty(player, MINOR_RESPAWNED_PROPERTY) === true;
+    if (!hasExplainedDeathPersistence) {
+        player.onScreenDisplay.setTitle("§e§lMINOR INFECTION", {
+            fadeInDuration: 10,
+            stayDuration: 60,
+            fadeOutDuration: 20
+        });
+        player.sendMessage(CHAT_WARNING + "You are still infected with a minor infection.");
+        player.sendMessage(CHAT_INFO + "The infection persists even after death.");
+        const volumeMultiplier = getPlayerSoundVolume(player);
+        player.playSound("mob.enderman.portal", { pitch: 0.9, volume: 0.6 * volumeMultiplier });
+        player.playSound("mob.villager.idle", { pitch: 0.8, volume: 0.5 * volumeMultiplier });
+        setPlayerProperty(player, MINOR_RESPAWNED_PROPERTY, true);
+    } else {
+        player.sendMessage(CHAT_WARNING + "Minor infection.");
     }
 }
 
@@ -3538,6 +3593,12 @@ world.afterEvents.entityDie.subscribe((event) => {
                     dimension.spawnParticle("mb:white_dust_particle", { x: loc.x, y: loc.y + 1, z: loc.z });
                     dimension.runCommand(`particle minecraft:ash ${x} ${y} ${z} 0.5 0.5 0.5 0.05 15`);
                 } catch { }
+
+                try {
+                    applyTorpedoBlastPlayerEffects(dimension, loc, 5);
+                } catch {
+                    /* ignore */
+                }
             } catch (error) {
                 if (isDebugEnabled("main", "death")) {
                     console.warn(`[TORPEDO DEATH] Error executing explosion commands:`, error);
@@ -3758,6 +3819,13 @@ world.afterEvents.entityHurt.subscribe((event) => {
                     TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID
                 ];
     if (source && source.damagingEntity && mapleBearTypes.includes(source.damagingEntity.typeId)) {
+        try {
+            const infectionState = playerInfection.get(player.id);
+            const snowCount = Math.max(1, infectionState?.snowCount || 1);
+            triggerMapleBearHitCameraBuzz(player, source.damagingEntity.typeId, snowCount);
+        } catch {
+            /* ignore */
+        }
         // Anger spread: nearby flying bears and infected (bear/pig/cow) target this player (another bear hit them)
         try {
             if (player.dimension && player.location) {
@@ -3981,9 +4049,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                     firstTime.hasBeenHit = true;
                     firstTimeMessages.set(player.id, firstTime);
                 }
-                if (newHitCount === 1) {
-                    applyEffect(player, "minecraft:blindness", 60, { amplifier: 0 });
-                } else if (newHitCount === 2) {
+                if (newHitCount === 2) {
                     applyEffect(player, "minecraft:blindness", 100, { amplifier: 0 });
                     applyEffect(player, "minecraft:nausea", 160, { amplifier: 0 });
                 }
@@ -4099,7 +4165,6 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 
                 // Apply staged effects based on hit count (pre-progression)
                 if (newHitCount === 1) {
-                    applyEffect(player, "minecraft:blindness", 80, { amplifier: 0 });
                     applyEffect(player, "minecraft:slowness", 100, { amplifier: 0 });
                 }
             }
@@ -4198,9 +4263,7 @@ world.afterEvents.entityHurt.subscribe((event) => {
                 firstTimeMessages.set(player.id, firstTime);
             }
             // Apply staged effects based on hit count (pre-infection)
-                if (newHitCount === 1) {
-                applyEffect(player, "minecraft:blindness", 60, { amplifier: 0 });
-                } else if (newHitCount === 2) {
+                if (newHitCount === 2) {
                 applyEffect(player, "minecraft:blindness", 100, { amplifier: 0 });
                 applyEffect(player, "minecraft:nausea", 160, { amplifier: 0 });
                 }
@@ -4517,6 +4580,9 @@ function tickBiomeDiscovery() {
 // --- Infection Timers and Effects ---
 function tryInfectionCameraShake(player, state, shakeOpts) {
     if (!getInfectionCameraShakeEnabled(player)) return;
+    if (infectionActionBarSuppressedUntilSpawn.has(player.id)) return;
+    if (isInfectionCameraShakeSuppressed(player.id)) return;
+    if (isPlayerDeadForInfection(player)) return;
     if (!shouldTickInfectionCameraShake(state, shakeOpts.maxTicks)) return;
     tickInfectionCameraShake(player, state, shakeOpts);
 }
@@ -4538,6 +4604,9 @@ system.runInterval(() => {
         }
         const player = playersById.get(id);
         if (!player) continue;
+
+        if (infectionActionBarSuppressedUntilSpawn.has(id)) continue;
+        if (isPlayerDeadForInfection(player)) continue;
 
         if (sleepInfection) continue;
 
@@ -5889,7 +5958,14 @@ world.afterEvents.playerSpawn.subscribe((event) => {
         if (!player || !player.isValid) return;
 
         infectionActionBarSuppressedUntilSpawn.delete(player.id);
+        suppressInfectionCameraShake(player, 120);
+        pulseClearInfectionCameraShake(player, 7);
         clearInfectionCameraShake(player);
+
+        const deathUiPending = normalizeBoolean(getPlayerProperty(player, MINOR_POST_DEATH_UI_PENDING_PROPERTY));
+        if (deathUiPending) {
+            setPlayerProperty(player, MINOR_POST_DEATH_UI_PENDING_PROPERTY, false);
+        }
         
         console.log(`[SPAWN] Player ${player.name} spawned`);
         
@@ -5924,63 +6000,42 @@ world.afterEvents.playerSpawn.subscribe((event) => {
         // Check if player has permanent immunity
         const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
         if (hasPermanentImmunity) {
-            // Permanently immune players don't get infection on respawn
             return;
         }
-        
-        // Minor infection: tag on any spawn (join / rejoin / respawn). Death-themed chat/title only if pending from real death.
-        const infectionState = playerInfection.get(player.id);
-        const hasMinorInfection = infectionState && infectionState.infectionType === MINOR_INFECTION_TYPE;
-        
-        if (hasMinorInfection && !infectionState.cured) {
-            // Re-apply minor infection on respawn (tag only - effects are applied periodically by timer loop)
-            if (!player.hasTag(INFECTED_TAG)) {
-                player.addTag(INFECTED_TAG);
-            }
-            
-            // Don't apply effects here - they're applied periodically by the infection timer loop
-            // This prevents effects from being applied immediately on respawn
 
-            // Death-specific UI only after handlePlayerDeath (minor path) set the pending flag — not on world rejoin.
-            const deathUiPending = normalizeBoolean(getPlayerProperty(player, MINOR_POST_DEATH_UI_PENDING_PROPERTY));
+        if (!playerInfection.has(player.id)) {
             if (deathUiPending) {
-                setPlayerProperty(player, MINOR_POST_DEATH_UI_PENDING_PROPERTY, false);
-                const hasExplainedDeathPersistence = getPlayerProperty(player, MINOR_RESPAWNED_PROPERTY) === true;
-                if (!hasExplainedDeathPersistence) {
-                    player.onScreenDisplay.setTitle("§e§lMINOR INFECTION", {
-                        fadeInDuration: 10,
-                        stayDuration: 60,
-                        fadeOutDuration: 20
-                    });
-                    player.sendMessage(CHAT_WARNING + "You are still infected with a minor infection.");
-                    player.sendMessage(CHAT_INFO + "The infection persists even after death.");
-                    const volumeMultiplier = getPlayerSoundVolume(player);
-                    player.playSound("mob.enderman.portal", { pitch: 0.9, volume: 0.6 * volumeMultiplier });
-                    player.playSound("mob.villager.idle", { pitch: 0.8, volume: 0.5 * volumeMultiplier });
-                    setPlayerProperty(player, MINOR_RESPAWNED_PROPERTY, true);
-                } else {
-                    player.sendMessage(CHAT_WARNING + "Minor infection.");
-                }
-                console.log(`[SPAWN] ${player.name} respawned after death with minor infection active`);
+                flushClearActiveInfectionSave(player);
+            } else {
+                loadInfectionData(player);
             }
-        } else if (!infectionState && !hasPermanentImmunity) {
-            // No infection data and not permanently immune - load data first, then initialize if needed
-            loadInfectionData(player);
-            
-            // If still no infection after loading, initialize minor infection
-            // But only if intro has been seen (otherwise intro will handle it)
-            system.runTimeout(() => {
-                if (player && player.isValid) {
-                    const stillNoInfection = !playerInfection.has(player.id);
-                    const introSeen = normalizeBoolean(getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY));
-                    if (stillNoInfection && introSeen) {
-                        initializeMinorInfection(player);
-                    } else if (stillNoInfection && !introSeen) {
-                        console.log(`[SPAWN] Waiting for intro sequence to initialize minor infection for ${player.name}`);
-                    }
-                }
-            }, 20);
         }
+
+        system.runTimeout(() => {
+            try {
+                if (!player?.isValid) return;
+                if (normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY))) {
+                    deathRespawnFreshMinorPending.delete(player.id);
+                    return;
+                }
+
+                const introSeen = normalizeBoolean(getPlayerProperty(player, PLAYER_INTRO_SEEN_PROPERTY));
+
+                if (deathUiPending && introSeen) {
+                    flushClearActiveInfectionSave(player);
+                    initializeMinorInfection(player, { silentUi: true });
+                    showMinorInfectionDeathRespawnUi(player);
+                    console.log(`[SPAWN] ${player.name} respawned after death → fresh minor infection`);
+                } else if (!playerInfection.has(player.id) && introSeen) {
+                    initializeMinorInfection(player);
+                }
+
+                deathRespawnFreshMinorPending.delete(player.id);
+            } catch (error) {
+                console.warn(`[SPAWN] Error finishing death respawn infection for ${player?.name}:`, error);
+                deathRespawnFreshMinorPending.delete(player.id);
+            }
+        }, 20);
         
         // Don't clear infection data on respawn - let it persist across sessions
         // Only clear on actual death (handled in handlePlayerDeath)
@@ -6017,6 +6072,9 @@ const INFECTION_SAVE_INTERVAL_TICKS = 200;
  */
 function saveInfectionData(player, options = {}) {
     try {
+        if (player?.id && infectionActionBarSuppressedUntilSpawn.has(player.id) && options.force !== true) {
+            return;
+        }
         const force = options.force === true;
         if (!force && player?.id) {
             const now = system.currentTick;
@@ -6139,8 +6197,10 @@ function getScaledMinorInfectionTicks(currentDay) {
 /**
  * Initialize minor infection for a player (first time spawn or after death)
  * @param {Player} player - The player to initialize minor infection for
+ * @param {{ silentUi?: boolean }} [options] Skip chat/title/sounds (death respawn uses showMinorInfectionDeathRespawnUi)
  */
-function initializeMinorInfection(player) {
+function initializeMinorInfection(player, options = {}) {
+    const silentUi = options.silentUi === true;
     try {
         // Check if player already has infection (shouldn't happen, but safety check)
         if (playerInfection.has(player.id)) {
@@ -6177,37 +6237,32 @@ function initializeMinorInfection(player) {
         // Apply mild effects (weakness I only - no slowness on spawn)
         // Slowness is applied periodically by the infection timer loop, not on initialization
         applyEffect(player, "minecraft:weakness", 200, { amplifier: 0 });
-        
-        // Play infection sounds (milder than major infection, but still noticeable)
-        const volumeMultiplier = getPlayerSoundVolume(player);
-        player.playSound("mob.enderman.portal", { pitch: 0.9, volume: 0.6 * volumeMultiplier });
-        player.playSound("mob.villager.idle", { pitch: 0.8, volume: 0.5 * volumeMultiplier });
-        
-        // Check if player has been reinfected before
-        const hasBeenReinfected = getPlayerProperty(player, MINOR_REINFECTED_PROPERTY) === true;
-        
-        // Show infection title (only if not during intro - intro already has dramatic moment)
-        if (!introInProgress.has(player.id)) {
-            if (hasBeenReinfected) {
-                // Minimal text for subsequent reinfections
-                player.sendMessage(CHAT_WARNING + "Minor infection.");
-            } else {
-                // Full text for first reinfection
-                player.onScreenDisplay.setTitle("§e§lMINOR INFECTION", {
-                    fadeInDuration: 10,
-                    stayDuration: 60,
-                    fadeOutDuration: 20
-                });
-                
-                player.sendMessage(CHAT_WARNING + "You have been infected with a minor infection.");
-                player.sendMessage(CHAT_INFO + "The effects are mild, but it can progress to major if not treated.");
-                
-                // Mark as reinfected for future minimal messages
+
+        if (!silentUi) {
+            const volumeMultiplier = getPlayerSoundVolume(player);
+            player.playSound("mob.enderman.portal", { pitch: 0.9, volume: 0.6 * volumeMultiplier });
+            player.playSound("mob.villager.idle", { pitch: 0.8, volume: 0.5 * volumeMultiplier });
+
+            const hasBeenReinfected = getPlayerProperty(player, MINOR_REINFECTED_PROPERTY) === true;
+
+            if (!introInProgress.has(player.id)) {
+                if (hasBeenReinfected) {
+                    player.sendMessage(CHAT_WARNING + "Minor infection.");
+                } else {
+                    player.onScreenDisplay.setTitle("§e§lMINOR INFECTION", {
+                        fadeInDuration: 10,
+                        stayDuration: 60,
+                        fadeOutDuration: 20
+                    });
+
+                    player.sendMessage(CHAT_WARNING + "You have been infected with a minor infection.");
+                    player.sendMessage(CHAT_INFO + "The effects are mild, but it can progress to major if not treated.");
+
+                    setPlayerProperty(player, MINOR_REINFECTED_PROPERTY, true);
+                }
+            } else if (hasBeenReinfected) {
                 setPlayerProperty(player, MINOR_REINFECTED_PROPERTY, true);
             }
-        } else if (hasBeenReinfected) {
-            // Even during intro, mark as reinfected if not already
-            setPlayerProperty(player, MINOR_REINFECTED_PROPERTY, true);
         }
         
         // Save to dynamic properties
@@ -6240,6 +6295,11 @@ function initializeMinorInfection(player) {
  */
 function loadInfectionData(player) {
     try {
+        if (deathRespawnFreshMinorPending.has(player.id)) {
+            console.log(`[LOAD] ${player.name} — death respawn pending, skipping saved infection`);
+            return;
+        }
+
         // Check if player has permanent immunity first
         const hasPermanentImmunity = normalizeBoolean(getPlayerProperty(player, PERMANENT_IMMUNITY_PROPERTY));
         if (hasPermanentImmunity) {

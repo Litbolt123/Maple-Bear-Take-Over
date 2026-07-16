@@ -6,6 +6,184 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+## 2026-07-09 — Patreon beta.5 draft: Dev vs public update note
+
+- Added **Updating** section to `docs/marketing/PATREON_BETA_5_UPDATE_DRAFT.md`: public→public keeps world save data; do not mix public and private/dev packs (different pack identities → infection/journal can look wiped); quit fully before swapping; install table + pin comment updated.
+
+## 2026-07-09 — Discussion: infection data lost on addon update
+
+- **Ask:** Friends lose major infection timer / save data when they delete the old pack and install a newer version. Want updates to never wipe progress.
+- **How data is stored:** Infection (`mb_infection`, `mb_infection_type`, immunity, hits, journal/codex, etc.) is **player/world dynamic properties** in the **world save**, not in the `.mcpack`. Replacing the pack alone should not clear them if pack **header/module UUIDs stay the same**.
+- **Likely causes:** (1) installing a pack with **different UUIDs** (e.g. **BP - Dev** vs release, or a re-exported Bridge pack that regenerated UUIDs) so the world treats it as a new addon and old script properties are orphaned; (2) **dirty cache not flushed** — `setPlayerProperty` batches writes (~30s); force-closing / swapping packs mid-session can drop recent timer progress; (3) load path when `mb_infection` is missing re-inits **fresh minor** (`loadInfectionData` / spawn), which looks like a wipe.
+- **Remedies discussed (not implemented yet):** keep release UUIDs forever; document “update in place / don’t use Dev pack on player worlds”; flush infection keys to disk more aggressively (or on leave / before unload); optional scoreboard/tag backup of timer; never clear properties on pack version bump. Need confirmation of how friends update (delete world? swap Dev↔release?).
+
+---
+
+## 2026-07-07 — Patreon beta.5 draft patched (feature gaps)
+
+- **`docs/marketing/PATREON_BETA_5_UPDATE_DRAFT.md`:** added dev beta 4.2 camera-shake video link; spawn auto-throttling + chunk backtrack under Day zero; death/respawn polish (camera clears, no duplicate minor chat); torpedo blast infection gameplay bullet; dropped “No GitHub hunt” line.
+
+---
+
+## 2026-07-07 — Dev pack UUIDs split from release
+
+- **`BP - Dev/manifest.json`** header `985e3929-9603-4371-b03d-2652a80bd44d`; modules `6ffc1fc1…` (data), `1e0ad031…` (script); depends on dev RP `8ea4ff9a…`.
+- **`RP - Dev/manifest.json`** header `8ea4ff9a-4646-4c3d-872c-34cb9881182c`; module `565a3f31…`; depends on dev BP `985e3929…`.
+- **Release `BP/` + `RP/`** keep original UUIDs (`064b6f9c…` / `2a4d2f59…`) for player worlds and Patreon installs.
+
+---
+
+## 2026-07-07 — Public beta.5 release prep (code)
+
+- **`npm run sync:bp-from-dev`** → 72 scripts into `BP/scripts/` (kept release `mb_buildConfig.js`).
+- **Version:** `ADDON_VERSION_PRERELEASE` + `PLAYER_CHANGELOG_VERSION` → **beta.5** in `BP/scripts/`.
+- **`docs/PLAYER_CHANGELOG.md`** + in-game What's new bullets updated.
+- **Removed `BP/biomes/worldgen_no_village/`** — vanilla villages on public pack.
+- **`npm run sync:pack-metadata`** + **`npm run check`** pass.
+
+---
+
+## 2026-07-07 — Beta.5 Patreon draft + playtest sign-off
+
+- **`PATREON_BETA_5_UPDATE_DRAFT.md`** + **`PUBLIC_BETA_5_PREVIEW.md`:** playtest bullets — shorter torpedo/buff blast pulses, no first-hit blindness, minor-cure/snow, mining loot, vanilla villages, camera sub-toggles.
+- **Ship still pending:** `ADDON_VERSION_PRERELEASE` still `beta.4` until maintainer runs release checklist.
+
+---
+
+## 2026-07-07 — Mining AI: natural drops on every break (no silk touch)
+
+- **`mb_miningAI.js`:** Scripted breaks use `collectMiningBlockDrops()` with correct no-silk-touch mappings. `mb:dusted_dirt` → dirt + **15%** bonus `mb:snow`. **25%** roll per break (`MINING_BLOCK_DROP_CHANCE`) to limit item spam when bear inventories overflow.
+
+---
+
+## 2026-07-07 — Bear hit: no blindness on first strike
+
+- **`main.js`:** Removed pre-infection `minecraft:blindness` on hit 1 from Maple Bears (all immunity/minor/normal paths). Hit 2+ staged effects unchanged; major infection onset blindness unchanged.
+
+---
+
+## 2026-07-07 — Mining bears: snow layer breaks yield mb:snow
+
+- **`mb_miningAI.js`:** `mb:snow_layer` / `minecraft:snow_layer` map to **`mb:snow`** in `blockToItemType` (matches block loot table; no silk touch). Snow layers are mineable obstacles (removed vanilla snow from walk-through set). **100%** collect on snow-layer breaks (other blocks stay 25% throttle). Drops go to bear inventory or spawn as item; death drops collected stacks as before.
+
+---
+
+## 2026-07-07 — Codex stray § / ? glyph cleanup (dev journal UI)
+
+- **`tools/fixCodexStraySectionSigns.js`:** batch-fix collateral from the `U+009D`→`§` repair — bullets (`§7•`), button labels (`Set day` not `Set days§`), breadcrumb arrows (`→`), checkmarks (`§a✓`), manual-preset text, spawn-load debug numbers. **572** replacements across both codex files (two passes).
+- **`npm run sync:dev-to-minecraft`** — dev packs updated.
+
+---
+
+## 2026-07-07 — Minor cure: snow still infects (no powder immunity)
+
+- **`handleSnowConsumption`:** Removed early return that blocked all snow effects when `mb_permanent_immunity` was set (minor golden-apple+carrot cure). Permanent immunity still blocks minor infection on respawn/bear hits; eating `mb:snow` can start or worsen **major** infection again.
+- Minor cure chat now warns that snow remains dangerous.
+
+---
+
+## 2026-07-07 — Shorter camera pulses + snow-eat shake crash fix
+
+- **`tickInfectionCameraShake`:** `maxTicks is not defined` when eating snow / major infection loop — now reads `opts.maxTicks`.
+- **Shorter shakes:** snow eat ~1.1s base (was ~2.1s), bear hits scaled ~55%, torpedo/buff blasts ~45% pulse length, infection jitter/burst ~50–58% duration.
+- **Dev Tools hub:** removed stray `?` before category names (corrupted arrow glyphs).
+
+---
+
+## 2026-07-07 — Fix: journal UI showing raw § / dotted formatting codes
+
+- **`mb_codex.js`:** 3766 corrupted color prefixes (`U+009D` control char instead of `§` U+00A7) broke Powdery Journal form titles, body, and buttons — showed literal codes in UI. Bulk-replaced in `BP - Dev/` + `BP/scripts/`.
+- **Load fix confirmed:** `mb_buffAI.js` `world` import + `sync:dev-to-minecraft` — scripts now initialize (no `DAY_COUNT_KEY` cascade).
+
+---
+
+## 2026-07-07 — Fix: mb_buffAI load crash (`world` not defined)
+
+- **`mb_buffAI.js`:** Added `import { system, world } from "@minecraft/server"` — top-level `world.afterEvents.entityDie` / `entityHurt` subscriptions (buff death burst) ran at module load without import, breaking `main.js` and cascading `DAY_COUNT_KEY is not initialized` warnings.
+- **`wolf_collar_baby_mers` texture inform:** vanilla 1.26 wolf texture-set log; not in addon RP — harmless, ignore.
+- Synced `BP/scripts/` + `BP - Dev/scripts/`.
+
+---
+
+## 2026-07-07 — Dev: vanilla freeze camera shake preview
+
+- **`previewVanillaFreezeCameraShake(player, 15)`** in `mb_infectionCameraShake.js` (dev-gated): clears/suppresses MBA shake, places `minecraft:powder_snow` at feet/head (saves + restores blocks), Resistance V to limit freeze damage; fallback ramping `camerashake` if placement fails.
+- **Journal → Developer Tools → Infection & players → Preview vanilla freeze shake (15s)** — chat on start/stop.
+- Synced `BP/scripts/`; `node --check` on changed files pass.
+
+---
+
+## 2026-07-07 — Public beta.5: vanilla villages back (script villages still off)
+
+- **`BP/biomes/worldgen_no_village/`** removed from public pack — Mojang `minecraft:village_type` rolls again in village biomes.
+- **`mb_villagerSpawnPolicy.js`:** release default `mb_suppress_villagers` **OFF** (`INCLUDE_FULL_DEVELOPER_TOOLS === false`); dev pack still defaults **ON** for abandoned-village testing.
+- Script village placement unchanged — `SCRIPT_DEFAULT_OFF` (`abandoned_village_worldgen`). Dev toggle only.
+- **`BP - Dev/`** keeps `worldgen_no_village/` for internal abandoned-village work.
+
+---
+
+## 2026-07-07 — Extended camera shake + journal sub-toggles
+
+- **Storm exposure** (unsheltered in active storm): throttled shake ~**28%** snow (flying MB level) — `tickStormExposureCameraBuzz` in `mb_snowStorm.js`.
+- **Buff death burst:** players in **6**-block radius get **86%** shake (torpedo-class) — `mb_buffAI.js`.
+- **Cough shake:** normal cough **12–18%**; dust breath / forced dust **38–55%** — `mb_infectionAudio.js`.
+- **Major cure:** brief settle pulse **20%** — `main.js`.
+- **Day milestone:** sunrise pulse on `MILESTONE_DAYS` **24%** — `mb_dayTracker.js`.
+- **Sub-toggles:** Journal → Settings — master + Infection / Snow / Combat / Storm / Cues (`getCameraShakeCategoryEnabled` in `mb_codex.js`).
+- Synced `BP/scripts/`; `npm run check` pass.
+
+---
+
+## 2026-07-07 — Patreon launch post archived + beta.5 update draft
+
+- **`docs/marketing/PATREON_ORIGINAL_LAUNCH_POST.md`** — user’s live launch post (beta.3) archived as tone reference; notes **Custom Biomes not required on 1.26.2+**.
+- **`docs/marketing/PATREON_BETA_5_UPDATE_DRAFT.md`** — paste-ready beta.5 update in same voice (public BP/RP, no GitHub, no script villages); links from `PUBLIC_BETA_5_PREVIEW.md`.
+
+---
+
+## 2026-07-07 — beta.5 distribution: Patreon (+ optional CurseForge), no GitHub publicity
+
+- **User:** Ship public **`BP/` + `RP/`** on Patreon (maybe CurseForge later); **no** public GitHub Release / tag publicity.
+- **`PUBLIC_BETA_5_PREVIEW.md`:** Install + maintainer checklist updated — Bridge `.mcpack` export, Patreon attach, skip `git tag` / `RELEASE_BODY` for this drop.
+
+---
+
+## 2026-07-07 — Flying/torpedo shake tune + Maple Bear catalog + beta.5 preview doc
+
+- **Flying MB hit shake:** Between tiny and standard — `flying_mb` **28%**, `flying_mb_day15` **38%**, `flying_mb_day20` **44%** (vs snow eat); shorter pulse scaling. Removed from large/heavy tiers.
+- **Torpedo:** Melee hit **54%**; **explosion 86%** (stronger than body slam). `TORPEDO_BLAST_SHAKE_RATIO` raised from 50%.
+- **Docs:** [`docs/reference/MAPLE_BEAR_TYPES.md`](reference/MAPLE_BEAR_TYPES.md) — full type catalog + shake table; [`docs/development/releases/PUBLIC_BETA_5_PREVIEW.md`](development/releases/PUBLIC_BETA_5_PREVIEW.md) — free public release feature list (excludes script villages). **No version bump** until user OK.
+- Synced `BP/scripts/`; `npm run check` pass.
+
+---
+
+## 2026-07-07 — Bear hit camera shake: size-tier revision
+
+- **User clarification:** Shake should scale with bear **size** — tiny = minimal, mid = moderate, buff = heavy (near snow eat). Prior flat ratios (tiny 65%, infected 75%) felt too strong on small bears.
+- **Revised tiers** (`mb_infectionCameraShake.js`, vs snow-eat first bite): **tiny** `mb:mb_day00` **24%** + 50% shorter pulse; **small** day04/08 **36%** + 65% duration; **standard** day13/20 + mining **50%**; **large** infected/pig/cow **62%**; **large+** infected_day08 + flying **66%**; **large max** infected_day13 + flying_day15 + mining_day20 **70%**; **heavy** infected_day20 + flying_day20 + torpedo **76%**; **buff** **100%**. Positional shake auto-skips when intensity &lt; 0.14 (tiny hits rotational only).
+- Synced `BP/scripts/`; `npm run check` pass.
+
+---
+
+## 2026-07-07 — Camera shake on bear hits + torpedo blast player effects
+
+- **User:** Tiered camera shake when Maple Bears hit the player (vs snow-eat buzz baseline); torpedo explosion should shake, cough dust, and worsen infection for players in blast radius.
+- **Bear hit shake** (`mb_infectionCameraShake.js`): `triggerMapleBearHitCameraBuzz`, `getBearHitShakeRatio`, `isMapleBearHitShakeType`. Ratios vs first-bite snow buzz — default **50%**, infected mobs **75%**, tiny (`mb:mb_day00`) **65%**, flying **60%**, buff **100%**. Wired in `main.js` `entityHurt` for all MBA bear types; respects `getInfectionCameraShakeEnabled` + suppression/spectator gates.
+- **Torpedo blast** (`mb_torpedoBlastEffects.js`): `applyTorpedoBlastPlayerEffects` — **50%** snow-reference shake, `playForcedCoughDustBurst` (particle + cough), infection callback from `main.js`. Hooked in `mb_torpedoAI.js` exhaustion explosion and `main.js` torpedo death handler. Constants: `TORPEDO_BLAST_SNOW_INCREASE = 1.2`, major flat timer **−2400t** (2 days) + snow tier time effect, minor **−1200t** (0.5 day). Radius **5** blocks.
+- **Sync:** `npm run sync:bp-from-dev`; `npm run check` pass.
+
+---
+
+## 2026-07-06 — 1.26.32 load errors: safeQueryEntitiesNear + wolf texture
+
+- **User:** Minecraft 1.26.32 world with **Maple Bear Apocalypse (Dev)** — `[Scripting] Could not find export 'safeQueryEntitiesNear' in module 'mb_workSpread.js'` (main.js fails); `[Texture] wolf_collar_baby_mers` image not found.
+- **Script audit:** Export **already present** at `mb_workSpread.js:1145` in both **`BP - Dev/scripts/`** and **`BP/scripts/`** (files byte-identical). Importers: **`mb_miningAI.js`**, **`mb_buffAI.js`**, **`mb_snowStorm.js`**. Static named-import scan + **`npm run check`** pass — no repo code change.
+- **Script root cause:** In-game **development pack out of sync** with repo (consumers updated, stale `mb_workSpread.js` in Minecraft folder). **Fix:** `npm run sync:dev-to-minecraft` or full Bridge re-export of **`BP - Dev`** + **`RP - Dev`**; restart world.
+- **Texture root cause:** No `wolf` / `wolf_collar_baby_mers` references in **`RP/`** or **`RP - Dev/`** — vanilla **1.26 baby-wolf texture-set** inform log (Mojang wolf model work); harmless, not addon-breaking.
+- **Watch:** Root **`config.json`** still points Bridge at **`./BP`** + **`./RP`** (release trees), not dev — dev play should use **`BP - Dev`** / **`RP - Dev`** or sync script. Manifests: `@minecraft/server` **2.6.0**, `min_engine_version` **1.26.10** — OK for 1.26.32.
+
+---
+
 ## 2026-06-24 — Duplicate minor infection chat on death respawn
 
 - Death respawn called `initializeMinorInfection` + `showMinorInfectionDeathRespawnUi` — both sent "Minor infection." Init now supports `{ silentUi: true }` on death path; UI only from death respawn helper.

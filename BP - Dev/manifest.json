@@ -15,13 +15,13 @@
 	},
 	"header": {
 		"name": "The Maple Bear Apocalypse (Dev)",
-		"description": "v0.9.0-beta.4.2 — The Maple Bear Apocalypse (Dev). Full developer tools.",
+		"description": "v0.9.0-beta.5 — The Maple Bear Apocalypse (Dev). Full developer tools.",
 		"min_engine_version": [
 			1,
 			26,
 			10
 		],
-		"uuid": "064b6f9c-349b-4ab1-80d3-c95f732db577",
+		"uuid": "985e3929-9603-4371-b03d-2652a80bd44d",
 		"version": [
 			0,
 			9,
@@ -31,7 +31,7 @@
 	"modules": [
 		{
 			"type": "data",
-			"uuid": "fd131ed7-ec19-427a-a7cb-a2628e6f9a14",
+			"uuid": "6ffc1fc1-9932-46d1-aaac-bd43dba759a1",
 			"version": [
 				0,
 				9,
@@ -41,7 +41,7 @@
 		{
 			"type": "script",
 			"language": "javascript",
-			"uuid": "68f5a9b0-5aac-47cc-961d-3b87ba331a0b",
+			"uuid": "1e0ad031-b05d-44bc-9235-85c9170890dd",
 			"entry": "scripts/main.js",
 			"version": [
 				0,
@@ -63,7 +63,7 @@
 			"version": "2.0.0"
 		},
 		{
-			"uuid": "2a4d2f59-f46d-47fc-a3c1-7a26d46d2157",
+			"uuid": "8ea4ff9a-4646-4c3d-872c-34cb9881182c",
 			"version": [
 				0,
 				9,
