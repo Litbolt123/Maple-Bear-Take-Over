@@ -147,7 +147,7 @@ const VANILLA_FREEZE_PREVIEW_REPLACEABLE = new Set([
     "minecraft:flowing_water"
 ]);
 
-/** @type {Map<string, { saved: Array<{ x: number, y: number, z: number, typeId: string }>, restoreTick: number }>} */
+/** @type {Map<string, { saved: Array<{ x: number, y: number, z: number, dimensionId: string, permutation: import("@minecraft/server").BlockPermutation }>, restoreTick: number }>} */
 const activeVanillaFreezePreviewByPlayer = new Map();
 
 /**
@@ -309,20 +309,49 @@ export function clearInfectionCameraShake(player) {
 }
 
 /**
- * @param {import("@minecraft/server").Dimension} dimension
- * @param {Array<{ x: number, y: number, z: number, typeId: string }>} saved
+ * Restore blocks from saved dimension + permutation (does not need a valid player).
+ * @param {Array<{ x: number, y: number, z: number, dimensionId: string, permutation: import("@minecraft/server").BlockPermutation }>} saved
  */
-function restoreVanillaFreezePreviewBlocks(dimension, saved) {
-    if (!dimension || !saved?.length) return;
+function restoreVanillaFreezePreviewBlocks(saved) {
+    if (!saved?.length) return;
     for (const entry of saved) {
         try {
-            const block = dimension.getBlock({ x: entry.x, y: entry.y, z: entry.z });
+            const dimension = world.getDimension(entry.dimensionId);
+            const block = dimension?.getBlock({ x: entry.x, y: entry.y, z: entry.z });
             if (!block) continue;
             if (block.typeId !== POWDER_SNOW_BLOCK) continue;
-            block.setType(entry.typeId);
+            block.setPermutation(entry.permutation);
         } catch {
             /* ignore */
         }
+    }
+}
+
+/**
+ * @param {string} playerId
+ * @param {boolean} [notify]
+ * @param {import("@minecraft/server").Player|null} [player]
+ */
+function stopVanillaFreezeCameraShakePreviewById(playerId, notify = false, player = null) {
+    if (!playerId) return;
+    const active = activeVanillaFreezePreviewByPlayer.get(playerId);
+    if (!active) return;
+    activeVanillaFreezePreviewByPlayer.delete(playerId);
+    restoreVanillaFreezePreviewBlocks(active.saved);
+    if (!notify) return;
+    try {
+        let target = player?.isValid ? player : null;
+        if (!target) {
+            for (const p of world.getAllPlayers()) {
+                if (p.id === playerId && p.isValid) {
+                    target = p;
+                    break;
+                }
+            }
+        }
+        target?.sendMessage("§7[Dev] Vanilla freeze shake preview stopped.");
+    } catch {
+        /* ignore */
     }
 }
 
@@ -331,21 +360,8 @@ function restoreVanillaFreezePreviewBlocks(dimension, saved) {
  * @param {boolean} [notify]
  */
 function stopVanillaFreezeCameraShakePreview(player, notify = false) {
-    const pid = player?.id;
-    if (!pid) return;
-    const active = activeVanillaFreezePreviewByPlayer.get(pid);
-    if (!active) return;
-    activeVanillaFreezePreviewByPlayer.delete(pid);
-    try {
-        if (player.isValid) {
-            restoreVanillaFreezePreviewBlocks(player.dimension, active.saved);
-            if (notify) {
-                player.sendMessage("§7[Dev] Vanilla freeze shake preview stopped.");
-            }
-        }
-    } catch {
-        /* ignore */
-    }
+    if (!player?.id) return;
+    stopVanillaFreezeCameraShakePreviewById(player.id, notify, player);
 }
 
 /**
@@ -400,30 +416,46 @@ export function previewVanillaFreezeCameraShake(player, durationSec = 15) {
         { x: bx, y: by + 1, z: bz }
     ];
 
-    /** @type {Array<{ x: number, y: number, z: number, typeId: string }>} */
+    /** @type {Array<{ x: number, y: number, z: number, dimensionId: string, permutation: import("@minecraft/server").BlockPermutation }>} */
     const saved = [];
+    const dimensionId = dim.id;
     for (const pos of slots) {
         try {
             const block = dim.getBlock(pos);
             if (!block) continue;
             const typeId = block.typeId;
             if (!VANILLA_FREEZE_PREVIEW_REPLACEABLE.has(typeId)) continue;
-            saved.push({ x: pos.x, y: pos.y, z: pos.z, typeId });
+            saved.push({
+                x: pos.x,
+                y: pos.y,
+                z: pos.z,
+                dimensionId,
+                permutation: block.permutation
+            });
             block.setType(POWDER_SNOW_BLOCK);
         } catch {
             /* ignore */
         }
     }
 
+    const restoreTick = system.currentTick + durationTicks;
+
     if (saved.length === 0) {
         player.sendMessage("§e[Dev] Could not place powder snow — using camerashake approximation.");
-        activeVanillaFreezePreviewByPlayer.set(player.id, { saved: [], restoreTick: system.currentTick + durationTicks });
+        activeVanillaFreezePreviewByPlayer.set(player.id, { saved: [], restoreTick });
         runVanillaFreezeShakeFallback(player, durationSec);
+        const fallbackToken = restoreTick;
+        const fallbackPlayerId = player.id;
         system.runTimeout(() => {
-            activeVanillaFreezePreviewByPlayer.delete(player.id);
+            const active = activeVanillaFreezePreviewByPlayer.get(fallbackPlayerId);
+            if (!active || active.restoreTick !== fallbackToken) return;
+            activeVanillaFreezePreviewByPlayer.delete(fallbackPlayerId);
             try {
-                if (player.isValid) {
-                    player.sendMessage("§7[Dev] Vanilla freeze shake preview stopped (approximation).");
+                for (const p of world.getAllPlayers()) {
+                    if (p.id === fallbackPlayerId && p.isValid) {
+                        p.sendMessage("§7[Dev] Vanilla freeze shake preview stopped (approximation).");
+                        break;
+                    }
                 }
             } catch {
                 /* ignore */
@@ -443,13 +475,17 @@ export function previewVanillaFreezeCameraShake(player, durationSec = 15) {
 
     activeVanillaFreezePreviewByPlayer.set(player.id, {
         saved,
-        restoreTick: system.currentTick + durationTicks
+        restoreTick
     });
 
     player.sendMessage(`§b[Dev] Vanilla freeze shake preview started (~${durationSec}s). MBA shake suppressed.`);
 
+    const savedToken = restoreTick;
+    const savedPlayerId = player.id;
     system.runTimeout(() => {
-        stopVanillaFreezeCameraShakePreview(player, true);
+        const active = activeVanillaFreezePreviewByPlayer.get(savedPlayerId);
+        if (!active || active.restoreTick !== savedToken) return;
+        stopVanillaFreezeCameraShakePreviewById(savedPlayerId, true);
     }, durationTicks);
 }
 

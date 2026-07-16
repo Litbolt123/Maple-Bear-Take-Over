@@ -17,10 +17,10 @@ export const TORPEDO_BLAST_RADIUS = 5;
  */
 export const TORPEDO_BLAST_SNOW_INCREASE = 1.2;
 
-/** Major infection: flat timer loss on top of snow tier time effect (2 Minecraft days). */
+/** Major infection: flat timer loss on top of snow tier time effect (0.1 Minecraft day = 2400 ticks). */
 export const TORPEDO_BLAST_MAJOR_TIMER_REDUCE_TICKS = 2400;
 
-/** Minor infection: flat timer loss (half a Minecraft day). */
+/** Minor infection: flat timer loss (0.05 Minecraft day = 1200 ticks). */
 export const TORPEDO_BLAST_MINOR_TIMER_REDUCE_TICKS = 1200;
 
 /** @type {((player: import("@minecraft/server").Player) => void)|null} */

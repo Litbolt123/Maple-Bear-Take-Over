@@ -6,6 +6,52 @@ Running log of **what changed and why** (gameplay, scripts, assets, docs). Used 
 
 ---
 
+---
+
+## 2026-07-16 — Git commit v0.9.0-beta.5 (label only, no Bridge export)
+
+- Committed **`ef84823`** on `main`: `chore: v0.9.0-beta.5 — camera shake, mining drops, perf, and respawn fixes`.
+- Version strings aligned to **beta.5** in `BP/scripts/mb_buildConfig.js`, manifests, `mb_playerChangelog.js`, and dev twin (`BP - Dev/` + `RP - Dev/`).
+- **No** `npm run sync:pack-metadata`, `npm run check`, or Bridge `.mcpack` export — version bump + source commit only.
+
+## 2026-07-16 — Findings batch: cough / torpedo / death clears / blast ticks
+
+- **Cough `played || true`:** already fixed earlier — skipped.
+- **Torpedo exhaustion double blast:** removed `applyTorpedoBlastPlayerEffects` from Dev+release `mb_torpedoAI.js`; keep `entity.kill()` so `main.js` entityDie applies player blast once.
+- **Blast timer ticks:** kept **2400 / 1200** (Bedrock day = **24000** t → 0.1 / 0.05 day). Comments wrongly said 2d / 0.5d; fixing comments (not buffing to 48000/12000) — aligns with shipped balance + “sting not delete the timer” vision. True 2d/0.5d would be 48000/12000.
+- **Death property clear:** `mb_immunity_end` / `mb_bear_hit_count` now use `clearPlayerPropertyToDisk` (flush after delete could re-read stale disk). Pending-UI flag still flushes `true`.
+
+## 2026-07-16 — Vanilla freeze preview: permutation restore + timeout tokens
+
+- **Both findings valid** in `mb_infectionCameraShake.js` (Dev + release).
+- **Restore:** save `dimensionId` + `block.permutation` per slot; restore via `world.getDimension` + `setPermutation` without requiring player validity/current dim (covers dim change / disconnect).
+- **Timeouts:** capture `restoreTick` token; saved-block and empty-fallback callbacks no-op unless active entry still matches before stop/delete/message.
+- **Validate:** `npm run check`. In-game dim-change / disconnect / water-state restore still needs Dev-pack manual smoke.
+
+## 2026-07-16 — Infection audio: return real cough playback result
+
+- **Valid:** `playForcedCoughDustBurst` returned `played || true` (always true). Particles not tracked as alt success.
+- **Fix:** `return played;` in Dev + release `mb_infectionAudio.js`.
+
+## 2026-07-16 — Finding: move schema-3 villager migration to public — already done
+
+- Compared `BP - Dev` vs `BP` `mb_propertyMigration.js`: **identical** (`CURRENT_PROPERTY_SCHEMA = 3`, `v < 3 && !INCLUDE_FULL_DEVELOPER_TOOLS` → `mb_suppress_villagers = 0`). No code change.
+- **Vision take:** Schema-3 reset on **public only** matches beta.5 (vanilla/living villagers allowed; clear old suppress-ON worlds). Dev stays suppress-default ON via build flag — do not run that reset in Dev. Finding’s “move from Dev into public” is obsolete; files are already synced.
+
+## 2026-07-16 — Confirmed Bedrock hay ID is `hay_block`
+
+- Looked up: Minecraft Wiki (Bedrock data values), Microsoft creator Block/Item enums, and repo `data/bedrock_blocks.json` all use **`minecraft:hay_block`** (UI name Hay Bale / Hay Block). Legacy `hay_bale` is old Java only. No rename needed in mining AI.
+
+## 2026-07-16 — Mining AI: partial inventory insert no longer dupes drops
+
+- **Finding valid:** `collectOrDropItem` ignored `addItem` remainder and always spawned a new stack with the original count (item dupe on partial fill).
+- **Fix (Dev + release):** track inserted = count − remainder.amount; spawn the remainder ItemStack only when amount > 0; on add failure still drop full count.
+
+## 2026-07-16 — Mining AI: hay_block drops hay (1:1)
+
+- **Finding check:** “map hay → 9 wheat” rejected — vanilla/no-silk hay bales drop the hay block itself, not wheat. Only one `blockToItemType` entry existed; no second mapping / no `MINING_DROP_COUNTS` hay entry (default count 1 is correct).
+- **Fix:** `"minecraft:hay_block": "minecraft:hay_block"` in `BP - Dev` + `BP` `mb_miningAI.js`.
+
 ## 2026-07-09 — Patreon beta.5 draft: Dev vs public update note
 
 - Added **Updating** section to `docs/marketing/PATREON_BETA_5_UPDATE_DRAFT.md`: public→public keeps world save data; do not mix public and private/dev packs (different pack identities → infection/journal can look wiped); quit fully before swapping; install table + pin comment updated.

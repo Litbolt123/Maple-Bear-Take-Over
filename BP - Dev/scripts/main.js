@@ -2918,9 +2918,9 @@ function handlePlayerDeath(player) {
 
         try {
             setPlayerProperty(player, "mb_immunity_end", undefined);
-            flushPlayerPropertyToDisk(player, "mb_immunity_end");
+            clearPlayerPropertyToDisk(player, "mb_immunity_end");
             setPlayerProperty(player, "mb_bear_hit_count", undefined);
-            flushPlayerPropertyToDisk(player, "mb_bear_hit_count");
+            clearPlayerPropertyToDisk(player, "mb_bear_hit_count");
             setPlayerProperty(player, MINOR_POST_DEATH_UI_PENDING_PROPERTY, true);
             flushPlayerPropertyToDisk(player, MINOR_POST_DEATH_UI_PENDING_PROPERTY);
             flushClearActiveInfectionSave(player);

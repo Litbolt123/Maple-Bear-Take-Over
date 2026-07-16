@@ -18,7 +18,6 @@ import { shouldSleepDayZeroWorldWork } from "./mb_dayZeroPerfBisect.js";
 import { registerBearAiStartCallback } from "./mb_bearAiBootstrap.js";
 import { getAiIntervalStretch } from "./mb_performanceProfile.js";
 import { TORPEDO_BEAR_ID, TORPEDO_BEAR_DAY20_ID } from "./mb_spawnEntityIds.js";
-import { applyTorpedoBlastPlayerEffects } from "./mb_torpedoBlastEffects.js";
 
 /** Dynamic property: true when this torpedo bear must not explode on death or block exhaustion. */
 export const TORPEDO_DUD_PROPERTY = "mb_torpedo_dud";
@@ -208,11 +207,7 @@ function checkTorpedoExhaustion(entity, config) {
             } catch { }
 
             const explosionRadius = 5;
-            try {
-                applyTorpedoBlastPlayerEffects(dimension, loc, explosionRadius);
-            } catch {
-                /* ignore */
-            }
+            // Player blast effects (shake / cough / infection) run once via main.js entityDie after kill().
             
             // Place snow layers on blocks nearby (5 block radius) - only if there are nearby blocks
             const centerX = Math.floor(loc.x);

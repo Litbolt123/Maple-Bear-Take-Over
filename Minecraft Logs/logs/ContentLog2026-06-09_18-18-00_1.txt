@@ -1,0 +1,920 @@
+18:18:10[Texture][inform]-TextureSet (textures/entity/wolf/wolf_collar_baby_mers) | Specified image could not be found
+
+18:19:42[Scripting][verbose]-Plugin Discovered [The Maple Bear Apocalypse (Dev)] PackId [064b6f9c-349b-4ab1-80d3-c95f732db577_0.9.0] ModuleId [68f5a9b0-5aac-47cc-961d-3b87ba331a0b]
+
+18:19:42[Scripting][verbose]-Plugin [The Maple Bear Apocalypse (Dev)] - promoted [@minecraft/server] from [2.6.0] to [2.7.0] requested by [The Maple Bear Apocalypse (Dev) - 0.9.0].
+
+18:19:42[Scripting][verbose]-Plugin [The Maple Bear Apocalypse (Dev)] - promoted [@minecraft/server] from [2.0.0] to [2.7.0] requested by [@minecraft/server-ui-bindings - 2.0.0].
+
+18:19:42[Scripting][verbose]-Plugin [The Maple Bear Apocalypse (Dev)] - promoted [@minecraft/server-bindings] from [2.6.0] to [2.7.0] requested by [@minecraft/server - 2.6.0].
+
+18:19:42[Scripting][verbose]-Plugin [The Maple Bear Apocalypse (Dev)] - promoted [@minecraft/server-bindings] from [2.0.0] to [2.7.0] requested by [@minecraft/server - 2.0.0].
+
+18:19:43[Scripting][warning]-[SPAWN] Maple Bear spawn controller initialized.
+
+18:19:43[Scripting][inform]-📜 Maple Bear Day Tracker script loaded
+
+18:19:43[Scripting][warning]-[ABANDONED VILLAGE] Worldgen watch started — journal → Abandoned villages → Content Log categories (enable Scans for horizon Scan #N)
+
+18:19:43[Scripting][inform]-World initialized, setting up event listeners...
+
+18:19:43[Scripting][inform]-[PropertyHandler] Initialized (lazy loading enabled)
+
+18:19:47[Scripting][inform]-Day tracking already initialized
+
+18:19:48[Scripting][inform]-🌍 First player joined, initializing day tracker
+
+18:19:48[Scripting][inform]-Day cycle loop not running, starting it now
+
+18:19:48[Scripting][inform]-Starting day cycle loop
+
+18:19:48[Scripting][inform]-Day cycle loop started successfully
+
+18:19:48[Scripting][inform]-[JOIN MAIN] Player join event received, playerId: -4294967295
+
+18:19:48[Scripting][inform]-[JOIN MAIN] Retry 1: player found = false, valid = undefined
+
+18:19:50[Scripting][inform]-[JOIN MAIN] Retry 2: player found = false, valid = undefined
+
+18:19:50[Scripting][warning]-[ABANDONED VILLAGE] Player JOIN/spawn (litbolt123) — checking deferred village titles + construction HUD
+
+18:19:50[Scripting][warning]-[ABANDONED VILLAGE] Player SPAWN (litbolt123) — build queue 0: no active builds
+
+18:19:50[Scripting][inform]-[SPAWN] Player litbolt123 spawned
+
+18:19:50[Scripting][inform]-[SPAWN] Intro seen: true, intro active: false
+
+18:19:50[Scripting][inform]-[SPAWN] Intro already seen, skipping
+
+18:19:50[Scripting][inform]-[MINOR INFECTION] Day 0: Scaled timer to 10 days (240000 ticks)
+
+18:19:50[Scripting][inform]-[LOAD] Preserved minor infection timer for litbolt123: 10 days remaining (day 0, max 10 days)
+
+18:19:50[Scripting][inform]-[LOAD] Loaded active infection for litbolt123 (type: minor): {"ticksLeft":238040,"snowCount":0,"hitCount":0,"cured":false,"source":"spawn","infectionType":"minor","minorInfectionCured":false,"maxSeverity":0,"lastTierMessage":0,"lastDecayTick":407,"warningSent":false,"lastActiveTick":4588}
+
+18:19:54[Scripting][inform]-[JOIN] Player litbolt123 joined, infection data will be loaded by main.js
+
+18:19:54[Scripting][inform]-[JOIN MAIN] Retry 3: player found = true, valid = true
+
+18:19:54[Scripting][inform]-[JOIN MAIN] ✓ Player litbolt123 found! Loading infection data and checking intro...
+
+18:19:54[Scripting][inform]-[MINOR INFECTION] Day 0: Scaled timer to 10 days (240000 ticks)
+
+18:19:54[Scripting][inform]-[LOAD] Preserved minor infection timer for litbolt123: 10 days remaining (day 0, max 10 days)
+
+18:19:54[Scripting][inform]-[LOAD] Loaded active infection for litbolt123 (type: minor): {"ticksLeft":238000,"snowCount":0,"hitCount":0,"cured":false,"source":"spawn","infectionType":"minor","minorInfectionCured":false,"maxSeverity":0,"lastTierMessage":0,"lastDecayTick":407,"warningSent":false,"lastActiveTick":5255}
+
+18:19:54[Scripting][inform]-[JOIN MAIN] Intro seen for this player: true (raw=true, type=boolean)
+
+18:19:54[Scripting][inform]-[JOIN MAIN] Intro already shown, giving journal if needed
+
+18:19:54[Scripting][inform]-[BASIC JOURNAL] Journal already given by intro for litbolt123, skipping
+
+18:19:56[Scripting][inform]-[BASIC JOURNAL] Journal already given by intro for litbolt123, skipping
+
+18:20:36[Scripting][warning]-[ABANDONED VILLAGE] Chunk + site registry cleared (build queue flushed)
+
+18:20:43[Scripting][warning]-[ABANDONED VILLAGE] Site grid -1,0 reset (registry cleared)
+
+18:20:52[Scripting][warning]-[ABANDONED VILLAGE]   → lamp arrival -1,0,0 distLamp=52.29998779296875 biome=minecraft:cold_taiga
+
+18:20:52[Scripting][warning]-[ABANDONED VILLAGE] Cleared 1 lamp artifact block(s) @ -1,0,0 (arrival)
+
+18:20:52[Scripting][warning]-[ABANDONED VILLAGE] Activate site -1,0,0 minecraft:cold_taiga tier-prox=0 roll=~1/48 (near infected +0) (queued)
+
+18:20:53[Scripting][warning]-[ABANDONED VILLAGE] Settlement build started tier=hamlet ruleset=taiga world -321,49 chunk -21,3 site=-1,0,0
+
+18:20:54[Scripting][warning]-[ABANDONED VILLAGE] Player entered construction HUD (litbolt123, 44ch from center @ -321,64,49) phase=cleanup edits=0 structures=0/9 slot=0
+
+18:20:54[Scripting][warning]-[ABANDONED VILLAGE] Build wake site=-1,0,0 phase=cleanup slot=1/9 structures=0/9 edits=0
+
+18:20:54[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ -321,64,49 — phase=cleanup edits=0 structures=0/9 slot=0
+
+18:21:01[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 1. weaponsmith (smithy_workshop) · @ -305, 76 · door=2 @ -305,64,76 (0/9 placed) phase=structures site=-1,0,0
+
+18:21:06[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 1. weaponsmith (smithy_workshop) · @ -305, 76 · door=2 @ -305,64,76 (0/9 placed) phase=structures site=-1,0,0
+
+18:21:06[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 2. farmer (farmer_barn) · @ -318, 82 · door=2 @ -318,64,82 (1/9 placed) phase=structures site=-1,0,0
+
+18:21:07[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ -321,64,49 — phase=structures edits=1814 structures=1/9 slot=1
+
+18:21:10[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 2. farmer (farmer_barn) · @ -318, 82 · door=2 @ -318,64,82 (1/9 placed) phase=structures site=-1,0,0
+
+18:21:10[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 4. fisherman · @ -342, 73 · door=2 @ -342,64,73 (3/9 placed) phase=structures site=-1,0,0
+
+18:21:12[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 4. fisherman · @ -342, 73 · door=2 @ -342,64,73 (3/9 placed) phase=structures site=-1,0,0
+
+18:21:13[Scripting][warning]-[ABANDONED VILLAGE] Build completion FINAL success placed=true structures=9/9 edits=3068 site=-1,0,0
+
+18:21:13[Scripting][warning]-[ABANDONED VILLAGE] Settlement built @ -21,3 site=-1,0,0:
+tier=village ruleset=taiga center=-321,64,49 chunk=-21,3
+layout=3 · plaza=shrine
+buildings (7/9 slots):
+  1. weaponsmith (smithy_workshop) · @ -305, 76 · door=2
+  2. farmer (farmer_barn) · @ -318, 82 · door=2
+  3. house (taiga_loft_1) · variant#10 · @ -300, 59 · door=3 · existing
+  4. fisherman · @ -342, 73 · door=2
+  5. market (market_hall) · @ -302, 41 · door=3 · existing
+  7. fletcher (fletcher_tower) · @ -348, 31 · door=1 · existing
+  9. church (taiga_chapel_small) · @ -314, 17 · door=0 · existing
+structure registry:
+  [1] weaponsmith complete @ -305, 76
+  [2] farmer complete @ -318, 82
+  [3] house existing @ -300, 59
+  [4] fisherman complete @ -342, 73
+  [5] market existing @ -302, 41
+  [6] librarian existing · ladders needed @ -348, 43
+  [7] fletcher existing @ -348, 31
+  [8] house existing @ -335, 19
+  [9] church existing @ -314, 17
+  … 2 slot(s) not built (aborted, stalled, or still queued)
+features: meeting=shrine · paths=808 · pathBunkers=3 · zombies=4
+blockEdits=3068
+
+18:21:13[Scripting][warning]-[ABANDONED VILLAGE] Placed script:village_settlement tier=village ruleset=taiga @ -21,3 y=64
+
+18:21:13[Scripting][warning]-[ABANDONED VILLAGE] Placed script:village_settlement (village) @ -21,3
+
+18:21:13[Animation][error]-Error: can't find animation riding.body
+
+18:21:13[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:21:13[Animation][error]-Error: can't find animation riding.body
+
+18:21:13[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:21:13[Animation][error]-Error: can't find animation riding.body
+
+18:21:13[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:21:13[Animation][error]-Error: can't find animation riding.body
+
+18:21:13[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:21:52[Scripting][warning]-[ABANDONED VILLAGE] Village Complete shown @ -321,64,49 (witness range)
+
+18:22:58[Scripting][warning]-[ABANDONED VILLAGE]   → lamp arrival -1,1,0 distLamp=60.5389404296875 biome=minecraft:cold_taiga
+
+18:22:58[Scripting][warning]-[ABANDONED VILLAGE] Cleared 1 lamp artifact block(s) @ -1,1,0 (arrival)
+
+18:22:58[Scripting][warning]-[ABANDONED VILLAGE] Activate site -1,1,0 minecraft:cold_taiga tier-prox=0 roll=~1/48 (near infected +0) (queued)
+
+18:22:59[Scripting][warning]-[ABANDONED VILLAGE] Settlement build started tier=hamlet ruleset=taiga world -306,446 chunk -20,27 site=-1,1,0
+
+18:23:00[Scripting][warning]-[ABANDONED VILLAGE] Player entered construction HUD (litbolt123, 48ch from center @ -306,67,446) phase=cleanup edits=0 structures=0/9 slot=0
+
+18:23:00[Scripting][warning]-[ABANDONED VILLAGE] Build wake site=-1,1,0 phase=cleanup slot=1/9 structures=0/9 edits=0
+
+18:23:00[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ -306,67,446 — phase=cleanup edits=0 structures=0/9 slot=0
+
+18:23:08[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 4. weaponsmith (smithy_workshop) · @ -291, 474 · door=2 @ -291,67,474 (3/9 placed) phase=structures site=-1,1,0
+
+18:23:11[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 4. weaponsmith (smithy_workshop) · @ -291, 474 · door=2 @ -291,67,474 (3/9 placed) phase=structures site=-1,1,0
+
+18:23:12[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 8. farmer · @ -302, 483 · door=2 @ -302,67,483 (7/9 placed) phase=structures site=-1,1,0
+
+18:23:13[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ -306,67,446 — phase=structures edits=1786 structures=7/9 slot=7
+
+18:23:14[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 8. farmer · @ -302, 483 · door=2 @ -302,67,483 (7/9 placed) phase=structures site=-1,1,0
+
+18:23:15[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 9. church (taiga_chapel_small) · @ -285, 421 · door=3 @ -285,67,421 (8/9 placed) phase=structures site=-1,1,0
+
+18:23:21[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 9. church (taiga_chapel_small) · @ -285, 421 · door=3 @ -285,67,421 (8/9 placed) phase=structures site=-1,1,0
+
+18:23:22[Scripting][warning]-[ABANDONED VILLAGE] Build completion FINAL success placed=true structures=9/9 edits=3818 site=-1,1,0
+
+18:23:22[Scripting][warning]-[ABANDONED VILLAGE] Settlement built @ -20,27 site=-1,1,0:
+tier=village ruleset=taiga center=-306,67,446 chunk=-20,27
+layout=3 · plaza=campfire
+buildings (9/9 slots):
+  1. fisherman · @ -333, 464 · door=1 · existing
+  2. librarian · @ -341, 445 · door=1 · existing
+  3. fletcher (fletcher_lwing) · @ -333, 427 · door=1 · existing
+  4. weaponsmith (smithy_workshop) · @ -291, 474 · door=2
+  5. house (taiga_taiga_longhouse) · variant#61 · @ -302, 417 · door=0 · existing
+  6. house (taiga_taiga_smoke_cabin) · variant#62 · @ -287, 461 · door=3 · existing
+  7. market (market_hall) · @ -287, 441 · door=3 · existing
+  8. farmer · @ -302, 483 · door=2
+  9. church (taiga_chapel_small) · @ -285, 421 · door=3
+structure registry:
+  [1] fisherman existing @ -333, 464
+  [2] librarian existing @ -341, 445
+  [3] fletcher existing @ -333, 427
+  [4] weaponsmith complete @ -291, 474
+  [5] house existing @ -302, 417
+  [6] house existing @ -287, 461
+  [7] market existing @ -287, 441
+  [8] farmer complete @ -302, 483
+  [9] church complete @ -285, 421
+features: meeting=campfire · paths=762 · pathBunkers=3 · zombies=4
+blockEdits=3818
+
+18:23:22[Scripting][warning]-[ABANDONED VILLAGE] Placed script:village_settlement tier=village ruleset=taiga @ -20,27 y=67
+
+18:23:22[Scripting][warning]-[ABANDONED VILLAGE] Placed script:village_settlement (village) @ -20,27
+
+18:23:22[Animation][error]-Error: can't find animation riding.body
+
+18:23:22[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:23:22[Animation][error]-Error: can't find animation riding.body
+
+18:23:22[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:23:22[Animation][error]-Error: can't find animation riding.body
+
+18:23:22[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:23:22[Animation][error]-Error: can't find animation riding.body
+
+18:23:22[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:24:03[Scripting][warning]-[ABANDONED VILLAGE] Village Complete shown @ -306,67,446 (witness range)
+
+18:24:47[Scripting][warning]-[ABANDONED VILLAGE]   → lamp arrival 0,1,0 distLamp=47.45621299743652 biome=minecraft:ice_plains
+
+18:24:47[Scripting][warning]-[ABANDONED VILLAGE] Cleared 1 lamp artifact block(s) @ 0,1,0 (arrival)
+
+18:24:47[Scripting][warning]-[ABANDONED VILLAGE] Activate site 0,1,0 minecraft:ice_plains tier-prox=0 roll=~1/48 (near infected +0) (queued)
+
+18:24:48[Scripting][warning]-[ABANDONED VILLAGE] Settlement build started tier=hamlet ruleset=ice world 78,447 chunk 4,27 site=0,1,0
+
+18:24:49[Scripting][warning]-[ABANDONED VILLAGE] Player entered construction HUD (litbolt123, 39ch from center @ 78,69,447) phase=cleanup edits=0 structures=0/9 slot=0
+
+18:24:49[Scripting][warning]-[ABANDONED VILLAGE] Build wake site=0,1,0 phase=cleanup slot=1/9 structures=0/9 edits=0
+
+18:24:49[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 78,69,447 — phase=cleanup edits=0 structures=0/9 slot=0
+
+18:24:56[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 1. fisherman · @ 53, 467 · door=2 @ 53,69,467 (0/9 placed) phase=structures site=0,1,0
+
+18:24:57[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 1. fisherman · @ 53, 467 · door=2 @ 53,69,467 (0/9 placed) phase=structures site=0,1,0
+
+18:24:57[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 5. fletcher (fletcher_tower) · @ 58, 421 · door=0 @ 58,69,421 (4/9 placed) phase=structures site=0,1,0
+
+18:25:00[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 5. fletcher (fletcher_tower) · @ 58, 421 · door=0 @ 58,69,421 (4/9 placed) phase=structures site=0,1,0
+
+18:25:00[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 6. weaponsmith · @ 91, 476 · door=2 @ 91,69,476 (5/9 placed) phase=structures site=0,1,0
+
+18:25:01[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 78,69,447 — phase=structures edits=1805 structures=5/9 slot=5
+
+18:25:02[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 6. weaponsmith · @ 91, 476 · door=2 @ 91,69,476 (5/9 placed) phase=structures site=0,1,0
+
+18:25:02[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 8. house (ice_stable_loft) · variant#36 · @ 108, 455 · door=3 @ 108,69,455 (7/9 placed) phase=structures site=0,1,0
+
+18:25:05[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 8. house (ice_stable_loft) · variant#36 · @ 108, 455 · door=3 @ 108,69,455 (7/9 placed) phase=structures site=0,1,0
+
+18:25:05[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 9. market (market_hall) · @ 112, 443 · door=3 @ 112,69,443 (8/9 placed) phase=structures site=0,1,0
+
+18:25:07[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 9. market (market_hall) · @ 112, 443 · door=3 @ 112,69,443 (8/9 placed) phase=structures site=0,1,0
+
+18:25:58[Scripting][warning]-[ABANDONED VILLAGE] Build completion FINAL success placed=true structures=9/9 edits=3684 site=0,1,0
+
+18:25:58[Scripting][warning]-[ABANDONED VILLAGE] Settlement built @ 4,27 site=0,1,0:
+tier=village ruleset=ice center=78,69,447 chunk=4,27
+layout=3 · plaza=market
+buildings (8/9 slots):
+  1. fisherman · @ 53, 467 · door=2
+  2. librarian · @ 43, 448 · door=1 · existing
+  4. house (ice_merchant_house) · variant#41 · @ 79, 425 · door=0 · existing
+  5. fletcher (fletcher_tower) · @ 58, 421 · door=0
+  6. weaponsmith · @ 91, 476 · door=2
+  7. church (ice_chapel_small) · @ 91, 418 · door=0 · existing
+  8. house (ice_stable_loft) · variant#36 · @ 108, 455 · door=3
+  9. market (market_hall) · @ 112, 443 · door=3
+structure registry:
+  [1] fisherman complete @ 53, 467
+  [2] librarian existing @ 43, 448
+  [3] farmer existing @ 71, 470
+  [4] house existing @ 79, 425
+  [5] fletcher complete @ 58, 421
+  [6] weaponsmith complete @ 91, 476
+  [7] church existing @ 91, 418
+  [8] house complete @ 108, 455
+  [9] market complete · ladders pending @ 112, 443
+  … 1 slot(s) not built (aborted, stalled, or still queued)
+features: meeting=market · paths=775 · pathBunkers=3 · zombies=4
+blockEdits=3684
+
+18:25:58[Scripting][warning]-[ABANDONED VILLAGE] Placed script:village_settlement tier=village ruleset=ice @ 4,27 y=69
+
+18:25:58[Scripting][warning]-[ABANDONED VILLAGE] Placed script:village_settlement (village) @ 4,27
+
+18:25:58[Animation][error]-Error: can't find animation riding.body
+
+18:25:58[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:25:58[Animation][error]-Error: can't find animation riding.body
+
+18:25:58[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:25:58[Animation][error]-Error: can't find animation riding.body
+
+18:25:58[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:25:58[Animation][error]-Error: can't find animation riding.body
+
+18:25:58[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:27:00[Scripting][warning]-[ABANDONED VILLAGE] Village Complete shown @ 78,69,447 (witness range)
+
+18:37:39[Scripting][warning]-[ABANDONED VILLAGE]   → lamp arrival 0,2,0 distLamp=60.21893310546875 biome=?
+
+18:37:39[Scripting][warning]-[ABANDONED VILLAGE] FAIL [NO_BIOME] Biome read failed @ site 0,2
+
+18:37:39[Scripting][warning]-[ABANDONED VILLAGE]   Chunk 3,53 at 52,859
+
+18:37:41[Scripting][warning]-[ABANDONED VILLAGE]   → lamp arrival 0,2,0 distLamp=51.72247314453125 biome=minecraft:ice_plains
+
+18:37:41[Scripting][warning]-[ABANDONED VILLAGE] Cleared 1 lamp artifact block(s) @ 0,2,0 (arrival)
+
+18:37:41[Scripting][warning]-[ABANDONED VILLAGE] Activate site 0,2,0 minecraft:ice_plains tier-prox=0 roll=~1/48 (near infected +0) (queued)
+
+18:37:42[Scripting][warning]-[ABANDONED VILLAGE] Settlement build started tier=hamlet ruleset=ice world 49,833 chunk 3,52 site=0,2,0
+
+18:37:43[Scripting][warning]-[ABANDONED VILLAGE] Player entered construction HUD (litbolt123, 35ch from center @ 49,64,833) phase=cleanup edits=0 structures=0/9 slot=0
+
+18:37:43[Scripting][warning]-[ABANDONED VILLAGE] Build wake site=0,2,0 phase=cleanup slot=1/9 structures=0/9 edits=0
+
+18:37:43[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 49,64,833 — phase=cleanup edits=0 structures=0/9 slot=0
+
+18:37:49[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 1. house (ice_narrow_2) · variant#9 · @ 78, 818 · door=3 @ 78,64,818 (0/9 placed) phase=structures site=0,2,0
+
+18:37:51[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 1. house (ice_narrow_2) · variant#9 · @ 78, 818 · door=3 @ 78,64,818 (0/9 placed) phase=structures site=0,2,0
+
+18:37:51[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 3. church (ice_chapel_small) · @ 84, 831 · door=3 @ 84,64,831 (2/9 placed) phase=structures site=0,2,0
+
+18:37:55[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 49,64,833 — phase=structures edits=1809 structures=2/9 slot=2
+
+18:37:59[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 3. church (ice_chapel_small) · @ 84, 831 · door=3 @ 84,64,831 (2/9 placed) phase=structures site=0,2,0
+
+18:38:00[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 4. weaponsmith (smithy_workshop) · @ 77, 805 · door=3 @ 77,64,805 (3/9 placed) phase=structures site=0,2,0
+
+18:38:04[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 4. weaponsmith (smithy_workshop) · @ 77, 805 · door=3 @ 77,64,805 (3/9 placed) phase=structures site=0,2,0
+
+18:38:04[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 5. fisherman · @ 77, 861 · door=3 @ 77,64,861 (4/9 placed) phase=structures site=0,2,0
+
+18:38:05[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 5. fisherman · @ 77, 861 · door=3 @ 77,64,861 (4/9 placed) phase=structures site=0,2,0
+
+18:38:05[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 6. market (market_bazaar) · @ 50, 798 · door=0 @ 50,64,798 (5/9 placed) phase=structures site=0,2,0
+
+18:38:08[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 49,64,833 — phase=structures edits=4657 structures=5/9 slot=5
+
+18:38:09[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 6. market (market_bazaar) · @ 50, 798 · door=0 @ 50,64,798 (5/9 placed) phase=structures site=0,2,0
+
+18:38:09[Scripting][warning]-[ABANDONED VILLAGE] Build relocated slot 7 (house) → offset 25,10 + approach path site=0,2,0
+
+18:38:09[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 7. house (ice_ice_drifting_shed) · variant#65 · @ 74, 843 · door=3 @ 74,64,843 (6/9 placed) phase=structures site=0,2,0
+
+18:38:12[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 7. house (ice_ice_drifting_shed) · variant#65 · @ 74, 843 · door=3 @ 74,64,843 (6/9 placed) phase=structures site=0,2,0
+
+18:38:12[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 8. farmer (farmer_barn) · @ 21, 861 · door=2 @ 21,64,861 (7/9 placed) phase=structures site=0,2,0
+
+18:38:16[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 8. farmer (farmer_barn) · @ 21, 861 · door=2 @ 21,64,861 (7/9 placed) phase=structures site=0,2,0
+
+18:38:16[Scripting][warning]-[ABANDONED VILLAGE] Build completion FINAL success placed=true structures=9/9 edits=6276 site=0,2,0
+
+18:38:16[Scripting][warning]-[ABANDONED VILLAGE] Settlement built @ 3,52 site=0,2,0:
+tier=village ruleset=ice center=49,64,833 chunk=3,52
+layout=4 · plaza=shrine
+buildings (9/9 slots):
+  1. house (ice_narrow_2) · variant#9 · @ 78, 818 · door=3
+  2. librarian (librarian_study) · @ 51, 850 · door=2 · existing
+  3. church (ice_chapel_small) · @ 84, 831 · door=3
+  4. weaponsmith (smithy_workshop) · @ 77, 805 · door=3
+  5. fisherman · @ 77, 861 · door=3
+  6. market (market_bazaar) · @ 50, 798 · door=0
+  7. house (ice_ice_drifting_shed) · variant#65 · @ 74, 843 · door=3
+  8. farmer (farmer_barn) · @ 21, 861 · door=2
+  9. fletcher (fletcher_lwing) · @ 19, 830 · door=1 · existing
+structure registry:
+  [1] house complete @ 78, 818
+  [2] librarian existing @ 51, 850
+  [3] church complete · ladders pending @ 84, 831
+  [4] weaponsmith complete @ 77, 805
+  [5] fisherman complete @ 77, 861
+  [6] market complete @ 50, 798
+  [7] house complete @ 74, 843
+  [8] farmer complete @ 21, 861
+  [9] fletcher existing @ 19, 830
+features: meeting=shrine · paths=671 · pathBunkers=3 · zombies=4
+blockEdits=6276
+
+18:38:16[Scripting][warning]-[ABANDONED VILLAGE] Placed script:village_settlement tier=village ruleset=ice @ 3,52 y=64
+
+18:38:16[Scripting][warning]-[ABANDONED VILLAGE] Placed script:village_settlement (village) @ 3,52
+
+18:38:16[Animation][error]-Error: can't find animation riding.body
+
+18:38:16[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:38:16[Animation][error]-Error: can't find animation riding.body
+
+18:38:16[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:38:16[Animation][error]-Error: can't find animation riding.body
+
+18:38:16[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:38:55[Scripting][warning]-[ABANDONED VILLAGE] Village Complete shown @ 49,64,833 (witness range)
+
+18:42:42[Scripting][warning]-[ABANDONED VILLAGE]   → lamp arrival 1,2,0 distLamp=38.53558349609375 biome=minecraft:ice_plains
+
+18:42:42[Scripting][warning]-[ABANDONED VILLAGE] Activate site 1,2,0 minecraft:ice_plains tier-prox=0 roll=~1/48 (near infected +0) (queued)
+
+18:42:43[Scripting][warning]-[ABANDONED VILLAGE] Settlement build started tier=village ruleset=ice world 445,817 chunk 27,51 site=1,2,0
+
+18:42:44[Scripting][warning]-[ABANDONED VILLAGE] Player entered construction HUD (litbolt123, 39ch from center @ 445,75,817) phase=cleanup edits=1 structures=0/5 slot=0
+
+18:42:44[Scripting][warning]-[ABANDONED VILLAGE] Build wake site=1,2,0 phase=cleanup slot=1/5 structures=0/5 edits=1
+
+18:42:44[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 445,75,817 — phase=cleanup edits=1 structures=0/5 slot=0
+
+18:42:50[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 1. house (ice_ice_drifting_shed) · variant#65 · @ 460, 824 · door=3 @ 460,75,824 (0/5 placed) phase=structures site=1,2,0
+
+18:42:52[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 1. house (ice_ice_drifting_shed) · variant#65 · @ 460, 824 · door=3 @ 460,75,824 (0/5 placed) phase=structures site=1,2,0
+
+18:42:52[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 2. weaponsmith (smithy_workshop) · @ 428, 830 · door=2 @ 428,75,830 (1/5 placed) phase=structures site=1,2,0
+
+18:42:56[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 2. weaponsmith (smithy_workshop) · @ 428, 830 · door=2 @ 428,75,830 (1/5 placed) phase=structures site=1,2,0
+
+18:42:56[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 4. house (ice_snowy_aframe) · variant#63 · @ 424, 805 · door=1 @ 424,75,805 (3/5 placed) phase=structures site=1,2,0
+
+18:42:57[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 445,75,817 — phase=structures edits=1928 structures=3/5 slot=3
+
+18:43:00[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 4. house (ice_snowy_aframe) · variant#63 · @ 424, 805 · door=1 @ 424,75,805 (3/5 placed) phase=structures site=1,2,0
+
+18:43:00[Scripting][warning]-[ABANDONED VILLAGE] Build relocated slot 5 (house) → offset -24,1 + approach path site=1,2,0
+
+18:43:00[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 5. house (ice_ice_fisher_dock) · variant#64 · @ 421, 818 · door=1 @ 421,75,818 (4/5 placed) phase=structures site=1,2,0
+
+18:43:03[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 5. house (ice_ice_fisher_dock) · variant#64 · @ 421, 818 · door=1 @ 421,75,818 (4/5 placed) phase=structures site=1,2,0
+
+18:43:03[Scripting][warning]-[ABANDONED VILLAGE] Build completion FINAL success placed=true structures=5/5 edits=2575 site=1,2,0
+
+18:43:03[Scripting][warning]-[ABANDONED VILLAGE] Settlement built @ 27,51 site=1,2,0:
+tier=hamlet ruleset=ice center=445,75,817 chunk=27,51
+layout=3 · plaza=campfire
+buildings (5/5 slots):
+  1. house (ice_ice_drifting_shed) · variant#65 · @ 460, 824 · door=3
+  2. weaponsmith (smithy_workshop) · @ 428, 830 · door=2
+  3. market (market_bazaar) · @ 460, 812 · door=3 · existing
+  4. house (ice_snowy_aframe) · variant#63 · @ 424, 805 · door=1
+  5. house (ice_ice_fisher_dock) · variant#64 · @ 421, 818 · door=1
+structure registry:
+  [1] house complete @ 460, 824
+  [2] weaponsmith complete @ 428, 830
+  [3] market existing @ 460, 812
+  [4] house complete @ 424, 805
+  [5] house complete @ 421, 818
+features: meeting=campfire · paths=411 · zombies=2
+blockEdits=2575
+
+18:43:03[Scripting][warning]-[ABANDONED VILLAGE] Placed script:hamlet_settlement tier=hamlet ruleset=ice @ 27,51 y=75
+
+18:43:03[Scripting][warning]-[ABANDONED VILLAGE] Placed script:hamlet_settlement (hamlet) @ 27,51
+
+18:43:45[Scripting][warning]-[ABANDONED VILLAGE] Village Complete shown @ 445,75,817 (witness range)
+
+18:47:43[Scripting][warning]-[ABANDONED VILLAGE]   → lamp arrival 4,-1,0 distLamp=60.1536865234375 biome=minecraft:plains
+
+18:47:43[Scripting][warning]-[ABANDONED VILLAGE] Cleared 1 lamp artifact block(s) @ 4,-1,0 (arrival)
+
+18:47:43[Scripting][warning]-[ABANDONED VILLAGE] Activate site 4,-1,0 minecraft:plains tier-prox=0 roll=~1/48 (near infected +0) (queued)
+
+18:47:44[Scripting][warning]-[ABANDONED VILLAGE] Settlement build started tier=hamlet ruleset=plains world 1614,-325 chunk 100,-21 site=4,-1,0
+
+18:47:45[Scripting][warning]-[ABANDONED VILLAGE] Player entered construction HUD (litbolt123, 54ch from center @ 1614,73,-325) phase=cleanup edits=0 structures=0/9 slot=0
+
+18:47:45[Scripting][warning]-[ABANDONED VILLAGE] Build wake site=4,-1,0 phase=cleanup slot=1/9 structures=0/9 edits=0
+
+18:47:45[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 1614,73,-325 — phase=cleanup edits=0 structures=0/9 slot=0
+
+18:47:52[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 2. fletcher (fletcher_lwing) · @ 1612, -295 · door=2 @ 1612,73,-295 (1/9 placed) phase=structures site=4,-1,0
+
+18:47:55[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 2. fletcher (fletcher_lwing) · @ 1612, -295 · door=2 @ 1612,73,-295 (1/9 placed) phase=structures site=4,-1,0
+
+18:47:55[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 3. house (plains_wide_1) · variant#6 · @ 1625, -290 · door=2 @ 1625,73,-290 (2/9 placed) phase=structures site=4,-1,0
+
+18:47:56[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 1614,73,-325 — phase=structures edits=1784 structures=2/9 slot=2
+
+18:47:57[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 3. house (plains_wide_1) · variant#6 · @ 1625, -290 · door=2 @ 1625,73,-290 (2/9 placed) phase=structures site=4,-1,0
+
+18:47:57[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 4. house (plains_plains_wrap_farm) · variant#51 · @ 1586, -353 · door=0 @ 1586,73,-353 (3/9 placed) phase=structures site=4,-1,0
+
+18:48:00[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 4. house (plains_plains_wrap_farm) · variant#51 · @ 1586, -353 · door=0 @ 1586,73,-353 (3/9 placed) phase=structures site=4,-1,0
+
+18:48:00[Scripting][warning]-[ABANDONED VILLAGE] Structure WAIT chunks: 8. weaponsmith · @ 1642, -353 · door=3 @ 1642,73,-353 (7/9 placed) phase=structures site=4,-1,0
+
+18:48:00[Scripting][warning]-[ABANDONED VILLAGE] Structure WAIT chunks (still loading): 8. weaponsmith · @ 1642, -353 · door=3 @ 1642,73,-353 (7/9 placed) phase=structures site=4,-1,0
+
+18:48:09[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 1614,73,-325 — phase=structures edits=2575 structures=7/9 slot=7
+
+18:48:20[Scripting][warning]-[ABANDONED VILLAGE] Structure RESUME chunks: 8. weaponsmith · @ 1642, -353 · door=3 @ 1642,73,-353 (7/9 placed) phase=structures site=4,-1,0
+
+18:48:23[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 8. weaponsmith · @ 1642, -353 · door=3 @ 1642,73,-353 (7/9 placed) phase=structures site=4,-1,0
+
+18:48:23[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 9. fisherman · @ 1642, -297 · door=3 @ 1642,73,-297 (8/9 placed) phase=structures site=4,-1,0
+
+18:48:24[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 1614,73,-325 — phase=structures edits=3320 structures=8/9 slot=8
+
+18:48:25[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 9. fisherman · @ 1642, -297 · door=3 @ 1642,73,-297 (8/9 placed) phase=structures site=4,-1,0
+
+18:48:26[Scripting][warning]-[ABANDONED VILLAGE] Build completion FINAL success placed=true structures=9/9 edits=3687 site=4,-1,0
+
+18:48:26[Scripting][warning]-[ABANDONED VILLAGE] Settlement built @ 100,-21 site=4,-1,0:
+tier=village ruleset=plains center=1614,73,-325 chunk=100,-21
+layout=4 · plaza=shrine
+buildings (9/9 slots):
+  1. farmer · @ 1586, -297 · door=2 · existing
+  2. fletcher (fletcher_lwing) · @ 1612, -295 · door=2
+  3. house (plains_wide_1) · variant#6 · @ 1625, -290 · door=2
+  4. house (plains_plains_wrap_farm) · variant#51 · @ 1586, -353 · door=0
+  5. market (market_hall) · @ 1637, -332 · door=3 · existing
+  6. librarian · @ 1638, -318 · door=3 · existing
+  7. church (plains_chapel_small) · @ 1621, -360 · door=0 · existing
+  8. weaponsmith · @ 1642, -353 · door=3
+  9. fisherman · @ 1642, -297 · door=3
+structure registry:
+  [1] farmer existing @ 1586, -297
+  [2] fletcher complete @ 1612, -295
+  [3] house complete @ 1625, -290
+  [4] house complete @ 1586, -353
+  [5] market existing @ 1637, -332
+  [6] librarian existing @ 1638, -318
+  [7] church existing @ 1621, -360
+  [8] weaponsmith complete @ 1642, -353
+  [9] fisherman complete @ 1642, -297
+features: meeting=shrine · paths=768 · pathBunkers=3 · zombies=4
+blockEdits=3687
+
+18:48:26[Scripting][warning]-[ABANDONED VILLAGE] Placed script:village_settlement tier=village ruleset=plains @ 100,-21 y=73
+
+18:48:26[Scripting][warning]-[ABANDONED VILLAGE] Placed script:village_settlement (village) @ 100,-21
+
+18:48:26[Animation][error]-Error: can't find animation riding.body
+
+18:48:26[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:48:26[Animation][error]-Error: can't find animation riding.body
+
+18:48:26[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:48:26[Animation][error]-Error: can't find animation riding.body
+
+18:48:26[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:48:26[Animation][error]-Error: can't find animation riding.body
+
+18:48:26[Animation][error]-Error: can't find animation baby_zombie_attack_bare_hand
+
+18:49:06[Scripting][warning]-[ABANDONED VILLAGE] Village Complete shown @ 1614,73,-325 (witness range)
+
+18:51:36[Scripting][warning]-[ABANDONED VILLAGE]   → lamp arrival 2,-4,0 distLamp=39.188232421875 biome=minecraft:meadow
+
+18:51:36[Scripting][warning]-[ABANDONED VILLAGE] Cleared 1 lamp artifact block(s) @ 2,-4,0 (arrival)
+
+18:51:36[Scripting][warning]-[ABANDONED VILLAGE] Activate site 2,-4,0 minecraft:meadow tier-prox=0 roll=~1/48 (near infected +0) (queued)
+
+18:51:37[Scripting][warning]-[ABANDONED VILLAGE] Settlement build started tier=hamlet ruleset=plains world 839,-1486 chunk 52,-93 site=2,-4,0
+
+18:51:38[Scripting][warning]-[ABANDONED VILLAGE] Player entered construction HUD (litbolt123, 40ch from center @ 839,115,-1486) phase=cleanup edits=0 structures=0/9 slot=0
+
+18:51:38[Scripting][warning]-[ABANDONED VILLAGE] Build wake site=2,-4,0 phase=cleanup slot=1/9 structures=0/9 edits=0
+
+18:51:38[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=cleanup edits=0 structures=0/9 slot=0
+
+18:51:46[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 1. fletcher (fletcher_tower) · @ 844, -1469 · door=2 @ 844,115,-1469 (0/9 placed) phase=structures site=2,-4,0
+
+18:51:49[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 1. fletcher (fletcher_tower) · @ 844, -1469 · door=2 @ 844,115,-1469 (0/9 placed) phase=structures site=2,-4,0
+
+18:51:49[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 2. church (plains_chapel_small) · @ 819, -1457 · door=2 @ 819,115,-1457 (1/9 placed) phase=structures site=2,-4,0
+
+18:51:51[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=1812 structures=1/9 slot=1
+
+18:51:59[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 2. church (plains_chapel_small) · @ 819, -1457 · door=2 @ 819,115,-1457 (1/9 placed) phase=structures site=2,-4,0
+
+18:52:00[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 3. market (market_hall) · @ 853, -1457 · door=2 @ 853,115,-1457 (2/9 placed) phase=structures site=2,-4,0
+
+18:52:03[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 3. market (market_hall) · @ 853, -1457 · door=2 @ 853,115,-1457 (2/9 placed) phase=structures site=2,-4,0
+
+18:52:03[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 4. fisherman · @ 803, -1493 · door=1 @ 803,115,-1493 (3/9 placed) phase=structures site=2,-4,0
+
+18:52:04[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 4. fisherman · @ 803, -1493 · door=1 @ 803,115,-1493 (3/9 placed) phase=structures site=2,-4,0
+
+18:52:04[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 6. librarian (librarian_study) · @ 846, -1509 · door=0 @ 846,115,-1509 (5/9 placed) phase=structures site=2,-4,0
+
+18:52:04[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=4306 structures=5/9 slot=5
+
+18:52:09[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 6. librarian (librarian_study) · @ 846, -1509 · door=0 @ 846,115,-1509 (5/9 placed) phase=structures site=2,-4,0
+
+18:52:09[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 7. house (plains_meadow_bloom_court) · variant#69 · @ 871, -1489 · door=3 @ 871,115,-1489 (6/9 placed) phase=structures site=2,-4,0
+
+18:52:12[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 7. house (plains_meadow_bloom_court) · variant#69 · @ 871, -1489 · door=3 @ 871,115,-1489 (6/9 placed) phase=structures site=2,-4,0
+
+18:52:13[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 9. house (plains_meadow_bloom_court) · variant#69 · @ 837, -1524 · door=0 @ 837,115,-1524 (8/9 placed) phase=structures site=2,-4,0
+
+18:52:16[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=6870 structures=8/9 slot=8
+
+18:52:18[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 9. house (plains_meadow_bloom_court) · variant#69 · @ 837, -1524 · door=0 @ 837,115,-1524 (8/9 placed) phase=structures site=2,-4,0
+
+18:52:31[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=7123 structures=9/9 slot=3
+
+18:52:47[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=7123 structures=9/9 slot=3
+
+18:52:59[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=7123 structures=9/9 slot=3
+
+18:53:11[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=7123 structures=9/9 slot=3
+
+18:53:23[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=7123 structures=9/9 slot=3
+
+18:53:35[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=7123 structures=9/9 slot=3
+
+18:53:48[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=7123 structures=9/9 slot=3
+
+18:54:00[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=7123 structures=9/9 slot=3
+
+18:54:12[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=7123 structures=9/9 slot=3
+
+18:54:26[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=7123 structures=9/9 slot=3
+
+18:54:30[Scripting][warning]-[ABANDONED VILLAGE] Player LEFT world (litbolt123) — active builds keep running; return to resume
+
+18:54:30[Scripting][warning]-[ABANDONED VILLAGE] Player LEFT (litbolt123) — build queue 1: village/plains@839,-1486 phase=structures edits=7123 (incomplete sites saved for reload)
+
+18:54:35[Texture][inform]-TextureSet (textures/entity/wolf/wolf_collar_baby_mers) | Specified image could not be found
+
+19:15:26[Scripting][verbose]-Plugin Discovered [The Maple Bear Apocalypse (Dev)] PackId [064b6f9c-349b-4ab1-80d3-c95f732db577_0.9.0] ModuleId [68f5a9b0-5aac-47cc-961d-3b87ba331a0b]
+
+19:15:26[Scripting][verbose]-Plugin [The Maple Bear Apocalypse (Dev)] - promoted [@minecraft/server] from [2.6.0] to [2.7.0] requested by [The Maple Bear Apocalypse (Dev) - 0.9.0].
+
+19:15:26[Scripting][verbose]-Plugin [The Maple Bear Apocalypse (Dev)] - promoted [@minecraft/server] from [2.0.0] to [2.7.0] requested by [@minecraft/server-ui-bindings - 2.0.0].
+
+19:15:26[Scripting][verbose]-Plugin [The Maple Bear Apocalypse (Dev)] - promoted [@minecraft/server-bindings] from [2.6.0] to [2.7.0] requested by [@minecraft/server - 2.6.0].
+
+19:15:26[Scripting][verbose]-Plugin [The Maple Bear Apocalypse (Dev)] - promoted [@minecraft/server-bindings] from [2.0.0] to [2.7.0] requested by [@minecraft/server - 2.0.0].
+
+19:15:27[Scripting][warning]-[SPAWN] Maple Bear spawn controller initialized.
+
+19:15:27[Scripting][inform]-📜 Maple Bear Day Tracker script loaded
+
+19:15:27[Scripting][warning]-[ABANDONED VILLAGE] Worldgen watch started — journal → Abandoned villages → Content Log categories (enable Scans for horizon Scan #N)
+
+19:15:27[Scripting][inform]-World initialized, setting up event listeners...
+
+19:15:27[Scripting][inform]-[PropertyHandler] Initialized (lazy loading enabled)
+
+19:15:31[Scripting][inform]-Day tracking already initialized
+
+19:15:32[Scripting][inform]-🌍 First player joined, initializing day tracker
+
+19:15:32[Scripting][inform]-Day cycle loop not running, starting it now
+
+19:15:32[Scripting][inform]-Starting day cycle loop
+
+19:15:32[Scripting][inform]-Day cycle loop started successfully
+
+19:15:32[Scripting][inform]-[JOIN MAIN] Player join event received, playerId: -4294967295
+
+19:15:32[Scripting][inform]-[JOIN MAIN] Retry 1: player found = false, valid = undefined
+
+19:15:35[Scripting][inform]-[JOIN MAIN] Retry 2: player found = false, valid = undefined
+
+19:15:37[Scripting][inform]-[JOIN MAIN] Retry 3: player found = false, valid = undefined
+
+19:15:39[Scripting][warning]-[ABANDONED VILLAGE] Player JOIN/spawn (litbolt123) — checking deferred village titles + construction HUD
+
+19:15:39[Scripting][warning]-[ABANDONED VILLAGE] Player SPAWN (litbolt123) — build queue 0: no active builds
+
+19:15:39[Scripting][inform]-[SPAWN] Player litbolt123 spawned
+
+19:15:39[Scripting][inform]-[SPAWN] Intro seen: true, intro active: false
+
+19:15:39[Scripting][inform]-[SPAWN] Intro already seen, skipping
+
+19:15:39[Scripting][inform]-[MINOR INFECTION] Day 0: Scaled timer to 10 days (240000 ticks)
+
+19:15:39[Scripting][inform]-[LOAD] Preserved minor infection timer for litbolt123: 10 days remaining (day 0, max 10 days)
+
+19:15:39[Scripting][inform]-[LOAD] Loaded active infection for litbolt123 (type: minor): {"ticksLeft":234240,"snowCount":0,"hitCount":0,"cured":false,"source":"spawn","infectionType":"minor","minorInfectionCured":false,"maxSeverity":0,"lastTierMessage":0,"lastDecayTick":407,"warningSent":false,"lastActiveTick":26335}
+
+19:15:39[Scripting][warning]-[ABANDONED VILLAGE]   → lamp arrival 2,-4,0 distLamp=33.61102294921875 biome=minecraft:meadow
+
+19:15:39[Scripting][warning]-[ABANDONED VILLAGE] Site 2,-4,0 incomplete — queued resume (saved center)
+
+19:15:39[Scripting][inform]-[JOIN] Player litbolt123 joined, infection data will be loaded by main.js
+
+19:15:39[Scripting][inform]-[JOIN MAIN] Retry 4: player found = true, valid = true
+
+19:15:39[Scripting][inform]-[JOIN MAIN] ✓ Player litbolt123 found! Loading infection data and checking intro...
+
+19:15:39[Scripting][inform]-[MINOR INFECTION] Day 0: Scaled timer to 10 days (240000 ticks)
+
+19:15:39[Scripting][inform]-[LOAD] Preserved minor infection timer for litbolt123: 10 days remaining (day 0, max 10 days)
+
+19:15:39[Scripting][inform]-[LOAD] Loaded active infection for litbolt123 (type: minor): {"ticksLeft":234240,"snowCount":0,"hitCount":0,"cured":false,"source":"spawn","infectionType":"minor","minorInfectionCured":false,"maxSeverity":0,"lastTierMessage":0,"lastDecayTick":407,"warningSent":false,"lastActiveTick":26335}
+
+19:15:39[Scripting][inform]-[JOIN MAIN] Intro seen for this player: true (raw=true, type=boolean)
+
+19:15:39[Scripting][inform]-[JOIN MAIN] Intro already shown, giving journal if needed
+
+19:15:39[Scripting][inform]-[BASIC JOURNAL] Journal already given by intro for litbolt123, skipping
+
+19:15:40[Scripting][warning]-[ABANDONED VILLAGE] Build resume — 6 slot(s) demoted (partial), 3 structure slot(s) tracked in world (3 toward minimum) site=2,-4,0
+  [1] fletcher pending @ 844, -1469
+  [2] church complete · ladders pending @ 819, -1457
+  [3] market complete · ladders pending @ 853, -1457
+  [4] fisherman pending @ 803, -1493
+  [5] weaponsmith pending @ 864, -1476
+  [6] librarian complete · ladders pending @ 846, -1509
+  [7] house pending @ 871, -1489
+  [8] farmer pending @ 821, -1514
+  [9] house pending @ 837, -1524
+
+19:15:40[Scripting][warning]-[ABANDONED VILLAGE] Build resume — continuing structures at slot 1/9 (3 already placed) site=2,-4,0
+
+19:15:40[Scripting][warning]-[ABANDONED VILLAGE] Settlement build resumed tier=hamlet ruleset=plains world 839,-1486 chunk 52,-93 site=2,-4,0
+
+19:15:41[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 1. fletcher (fletcher_tower) · @ 844, -1469 · door=2 @ 844,115,-1469 (3/9 placed) phase=structures site=2,-4,0
+
+19:15:41[Scripting][warning]-[ABANDONED VILLAGE] Player entered construction HUD (litbolt123, 26ch from center @ 839,115,-1486) phase=structures edits=108 structures=3/9 slot=0
+
+19:15:41[Scripting][warning]-[ABANDONED VILLAGE] Build wake site=2,-4,0 phase=structures slot=1/9 structures=3/9 edits=108
+
+19:15:41[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=108 structures=3/9 slot=0
+
+19:15:41[Scripting][warning]-[ABANDONED VILLAGE] Build wake site=2,-4,0 phase=structures slot=1/9 structures=3/9 edits=192
+
+19:15:44[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 1. fletcher (fletcher_tower) · @ 844, -1469 · door=2 @ 844,115,-1469 (3/9 placed) phase=structures site=2,-4,0
+
+19:15:44[Scripting][warning]-[ABANDONED VILLAGE] Build relocated slot 4 (fisherman) → offset -25,13 + approach path site=2,-4,0
+
+19:15:44[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 4. fisherman · @ 814, -1473 · door=1 @ 814,115,-1473 (4/9 placed) phase=structures site=2,-4,0
+
+19:15:46[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 4. fisherman · @ 814, -1473 · door=1 @ 814,115,-1473 (4/9 placed) phase=structures site=2,-4,0
+
+19:15:46[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 5. weaponsmith · @ 864, -1476 · door=3 @ 864,115,-1476 (5/9 placed) phase=structures site=2,-4,0
+
+19:15:50[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 5. weaponsmith · @ 864, -1476 · door=3 @ 864,115,-1476 (5/9 placed) phase=structures site=2,-4,0
+
+19:15:50[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 7. house (plains_meadow_bloom_court) · variant#69 · @ 871, -1489 · door=3 @ 871,115,-1489 (6/9 placed) phase=structures site=2,-4,0
+
+19:15:54[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 7. house (plains_meadow_bloom_court) · variant#69 · @ 871, -1489 · door=3 @ 871,115,-1489 (6/9 placed) phase=structures site=2,-4,0
+
+19:15:54[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 8. farmer (farmer_barn) · @ 821, -1514 · door=0 @ 821,115,-1514 (7/9 placed) phase=structures site=2,-4,0
+
+19:15:57[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=2450 structures=7/9 slot=7
+
+19:15:59[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 8. farmer (farmer_barn) · @ 821, -1514 · door=0 @ 821,115,-1514 (7/9 placed) phase=structures site=2,-4,0
+
+19:15:59[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 9. house (plains_meadow_bloom_court) · variant#69 · @ 837, -1524 · door=0 @ 837,115,-1524 (8/9 placed) phase=structures site=2,-4,0
+
+19:16:03[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 9. house (plains_meadow_bloom_court) · variant#69 · @ 837, -1524 · door=0 @ 837,115,-1524 (8/9 placed) phase=structures site=2,-4,0
+
+19:16:10[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=3369 structures=9/9 slot=9
+
+19:16:22[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=3369 structures=9/9 slot=9
+
+19:16:35[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=3369 structures=9/9 slot=9
+
+19:16:46[Scripting][warning]-[ABANDONED VILLAGE] Player left construction HUD (litbolt123, 97ch) — action bar linger then clear
+
+19:16:54[Scripting][warning]-[ABANDONED VILLAGE] Player entered construction HUD (litbolt123, 93ch from center @ 839,115,-1486) phase=structures edits=3369 structures=9/9 slot=5
+
+19:16:54[Scripting][warning]-[ABANDONED VILLAGE] Build wake site=2,-4,0 phase=structures slot=1/9 structures=0/9 edits=3369
+
+19:16:54[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=3369 structures=9/9 slot=5
+
+19:16:55[Scripting][warning]-[ABANDONED VILLAGE] Build relocated slot 1 (fletcher) → offset -31,-11 + approach path site=2,-4,0
+
+19:16:55[Scripting][warning]-[ABANDONED VILLAGE] Structure WAIT chunks: 1. fletcher (fletcher_tower) · @ 808, -1497 · door=1 @ 808,115,-1497 (0/9 placed) phase=structures site=2,-4,0
+
+19:16:55[Scripting][warning]-[ABANDONED VILLAGE] Structure WAIT chunks (still loading): 1. fletcher (fletcher_tower) · @ 808, -1497 · door=1 @ 808,115,-1497 (0/9 placed) phase=structures site=2,-4,0
+
+19:16:55[Scripting][warning]-[ABANDONED VILLAGE] Structure RESUME chunks: 1. fletcher (fletcher_tower) · @ 808, -1497 · door=1 @ 808,115,-1497 (0/9 placed) phase=structures site=2,-4,0
+
+19:16:58[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 1. fletcher (fletcher_tower) · @ 808, -1497 · door=1 @ 808,115,-1497 (0/9 placed) phase=structures site=2,-4,0
+
+19:16:58[Scripting][warning]-[ABANDONED VILLAGE] Structure EXISTING: 2. church (plains_chapel_small) · @ 819, -1457 · door=2 @ 819,115,-1457 (1/9 placed) phase=structures site=2,-4,0
+
+19:16:58[Scripting][warning]-[ABANDONED VILLAGE] Build relocated slot 3 (market) → offset 19,-23 + approach path site=2,-4,0
+
+19:16:58[Scripting][warning]-[ABANDONED VILLAGE] Structure WAIT chunks: 3. market (market_hall) · @ 858, -1509 · door=3 @ 858,115,-1509 (2/9 placed) phase=structures site=2,-4,0
+
+19:16:58[Scripting][warning]-[ABANDONED VILLAGE] Structure WAIT chunks (still loading): 3. market (market_hall) · @ 858, -1509 · door=3 @ 858,115,-1509 (2/9 placed) phase=structures site=2,-4,0
+
+19:16:59[Scripting][warning]-[ABANDONED VILLAGE] Structure RESUME chunks: 3. market (market_hall) · @ 858, -1509 · door=3 @ 858,115,-1509 (2/9 placed) phase=structures site=2,-4,0
+
+19:17:02[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 3. market (market_hall) · @ 858, -1509 · door=3 @ 858,115,-1509 (2/9 placed) phase=structures site=2,-4,0
+
+19:17:02[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 4. fisherman · @ 814, -1473 · door=1 @ 814,115,-1473 (3/9 placed) phase=structures site=2,-4,0
+
+19:17:04[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 4. fisherman · @ 814, -1473 · door=1 @ 814,115,-1473 (3/9 placed) phase=structures site=2,-4,0
+
+19:17:04[Scripting][warning]-[ABANDONED VILLAGE] Structure WAIT chunks: 5. weaponsmith · @ 864, -1476 · door=3 @ 864,115,-1476 (4/9 placed) phase=structures site=2,-4,0
+
+19:17:04[Scripting][warning]-[ABANDONED VILLAGE] Structure WAIT chunks (still loading): 5. weaponsmith · @ 864, -1476 · door=3 @ 864,115,-1476 (4/9 placed) phase=structures site=2,-4,0
+
+19:17:04[Scripting][warning]-[ABANDONED VILLAGE] Structure RESUME chunks: 5. weaponsmith · @ 864, -1476 · door=3 @ 864,115,-1476 (4/9 placed) phase=structures site=2,-4,0
+
+19:17:05[Scripting][warning]-[ABANDONED VILLAGE] Structure EXISTING: 6. librarian (librarian_study) · @ 846, -1509 · door=0 @ 846,115,-1509 (5/9 placed) phase=structures site=2,-4,0
+
+19:17:05[Scripting][warning]-[ABANDONED VILLAGE] Structure EXISTING: 7. house (plains_meadow_bloom_court) · variant#69 · @ 871, -1489 · door=3 @ 871,115,-1489 (6/9 placed) phase=structures site=2,-4,0
+
+19:17:05[Scripting][warning]-[ABANDONED VILLAGE] Structure EXISTING: 8. farmer (farmer_barn) · @ 821, -1514 · door=0 @ 821,115,-1514 (7/9 placed) phase=structures site=2,-4,0
+
+19:17:05[Scripting][warning]-[ABANDONED VILLAGE] Structure START: 9. house (plains_meadow_bloom_court) · variant#69 · @ 837, -1524 · door=0 @ 837,115,-1524 (8/9 placed) phase=structures site=2,-4,0
+
+19:17:07[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structures edits=5597 structures=8/9 slot=8
+
+19:17:09[Scripting][warning]-[ABANDONED VILLAGE] Structure DONE: 9. house (plains_meadow_bloom_court) · variant#69 · @ 837, -1524 · door=0 @ 837,115,-1524 (8/9 placed) phase=structures site=2,-4,0
+
+19:17:09[Scripting][warning]-[ABANDONED VILLAGE] Build structure hold — need 8 placed, have 9 (waiting / abandoned slots) site=2,-4,0
+
+19:17:09[Scripting][warning]-[ABANDONED VILLAGE] Build resume — 3 slot(s) demoted (partial), 6 structure slot(s) tracked in world (6 toward minimum) site=2,-4,0
+  [1] fletcher pending @ 808, -1497
+  [2] church existing @ 819, -1457
+  [3] market pending · ladders pending @ 858, -1509
+  [4] fisherman complete @ 814, -1473
+  [5] weaponsmith existing @ 864, -1476
+  [6] librarian existing @ 846, -1509
+  [7] house existing @ 871, -1489
+  [8] farmer existing @ 821, -1514
+  [9] house pending @ 837, -1524
+
+19:17:41[Scripting][warning]-[ABANDONED VILLAGE] Build resume — 2 slot(s) demoted (partial), 7 structure slot(s) tracked in world (7 toward minimum) site=2,-4,0
+  [1] fletcher pending @ 808, -1497
+  [2] church existing @ 819, -1457
+  [3] market complete · ladders pending @ 858, -1509
+  [4] fisherman complete @ 814, -1473
+  [5] weaponsmith existing @ 864, -1476
+  [6] librarian existing @ 846, -1509
+  [7] house existing @ 871, -1489
+  [8] farmer existing @ 821, -1514
+  [9] house pending @ 837, -1524
+
+19:17:41[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structure_retry edits=7916 structures=7/9 slot=0
+
+19:17:51[Scripting][warning]-[ABANDONED VILLAGE] Build resume — 2 slot(s) demoted (partial), 7 structure slot(s) tracked in world (7 toward minimum) site=2,-4,0
+  [1] fletcher pending @ 808, -1497
+  [2] church existing @ 819, -1457
+  [3] market complete · ladders pending @ 858, -1509
+  [4] fisherman complete @ 814, -1473
+  [5] weaponsmith existing @ 864, -1476
+  [6] librarian existing @ 846, -1509
+  [7] house existing @ 871, -1489
+  [8] farmer existing @ 821, -1514
+  [9] house pending @ 837, -1524
+
+19:17:57[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structure_retry edits=10261 structures=8/9 slot=8
+
+19:18:00[Scripting][warning]-[ABANDONED VILLAGE] Build resume — 2 slot(s) demoted (partial), 7 structure slot(s) tracked in world (7 toward minimum) site=2,-4,0
+  [1] fletcher pending @ 808, -1497
+  [2] church existing @ 819, -1457
+  [3] market complete · ladders pending @ 858, -1509
+  [4] fisherman complete @ 814, -1473
+  [5] weaponsmith existing @ 864, -1476
+  [6] librarian existing @ 846, -1509
+  [7] house existing @ 871, -1489
+  [8] farmer existing @ 821, -1514
+  [9] house pending @ 837, -1524
+
+19:18:08[Scripting][warning]-[ABANDONED VILLAGE] Build resume — 2 slot(s) demoted (partial), 7 structure slot(s) tracked in world (7 toward minimum) site=2,-4,0
+  [1] fletcher pending @ 808, -1497
+  [2] church existing @ 819, -1457
+  [3] market complete · ladders pending @ 858, -1509
+  [4] fisherman complete @ 814, -1473
+  [5] weaponsmith existing @ 864, -1476
+  [6] librarian existing @ 846, -1509
+  [7] house existing @ 871, -1489
+  [8] farmer existing @ 821, -1514
+  [9] house pending @ 837, -1524
+
+19:18:12[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structure_retry edits=12554 structures=8/9 slot=8
+
+19:18:16[Scripting][warning]-[ABANDONED VILLAGE] Build resume — 2 slot(s) demoted (partial), 7 structure slot(s) tracked in world (7 toward minimum) site=2,-4,0
+  [1] fletcher pending @ 808, -1497
+  [2] church existing @ 819, -1457
+  [3] market complete · ladders pending @ 858, -1509
+  [4] fisherman complete @ 814, -1473
+  [5] weaponsmith existing @ 864, -1476
+  [6] librarian existing @ 846, -1509
+  [7] house existing @ 871, -1489
+  [8] farmer existing @ 821, -1514
+  [9] house pending @ 837, -1524
+
+19:18:24[Scripting][warning]-[ABANDONED VILLAGE] Build resume — 2 slot(s) demoted (partial), 7 structure slot(s) tracked in world (7 toward minimum) site=2,-4,0
+  [1] fletcher pending @ 808, -1497
+  [2] church existing @ 819, -1457
+  [3] market complete · ladders pending @ 858, -1509
+  [4] fisherman complete @ 814, -1473
+  [5] weaponsmith existing @ 864, -1476
+  [6] librarian existing @ 846, -1509
+  [7] house existing @ 871, -1489
+  [8] farmer existing @ 821, -1514
+  [9] house pending @ 837, -1524
+
+19:18:28[Scripting][warning]-[ABANDONED VILLAGE] Construction HUD @ 839,115,-1486 — phase=structure_retry edits=14856 structures=8/9 slot=8
+
+19:18:33[Scripting][warning]-[ABANDONED VILLAGE] Player LEFT world (litbolt123) — active builds keep running; return to resume
+
+19:18:33[Scripting][warning]-[ABANDONED VILLAGE] Player LEFT (litbolt123) — build queue 1: village/plains@839,-1486 phase=structure_retry edits=15326 (incomplete sites sa

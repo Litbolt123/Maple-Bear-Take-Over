@@ -251,7 +251,7 @@ export function playForcedCoughDustBurst(sourcePlayer, getEmitterTier, getHearOt
         getMasterVolume
     );
     triggerInfectionDustCoughCameraBuzz(sourcePlayer, isMajor);
-    return played || true;
+    return played;
 }
 
 /** After eating powder — higher pitch (~+25%). Radius 0 = only the eater (no nearby players). */

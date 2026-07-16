@@ -436,7 +436,7 @@ function blockToItemType(blockTypeId) {
         "minecraft:clay": "minecraft:clay_ball",
         "minecraft:bookshelf": "minecraft:book",
         "minecraft:melon_block": "minecraft:melon_slice",
-        "minecraft:hay_block": "minecraft:wheat",
+        "minecraft:hay_block": "minecraft:hay_block",
 
         // Ice variants - don't drop without silk touch
         "minecraft:ice": null, // Doesn't drop without silk touch
@@ -595,27 +595,35 @@ function collectOrDropItem(entity, itemTypeId, location, amount = 1) {
     if (!entity || !itemTypeId || !location) return;
     const count = Math.max(1, Math.floor(amount));
     try {
+        let dropStack = new ItemStack(itemTypeId, count);
         const inventory = entity.getComponent("inventory")?.container;
         if (inventory) {
             try {
-                const itemStack = new ItemStack(itemTypeId, count);
-                const remaining = inventory.addItem(itemStack);
-                if (!remaining) {
+                const remaining = inventory.addItem(dropStack);
+                if (!remaining || (remaining.amount ?? 0) <= 0) {
                     trackCollectedItem(entity, itemTypeId, count);
                     return;
                 }
+                const remainAmount = remaining.amount;
+                const inserted = count - remainAmount;
+                if (inserted > 0) {
+                    trackCollectedItem(entity, itemTypeId, inserted);
+                }
+                dropStack = remaining;
             } catch {
-                // Inventory add failed, fall through to drop
+                // Inventory add failed — drop full original count
+                dropStack = new ItemStack(itemTypeId, count);
             }
         }
 
-        const itemStack = new ItemStack(itemTypeId, count);
+        if ((dropStack.amount ?? 0) <= 0) return;
+
         const dropLocation = {
             x: location.x + (Math.random() - 0.5) * 0.5,
             y: location.y + 0.5,
             z: location.z + (Math.random() - 0.5) * 0.5
         };
-        entity.dimension.spawnItem(itemStack, dropLocation);
+        entity.dimension.spawnItem(dropStack, dropLocation);
     } catch {
         // Silently fail - don't spam console
     }
